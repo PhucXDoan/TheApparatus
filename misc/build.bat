@@ -4,25 +4,36 @@ setlocal EnableDelayedExpansion
 REM {avrdude -c avrisp} : List of supported AVR devices.
 REM {avrdude -c asd   } : List of supported programmers.
 
-REM In the case of strange errors relating to accessing register values,
-REM try using the `--param=min-pagesize=0` argument. This seems to be a
-REM bug on AVR-GCC's end.
 set AVR_GCC_FLAGS= ^
 	-std=c2x -fshort-enums ^
 	-Werror -Wall -Wextra -fmax-errors=1 ^
-	-Wno-unused-function -Wno-unused-label -Wno-unused-variable
+	-Wno-unused-function -Wno-unused-label -Wno-unused-variable ^
+	-Wno-implicit-fallthrough ^
+	--param=min-pagesize=0
+
+REM There is this strange warning saying
+REM     > array subscript 0 is outside array bounds of 'volatile uint8_t[0]' {aka 'volatile unsigned char[]'}
+REM in certain usages to registers.
+REM
+REM The following code would trigger such warning:
+REM     > UDCON &= ~(1 << DETACH)
+REM
+REM Using
+REM     > --param=min-pagesize=0
+REM seems to calm AVR-GCC down.
 
 if not exist W:\build\ (
 	mkdir W:\build\
 )
 
 pushd W:\build\
-	del *.o *.elf *.hex > nul 2>&1
+	*.o *.elf *.hex > nul 2>&1
 
-	REM I can't find much information online at all about what bootloader is used
-	REM specifically for the Arduino Leonardo. The IDE calls AVRDUDE with AVR109 as
-	REM the programmer, but other than that, there's no official documentation I
-	REM could find for this.
+	REM TODO(Programmer?).
+	REM     I can't find much information online at all about what bootloader is used
+	REM     specifically for the Arduino Leonardo. The IDE calls AVRDUDE with AVR109 as
+	REM     the programmer, but other than that, there's no official documentation I
+	REM     could find for this.
 
 	set PROGRAM_MCU=ATmega32U4
 	set PROGRAM_NAME=Diplomat
@@ -49,8 +60,9 @@ pushd W:\build\
 		goto ABORT
 	)
 
-	REM TODO Once we can get a virtual COM port set up,
-	REM we can begin diagnostic outputs.
+	REM TODO(COM Port)
+	RME     Once we can get a virtual COM port set up,
+	REM     we can begin diagnostic outputs.
 	REM
 	REM start putty.exe -load "COM3_settings"
 
