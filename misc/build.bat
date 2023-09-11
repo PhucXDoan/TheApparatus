@@ -5,10 +5,10 @@ REM {avrdude -c avrisp} : List of supported AVR devices.
 REM {avrdude -c asd   } : List of supported programmers.
 
 set AVR_GCC_FLAGS= ^
-	-std=c2x -fshort-enums ^
+	-std=c2x -fshort-enums -I W:/ ^
 	-Werror -Wall -Wextra -fmax-errors=1 ^
 	-Wno-unused-function -Wno-unused-label -Wno-unused-variable ^
-	-Wno-implicit-fallthrough ^
+	-Wno-implicit-fallthrough -Wno-unused-but-set-variable ^
 	--param=min-pagesize=0
 
 REM There is this strange warning saying
