@@ -1,19 +1,13 @@
-/*
-	Source(1) @ ATmega32U4 Datasheet ("Atmel-7766J-USB-ATmega16U4/32U4-Datasheet_04/2016").
-	Source(2) @ USB 2.0 Specification @ ("Universal Serial Bus Specification Revision 2.0", April 27, 2000).
-
-	TODO Interrupt behavior on USB disconnection?
-*/
-
 #define F_CPU 16'000'000
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
 #include <stdint.h>
 #include "defs.h"
+#include "pins.c"
 
 /* "USB Device Interrupt".
-	Handles:
+	Can trigger on:
 		- VBUS Plug-In.
 		- Upstream Resume.
 		- End-of-Resume.
@@ -26,7 +20,7 @@
 	Since only the End-of-Reset event is enabled, that's what this
 	interrupt will be only triggered for.
 
-	See: "[6] Configure USB interface (USB speed, Endpoints configuration...).".
+	See: [6] Configure USB interface (USB speed, Endpoints configuration...).
 	* "USB Device Interrupt" @ Source(1) @ Figure(22-4) @ Page(279).
 	* Interrupt Bits @ Source(1) @ Section(22.18.1) @ Page(283).
 */
@@ -63,8 +57,6 @@ ISR(USB_GEN_vect)
 			How does the size affect endpoint 0?
 			Could we just be cheap and have 8 bytes?
 
-		TODO What exactly is Ping-Pong Mode?
-
 		TODO 512 Byte Endpoint?
 			The datasheet claims that an endpoint size can be 512 bytes,
 			but makes no other mention to this at all. The introduction
@@ -79,8 +71,8 @@ ISR(USB_GEN_vect)
 
 		* "Endpoint Selection" @ Source(1) @ Section(22.5) @ Page(271).
 		* "Endpoint Activation" @ Source(1) @ Section(22.6) @ Page(271).
-		* EPEN, UENUM, UECONX, UECFG0X, EPDIR, UECFG1X, ALLOC, @ Source(1) @ Section(22.18.2) @ Page(285-287).
-		* USB Transfer Types @ Source(2) @ Chapter(5) @ Section(5.4) @ Page(36-37).
+		* EPEN, UENUM, EPSIZEx, UECONX, UECFG0X, EPDIR, UECFG1X, ALLOC @ Source(1) @ Section(22.18.2) @ Page(285-287).
+		* USB Transfer Types @ Source(2) @ Section(5.4) @ Page(36-37).
 		* USB Device Operating Modes Introduction @ Source(1) @ Section(22.1) @ Page(270).
 		* Dual Bank Behavior for OUT Endpoints @ Source(1) @ Section(22.13.2.1) @ 276.
 		* Dual Bank Behavior for IN Endpoints @ Source(1) @ Section(22.14.1) @ 276.
@@ -88,7 +80,7 @@ ISR(USB_GEN_vect)
 
 	UENUM   = 0;
 	UECONX  = (1 << EPEN);
-	UECFG1X = (1 << EPSIZE1) | (1 << EPSIZE0) | (1 << ALLOC);
+	UECFG1X = (USB_ENDPOINT_0_SIZE << EPSIZE0) | (1 << ALLOC);
 
 	/* Endpoint Allocation Check.
 		The allocation process can technically fail,
@@ -106,12 +98,12 @@ ISR(USB_GEN_vect)
 		that'll trigger when we have received some setup commands from the host.
 		This is done with RXSTPE ("Received Setup Enable") bit in the UEIENX register.
 
-		TODO Endpoint Specific Interrupts?
-			If I'm understanding correctly, is this interrupt only going to trigger for endpoint 0?
-			So if the host sends a setup command to endpoint 3 (if that's how that happens), then this won't be triggered?
-			* "USB Device Controller Endpoint Interrupt System" @ Source(1) @ Figure(22-5) @ Page(280).
+		Note that this interrupt is only going to trigger for endpoint 0.
+		So if the host sends a setup command to endpoint 3, it'll be ignored
+		(unless the interrupt for that is enabled).
 
 		* UEIENX, RXSTPE @ Source(1) @ Section(22.18.2) @ Page(290-291).
+		* "USB Device Controller Endpoint Interrupt System" @ Source(1) @ Figure(22-5) @ Page(280).
 	*/
 
 	UEIENX = (1 << RXSTPE);
@@ -131,38 +123,107 @@ ISR(USB_GEN_vect)
 }
 
 /* "Endpoint Interrupt".
-	Triggers when there's a(n):
-		- Endpoint is ready to accept data.
-		- Endpoint received data.
-		- Endpoint received setup command.
-		- Data packet has stalled.
-		- CRC mismatch on OUT data (isochronous mode).
-		- Overflow/underflow (isochronous mode).
-		- NAK of IN/OUT.
+	Can trigger when there's an endpoint that:
+		- is ready to accept data.
+		- received data.
+		- received setup command.
+		- has stalled packet.
+		- has CRC mismatch on OUT data (isochronous mode).
+		- has overflow/underflow (isochronous mode).
+		- has NAK on IN/OUT.
 
-	TODO Document!
+	What will actually trigger it:
+		When a setup command is sent to endpoint 0 (UENUM = 0, RXSTPI in UEINTX).
 
 	See: ISR(USB_GEN_vect).
 	* "Endpoint Interrupt" @ Source(1) @ Figure(22-5) @ Page(280).
+	* UENUM, RXSTPI, UEINTX @ Source(1) @ Section(22.18.2) @ Page(285-290).
 */
 ISR(USB_COM_vect)
 {
-	// TODO Document!
+	/* Handle Interrupt Types.
+		There are multitude of sources that could trigger interrupt routine,
+		each applied to each enabled endpoint.
+		The source can be found in the bits of UEINTX
+		(which is specific to the currently selected endpoint dictated by UENUM).
 
-	UENUM  = 0;
+		At the end, we'll need to clear UEINTX register or
+		else the interrupt routine might get triggered again.
+		Some of the bits perform a specific task when cleared (like with FIFOCON),
+		some require it to be cleared (NAKINI), others don't do anything (KILLBK).
 
-	if (UEINTX & (1 << RXSTPI))
+		* Sources of Interrupt Triggers @ Source(1) @ Figure(22-5) @ Page(280).
+		* UENUM, UEINTX, FIFOCON, NAKINI, KILLBK @ Source(1) @ Section(22.18.2) @ Page(285-290).
+	*/
+
+	UENUM = 0;
+
+	//
+	// Read setup packet.
+	//
+	// * "USB Device Requests" @ Source(2) @ Section(9.3) @ Page(248).
+	//
+
+	struct USBSetupPacket setup_packet;
+	for (u8 i = 0; i < sizeof(setup_packet); i += 1)
 	{
-		// TODO Handle Setup command!
+		((u8*) &setup_packet)[i] = UEDATX;
+	}
+
+	//
+	// Determine setup packet's purpose.
+	//
+	// * "Standard Device Requests" @ Source(2) @ Table(9-3) @ Page(250).
+	//
+
+	if
+	(
+		setup_packet.unknown.bmRequestType == 0b1000'0000
+		&& setup_packet.unknown.bRequest == USBStandardRequestCode_get_descriptor
+	)
+	{
+		switch (setup_packet.get_descriptor.descriptor_type)
+		{
+			case DescriptorType_device:
+			{
+				static int i = 0; // TEMP
+				pin_output(++i); // TEMP
+			} break;
+
+			case DescriptorType_configuration:
+			case DescriptorType_string:
+			case DescriptorType_interface:
+			case DescriptorType_endpoint:
+			case DescriptorType_device_qualifier:
+			case DescriptorType_other_speed_configuration:
+			case DescriptorType_interface_power:
+			default:
+			{
+				goto error;
+			} break;
+		}
+	}
+	else
+	{
+		goto error;
 	}
 
 	UEINTX = 0;
+	return;
+
+	error:; // TODO have a better looking error here...
+	DDRC = (1 << DDC7);
+	for (;;)
+	{
+		pin_set(13, !pin_read(13));
+		_delay_ms(50.0);
+	}
 }
 
 int
 main(void)
 {
-	sei(); // TODO document
+	sei(); // Activates global interrupts. @ Source(1) @ Section(4.4) @ Page(11).
 
 	/* USB Initialization Process.
 		We will be doing the following:
@@ -314,30 +375,18 @@ main(void)
 	DDRC   = (1 << DDC7);
 	PORTC &= ~(1 << PORTC7);
 	_delay_ms(1000.0);
+
 	for (;;)
 	{
-		UENUM = 0;
-		if (UECONX & (1 << EPEN))
-		{
-			PORTC |= (1 << PORTC7);
-			_delay_ms(1000.0);
-			PORTC &= ~(1 << PORTC7);
-			_delay_ms(1000.0);
-		}
-		else
-		{
-			PORTC |= (1 << PORTC7);
-			_delay_ms(100.0);
-			PORTC &= ~(1 << PORTC7);
-			_delay_ms(100.0);
-		}
+		PORTC ^= (1 << PORTC7);
+		_delay_ms(1000.0);
 	}
 
 	error:;
 	DDRC = (1 << DDC7);
 	for (;;)
 	{
-		PORTC ^= (1 << PORTC7);
+		pin_set(13, !pin_read(13));
 		_delay_ms(50.0);
 	}
 }
