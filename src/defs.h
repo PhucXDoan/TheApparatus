@@ -1,6 +1,7 @@
 /*
 	Source(1) @ ATmega32U4 Datasheet ("Atmel-7766J-USB-ATmega16U4/32U4-Datasheet_04/2016").
 	Source(2) @ USB 2.0 Specification @ ("Universal Serial Bus Specification Revision 2.0", April 27, 2000).
+	Source(3) @ Arduino Leonardo Pinout Diagram (STORE.ARDUINO.CC/LEONARDO, 17/06/2020).
 
 	TODO Interrupt behavior on USB disconnection?
 	TODO AVR-GCC is being an absolute pain and is complaining about `int x = {0};`. Disable the warning!
@@ -30,6 +31,55 @@ typedef uint16_t b16;
 typedef uint32_t b32;
 typedef uint64_t b64;
 
+//
+// Pins.
+//
+
+enum PinState // See: pin_set(...).
+{
+	PinState_false    = 0b00, // Alias: false.
+	PinState_true     = 0b01, // Alias: true.
+	PinState_floating = 0b10,
+	PinState_input    = 0b11
+};
+
+// X-Macro data-table of Arduino Leonardo's pin numbering,
+// the corresponding ATmega32U4's data-direction register,
+// and the port bit respectively.
+//
+// Pins 14-19 are analog pins, but they can still be nonetheless
+// used as digital ones.
+//
+// * Arduino Leonardo Pinout Diagram @ Source(3) @ Page(1).
+// * Analog as Digital Pins @ Source(1) @ Section(2.2.7) @ Page(6).
+#define PIN_XMDT(X) \
+	X( 0, D, 2) \
+	X( 1, D, 3) \
+	X( 2, D, 1) \
+	X( 3, D, 0) \
+	X( 4, D, 4) \
+	X( 5, C, 6) \
+	X( 6, D, 7) \
+	X( 7, E, 6) \
+	X( 8, B, 4) \
+	X( 9, B, 5) \
+	X(10, B, 6) \
+	X(11, B, 7) \
+	X(12, D, 6) \
+	X(13, C, 7) \
+	X(14, F, 7) \
+	X(15, F, 6) \
+	X(16, F, 5) \
+	X(17, F, 4) \
+	X(18, F, 1) \
+	X(19, F, 0)
+
+//
+// USB.
+//
+
+#define USB_ENDPOINT_0_SIZE USBEndpointSize_64
+
 enum USBEndpointSize // See: EPSIZE2:0 @ Source(1) @ Section(22.18.2) @ Page(287).
 {
 	USBEndpointSize_8   = 0b000,
@@ -56,16 +106,16 @@ enum USBStandardRequestCode // See: Source(2) @ Table(9-3) @ Page(251).
 	USBStandardRequestCode_synch_frame       = 12,
 };
 
-enum DescriptorType // See: Source(2) @ Table(9-5) @ Page(251).
+enum USBDescriptorType // See: Source(2) @ Table(9-5) @ Page(251).
 {
-	DescriptorType_device                    = 1,
-	DescriptorType_configuration             = 2,
-	DescriptorType_string                    = 3,
-	DescriptorType_interface                 = 4,
-	DescriptorType_endpoint                  = 5,
-	DescriptorType_device_qualifier          = 6,
-	DescriptorType_other_speed_configuration = 7,
-	DescriptorType_interface_power           = 8,
+	USBDescriptorType_device                    = 1,
+	USBDescriptorType_configuration             = 2,
+	USBDescriptorType_string                    = 3,
+	USBDescriptorType_interface                 = 4,
+	USBDescriptorType_endpoint                  = 5,
+	USBDescriptorType_device_qualifier          = 6,
+	USBDescriptorType_other_speed_configuration = 7,
+	USBDescriptorType_interface_power           = 8,
 };
 
 // Note that the USB specification seems to call the descriptor
@@ -77,7 +127,7 @@ __attribute__((packed))
 struct USBStandardDescriptor // Source(2) @ Table(9-8) @ Page(262-263).
 {
 	u8 bLength;            // Size of the descriptor which should always be 18 bytes.
-	u8 bDescriptorType;    // Alias: enum DescriptorType.
+	u8 bDescriptorType;    // Alias: enum USBDescriptorType.
 	u8 bcdUSB[2];          // USB Specification version that's being complied with.
 	u8 bDeviceClass;       // TODO document
 	u8 bDeviceSubClass;    // TODO document
@@ -111,21 +161,19 @@ struct USBSetupPacket // See: struct USBSetupPacketUnknown.
 			u8 bmRequestType;    // Should be 0b1000'0000.
 			u8 bRequest;         // Should be USBStandardRequestCode_get_descriptor.
 			u8 descriptor_index; // Low byte of wValue.
-			u8 descriptor_type;  // High byte of wValue. Alias: enum DescriptorType.
+			u8 descriptor_type;  // High byte of wValue. Alias: enum USBDescriptorType.
 			u8 language_id[2];
 			u8 wLength[2];
 		} get_descriptor;
 	};
 };
 
-#define USB_ENDPOINT_0_SIZE USBEndpointSize_64
-
 // TODO document
 // TODO PROGMEMify
 static const struct USBStandardDescriptor USB_DEVICE_DESCRIPTOR =
 	{
 		.bLength            = sizeof(struct USBStandardDescriptor),
-		.bDescriptorType    = DescriptorType_device,
+		.bDescriptorType    = USBDescriptorType_device,
 		.bcdUSB             = { 0x00, 0x02 },
 		.bDeviceClass       = 0,   // TEMP
 		.bDeviceSubClass    = 0,   // TEMP
@@ -139,4 +187,3 @@ static const struct USBStandardDescriptor USB_DEVICE_DESCRIPTOR =
 		.iSerialNumber      = 0,   // TEMP
 		.bNumConfigurations = 1,
 	};
-

@@ -1,71 +1,77 @@
-// TODO Copied from CMD. Revamp it!
+/* TODO(Setting Pin Optimizations)
+	There is potentially be a lot of garbage code that could be generated from
+	changing pin configurations, particularly changing output pins from low to high
+	or vice-versa. Each time we do that, we have to set DDRx, but really we only have to
+	do this once. If we're doing it all over the codebase though, then there's very little
+	chance for the compiler to realize that pin X will always be an output pin, so we don't
+	need to write that one bit in DDRx every single time.
+*/
 
-enum PinState
+void
+pin_set(u8 pin, enum PinState state)
 {
-	PinState_false    = 0b00, // The corresponding booleans
-	PinState_true     = 0b01, // can just be used instead.
-	PinState_floating = 0b10,
-	PinState_input    = 0b11
-};
-#define PIN_DEFS(X) \
-	X( 0, D, 2) X( 1, D, 3) X( 2, D, 1) X( 3, D, 0) X( 4, D, 4) X( 5, C, 6) X(6, D, 7) X(7, E, 6) \
-	X( 8, B, 4) X( 9, B, 5) X(10, B, 6) X(11, B, 7) X(12, D, 6) X(13, C, 7)
+	/* Configuring Pin.
+		We set the pin's output direction (determined by the 2nd LSB of the values in enum PinState)
+		and then the pin's driven state (LSB of enum PinState).
 
-static void
-pin_set(u8 pin_index, enum PinState state)
-{
-	switch (pin_index) // Sets the data direction (i.e. input/output).
+		If the 2nd LSB is 0, then the pin is set to output some voltage level.
+		In this case, the voltage level is determined by the LSB of enum PinState (5 volts when 1, 0 volts when 0).
+
+		If the 2nd LSB is 1, then the pin will not be necessarily used for outputting a voltage signal.
+		In this case, if the LSB is 0, then the pin is "floating" or "tri-state" or "Hi-Z" ("High-Impedence").
+		This just means that reading from the pin will be noisy, perhaps because neighboring pins are
+		influence it or some external signal is affecting its voltage level.
+		This is the default state of a pin after the chip is reset.
+
+		If we want to avoid noise, the pin's pull-up resistor can be activated (this will be where LSB is 1).
+		The pull-up resistor pulls the pin's voltage level to ~5v, thus resisting any external noise
+		from influencing it. The pin's voltage level can still be pulled down to 0 volts by some strong,
+		outside force on purpose, like another chip. This is how we will read pin inputs reliably.
+
+		TODO Power Consumption?
+			Apparently floating pins comsume more power than pins that are tied to 5v.
+			How much though? Is it that important?
+			* "Unconnected Pins" @ Source(1) @ Section(10.2.6) @ Page(71-72).
+
+		* "Configuring the Pin" @ Source(1) @ Section(10.2.1) @ Page(68).
+		* PORTx, DDRx @ Source(1) @ Section(10.4.1) @ Page(84-86).
+	*/
+
+	switch (pin)
 	{
-		#define CASE(PIN_NUMBER, LETTER, INDEX) \
-			case PIN_NUMBER: \
-			{ \
-				DDR##LETTER ^= (DDR##LETTER & (1 << DD##LETTER##INDEX)) ^ (((~state >> 1) & 1) << DD##LETTER##INDEX); \
-			} break;
-		PIN_DEFS(CASE);
-		#undef CASE
+		#define MAKE_CASE(P, X, N) case P: DDR##X ^= (DDR##X & (1 << DD##X##N)) ^ (((~state >> 1) & 1) << DD##X##N); break;
+		PIN_XMDT(MAKE_CASE);
+		#undef MAKE_CASE
 	}
 
-	switch (pin_index) // Sets the port value (i.e. is driven high).
+	switch (pin)
 	{
-		#define CASE(PIN_NUMBER, LETTER, INDEX) \
-			case PIN_NUMBER: \
-			{ \
-				PORT##LETTER ^= (PORT##LETTER & (1 << PORT##LETTER##INDEX)) ^ ((state & 1) << PORT##LETTER##INDEX); \
-			} break;
-		PIN_DEFS(CASE);
-		#undef CASE
+		#define MAKE_CASE(P, X, N) case P: PORT##X ^= (PORT##X & (1 << PORT##X##N)) ^ ((state & 1) << PORT##X##N); break;
+		PIN_XMDT(MAKE_CASE);
+		#undef MAKE_CASE
 	}
 }
 
 static b8
-pin_read(u8 pin_index)
+pin_read(u8 pin)
 {
-	switch (pin_index)
+	/* Read Digital Input.
+		We use PINx to simply read the binary voltage level of the specified pin!
+		If the pin is configured as an output, then the reading will return whatever
+		we have set the voltage level to. If it's in a floating state, when there is
+		no reliable reading that can be gathered here. If it's in the input state
+		(pull-up resistors enabled), then readings are reliable.
+
+		* "Reading the Pin Value" @ Source(1) @ Section(10.2.4) @ Page(69).
+		* PINx @ Source(1) @ Section(10.4.1) @ Page(84-86).
+	*/
+
+	switch (pin)
 	{
-		#define CASE(PIN_NUMBER, LETTER, INDEX) \
-			case PIN_NUMBER: \
-			{ \
-				return (PIN##LETTER >> PIN##LETTER##INDEX) & 1; \
-			} break;
-		PIN_DEFS(CASE);
-		#undef CASE
+		#define MAKE_CASE(P, X, N) case P: return (PIN##X >> PIN##X##N) & 1;
+		PIN_XMDT(MAKE_CASE);
+		#undef MAKE_CASE
 
-		default:
-		{
-			return false;
-		} break;
+		default: return false;
 	}
-}
-
-static void
-pin_output(u8 byte)
-{
-	pin_set(9, (byte >> 0) & 1);
-	pin_set(8, (byte >> 1) & 1);
-	pin_set(7, (byte >> 2) & 1);
-	pin_set(6, (byte >> 3) & 1);
-	pin_set(5, (byte >> 4) & 1);
-	pin_set(4, (byte >> 5) & 1);
-	pin_set(3, (byte >> 6) & 1);
-	pin_set(2, (byte >> 7) & 1);
 }

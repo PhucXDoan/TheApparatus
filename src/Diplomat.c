@@ -6,6 +6,19 @@
 #include "defs.h"
 #include "pins.c"
 
+static void
+debug_pin_output(u8 byte)
+{
+	pin_set(9, (byte >> 0) & 1);
+	pin_set(8, (byte >> 1) & 1);
+	pin_set(7, (byte >> 2) & 1);
+	pin_set(6, (byte >> 3) & 1);
+	pin_set(5, (byte >> 4) & 1);
+	pin_set(4, (byte >> 5) & 1);
+	pin_set(3, (byte >> 6) & 1);
+	pin_set(2, (byte >> 7) & 1);
+}
+
 /* "USB Device Interrupt".
 	Can trigger on:
 		- VBUS Plug-In.
@@ -184,19 +197,19 @@ ISR(USB_COM_vect)
 	{
 		switch (setup_packet.get_descriptor.descriptor_type)
 		{
-			case DescriptorType_device:
+			case USBDescriptorType_device:
 			{
 				static int i = 0; // TEMP
-				pin_output(++i); // TEMP
+				debug_pin_output(++i); // TEMP
 			} break;
 
-			case DescriptorType_configuration:
-			case DescriptorType_string:
-			case DescriptorType_interface:
-			case DescriptorType_endpoint:
-			case DescriptorType_device_qualifier:
-			case DescriptorType_other_speed_configuration:
-			case DescriptorType_interface_power:
+			case USBDescriptorType_configuration:
+			case USBDescriptorType_string:
+			case USBDescriptorType_interface:
+			case USBDescriptorType_endpoint:
+			case USBDescriptorType_device_qualifier:
+			case USBDescriptorType_other_speed_configuration:
+			case USBDescriptorType_interface_power:
 			default:
 			{
 				goto error;
