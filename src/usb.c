@@ -33,57 +33,32 @@ ISR(USB_COM_vect)
 		((u8*) &setup_packet)[i] = UEDATX;
 	}
 
+	// Acknowledge SETUP GetDescriptor packet.
+	UEINTX &= ~(1 << RXSTPI);
+
 	if // [SETUP GetDescriptor].
 	(
 		setup_packet.unknown.bmRequestType == 0b1000'0000
 		&& setup_packet.unknown.bRequest == USBStandardRequestCode_get_descriptor
 	)
 	{
+		u8  data_remaining = 0;
+		u8* data_cursor    = 0;
+
 		switch (setup_packet.get_descriptor.descriptor_type)
 		{
 			case USBDescriptorType_device: // [SETUP GetDescriptor Device].
 			{
-				UEINTX &= ~(1 << RXSTPI); // Acknowledge SETUP GetDescriptor packet.
-
-				u8  data_remaining;
-				u8* data_cursor;
-
 				static_assert(sizeof(USB_DEVICE_DESCRIPTOR) < (1 << (sizeof(data_remaining) * 8)));
 				data_remaining = sizeof(USB_DEVICE_DESCRIPTOR);
 				data_cursor    = (u8*) &USB_DEVICE_DESCRIPTOR;
-
-				while (true)
-				{
-					if (UEINTX & (1 << TXINI))
-					{
-						u8 writes_left = USB_ENDPOINT_0_SIZE;
-						if (writes_left > data_remaining)
-						{
-							writes_left = data_remaining;
-						}
-
-						data_remaining -= writes_left;
-						while (writes_left)
-						{
-							UEDATX        = data_cursor[0];
-							data_cursor  += 1;
-							writes_left  -= 1;
-						}
-
-						UEINTX &= ~(1 << TXINI);
-					}
-
-					if (UEINTX & (1 << RXOUTI))
-					{
-						UEINTX &= ~(1 << RXOUTI);
-						break;
-					}
-				}
 			} break;
 
 			case USBDescriptorType_configuration:
 			{
-				debug_halt(3);
+				static_assert(sizeof(USB_CONFIGURATION) < (1 << (sizeof(data_remaining) * 8)));
+				data_remaining = sizeof(USB_CONFIGURATION);
+				data_cursor    = (u8*) &USB_CONFIGURATION;
 			} break;
 
 			case USBDescriptorType_string:
@@ -100,13 +75,60 @@ ISR(USB_COM_vect)
 				debug_halt(5);
 			} break;
 		}
+
+		while (true)
+		{
+			if (UEINTX & (1 << TXINI))
+			{
+				u8 writes_left = USB_ENDPOINT_0_SIZE;
+				if (writes_left > data_remaining)
+				{
+					writes_left = data_remaining;
+				}
+
+				data_remaining -= writes_left;
+				while (writes_left)
+				{
+					UEDATX        = data_cursor[0];
+					data_cursor  += 1;
+					writes_left  -= 1;
+				}
+
+				UEINTX &= ~(1 << TXINI);
+			}
+
+			if (UEINTX & (1 << RXOUTI))
+			{
+				UEINTX &= ~(1 << RXOUTI);
+				break;
+			}
+		}
+	}
+	else if // [SETUP SetAddress].
+	(
+		setup_packet.unknown.bmRequestType == 0b0000'0000
+		&& setup_packet.unknown.bRequest == USBStandardRequestCode_set_address
+	)
+	{
+		u16 address =
+			((u16) setup_packet.set_address.address_parts[1] << 8) |
+			((u16) setup_packet.set_address.address_parts[0] << 0);
+		if (address >= 0b0111'1111)
+		{
+			error_halt();
+		}
+
+		UDADDR = address;
+
+		UEINTX &= ~(1 << TXINI);
+
+		while (!(UEINTX & (1 << TXINI)));
+
+		UDADDR |= (1 << ADDEN);
 	}
 	else // Unhandled or unknown SETUP command.
 	{
-		static u16 TEMP = 0;
-		debug_u8(TEMP += 1);
-		UEINTX &= ~(1 << RXSTPI);
-		//debug_halt(2);
+		debug_halt(2);
 	}
 
 	return;
