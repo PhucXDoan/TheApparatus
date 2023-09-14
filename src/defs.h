@@ -89,7 +89,7 @@ enum USBStandardRequestCode // Source(2) @ Table(9-3) @ Page(251).
 	USBStandardRequestCode_synch_frame       = 12,
 };
 
-enum USBDescriptorType // Source(2) @ Table(9-5) @ Page(251).
+enum USBDescriptorType // See: Source(2) @ Table(9-5) @ Page(251).
 {
 	USBDescriptorType_device                    = 1,
 	USBDescriptorType_configuration             = 2,
@@ -122,7 +122,7 @@ struct USBStandardDescriptor // Source(2) @ Table(9-8) @ Page(262-263).
 };
 
 __attribute__((packed))
-struct USBSetupPacket // TODO Document.
+struct USBSetupPacket // See: Source(2) @ Table(9-2) @ Page(248).
 {
 	union
 	{
