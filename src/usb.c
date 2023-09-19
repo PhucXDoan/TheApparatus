@@ -67,25 +67,26 @@ ISR(USB_COM_vect)
 	if // [SETUP GetDescriptor].
 	(
 		setup_packet.unknown.bmRequestType == 0b1000'0000
-		&& setup_packet.unknown.bRequest == USBStandardRequestCode_get_descriptor
+		&& setup_packet.unknown.bRequest == USBRequestCode_get_descriptor
 	)
 	{
+		// TODO Eventually move to having something using: struct USBDescriptor* descriptor = 0;
+
 		u8  data_remaining = 0;
 		u8* data_cursor    = 0;
+
 		switch (setup_packet.get_descriptor.descriptor_type)
 		{
 			case USBDescriptorType_device: // [SETUP GetDescriptor Device].
 			{
-				static_assert(sizeof(USB_DEVICE_DESCRIPTOR) < (1 << (sizeof(data_remaining) * 8)));
-				data_remaining = sizeof(USB_DEVICE_DESCRIPTOR);
 				data_cursor    = (u8*) &USB_DEVICE_DESCRIPTOR;
+				data_remaining = sizeof(USB_DEVICE_DESCRIPTOR);
 			} break;
 
 			case USBDescriptorType_configuration: // [SETUP GetDescriptor Configuration].
 			{
-				static_assert(sizeof(USB_CONFIGURATION) < (1 << (sizeof(data_remaining) * 8)));
-				data_remaining = sizeof(USB_CONFIGURATION);
 				data_cursor    = (u8*) &USB_CONFIGURATION;
+				data_remaining = sizeof(USB_CONFIGURATION);
 			} break;
 
 			case USBDescriptorType_string:
@@ -133,7 +134,7 @@ ISR(USB_COM_vect)
 	else if // [SETUP SetAddress].
 	(
 		setup_packet.unknown.bmRequestType == 0b0000'0000
-		&& setup_packet.unknown.bRequest == USBStandardRequestCode_set_address
+		&& setup_packet.unknown.bRequest == USBRequestCode_set_address
 	)
 	{
 		u16 address =
@@ -382,7 +383,7 @@ ISR(USB_COM_vect)
 /* [SETUP GetDescriptor Device].
 	The host wants to learn what the device actually is and how to further work with it.
 	The data that is sent to the host are all detailed within
-	{struct USBStandardDescriptor}.
+	{struct USBDescriptor}.
 
 	Refer to the diagram of the heirarchy of protocols at (1).
 

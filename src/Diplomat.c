@@ -10,7 +10,7 @@
 int
 main(void)
 {
-	sei(); // Activates global interrupts. @ Source(1) @ Section(4.4) @ Page(11).
+	sei(); // Activates global interrupts. See: Source(1) @ Section(4.4) @ Page(11).
 
 	usb_init();
 
