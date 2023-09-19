@@ -77,42 +77,46 @@ pin_read(u8 pin)
 }
 
 static void
-error_halt(void)
-{
-	cli();
-	while (true)
-	{
-		pin_set(13, !pin_read(13));
-		_delay_ms(50.0);
-	}
-}
-
-static void
 debug_halt(u8 flashes)
 {
 	while (true)
 	{
-		for (u8 i = 0; i < flashes; i += 1)
+		for (u8 j = 0; j < 8; j += 1)
 		{
-			pin_set(13, true);
-			_delay_ms(100.0);
-			pin_set(13, false);
-			_delay_ms(100.0);
+			for (u8 i = 0; i < flashes; i += 1)
+			{
+				pin_set(2 + j, !pin_read(2 + j));
+				_delay_ms(200.0);
+				pin_set(2 + j, !pin_read(2 + j));
+				_delay_ms(200.0);
+			}
+			_delay_ms(1000.0);
 		}
-		pin_set(13, false);
-		_delay_ms(1000.0);
 	}
 }
 
 static void
 debug_u8(u8 byte)
 {
-	pin_set(9, (byte >> 0) & 1);
-	pin_set(8, (byte >> 1) & 1);
-	pin_set(7, (byte >> 2) & 1);
-	pin_set(6, (byte >> 3) & 1);
-	pin_set(5, (byte >> 4) & 1);
-	pin_set(4, (byte >> 5) & 1);
-	pin_set(3, (byte >> 6) & 1);
-	pin_set(2, (byte >> 7) & 1);
+	pin_set(2, (byte >> 0) & 1);
+	pin_set(3, (byte >> 1) & 1);
+	pin_set(4, (byte >> 2) & 1);
+	pin_set(5, (byte >> 3) & 1);
+	pin_set(6, (byte >> 4) & 1);
+	pin_set(7, (byte >> 5) & 1);
+	pin_set(8, (byte >> 6) & 1);
+	pin_set(9, (byte >> 7) & 1);
+}
+
+static void
+error_halt(void)
+{
+	cli();
+	while (true)
+	{
+		debug_u8(0);
+		_delay_ms(50.0);
+		debug_u8(-1);
+		_delay_ms(50.0);
+	}
 }

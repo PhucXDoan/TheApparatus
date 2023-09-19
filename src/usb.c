@@ -54,7 +54,7 @@ ISR(USB_COM_vect)
 
 	UENUM = 0;
 
-	// [Reading SETUP Packet].
+	// [Read SETUP Packet].
 	struct USBSetupPacket setup_packet;
 	for (u8 i = 0; i < sizeof(setup_packet); i += 1)
 	{
@@ -98,6 +98,8 @@ ISR(USB_COM_vect)
 				debug_halt(3);
 			} break;
 		}
+
+		// TODO[IN/OUT Interrupts].
 
 		// [Transmit IN Data To Host].
 		while (true)
@@ -145,7 +147,6 @@ ISR(USB_COM_vect)
 		UDADDR = address;
 
 		UEINTX &= ~(1 << TXINI);
-
 		while (!(UEINTX & (1 << TXINI)));
 
 		UDADDR |= (1 << ADDEN);
@@ -176,27 +177,31 @@ ISR(USB_COM_vect)
 */
 
 /* [Power-On USB Pads Regulator].
-	Based off of (1), the USB (pad) regulator simply supplies voltage to the USB data lines and capacitor.
+	Based off of (1), the USB (pad) regulator simply supplies voltage to the USB data
+	lines and capacitor.
 
-	So this first step is as simple as turning the UVREGE bit in UHWCON to enable this hardware (2).
+	So this first step is as simple as turning the UVREGE bit in UHWCON to enable this
+	hardware (2).
 
 	(1) "USB Controller Block Diagram Overview" @ Source(1) @ Figure(21-1) @ Page(256).
 	(2) UHWCON, UVREGE @ Source(1) @ Section(21.13.1) @ Page(267).
 */
 
 /* [Configure PLL Interface].
-	PLL refers to a phase-locked-loop device. I don't know much about the mechanisms of it,
-	but it seems like you give it some input frequency and it'll output a higher frequency
-	after it has synced up onto it.
+	PLL refers to a phase-locked-loop device. I don't know much about the mechanisms of
+	it, but it seems like you give it some input frequency and it'll output a higher
+	frequency after it has synced up onto it.
 
 	I've heard that using the default 16MHz clock signal is more reliable (TODO Prove),
 	especially when using full-speed USB connection. So that's what we'll be using.
 
-	We don't actually use the 16MHz frequency directly, but put it through a PLL clock prescaler first,
-	as seen in (1). The actual PLL unit itself expects 8MHz, so we'll need to half our 16MHz clock to get that.
+	We don't actually use the 16MHz frequency directly, but put it through a PLL clock
+	prescaler first, as seen in (1). The actual PLL unit itself expects 8MHz, so we'll
+	need to half our 16MHz clock to get that.
 
-	From there, we enable the PLL and it will output a 48MHz frequency by default, as shown in the default bits
-	in (2) and table (3). We want 48MHz since this is what the USB interface expects as shown by (1).
+	From there, we enable the PLL and it will output a 48MHz frequency by default, as
+	shown in the default bits in (2) and table (3). We want 48MHz since this is what
+	the USB interface expects as shown by (1).
 
 	(1) "USB Controller Block Diagram Overview" @ Source(1) @ Figure(21-1) @ Page(256).
 	(2) PDIV @ Source(1) @ Section(6.11.6) @ Page(41).
@@ -211,18 +216,18 @@ ISR(USB_COM_vect)
 */
 
 /* [Enable USB Interface].
-	The "USB interface" is synonymous with "USB device controller" or simply "USB controller" (1).
+	The "USB interface" is synonymous with "USB device controller" or simply
+	"USB controller" (1). We can enable the controller with the USBE bit in USBCON.
 
-	We can enable the controller with the USBE bit in USBCON.
+	But... based off of some experiments and the crude figure of the USB state machine
+	at (2), the FRZCLK bit can only be cleared **AFTER** the USB interface has been
+	enabled. FRZCLK halts the USB clock in order to minimize power consumption (3),
+	but obviously the USB is also disabled, so we want to avoid that. As a result, we
+	just have to assign to USBCON again afterwards to be able to clear the FRZCLK bit.
 
-	But... based off of some experiments and the crude figure of the USB state machine at (2),
-	the FRZCLK bit can only be cleared **AFTER** the USB interface has been enabled.
-	FRZCLK halts the USB clock in order to minimize power consumption (3),
-	but obviously the USB is also disabled, so we want to avoid that.
-	As a result, we just have to assign to USBCON again afterwards to be able to clear the FRZCLK bit.
-
-	We will also set OTGPADE to be able to detect whether or not we are connected to a USB device/host.
-	This connection can be determined by the VBUS bit in the USBSTA register (4).
+	We will also set OTGPADE to be able to detect whether or not we are connected to a
+	USB device/host. This connection can be determined by the VBUS bit in the USBSTA
+	register (4).
 
 	(1) "USB interface" @ Source(1) @ Section(22.2) @ Page(270).
 	(2) Crude USB State Machine @ Source(1) @ Figure (21-7) @ Page(260).
@@ -231,19 +236,21 @@ ISR(USB_COM_vect)
 */
 
 /* [Configure USB Interface].
-	We enable the End-of-Reset interrupt, so when the unenumerated USB device connects and the hosts sees this,
-	the host will pull the data lines to a state to signal that the device should reset, and when
-	the host releases, the [USB Device Interrupt Routine] is then triggered.
+	We enable the End-of-Reset interrupt, so when the unenumerated USB device connects
+	and the hosts sees this, the host will pull the data lines to a state to signal
+	that the device should reset, and when the host releases, the
+	[USB Device Interrupt Routine] is then triggered.
 
-	It is important that we do some of our initializations after the End-of-Reset signal since (1)
-	specifically states that the endpoints will end up disable at the end.
+	It is important that we do some of our initializations after the End-of-Reset
+	signal since (1) specifically states that the endpoints will end up disable at the
+	end.
 
 	(1) "USB Reset" @ Source(1) @ Section(22.4) @ Page(271).
 */
 
 /* [Wait For USB VBUS Information Connection].
-	We just allow the device to be able to attach to a host and we're done initializing the USB interface.
-	No need to actually wait for a connection.
+	We just allow the device to be able to attach to a host and we're done initializing
+	sthe USB interface. No need to actually wait for a connection.
 */
 
 /* [USB Device Interrupt Routine].
@@ -261,11 +268,12 @@ ISR(USB_COM_vect)
 */
 
 /* [Endpoint Configuration].
-	We consult the flowchart in (1) where we select our choice of endpoint to modify (dictated by UENUM (3)),
-	enable it via EPEN in UECONX, apply the configurations such as size and banks, and then allocate.
+	We consult the flowchart in (1) where we select our choice of endpoint to modify
+	(dictated by UENUM (3)), enable it via EPEN in UECONX, apply the configurations
+	such as size and banks, and then allocate.
 
 	It should be noted that UECFG0X (2) describes the endpoint's
-	USB transfer type (cONTROL, BULK, ISOCHRONOUS, INTERRUPT) (4).
+	USB transfer type (CONTROL, BULK, ISOCHRONOUS, INTERRUPT) (4).
 	Since endpoint 0 is for setting up the USB device,
 	it can only be the CONTROL type, and it is already so by default.
 
@@ -278,8 +286,8 @@ ISR(USB_COM_vect)
 	According to the (5), endpoint 0 has a max size of 64 bytes.
 	Any larger than this will probably cause an allocation failure.
 
-	The other configuration in the UECFG1X register is the ability to pick between one or two banks.
-	This is also called "ping-pong mode".
+	The other configuration in the UECFG1X register is the ability to pick between one
+	or two banks. This is also called "ping-pong mode".
 	Since endpoint 0 will be communicating from device to host and vice-versa
 	(despite being considered an OUT by UECFG0X), we can't dual-bank (6) (7).
 
@@ -296,7 +304,8 @@ ISR(USB_COM_vect)
 	The allocation process can technically fail, as seen in (1),
 	but if we aren't dynamically changing the endpoints around like in (2),
 	then we can safely assume the allocation we do here is successful
-	(we'd only have to check CFGOK in UESTA0X once and then recompile without the asserting code after (3)).
+	(we'd only have to check CFGOK in UESTA0X once and then recompile without
+	the asserting code after (3)).
 
 	(1) "Endpoint Activation" @ Source(1) @ Section(22.6) @ Page(271).
 	(2) Allocation and Reorganization USB Memory Flow @ Source(1) @ Table(21-1) @ Page(264).
@@ -320,7 +329,8 @@ ISR(USB_COM_vect)
 
 /* [Clear UDINT].
 	The UDINT register has flags that are triggering this interrupt routine,
-	so we'll need to clear them to make sure we don't accidentally go in an infinite loop!
+	so we'll need to clear them to make sure we don't accidentally go in an infinite
+	loop!
 
 	The only flag-bit we'd need to actually clear is the EORSTI bit,
 	but since we don't care about the other bits and they don't do anything when cleared,
@@ -330,7 +340,7 @@ ISR(USB_COM_vect)
 */
 
 /* [Endpoint Interrupt Routine].
-	Triggers listed on (1) of when endpoint UENUM:
+	Triggers listed on (1) of when a specific endpoint:
 		[ ] is ready to supply data for IN packets to send to the host.
 		[ ] received OUT data from the host.
 		[X] received a SETUP command.
@@ -342,19 +352,20 @@ ISR(USB_COM_vect)
 	(1) "Endpoint Interrupt" @ Source(1) @ Figure(22-5) @ Page(280).
 */
 
-/* [Reading SETUP Packet].
+/* [Read SETUP Packet].
 	The host first sends the device a TOKEN that signifies a SETUP command.
 	After that token is a DATA packet consisting of 8 bytes,
 	the layout of which is detailed by {struct USBSetupPacket}.
 	After this data packet is a handshake (also called the status stage)
 	given to the host that the device acknowledged the transaction,
-	which according to (1), is always done automatically for CONTROL typed endpoints to SETUP commands.
+	which according to (1), is always done automatically for CONTROL typed endpoints
+	to SETUP commands.
 
 	We can read the data sent by the host byte-by-byte from UEDATX.
 	The amount of bytes within the buffer is UEBCX (2), but since SETUP data packets
 	are already 8 bytes always, we can assume that it is so. If it isn't,
-	then there's a very unlikely chance that there'll be a successful enumeration.
-	No need to waste program memory here.
+	then there's a very unlikely chance that there'll be a successful enumeration;
+	no need to waste program memory here.
 
 	(1) CONTROL Endpoint Management @ Source(1) @ Section(22.12) @ Page(274).
 	(2) UEDATX, UEBCX @ Source(1) @ Section(22.18.2) @ Page(291).
@@ -364,48 +375,87 @@ ISR(USB_COM_vect)
 
 /* [SETUP GetDescriptor].
 	This is where the host wants to learn more about the device.
-	The host asks about various things such as information about device itself, configurations, strings, etc,
-	all of which are noted in {enum USBDescriptorType}.
+	The host asks about various things such as information about device itself,
+	configurations, strings, etc, all of which are noted in {enum USBDescriptorType}.
 */
 
 /* [SETUP GetDescriptor Device].
 	The host wants to learn what the device actually is and how to further work with it.
-	The data that is sent to the host are all detailed within {struct USBStandardDescriptor}.
+	The data that is sent to the host are all detailed within
+	{struct USBStandardDescriptor}.
+
+	Refer to the diagram of the heirarchy of protocols at (1).
+
+	(1) "Heirarchy of Protocols" @ Source(4) @ Chapter(5).
 */
 
 /* [SETUP GetDescriptor Configuration].
-	TODO
+	A USB device configuration describes the high-level settings of the entire device
+	(e.g. whether or not the device is self-powered or host-powered (1)),
+	and there can be multiple configurations on a single device, to which the host will
+	pick the most appropriate one.
+
+	A configuration primarily describes the set of interfaces, which can be thought of
+	as the set of "features" that this device in this specific configuration has.
+
+	(1) Configurations @ Source(4) @ Chapter(5).
 */
 
 /* [Transmit IN Data To Host].
-	The USB transaction of data from device-to-host begins after the host has already sent the SETUP command
-	(first a TOKEN, then the {struct USBSetupPacket} as the 8-byte data packet, finally handshake of ACK).
-	The host now begins to send a series of IN commands to get data from the device.
+	The USB transaction of data from device-to-host begins after the host has already
+	sent the SETUP command (first a TOKEN, then the {struct USBSetupPacket} as the
+	8-byte data packet, finally handshake of ACK). The host now begins to send a series
+	of IN commands to get data from the device.
 
-	The transaction, like with any other, follows the same format: TOKEN, data packet, and finally handshake.
-	The TOKEN is sent by host (since USB is host-centric) with a bit-pattern that signifies an IN command,
-	to which the data-packet that follows it is now being transmitted by the device
-	(rather than from the host like last time with the SETUP data-packet).
-	After the data-packet has been sent,
-	the host sends an ACK handshake just like the device did for the SETUP command.
+	The transaction, like with any other, follows the same format: TOKEN, data packet,
+	and finally handshake. The TOKEN is sent by host (since USB is host-centric) with a
+	bit-pattern that signifies an IN command, to which the data-packet that follows it
+	is now being transmitted by the device (rather than from the host like last time
+	with the SETUP data-packet). After the data-packet has been sent, the host is now
+	the one to send the ACK handshake.
 
-	This applies to any endpoint, but let's say for endpoint 0 that it has a buffer size of 8 bytes.
-	This will mean that data requested by the host longer than 8 bytes cannot be sent entirely through
-	endpoint 0. This is resolved by having the host perform multiple of these transactions involving
-	the IN commands until the transfer is complete. The data-packet that is sent does not have to be
-	multiples of the endpoint's buffer size, i.e. endpoint 0 can send a data-packet of 3 bytes.
+	Let's say for endpoint 0 that it has a buffer size of 8 bytes.
+	This will mean that data requested by the host longer than 8 bytes cannot be sent
+	entirely through endpoint 0. This is resolved by having the host perform multiple
+	of these transactions involving the IN commands until the transfer is complete.
+	Data-packets should always be as long as the endpoint's buffer can make it to be,
+	until there is not enough remaining data to send, to which the data-packet can be
+	truncated to a shorter length (e.g. 3 bytes instead of max 8 bytes). In other words,
+	no padding bytes are to be sent.
 
 	After the series of IN commands, the host sends the device an OUT command.
-	This transaction is simply a "long" handshake though, since the data-packet that is sent from host
-	to device is zero-lengthed. This is just to let the device know that the host has received all the
-	data.
+	This transaction is simply a longer version of the ACK handshake though,
+	since the OUT data-packet that is sent from host to device is zero-lengthed.
+	This is just to let the device know that the host has received all the data.
 
-	An OUT command could also be sent prematurely by the host, even if the device still has remaining
-	data to send.
+	An OUT command could also be sent prematurely by the host, even if the device still
+	has remaining data to send. Perhaps the host had enough of the device!
 */
 
 /* [SETUP SetAddress]
-	TODO
+	The host would like to set the device's address, which at this point is zero by
+	default, as with any other USB device when it first connect. The desired address
+	is stated within the SETUP data-packet that the host sent to endpoint 0,
+	specifically in a 16-bit field.
+
+	According to (1), any address is a 7-bit unsigned integer, so if we received a
+	desired address from the host that can't fit into that, then something has gone
+	quite wrong.
+
+	Once we have the desired address, we set it as so in the UDADDR register, but don't
+	actually enable it until later, as stated in (2).
+
+	So the host sent a SETUP command asking to set the device's address, which we ACK'd
+	and processed. After that SETUP command is an IN command (still to address 0) to
+	make sure the device has processed it. We can signal to the host that we have indeed
+	so by sending a zero-lengthed data-packet in response.
+
+	The ATmega32U4 datasheet makes no mention of this at all, but it seems like we can
+	only enable the address **AFTER** we have completely sent the zero-lengthed
+	data-packet. So we just simply spinlock until endpoint 0's buffer is free.
+
+	(1) "Address Field" @ Source(2) @ Section(8.3.2.1) @ Page(197).
+	(2) "Address Setup" @ Source(1) @ Section(22.7) @ Page(272).
 */
 
 /* TODO[Tampered Default Register Values].
@@ -445,4 +495,13 @@ ISR(USB_COM_vect)
 	configure an endpoint in UECFG1X to be have 512 bytes!
 	* UECFG1X @ Source(1) @ Section(22.18.2) @ Page(287).
 	* Endpoint Size Statements @ Source(1) @ Section(22.1) @ Page(270).
+*/
+
+/* TODO[IN/OUT Interrupts].
+	In theory, using interrupts to trigger on IN/OUT commands to handle should be
+	identical to spinlocking for those commands, but it turns out not. I'm not entirely
+	too sure why. Perhaps I am not understanding the exact semantic of the endpoint
+	interrupts for these cases, or that the CPU can't handle the interrupt in time
+	because USB is just so fast. It could also very well be neither of those cases and
+	it's something else entirely!
 */

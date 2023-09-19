@@ -14,21 +14,11 @@ main(void)
 
 	usb_init();
 
-	DDRC   = (1 << DDC7);
-	PORTC &= ~(1 << PORTC7);
-	_delay_ms(1000.0);
-
-	for (;;)
+	while (true)
 	{
-		PORTC ^= (1 << PORTC7);
-		_delay_ms(1000.0);
-	}
-
-	error:;
-	DDRC = (1 << DDC7);
-	for (;;)
-	{
-		pin_set(13, !pin_read(13));
-		_delay_ms(50.0);
+		debug_u8(0xAA);
+		_delay_ms(100.0);
+		debug_u8(0x55);
+		_delay_ms(100.0);
 	}
 }

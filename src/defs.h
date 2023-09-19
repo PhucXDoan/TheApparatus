@@ -101,26 +101,6 @@ enum USBDescriptorType // See: Source(2) @ Table(9-5) @ Page(251).
 	USBDescriptorType_interface_power           = 8,
 };
 
-// TODO Document.
-__attribute__((packed))
-struct USBStandardDescriptor // Source(2) @ Table(9-8) @ Page(262-263).
-{
-	u8 bLength;            // Size of the descriptor which should always be 18 bytes.
-	u8 bDescriptorType;    // Alias: enum USBDescriptorType.
-	u8 bcdUSB[2];          // USB Specification version that's being complied with.
-	u8 bDeviceClass;       // TODO Document.
-	u8 bDeviceSubClass;    // TODO Document.
-	u8 bDevceProtocol;     // TODO Document.
-	u8 bMaxPacketSize0;    // Max packet size of endpoint 0.
-	u8 idVendor[2];        // TODO Document.
-	u8 idProduct[2];       // TODO Document.
-	u8 bcdDevice[2];       // TODO Document.
-	u8 iManufacturer;      // Zero-based index of string descriptor for the manufacturer description.
-	u8 iProduct;           // Zero-based index of string descriptor for the product description.
-	u8 iSerialNumber;      // Zero-based index of string descriptor for the device's serial number.
-	u8 bNumConfigurations; // TODO Document.
-};
-
 __attribute__((packed))
 struct USBSetupPacket // See: Source(2) @ Table(9-2) @ Page(248).
 {
@@ -153,6 +133,26 @@ struct USBSetupPacket // See: Source(2) @ Table(9-2) @ Page(248).
 			u32 zeros;            // Should all be zeros.
 		} set_address;
 	};
+};
+
+// TODO Document.
+__attribute__((packed))
+struct USBStandardDescriptor // Source(2) @ Table(9-8) @ Page(262-263).
+{
+	u8 bLength;            // Size of the descriptor which should always be 18 bytes.
+	u8 bDescriptorType;    // Alias: enum USBDescriptorType.
+	u8 bcdUSB[2];          // USB Specification version that's being complied with.
+	u8 bDeviceClass;       // TODO Document.
+	u8 bDeviceSubClass;    // TODO Document.
+	u8 bDevceProtocol;     // TODO Document.
+	u8 bMaxPacketSize0;    // Max packet size of endpoint 0.
+	u8 idVendor[2];        // TODO Document.
+	u8 idProduct[2];       // TODO Document.
+	u8 bcdDevice[2];       // TODO Document.
+	u8 iManufacturer;      // Zero-based index of string descriptor for the manufacturer description.
+	u8 iProduct;           // Zero-based index of string descriptor for the product description.
+	u8 iSerialNumber;      // Zero-based index of string descriptor for the device's serial number.
+	u8 bNumConfigurations; // TODO Document.
 };
 
 // TODO Document.
@@ -287,12 +287,14 @@ static const u8 USB_CONFIGURATION[] =
 	Source(1) @ ATmega32U4 Datasheet ("Atmel-7766J-USB-ATmega16U4/32U4-Datasheet_04/2016").
 	Source(2) @ USB 2.0 Specification @ ("Universal Serial Bus Specification Revision 2.0", April 27, 2000).
 	Source(3) @ Arduino Leonardo Pinout Diagram (STORE.ARDUINO.CC/LEONARDO, 17/06/2020).
+	Source(4) @ USB in a NutShell (BeyondLogic, September 19, 2023).
 
 	TODO Redo documentation style.
 	TODO Interrupt behavior on USB disconnection?
 	TODO AVR-GCC is being an absolute pain and is complaining about `int x = {0};`. Disable the warning!
 	TODO How does endianess work? Is doing shifts for u8s to make u16 the same as just interpreting as u16?
 	TODO is __attribute__((packed)) necessary?
+	TODO is there a global jump that could be done for error purposes?
 */
 
 // Note that the USB specification seems to call the descriptor
