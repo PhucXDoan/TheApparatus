@@ -70,23 +70,22 @@ ISR(USB_COM_vect)
 		&& setup_packet.unknown.bRequest == USBRequestCode_get_descriptor
 	)
 	{
-		// TODO Eventually move to having something using: struct USBDescriptor* descriptor = 0;
 
 		u8  data_remaining = 0;
 		u8* data_cursor    = 0;
 
 		switch (setup_packet.get_descriptor.descriptor_type)
 		{
-			case USBDescriptorType_device: // [SETUP GetDescriptor Device].
+			case USBDescriptorType_device:
 			{
 				data_cursor    = (u8*) &USB_DEVICE_DESCRIPTOR;
 				data_remaining = sizeof(USB_DEVICE_DESCRIPTOR);
 			} break;
 
-			case USBDescriptorType_configuration: // [SETUP GetDescriptor Configuration].
+			case USBDescriptorType_configuration:
 			{
-				data_cursor    = (u8*) &USB_CONFIGURATION;
-				data_remaining = sizeof(USB_CONFIGURATION);
+				data_cursor    = (u8*) &USB_CONFIGURATION_HIERARCHY;
+				data_remaining = sizeof(USB_CONFIGURATION_HIERARCHY);
 			} break;
 
 			case USBDescriptorType_string:
@@ -100,10 +99,16 @@ ISR(USB_COM_vect)
 			} break;
 		}
 
-		// TODO[IN/OUT Interrupts].
-
+		//
 		// [Transmit IN Data To Host].
-		while (true)
+		//
+
+		if (data_remaining > setup_packet.get_descriptor.wLength)
+		{
+			data_remaining = setup_packet.get_descriptor.wLength;
+		}
+
+		while (true) // TODO[IN/OUT Interrupts].
 		{
 			if (UEINTX & (1 << TXINI))
 			{
@@ -137,15 +142,12 @@ ISR(USB_COM_vect)
 		&& setup_packet.unknown.bRequest == USBRequestCode_set_address
 	)
 	{
-		u16 address =
-			((u16) setup_packet.set_address.address_parts[1] << 8) |
-			((u16) setup_packet.set_address.address_parts[0] << 0);
-		if (address >= 0b0111'1111)
+		if (setup_packet.set_address.address >= 0b0111'1111)
 		{
 			error_halt();
 		}
 
-		UDADDR = address;
+		UDADDR = setup_packet.set_address.address;
 
 		UEINTX &= ~(1 << TXINI);
 		while (!(UEINTX & (1 << TXINI)));
@@ -378,28 +380,6 @@ ISR(USB_COM_vect)
 	This is where the host wants to learn more about the device.
 	The host asks about various things such as information about device itself,
 	configurations, strings, etc, all of which are noted in {enum USBDescriptorType}.
-*/
-
-/* [SETUP GetDescriptor Device].
-	The host wants to learn what the device actually is and how to further work with it.
-	The data that is sent to the host are all detailed within
-	{struct USBDescriptor}.
-
-	Refer to the diagram of the heirarchy of protocols at (1).
-
-	(1) "Heirarchy of Protocols" @ Source(4) @ Chapter(5).
-*/
-
-/* [SETUP GetDescriptor Configuration].
-	A USB device configuration describes the high-level settings of the entire device
-	(e.g. whether or not the device is self-powered or host-powered (1)),
-	and there can be multiple configurations on a single device, to which the host will
-	pick the most appropriate one.
-
-	A configuration primarily describes the set of interfaces, which can be thought of
-	as the set of "features" that this device in this specific configuration has.
-
-	(1) Configurations @ Source(4) @ Chapter(5).
 */
 
 /* [Transmit IN Data To Host].

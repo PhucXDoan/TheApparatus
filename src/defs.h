@@ -100,73 +100,71 @@ enum USBDescriptorType // See: Source(2) @ Table(9-5) @ Page(251).
 	USBDescriptorType_interface_power           = 8, // Descriptor layout is not defined within Source(2). See: Source(2) @ Section(9.4) @ Page(251).
 };
 
-__attribute__((packed))
 struct USBSetupPacket // See: Source(2) @ Table(9-2) @ Page(248).
 {
 	union
 	{
 		struct USBSetupPacketUnknown
 		{
-			u8 bmRequestType;
-			u8 bRequest;         // Alias: enum USBRequestCode.
-			u8 wValue_parts[2];
-			u8 wIndex_parts[2];
-			u8 wLength_parts[2];
+			u8  bmRequestType;
+			u8  bRequest;      // Alias: enum USBRequestCode.
+			u16 wValue;
+			u16 wIndex;
+			u16 wLength;
 		} unknown;
 
 		struct USBSetupPacketGetDescriptor
 		{
-			u8 bmRequestType;        // Must be 0b1000'0000.
-			u8 bRequest;             // Must be USBRequestCode_get_descriptor.
-			u8 descriptor_index;     // Low byte of wValue.
-			u8 descriptor_type;      // High byte of wValue. Alias: enum USBDescriptorType.
-			u8 language_id_parts[2];
-			u8 wLength_parts[2];
+			u8  bmRequestType;    // Must be 0b1000'0000.
+			u8  bRequest;         // Must be USBRequestCode_get_descriptor.
+			u8  descriptor_index; // Low byte of wValue.
+			u8  descriptor_type;  // High byte of wValue. Alias: enum USBDescriptorType.
+			u16 language_id;
+			u16 wLength;
 		} get_descriptor;
 
 		struct USBSetupPacketSetAddress
 		{
-			u8  bmRequestType;    // Must be 0b0000'0000.
-			u8  bRequest;         // Must be USBRequestCode_set_address.
-			u8  address_parts[2];
-			u32 zero;             // Expect to be zero.
+			u8  bmRequestType; // Must be 0b0000'0000.
+			u8  bRequest;      // Must be USBRequestCode_set_address.
+			u16 address;
+			u32 zero;          // Expect to be zero.
 		} set_address;
 	};
 };
 
-__attribute__((packed))
 struct USBDescriptor
 {
 	union
 	{
-		struct USBDescriptorDevice // See: Source(2) @ Table(9-8) @ Page(262-263).
+		struct USBDescriptorDevice // [USB Device Descriptor].
 		{
-			u8 bLength;            // Must be the size of struct USBDescriptorDevice.
-			u8 bDescriptorType;    // Must be USBDescriptorType_device. Aliasing: enum USBDescriptorType.
-			u8 bcdUSB[2];          // USB Specification version that's being complied with.
-			u8 bDeviceClass;       // TODO Document.
-			u8 bDeviceSubClass;    // TODO Document.
-			u8 bDevceProtocol;     // TODO Document.
-			u8 bMaxPacketSize0;    // Max packet size of endpoint 0.
-			u8 idVendor[2];        // TODO Document.
-			u8 idProduct[2];       // TODO Document.
-			u8 bcdDevice[2];       // TODO Document.
-			u8 iManufacturer;      // Zero-based index of string descriptor for the manufacturer description.
-			u8 iProduct;           // Zero-based index of string descriptor for the product description.
-			u8 iSerialNumber;      // Zero-based index of string descriptor for the device's serial number.
-			u8 bNumConfigurations; // Count of configurations the device can be set to. See: Source(4) @ Chapter(5).
+			u8  bLength;            // Must be the size of struct USBDescriptorDevice.
+			u8  bDescriptorType;    // Must be USBDescriptorType_device. Aliasing: enum USBDescriptorType.
+			u16 bcdUSB;             // USB Specification version that's being complied with.
+			u8  bDeviceClass;       // TODO Document.
+			u8  bDeviceSubClass;    // TODO Document.
+			u8  bDeviceProtocol;    // TODO Document.
+			u8  bMaxPacketSize0;    // Max packet size of endpoint 0.
+			u16 idVendor;           // TODO Document.
+			u16 idProduct;          // TODO Document.
+			u16 bcdDevice;          // TODO Document.
+			u8  iManufacturer;      // Zero-based index of string descriptor for the manufacturer description.
+			u8  iProduct;           // Zero-based index of string descriptor for the product description.
+			u8  iSerialNumber;      // Zero-based index of string descriptor for the device's serial number.
+			u8  bNumConfigurations; // Count of configurations the device can be set to. See: Source(4) @ Chapter(5).
 		} device;
 
-		struct USBDescriptorConfiguration // TODO Document.
+		struct USBDescriptorConfiguration // [USB Configuration Descriptor].
 		{
-			u8 bLength;            // Must be the size of struct USBDescriptorConfiguration.
-			u8 bDescriptorType;    // Must be USBDescriptorType_configuration. Aliasing: enum USBDescriptorType.
-			u8 wTotalLength[2];
-			u8 bNumInterfaces;
-			u8 bConfigurationValue;
-			u8 iConfiguration;
-			u8 bmAttributes;
-			u8 bMaxPower;
+			u8  bLength;             // Must be the size of struct USBDescriptorConfiguration.
+			u8  bDescriptorType;     // Must be USBDescriptorType_configuration. Aliasing: enum USBDescriptorType.
+			u16 wTotalLength;        // TODO Document.
+			u8  bNumInterfaces;      // TODO Document.
+			u8  bConfigurationValue; // TODO Document.
+			u8  iConfiguration;      // TODO Document.
+			u8  bmAttributes;        // TODO Document.
+			u8  bMaxPower;           // TODO Document.
 		} configuration;
 
 		struct USBDescriptorInterface // TODO Document.
@@ -184,12 +182,12 @@ struct USBDescriptor
 
 		struct USBDescriptorEndpoint // TODO Document.
 		{
-			u8 bLength;            // Must be the size of struct USBDescriptorEndpoint.
-			u8 bDescriptorType;    // Must be USBDescriptorType_endpoint. Aliasing: enum USBDescriptorType.
-			u8 bEndpointAddress;
-			u8 bmAttributes;
-			u8 wMaxPacketSize[2];
-			u8 bInterval;
+			u8  bLength;            // Must be the size of struct USBDescriptorEndpoint.
+			u8  bDescriptorType;    // Must be USBDescriptorType_endpoint. Aliasing: enum USBDescriptorType.
+			u8  bEndpointAddress;
+			u8  bmAttributes;
+			u16 wMaxPacketSize;
+			u8  bInterval;
 		} endpoint;
 
 		struct USBDescriptorDeviceQualifer
@@ -206,127 +204,161 @@ struct USBDescriptor
 	};
 };
 
-// TODO PROGMEMify.
-static const struct USBDescriptorDevice USB_DEVICE_DESCRIPTOR =
-	{
-		18,                  // bLength
-		1,                   // bDescriptorType
-		{ 0x00, 0x02 },      // bcdUSB
-		2,                   // bDeviceClass
-		0,                   // bDeviceSubClass
-		0,                   // bDeviceProtocol
-		USB_ENDPOINT_0_SIZE, // bMaxPacketSize0
-		{ 0xC0, 0x16 },      // idVendor
-		{ 0x7A, 0x04 },      // idProduct
-		{ 0x00, 0x01 },      // bcdDevice
-		1,                   // iManufacturer
-		2,                   // iProduct
-		3,                   // iSerialNumber
-		1                    // bNumConfigurations
+#define CDC_ACM_ENDPOINT 2
+#define CDC_RX_ENDPOINT  3
+#define CDC_TX_ENDPOINT  4
+#define CDC_ACM_SIZE     16
+#define CDC_ACM_BUFFER   EP_SINGLE_BUFFER
+#define CDC_RX_SIZE      64
+#define CDC_RX_BUFFER    EP_DOUBLE_BUFFER
+#define CDC_TX_SIZE      64
+#define CDC_TX_BUFFER    EP_DOUBLE_BUFFER
 
-//		.bLength            = sizeof(struct USBDescriptor),
-//		.bDescriptorType    = USBDescriptorType_device,
-//		.bcdUSB             = { 0x00, 0x02 },
-//		.bDeviceClass       = 0,   // TEMP
-//		.bDeviceSubClass    = 0,   // TEMP
-//		.bDevceProtocol     = 0,   // TEMP
-//		.bMaxPacketSize0    = USB_ENDPOINT_0_SIZE,
-//		.idVendor           = {0}, // TEMP
-//		.idProduct          = {0}, // TEMP
-//		.bcdDevice          = {0}, // TEMP
-//		.iManufacturer      = 0,   // TEMP
-//		.iProduct           = 0,   // TEMP
-//		.iSerialNumber      = 0,   // TEMP
-//		.bNumConfigurations = 1,
+static const struct USBDescriptorDevice USB_DEVICE_DESCRIPTOR = // TODO PROGMEMify.
+	{
+		.bLength            = sizeof(struct USBDescriptorDevice),
+		.bDescriptorType    = USBDescriptorType_device,
+		.bcdUSB             = 0x0200,
+		.bDeviceClass       = 2,
+		.bDeviceSubClass    = 0,
+		.bDeviceProtocol    = 0,
+		.bMaxPacketSize0    = USB_ENDPOINT_0_SIZE,
+		.idVendor           = 0x16C0,
+		.idProduct          = 0x047A,
+		.bcdDevice          = 0x0100,
+		.iManufacturer      = 1,
+		.iProduct           = 2,
+		.iSerialNumber      = 3,
+		.bNumConfigurations = 1
 	};
 
-// TODO Copypasta from m_usb.
-#define CONFIG1_DESC_SIZE           (9+9+5+5+4+5+7+9+7+7)
-#define ENDPOINT0_SIZE              16
-#define CDC_ACM_ENDPOINT            2
-#define CDC_RX_ENDPOINT             3
-#define CDC_TX_ENDPOINT             4
-#define CDC_ACM_SIZE                16
-#define CDC_ACM_BUFFER              EP_SINGLE_BUFFER
-#define CDC_RX_SIZE                 64
-#define CDC_RX_BUFFER               EP_DOUBLE_BUFFER
-#define CDC_TX_SIZE                 64
-#define CDC_TX_BUFFER               EP_DOUBLE_BUFFER
-static const u8 USB_CONFIGURATION[] =
+struct USBConfigurationHierarchy
+{
+	struct USBDescriptorConfiguration configuration;
+
+	struct
 	{
-		// configuration descriptor, USB spec 9.6.3, page 264-266, Table 9-10
-		9,                               // bLength;
-		2,                               // bDescriptorType;
-		(CONFIG1_DESC_SIZE) & 0xFF,      // wTotalLength
-		(CONFIG1_DESC_SIZE >> 8) & 0xFF,
-		2,                               // bNumInterfaces
-		1,                               // bConfigurationValue
-		0,                               // iConfiguration
-		0xC0,                            // bmAttributes
-		50,                              // bMaxPower
-		// interface descriptor, USB spec 9.6.5, page 267-269, Table 9-12
-		9,                       // bLength
-		4,                       // bDescriptorType
-		0,                       // bInterfaceNumber
-		0,                       // bAlternateSetting
-		1,                       // bNumEndpoints
-		0x02,                    // bInterfaceClass
-		0x02,                    // bInterfaceSubClass
-		0x01,                    // bInterfaceProtocol
-		0,                       // iInterface
-		// CDC Header Functional Descriptor, CDC Spec 5.2.3.1, Table 26
-		5,                       // bFunctionLength
-		0x24,                    // bDescriptorType
-		0x00,                    // bDescriptorSubtype
-		0x10, 0x01,              // bcdCDC
-		// Call Management Functional Descriptor, CDC Spec 5.2.3.2, Table 27
-		5,                       // bFunctionLength
-		0x24,                    // bDescriptorType
-		0x01,                    // bDescriptorSubtype
-		0x01,                    // bmCapabilities
-		1,                       // bDataInterface
-		// Abstract Control Management Functional Descriptor, CDC Spec 5.2.3.3, Table 28
-		4,                       // bFunctionLength
-		0x24,                    // bDescriptorType
-		0x02,                    // bDescriptorSubtype
-		0x06,                    // bmCapabilities
-		// Union Functional Descriptor, CDC Spec 5.2.3.8, Table 33
-		5,                       // bFunctionLength
-		0x24,                    // bDescriptorType
-		0x06,                    // bDescriptorSubtype
-		0,                       // bMasterInterface
-		1,                       // bSlaveInterface0
-		// endpoint descriptor, USB spec 9.6.6, page 269-271, Table 9-13
-		7,                       // bLength
-		5,                       // bDescriptorType
-		CDC_ACM_ENDPOINT | 0x80, // bEndpointAddress
-		0x03,                    // bmAttributes (0x03=intr)
-		CDC_ACM_SIZE, 0,         // wMaxPacketSize
-		64,                      // bInterval
-		// interface descriptor, USB spec 9.6.5, page 267-269, Table 9-12
-		9,                       // bLength
-		4,                       // bDescriptorType
-		1,                       // bInterfaceNumber
-		0,                       // bAlternateSetting
-		2,                       // bNumEndpoints
-		0x0A,                    // bInterfaceClass
-		0x00,                    // bInterfaceSubClass
-		0x00,                    // bInterfaceProtocol
-		0,                       // iInterface
-		// endpoint descriptor, USB spec 9.6.6, page 269-271, Table 9-13
-		7,                       // bLength
-		5,                       // bDescriptorType
-		CDC_RX_ENDPOINT,         // bEndpointAddress
-		0x02,                    // bmAttributes (0x02=bulk)
-		CDC_RX_SIZE, 0,          // wMaxPacketSize
-		0,                       // bInterval
-		// endpoint descriptor, USB spec 9.6.6, page 269-271, Table 9-13
-		7,                       // bLength
-		5,                       // bDescriptorType
-		CDC_TX_ENDPOINT | 0x80,  // bEndpointAddress
-		0x02,                    // bmAttributes (0x02=bulk)
-		CDC_TX_SIZE, 0,          // wMaxPacketSize
-		0                        // bInterval
+		struct USBDescriptorInterface descriptor;
+		u8                            TEMP_0[5];
+		u8                            TEMP_1[5];
+		u8                            TEMP_2[4];
+		u8                            TEMP_3[5];
+		struct USBDescriptorEndpoint  endpoint;
+	} interface_a;
+
+	struct
+	{
+		struct USBDescriptorInterface descriptor;
+		struct USBDescriptorEndpoint  endpoints[2];
+	} interface_b;
+};
+
+static const struct USBConfigurationHierarchy USB_CONFIGURATION_HIERARCHY = // See: Source(4) @ Chapter(5).
+	{
+		.configuration =
+			{
+				.bLength             = sizeof(struct USBDescriptorConfiguration),
+				.bDescriptorType     = USBDescriptorType_configuration,
+				.wTotalLength        = sizeof(struct USBConfigurationHierarchy),
+				.bNumInterfaces      = 2,
+				.bConfigurationValue = 1,
+				.iConfiguration      = 0,
+				.bmAttributes        = 0xC0,
+				.bMaxPower           = 50,
+			},
+		.interface_a =
+			{
+				.descriptor =
+					{
+						.bLength            = sizeof(struct USBDescriptorInterface),
+						.bDescriptorType    = USBDescriptorType_interface,
+						.bInterfaceNumber   = 0,
+						.bAlternateSetting  = 0,
+						.bNumEndpoints      = 1,
+						.bInterfaceClass    = 0x02,
+						.bInterfaceSubClass = 0x02,
+						.bInterfaceProtocol = 0x01,
+						.iInterface         = 0,
+					},
+
+				.TEMP_0 = // TODO CDC Header Functional Descriptor, CDC Spec 5.2.3.1, Table 26
+					{
+						5,                       // bFunctionLength
+						0x24,                    // bDescriptorType
+						0x00,                    // bDescriptorSubtype
+						0x10, 0x01,              // bcdCDC
+					},
+
+				.TEMP_1 = // TODO Call Management Functional Descriptor, CDC Spec 5.2.3.2, Table 27
+					{
+						5,                       // bFunctionLength
+						0x24,                    // bDescriptorType
+						0x01,                    // bDescriptorSubtype
+						0x01,                    // bmCapabilities
+						1,                       // bDataInterface
+					},
+
+				.TEMP_2 = // TODO Abstract Control Management Functional Descriptor, CDC Spec 5.2.3.3, Table 28
+					{
+						4,                       // bFunctionLength
+						0x24,                    // bDescriptorType
+						0x02,                    // bDescriptorSubtype
+						0x06,                    // bmCapabilities
+					},
+
+				.TEMP_3 = // TODO Union Functional Descriptor, CDC Spec 5.2.3.8, Table 33
+					{
+						5,                       // bFunctionLength
+						0x24,                    // bDescriptorType
+						0x06,                    // bDescriptorSubtype
+						0,                       // bMasterInterface
+						1,                       // bSlaveInterface0
+					},
+
+				.endpoint =
+					{
+						.bLength          = sizeof(struct USBDescriptorEndpoint),
+						.bDescriptorType  = USBDescriptorType_endpoint,
+						.bEndpointAddress = CDC_ACM_ENDPOINT | 0x80,
+						.bmAttributes     = 0x03,
+						.wMaxPacketSize   = CDC_ACM_SIZE,
+						.bInterval        = 64,
+					},
+			},
+		.interface_b =
+			{
+				.descriptor =
+					{
+						.bLength            = sizeof(struct USBDescriptorInterface),
+						.bDescriptorType    = USBDescriptorType_interface,
+						.bInterfaceNumber   = 1,
+						.bAlternateSetting  = 0,
+						.bNumEndpoints      = 2,
+						.bInterfaceClass    = 0x0A,
+						.bInterfaceSubClass = 0x00,
+						.bInterfaceProtocol = 0x00,
+						.iInterface         = 0,
+					},
+				.endpoints =
+					{
+						{
+							.bLength          = sizeof(struct USBDescriptorEndpoint),
+							.bDescriptorType  = USBDescriptorType_endpoint,
+							.bEndpointAddress = CDC_RX_ENDPOINT,
+							.bmAttributes     = 0x02,
+							.wMaxPacketSize   = CDC_RX_SIZE,
+							.bInterval        = 0,
+						},
+						{
+							.bLength          = sizeof(struct USBDescriptorEndpoint),
+							.bDescriptorType  = USBDescriptorType_endpoint,
+							.bEndpointAddress = CDC_TX_ENDPOINT | 0x80,
+							.bmAttributes     = 0x02,
+							.wMaxPacketSize   = CDC_TX_SIZE,
+							.bInterval        = 0,
+						},
+					}
+			},
 	};
 
 //
@@ -339,10 +371,16 @@ static const u8 USB_CONFIGURATION[] =
 	Source(3) := Arduino Leonardo Pinout Diagram (STORE.ARDUINO.CC/LEONARDO) (Dated: 17/06/2020).
 	Source(4) := USB in a NutShell by BeyondLogic (Accessed: September 19, 2023).
 
+	We are working within the environment of the ATmega32U4 microcontroller,
+	which is an 8-bit CPU. This consequently means that there are no padding bytes to
+	worry about within structs, and that the CPU doesn't exactly have the concept of
+	"endianess", since all words are single bytes, so it's really up to the compiler
+	on how it will layout memory and perform arithmetic calculations on operands greater
+	than a byte. That said, it seems like the MCU's opcodes are 16-bits and are stored in
+	little-endian format, so AVR-GCC then also use the same convention for everything else.
+	In short: no padding bytes exist and we are in little-endian.
+
 	TODO Interrupt behavior on USB disconnection?
-	TODO AVR-GCC is being an absolute pain and is complaining about `int x = {0};`. Disable the warning!
-	TODO How does endianess work? Is doing shifts for u8s to make u16 the same as just interpreting as u16?
-	TODO is __attribute__((packed)) necessary?
 	TODO is there a global jump that could be done for error purposes?
 */
 
@@ -351,4 +389,25 @@ static const u8 USB_CONFIGURATION[] =
 	This can be found in pinout diagrams such as (1).
 
 	(1) Arduino Leonardo Pinout Diagram @ Source(3).
+*/
+
+/* [USB Device Descriptor]
+	The host wants to learn what the device actually is and how to further work with it.
+
+	Refer to the diagram of the heirarchy of protocols at (2).
+
+	(1) Device Descriptor Layout @ Source(2) @ Table(9-8) @ Page(262-263).
+	(2) "Heirarchy of Protocols" @ Source(4) @ Chapter(5).
+*/
+
+/* [USB Configuration Descriptor].
+	A USB device configuration describes the high-level settings of the entire device
+	(e.g. whether or not the device is self-powered or host-powered (1)),
+	and there can be multiple configurations on a single device, to which the host will
+	pick the most appropriate one.
+
+	A configuration primarily describes the set of interfaces, which can be thought of
+	as the set of "features" that this device in this specific configuration has.
+
+	(1) Configurations @ Source(4) @ Chapter(5).
 */
