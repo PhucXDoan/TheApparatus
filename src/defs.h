@@ -75,6 +75,30 @@ enum USBEndpointSizeType // See: Source(1) @ Section(22.18.2) @ Page(287).
 	USBEndpointSizeType_512 = 0b110,
 };
 
+enum USBEndpointTransferType // See: Source(2) @ Table(9-13) @ Page(270) & Source(1) @ Section(22.18.2) @ Page(286).
+{
+	USBEndpointTransferType_control     = 0b00,
+	USBEndpointTransferType_isochronous = 0b01,
+	USBEndpointTransferType_bulk        = 0b10,
+	USBEndpointTransferType_interrupt   = 0b11,
+};
+
+enum USBEndpointSyncType // See: Source(2) @ Table(9-13) @ Page(270).
+{
+	USBEndpointSyncType_null     = 0b00,
+	USBEndpointSyncType_async    = 0b01,
+	USBEndpointSyncType_adaptive = 0b10,
+	USBEndpointSyncType_sync     = 0b11,
+};
+
+enum USBEndpointUsageType // See: Source(2) @ Table(9-13) @ Page(270).
+{
+	USBEndpointUsageType_data                   = 0b00,
+	USBEndpointUsageType_feedback               = 0b01,
+	USBEndpointUsageType_implicit_feedback_data = 0b10,
+	USBEndpointUsageType_reserved               = 0b11,
+};
+
 enum USBRequestCode // See: Source(2) @ Table(9-3) @ Page(251).
 {
 	USBRequestCode_get_status        = 0,
@@ -90,6 +114,11 @@ enum USBRequestCode // See: Source(2) @ Table(9-3) @ Page(251).
 	USBRequestCode_synch_frame       = 12,
 };
 
+enum USBEndpointAddressFlag // See: "bEndpointAddress" @ Source(2) @ Table(9-13) @ Page(269).
+{
+	USBEndpointAddressFlag_in = 1 << 7
+};
+
 enum USBDescriptorType // See: Source(2) @ Table(9-5) @ Page(251).
 {
 	USBDescriptorType_device                    = 1,
@@ -98,8 +127,8 @@ enum USBDescriptorType // See: Source(2) @ Table(9-5) @ Page(251).
 	USBDescriptorType_interface                 = 4,
 	USBDescriptorType_endpoint                  = 5,
 	USBDescriptorType_device_qualifier          = 6,
-	USBDescriptorType_other_speed_configuration = 7, // Descriptor layout is identical to USBDescriptorType_configuration. See: Source(2) @ Section(9.6.4) @ Page(266).
-	USBDescriptorType_interface_power           = 8, // Descriptor layout is not defined within Source(2). See: Source(2) @ Section(9.4) @ Page(251).
+	USBDescriptorType_other_speed_configuration = 7,
+	USBDescriptorType_interface_power           = 8,
 };
 
 struct USBSetupPacket // See: Source(2) @ Table(9-2) @ Page(248).
@@ -151,75 +180,57 @@ enum USBConfigurationAttributeFlag // See: Source(2) @ Table(9-10) @ Page(266).
 	USBConfigurationAttributeFlag_reserved_one  = 1 << 7, // Must always be set.
 };
 
-struct USBDescriptor // See: Hierarchy of Descriptors @ Source(4) @ Chapter(5).
+struct USBDescriptorDevice // [USB Device Descriptor].
 {
-	union
-	{
-		struct USBDescriptorDevice // [USB Device Descriptor].
-		{
-			u8  bLength;            // Must be the size of struct USBDescriptorDevice.
-			u8  bDescriptorType;    // Aliasing(enum USBDescriptorType). Must be USBDescriptorType_device.
-			u16 bcdUSB;             // USB Specification version that's being complied with.
-			u8  bDeviceClass;       // Aliasing(enum USBClass).
-			u8  bDeviceSubClass;    // Might be used to further subdivide the device class. See: Source(2) @ Section(9.2.3) @ Page(245).
-			u8  bDeviceProtocol;    // Might be used to indicate to the host on how to communicate with the device. See: Source(2) @ Section(9.2.3) @ Page(245).
-			u8  bMaxPacketSize0;    // Max packet size of endpoint 0.
-			u16 idVendor;           // UID assigned by the USB-IF organization for a company. This with idProduct apparently helps the host find the most appropriate driver for the device (see: Source(4) @ Chapter(5)).
-			u16 idProduct;          // UID arbitrated by the vendor for a specific device made by them.
-			u16 bcdDevice;          // Version number of the device.
-			u8  iManufacturer;      // Index of string descriptor for the manufacturer description.
-			u8  iProduct;           // Index of string descriptor for the product description.
-			u8  iSerialNumber;      // Index of string descriptor for the device's serial number.
-			u8  bNumConfigurations; // Count of configurations the device can be set to. See: Source(4) @ Chapter(5).
-		} device;
+	u8  bLength;            // Must be the size of struct USBDescriptorDevice.
+	u8  bDescriptorType;    // Aliasing(enum USBDescriptorType). Must be USBDescriptorType_device.
+	u16 bcdUSB;             // USB Specification version that's being complied with.
+	u8  bDeviceClass;       // Aliasing(enum USBClass).
+	u8  bDeviceSubClass;    // Might be used to further subdivide the device class. See: Source(2) @ Section(9.2.3) @ Page(245).
+	u8  bDeviceProtocol;    // Might be used to indicate to the host on how to communicate with the device. See: Source(2) @ Section(9.2.3) @ Page(245).
+	u8  bMaxPacketSize0;    // Max packet size of endpoint 0.
+	u16 idVendor;           // UID assigned by the USB-IF organization for a company. This with idProduct apparently helps the host find the most appropriate driver for the device (see: Source(4) @ Chapter(5)).
+	u16 idProduct;          // UID arbitrated by the vendor for a specific device made by them.
+	u16 bcdDevice;          // Version number of the device.
+	u8  iManufacturer;      // Index of string descriptor for the manufacturer description.
+	u8  iProduct;           // Index of string descriptor for the product description.
+	u8  iSerialNumber;      // Index of string descriptor for the device's serial number.
+	u8  bNumConfigurations; // Count of configurations the device can be set to. See: Source(4) @ Chapter(5).
+};
 
-		struct USBDescriptorConfiguration // [USB Configuration Descriptor].
-		{
-			u8  bLength;             // Must be the size of struct USBDescriptorConfiguration.
-			u8  bDescriptorType;     // Aliasing(enum USBDescriptorType). Must be USBDescriptorType_configuration.
-			u16 wTotalLength;        // Amount of bytes describing the entire configuration including the configuration descriptor, endpoints, etc. See: Configuration Hierarchy Diagram @ Source(4) @ Chapter(5).
-			u8  bNumInterfaces;      // Amount of interfaces that this configuration has.
-			u8  bConfigurationValue; // "Value to use as an argument to the SetConfiguration() request to select this configuration". See: Source(2) @ Table(9-10) @ Page(265).
-			u8  iConfiguration;      // Index of string descriptor describing this configuration for diagnostics.
-			u8  bmAttributes;        // Aliasing(enum USBConfigurationAttributeFlag).
-			u8  bMaxPower;           // Expressed in units of 2mA (e.g. bMaxPower = 50 -> 100mA usage).
-		} configuration;
+struct USBDescriptorConfiguration // [USB Configuration Descriptor].
+{
+	u8  bLength;             // Must be the size of struct USBDescriptorConfiguration.
+	u8  bDescriptorType;     // Aliasing(enum USBDescriptorType). Must be USBDescriptorType_configuration.
+	u16 wTotalLength;        // Amount of bytes describing the entire configuration including the configuration descriptor, endpoints, etc. See: Configuration Hierarchy Diagram @ Source(4) @ Chapter(5).
+	u8  bNumInterfaces;      // Amount of interfaces that this configuration has.
+	u8  bConfigurationValue; // "Value to use as an argument to the SetConfiguration() request to select this configuration". See: Source(2) @ Table(9-10) @ Page(265).
+	u8  iConfiguration;      // Index of string descriptor describing this configuration for diagnostics.
+	u8  bmAttributes;        // Aliasing(enum USBConfigurationAttributeFlag).
+	u8  bMaxPower;           // Expressed in units of 2mA (e.g. bMaxPower = 50 -> 100mA usage).
+};
 
-		struct USBDescriptorInterface // [USB Interface Descriptor].
-		{
-			u8 bLength;            // Must be the size of struct USBDescriptorInterface.
-			u8 bDescriptorType;    // Aliasing(enum USBDescriptorType). Must be USBDescriptorType_interface.
-			u8 bInterfaceNumber;   // Index of the interface within the configuration.
-			u8 bAlternateSetting;  // If 1, then this interface is an alternate for the interface at index bInterfaceNumber.
-			u8 bNumEndpoints;      // Number of endpoints (that aren't endpoint 0) used by this interface.
-			u8 bInterfaceClass;    // Aliasing(enum USBClass). Value of USBClass_null is reserved.
-			u8 bInterfaceSubClass; // Might be used to further subdivide the interface class.
-			u8 bInterfaceProtocol; // Might be used to indicate to the host on how to communicate with the device.
-			u8 iInterface;         // Index of string descriptor that describes this interface.
-		} interface;
+struct USBDescriptorInterface // [USB Interface Descriptor].
+{
+	u8 bLength;            // Must be the size of struct USBDescriptorInterface.
+	u8 bDescriptorType;    // Aliasing(enum USBDescriptorType). Must be USBDescriptorType_interface.
+	u8 bInterfaceNumber;   // Index of the interface within the configuration.
+	u8 bAlternateSetting;  // If 1, then this interface is an alternate for the interface at index bInterfaceNumber.
+	u8 bNumEndpoints;      // Number of endpoints (that aren't endpoint 0) used by this interface.
+	u8 bInterfaceClass;    // Aliasing(enum USBClass). Value of USBClass_null is reserved.
+	u8 bInterfaceSubClass; // Might be used to further subdivide the interface class.
+	u8 bInterfaceProtocol; // Might be used to indicate to the host on how to communicate with the device.
+	u8 iInterface;         // Index of string descriptor that describes this interface.
+};
 
-		struct USBDescriptorEndpoint // TODO Document.
-		{
-			u8  bLength;            // Must be the size of struct USBDescriptorEndpoint.
-			u8  bDescriptorType;    // Aliasing(enum USBDescriptorType). Must be USBDescriptorType_endpoint.
-			u8  bEndpointAddress;
-			u8  bmAttributes;
-			u16 wMaxPacketSize;
-			u8  bInterval;
-		} endpoint;
-
-		struct USBDescriptorDeviceQualifer
-		{
-			u8 bLength;            // Must be the size of struct USBDescriptorDeviceQualifier.
-			u8 bDescriptorType;    // Aliasing(enum USBDescriptorType). Must be USBDescriptorType_device_qualifier.
-			u8 bcdUSB[2];          // USB Specification version that's being complied with.
-			u8 bDeviceClass;       // TODO Document.
-			u8 bDeviceSubClass;    // TODO Document.
-			u8 bDevceProtocol;     // TODO Document.
-			u8 bMaxPacketSize0;    // Max packet size of endpoint 0.
-			u8 zero;               // Must be zero.
-		} device_qualifer;
-	};
+struct USBDescriptorEndpoint // [USB Endpoint Descriptor].
+{
+	u8  bLength;          // Must be the size of struct USBDescriptorEndpoint.
+	u8  bDescriptorType;  // Aliasing(enum USBDescriptorType). Must be USBDescriptorType_endpoint.
+	u8  bEndpointAddress; // Addresses must be specified in low-nibble. Can be applied with enum USBEndpointAddressFlag.
+	u8  bmAttributes;     // Starting from LSb, attributes include enum USBEndpointTransferType, enum USBEndpointSyncType, and enum USBEndpointUsageType.
+	u16 wMaxPacketSize;   // Bits 10-0 specifies the maximum data-packet size that can be sent/received. Bits 12-11 are reserved for high-speed.
+	u8  bInterval;        // Amount of frames (~1ms in full-speed USB) that the endpoint will be polled for data. Isochronous must be within [0, 16] and interrupts within [1, 255].
 };
 
 struct USBConfigurationHierarchy
@@ -243,12 +254,6 @@ struct USBConfigurationHierarchy
 	} interface_1;
 };
 
-#define CDC_ACM_SIZE     16
-#define CDC_ACM_BUFFER   EP_SINGLE_BUFFER
-#define CDC_RX_SIZE      64
-#define CDC_RX_BUFFER    EP_DOUBLE_BUFFER
-#define CDC_TX_SIZE      64
-#define CDC_TX_BUFFER    EP_DOUBLE_BUFFER
 
 static const struct USBDescriptorDevice USB_DEVICE_DESCRIPTOR = // TODO PROGMEMify.
 	{
@@ -295,7 +300,6 @@ static const struct USBConfigurationHierarchy USB_CONFIGURATION_HIERARCHY = // S
 						.bInterfaceProtocol = 1, // Use the "V.250 (AT) Commands" for communication. See: Source(7) @ Section(3.2.2) @ AbsPage(15).
 						.iInterface         = 0, // Not important; point to empty string.
 					},
-
 				.TEMP_0 = // TODO CDC Header Functional Descriptor, CDC Spec 5.2.3.1, Table 26
 					{
 						5,                       // bFunctionLength
@@ -329,16 +333,15 @@ static const struct USBConfigurationHierarchy USB_CONFIGURATION_HIERARCHY = // S
 						0,                       // bMasterInterface
 						1,                       // bSlaveInterface0
 					},
-
 				.endpoints =
 					{
 						{
 							.bLength          = sizeof(struct USBDescriptorEndpoint),
 							.bDescriptorType  = USBDescriptorType_endpoint,
-							.bEndpointAddress = 1 | (1 << 7),
-							.bmAttributes     = 0x03,
-							.wMaxPacketSize   = 1,
-							.bInterval        = 64,
+							.bEndpointAddress = USBEndpointAddressFlag_in | 1,
+							.bmAttributes     = USBEndpointTransferType_interrupt,
+							.wMaxPacketSize   = 1, // TODO ????
+							.bInterval        = 64, // TODO Why this value specifically?
 						},
 					},
 			},
@@ -356,23 +359,23 @@ static const struct USBConfigurationHierarchy USB_CONFIGURATION_HIERARCHY = // S
 						.bInterfaceProtocol = 0, // Not using any specific communication protocol. See: Source(6) @ Section(4.7) @ AbsPage(21-22).
 						.iInterface         = 0, // Not important; point to empty string.
 					},
-				.endpoints = // TODO Can we remove the endpoint that sends data from host to device?
+				.endpoints =
 					{
 						{
 							.bLength          = sizeof(struct USBDescriptorEndpoint),
 							.bDescriptorType  = USBDescriptorType_endpoint,
-							.bEndpointAddress = 2 | (1 << 7),
-							.bmAttributes     = 0x02,
-							.wMaxPacketSize   = CDC_TX_SIZE,
-							.bInterval        = 0,
+							.bEndpointAddress = USBEndpointAddressFlag_in | 2,
+							.bmAttributes     = USBEndpointTransferType_bulk,
+							.wMaxPacketSize   = 64, // TODO How large can we make this?
+							.bInterval        = 0, // TODO What does this mean?
 						},
-						{
+						{ // TODO Can we remove the endpoint that sends data from host to device?
 							.bLength          = sizeof(struct USBDescriptorEndpoint),
 							.bDescriptorType  = USBDescriptorType_endpoint,
 							.bEndpointAddress = 3,
-							.bmAttributes     = 0x02,
-							.wMaxPacketSize   = CDC_RX_SIZE,
-							.bInterval        = 0,
+							.bmAttributes     = USBEndpointTransferType_bulk,
+							.wMaxPacketSize   = 64, // TODO How large can we make this?
+							.bInterval        = 0, // TODO What does this mean?
 						},
 					}
 			},
@@ -441,4 +444,12 @@ static const struct USBConfigurationHierarchy USB_CONFIGURATION_HIERARCHY = // S
 
 	(1) Interface Synopsis @ Source(4) @ Chapter(5).
 	(2) Interface Descriptor Layout @ Source(2) @ Table(9-12) @ Page(268-269).
+*/
+
+/* [USB Endpoint Descriptor].
+	An endpoint descriptor describe the properties of the endpoint for a specific
+	interface of a specific configuration of the device, as visually seen in (1).
+
+	(1) Configuration Hierarchy Diagram @ Source(4) @ Chapter(5).
+	(2) Endpoint Descriptor Layout @ Source(2) @ Table(9-13) @ Page(269-271).
 */
