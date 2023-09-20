@@ -119,6 +119,30 @@ enum USBEndpointAddressFlag // See: "bEndpointAddress" @ Source(2) @ Table(9-13)
 	USBEndpointAddressFlag_in = 1 << 7
 };
 
+enum USBConfigurationAttributeFlag // See: Source(2) @ Table(9-10) @ Page(266).
+{
+	USBConfigurationAttributeFlag_remote_wakeup = 1 << 5,
+	USBConfigurationAttributeFlag_self_powered  = 1 << 6,
+	USBConfigurationAttributeFlag_reserved_one  = 1 << 7, // Must always be set.
+};
+
+enum USBClass // ID that describes the generic function of the device or interface. This enum is non-exhuastive. See: Source(5).
+{
+	USBClass_null          = 0x00, // When used in device descriptors, the class is determined by the interface descriptors. Cannot otherwise be used in interface descriptors as it is reserved for future use.
+	USBClass_communication = 0x02,
+	USBClass_human         = 0x03,
+	USBClass_mass_storage  = 0x08,
+	USBClass_cdc_data      = 0x0A,
+};
+
+enum USBDescriptorCommunicationSubtype // This enum is non-exhuastive. See: Source(6) @ Table(13) @ AbsPage(25).
+{
+	USBDescriptorCommunicationSubtype_header                      = 0x00,
+	USBDescriptorCommunicationSubtype_call_management             = 0x01,
+	USBDescriptorCommunicationSubtype_abstract_control_management = 0x02,
+	USBDescriptorCommunicationSubtype_union                       = 0x06,
+};
+
 enum USBDescriptorType // See: Source(2) @ Table(9-5) @ Page(251).
 {
 	USBDescriptorType_device                    = 1,
@@ -129,6 +153,10 @@ enum USBDescriptorType // See: Source(2) @ Table(9-5) @ Page(251).
 	USBDescriptorType_device_qualifier          = 6,
 	USBDescriptorType_other_speed_configuration = 7,
 	USBDescriptorType_interface_power           = 8,
+
+	// Class-specific descriptor types for USBClass_communication. See: Source(6) @ Table(12) @ AbsPage(25).
+	USBDescriptorType_communication_interface   = 0x24,
+	USBDescriptorType_communication_endpoint    = 0x25,
 };
 
 struct USBSetupPacket // See: Source(2) @ Table(9-2) @ Page(248).
@@ -164,27 +192,11 @@ struct USBSetupPacket // See: Source(2) @ Table(9-2) @ Page(248).
 	};
 };
 
-enum USBClass // ID that describes the generic function of the device or interface. This enum is non-exhuastive. See: Source(5).
-{
-	USBClass_null          = 0x00, // When used in device descriptors, the class is determined by the interface descriptors. Cannot otherwise be used in interface descriptors as it is reserved for future use.
-	USBClass_communication = 0x02,
-	USBClass_human         = 0x03,
-	USBClass_mass_storage  = 0x08,
-	USBClass_cdc_data      = 0x0A,
-};
-
-enum USBConfigurationAttributeFlag // See: Source(2) @ Table(9-10) @ Page(266).
-{
-	USBConfigurationAttributeFlag_remote_wakeup = 1 << 5,
-	USBConfigurationAttributeFlag_self_powered  = 1 << 6,
-	USBConfigurationAttributeFlag_reserved_one  = 1 << 7, // Must always be set.
-};
-
 struct USBDescriptorDevice // [USB Device Descriptor].
 {
 	u8  bLength;            // Must be the size of struct USBDescriptorDevice.
 	u8  bDescriptorType;    // Aliasing(enum USBDescriptorType). Must be USBDescriptorType_device.
-	u16 bcdUSB;             // USB Specification version that's being complied with.
+	u16 bcdUSB;             // USB specification version that's being complied with.
 	u8  bDeviceClass;       // Aliasing(enum USBClass).
 	u8  bDeviceSubClass;    // Might be used to further subdivide the device class. See: Source(2) @ Section(9.2.3) @ Page(245).
 	u8  bDeviceProtocol;    // Might be used to indicate to the host on how to communicate with the device. See: Source(2) @ Section(9.2.3) @ Page(245).
@@ -233,18 +245,26 @@ struct USBDescriptorEndpoint // [USB Endpoint Descriptor].
 	u8  bInterval;        // Amount of frames (~1ms in full-speed USB) that the endpoint will be polled for data. Isochronous must be within [0, 16] and interrupts within [1, 255].
 };
 
+struct USBDescriptorCommunicationHeader // [USB Communication Header Descriptor].
+{
+	u8  bLength;            // Must be the size of struct USBDescriptorCommunicationHeader.
+	u8  bDescriptorType;    // Aliasing(enum USBDescriptorType). Must be USBDescriptorType_communication_interface.
+	u8  bDescriptorSubtype; // Aliasing(enum USBDescriptorCommunicationSubtype). Must be USBDescriptorCommunicationSubtype_header.
+	u16 bcdCDC;             // CDC specification version that's being complied with.
+};
+
 struct USBConfigurationHierarchy
 {
 	struct USBDescriptorConfiguration configuration;
 
 	struct
 	{
-		struct USBDescriptorInterface descriptor;
-		u8                            TEMP_0[5];
-		u8                            TEMP_1[5];
-		u8                            TEMP_2[4];
-		u8                            TEMP_3[5];
-		struct USBDescriptorEndpoint  endpoints[1];
+		struct USBDescriptorInterface           descriptor;
+		struct USBDescriptorCommunicationHeader communication_header;
+		u8                                      TEMP_1[5];
+		u8                                      TEMP_2[4];
+		u8                                      TEMP_3[5];
+		struct USBDescriptorEndpoint            endpoints[1];
 	} interface_0;
 
 	struct
@@ -261,8 +281,8 @@ static const struct USBDescriptorDevice USB_DEVICE_DESCRIPTOR = // TODO PROGMEMi
 		.bDescriptorType    = USBDescriptorType_device,
 		.bcdUSB             = 0x0200,
 		.bDeviceClass       = USBClass_communication,
-		.bDeviceSubClass    = 0, // Irrelevant for USBClass_communication. See Source(5).
-		.bDeviceProtocol    = 0, // Irrelevant for USBClass_communication. See Source(5).
+		.bDeviceSubClass    = 0, // Irrelevant for USBClass_communication. See Source(5) & Source(6) @ Section(5.1.1) @ AbsPage(23).
+		.bDeviceProtocol    = 0, // Irrelevant for USBClass_communication. See Source(5) & Source(6) @ Section(5.1.1) @ AbsPage(23).
 		.bMaxPacketSize0    = USB_ENDPOINT_0_SIZE,
 		.idVendor           = 0, // Setting to zero doesn't seem to prevent functionality.
 		.idProduct          = 0, // Setting to zero doesn't seem to prevent functionality.
@@ -300,36 +320,33 @@ static const struct USBConfigurationHierarchy USB_CONFIGURATION_HIERARCHY = // S
 						.bInterfaceProtocol = 1, // Use the "V.250 (AT) Commands" for communication. See: Source(7) @ Section(3.2.2) @ AbsPage(15).
 						.iInterface         = 0, // Not important; point to empty string.
 					},
-				.TEMP_0 = // TODO CDC Header Functional Descriptor, CDC Spec 5.2.3.1, Table 26
+				.communication_header =
 					{
-						5,                       // bFunctionLength
-						0x24,                    // bDescriptorType
-						0x00,                    // bDescriptorSubtype
-						0x10, 0x01,              // bcdCDC
+						.bLength            = sizeof(struct USBDescriptorCommunicationHeader),
+						.bDescriptorType    = USBDescriptorType_communication_interface,
+						.bDescriptorSubtype = USBDescriptorCommunicationSubtype_header,
+						.bcdCDC             = 0x0120,
 					},
-
 				.TEMP_1 = // TODO Call Management Functional Descriptor, CDC Spec 5.2.3.2, Table 27
 					{
 						5,                       // bFunctionLength
-						0x24,                    // bDescriptorType
-						0x01,                    // bDescriptorSubtype
+						USBDescriptorType_communication_interface,                    // bDescriptorType
+						USBDescriptorCommunicationSubtype_call_management,                    // bDescriptorSubtype
 						0x01,                    // bmCapabilities
 						1,                       // bDataInterface
 					},
-
 				.TEMP_2 = // TODO Abstract Control Management Functional Descriptor, CDC Spec 5.2.3.3, Table 28
 					{
 						4,                       // bFunctionLength
-						0x24,                    // bDescriptorType
-						0x02,                    // bDescriptorSubtype
+						USBDescriptorType_communication_interface,                    // bDescriptorType
+						USBDescriptorCommunicationSubtype_abstract_control_management,                    // bDescriptorSubtype
 						0x06,                    // bmCapabilities
 					},
-
 				.TEMP_3 = // TODO Union Functional Descriptor, CDC Spec 5.2.3.8, Table 33
 					{
 						5,                       // bFunctionLength
-						0x24,                    // bDescriptorType
-						0x06,                    // bDescriptorSubtype
+						USBDescriptorType_communication_interface,                    // bDescriptorType
+						USBDescriptorCommunicationSubtype_union,                    // bDescriptorSubtype
 						0,                       // bMasterInterface
 						1,                       // bSlaveInterface0
 					},
@@ -452,4 +469,17 @@ static const struct USBConfigurationHierarchy USB_CONFIGURATION_HIERARCHY = // S
 
 	(1) Configuration Hierarchy Diagram @ Source(4) @ Chapter(5).
 	(2) Endpoint Descriptor Layout @ Source(2) @ Table(9-13) @ Page(269-271).
+*/
+
+/* [USB Communication Header Descriptor].
+	This is a class-specific descriptor, in the sense that the USB 2.0 specification
+	doesn't mention this structure at all. This descriptor is just for CDC
+	(Communications Device Class), for which its specification does actually state the
+	layout (1).
+
+	This descriptor is used first before the other class-specific descriptors in CDC,
+	all to just simply announce the specification version.
+
+	(1) "Functional Descriptors" @ Source(6) @ Section(5.2.3) @ AbsPage(24).
+	(2) Header Descriptor Layout @ Source(6) @ section(5.2.3.1) @ AbsPage(26).
 */
