@@ -259,7 +259,7 @@ struct USBDescriptorEndpoint // [USB Endpoint Descriptor].
 	u8  bInterval;        // Amount of frames (~1ms in full-speed USB) that the endpoint will be polled for data. Isochronous must be within [0, 16] and interrupts within [1, 255].
 };
 
-struct USBDescriptorCommunicationHeader // [USB Communication Header Descriptor].
+struct USBDescriptorCommunicationHeader // [USB Communication Header Functional Descriptor].
 {
 	u8  bLength;            // Must be the size of struct USBDescriptorCommunicationHeader.
 	u8  bDescriptorType;    // Aliasing(enum USBDescriptorType). Must be USBDescriptorType_communication_interface.
@@ -267,7 +267,7 @@ struct USBDescriptorCommunicationHeader // [USB Communication Header Descriptor]
 	u16 bcdCDC;             // CDC specification version that's being complied with.
 };
 
-struct USBDescriptorCommunicationCallManagement // TODO Explain.
+struct USBDescriptorCommunicationCallManagement // [USB Communication Call Management Functional Descriptor].
 {
 	u8 bLength;            // Must be the size of struct USBDescriptorCommunicationCallManagement.
 	u8 bDescriptorType;    // Aliasing(enum USBDescriptorType). Must be USBDescriptorType_communication_interface.
@@ -276,7 +276,7 @@ struct USBDescriptorCommunicationCallManagement // TODO Explain.
 	u8 bDataInterface;     // Index of the CDC-data interface that is used to transmit/receive call management (if needed).
 };
 
-struct USBDescriptorCommunicationAbstractControlManagement // TODO Explain.
+struct USBDescriptorCommunicationAbstractControlManagement // [USB Communication Abstract Control Management Functional Descriptor].
 {
 	u8 bLength;            // Must be the size of struct USBDescriptorCommunicationAbstractControlManagement.
 	u8 bDescriptorType;    // Aliasing(enum USBDescriptorType). Must be USBDescriptorType_communication_interface.
@@ -284,12 +284,12 @@ struct USBDescriptorCommunicationAbstractControlManagement // TODO Explain.
 	u8 bmCapabilities;     // Aliasing(enum USBCommunicationAbstractControlManagementCapabilitiesFlag).
 };
 
-struct USBDescriptorCommunicationUnion // TODO Explain.
+struct USBDescriptorCommunicationUnion // [USB Communication Union Functional Descriptor].
 {
 	u8 bLength;            // Must be the size of struct USBDescriptorCommunicationUnion.
 	u8 bDescriptorType;    // Aliasing(enum USBDescriptorType). Must be USBDescriptorType_communication_interface.
 	u8 bDescriptorSubtype; // Aliasing(enum USBDescriptorCommunicationSubtype). Must be USBDescriptorCommunicationSubtype_union.
-	u8 bMasterInterface;   // Index to the master communication/cdc-data interface.
+	u8 bMasterInterface;   // Index to the master interface.
 	u8 bSlaveInterface[1]; // Index to the slave interface that is controlled by bMasterInterface. A varying amount is allowed here, but an array of 1 is all we'll need.
 };
 
@@ -320,7 +320,7 @@ static const struct USBDescriptorDevice USB_DEVICE_DESCRIPTOR = // TODO PROGMEMi
 		.bLength            = sizeof(struct USBDescriptorDevice),
 		.bDescriptorType    = USBDescriptorType_device,
 		.bcdUSB             = 0x0200,
-		.bDeviceClass       = USBClass_communication,
+		.bDeviceClass       = USBClass_communication, // TODO I think this makes the whole device a CDC. Can we take this out?
 		.bDeviceSubClass    = 0, // Irrelevant for USBClass_communication. See Source(5) & Source(6) @ Table(20) @ AbsPage(42).
 		.bDeviceProtocol    = 0, // Irrelevant for USBClass_communication. See Source(5) & Source(6) @ Table(20) @ AbsPage(42).
 		.bMaxPacketSize0    = USB_ENDPOINT_0_SIZE,
@@ -348,7 +348,7 @@ static const struct USBConfigurationHierarchy USB_CONFIGURATION_HIERARCHY = // S
 			},
 		.interface_0 =
 			{
-				.descriptor = // TODO Explain
+				.descriptor = // [USB Communication Interface].
 					{
 						.bLength            = sizeof(struct USBDescriptorInterface),
 						.bDescriptorType    = USBDescriptorType_interface,
@@ -356,18 +356,18 @@ static const struct USBConfigurationHierarchy USB_CONFIGURATION_HIERARCHY = // S
 						.bAlternateSetting  = 0,
 						.bNumEndpoints      = countof(USB_CONFIGURATION_HIERARCHY.interface_0.endpoints),
 						.bInterfaceClass    = USBClass_communication, // See: Source(6) @ Section(4.2) @ AbsPage(39).
-						.bInterfaceSubClass = 0x2, // "Abstract Control Model". See: Source(6) @ Table(16) @ AbsPage(39).
-						.bInterfaceProtocol = 1,   // Use the "V.250 (AT) Commands" for communication. See: Source(7) @ Section(3.2.2) @ AbsPage(15).
+						.bInterfaceSubClass = 0x2, // See: "Abstract Control Model" @ Source(6) @ Section(3.6.2) @ AbsPage(26).
+						.bInterfaceProtocol = 0x1, // See: "V.25ter" @ Source(6) @ Table(17) @ AbsPage(39).
 						.iInterface         = 0,   // Not important; point to empty string.
 					},
-				.communication_header = // TODO Explain
+				.communication_header = // [USB Communication Header Functional Descriptor].
 					{
 						.bLength            = sizeof(struct USBDescriptorCommunicationHeader),
 						.bDescriptorType    = USBDescriptorType_communication_interface,
 						.bDescriptorSubtype = USBDescriptorCommunicationSubtype_header,
 						.bcdCDC             = 0x0110,
 					},
-				.communication_call_management = // TODO Explain
+				.communication_call_management = // [USB Communication Call Management Functional Descriptor].
 					{
 						.bLength            = sizeof(struct USBDescriptorCommunicationCallManagement),
 						.bDescriptorType    = USBDescriptorType_communication_interface,
@@ -375,14 +375,14 @@ static const struct USBConfigurationHierarchy USB_CONFIGURATION_HIERARCHY = // S
 						.bmCapabilities     = USBCommunicationCallManagementCapabilitiesFlag_self_managed_device,
 						.bDataInterface     = 1,
 					},
-				.communication_abstract_control_management = // TODO Explain
+				.communication_abstract_control_management = // [USB Communication Abstract Control Management Functional Descriptor].
 					{
 						.bLength            = sizeof(struct USBDescriptorCommunicationAbstractControlManagement),
 						.bDescriptorType    = USBDescriptorType_communication_interface,
 						.bDescriptorSubtype = USBDescriptorCommunicationSubtype_abstract_control_management,
 						.bmCapabilities     = USBCommunicationAbstractControlManagementCapabilitiesFlag_line_group | USBCommunicationAbstractControlManagementCapabilitiesFlag_send_break,
 					},
-				.communication_union = // TODO Explain
+				.communication_union = // [USB Communication Union Functional Descriptor].
 					{
 						.bLength            = sizeof(struct USBDescriptorCommunicationUnion),
 						.bDescriptorType    = USBDescriptorType_communication_interface,
@@ -456,13 +456,14 @@ static const struct USBConfigurationHierarchy USB_CONFIGURATION_HIERARCHY = // S
 	worry about within structs, and that the CPU doesn't exactly have the concept of
 	"endianess", since all words are single bytes, so it's really up to the compiler
 	on how it will layout memory and perform arithmetic calculations on operands greater
-	than a byte. That said, it seems like the MCU's opcodes are 16-bits and are stored in
-	little-endian format, so AVR-GCC then also use the same convention for everything else.
-	In short: no padding bytes exist and we are in little-endian.
+	than a byte. That said, it seems like the MCU's opcodes are 16-bits and are stored
+	in little-endian format, so AVR-GCC then also use the same convention for everything
+	else. In short: no padding bytes exist and we are in little-endian.
 
-	* I seem to not be able to find a comprehensive document of v1.2. USB.org has a zip file containing an errata
-	version of v1.2., but even that seem to be missing quite a lot of information compared to v1.1. Perhaps we're
-	supposed to use the errata for the more up-to-date details, but fallback to v1.1 when needed. Regardless, USB
+	* I seem to not be able to find a comprehensive document of v1.2. USB.org has a zip
+	file containing an errata version of v1.2., but even that seem to be missing quite
+	a lot of information compared to v1.1. Perhaps we're supposed to use the errata for
+	the more up-to-date details, but fallback to v1.1 when needed. Regardless, USB
 	should be quite backwards-compatiable, so we should be fine with v1.1.
 */
 
@@ -516,15 +517,82 @@ static const struct USBConfigurationHierarchy USB_CONFIGURATION_HIERARCHY = // S
 	(2) Endpoint Descriptor Layout @ Source(2) @ Table(9-13) @ Page(269-271).
 */
 
-/* [USB Communication Header Descriptor].
+/* [USB Communication Interface].
+	This interface sets up the first half of the CDC (Communications Device Class)
+	interface so we can send diagnostic information to the host. I will admit that
+	I am quite too young to even begin to understand what modems are or the old ways of
+	technology before the internet became hip and cool. Nonetheless, I will document
+	my understanding of what has to be done in order to set the communication interface
+	up.
+
+	We set bInterfaceClass to USBClass_communication to indicate to the host that this
+	interface is for the communication class, and as a result will contain specific
+	information that is not specified at all within the USB specification.
+
+	bInterfaceSubClass then further narrows the interface's class down to
+	"Abstract Control Model" (1), which from what I understand, makes the USB device
+	emulate a modem that could then receive and transmit data serially.
+
+	TODO
+		For bInterfaceProtocol, I assume we should be using the protocol that interprets
+		AT/V250/V.25ter/Hayes commands, since (2) says that the abstract control model
+		understands these. But I don't think we use this obscure system anymore...
+		So can we remove it? (3) says that if the control model doesn't require it,
+		which PSTN that defines ACM doesn't seem to enforce, then we should set it to 0.
+
+	(1) "Abstract Control Model" @ Source(6) @ Section(3.6.2) @ AbsPage(26).
+	(2) ACM with AT Commands @ Source(7) @ Section(3.2.2) @ AbsPage(15).
+	(3) Control Model on Protocols @ Source(6) @ Section(4.4) @ AbsPage(40).
+*/
+
+/* [USB Communication Header Functional Descriptor].
 	This is a class-specific descriptor, in the sense that the USB 2.0 specification
-	doesn't mention this structure at all. This descriptor is just for CDC
-	(Communications Device Class), for which its specification does actually state the
-	layout (1).
+	doesn't mention this structure at all. This descriptor is just for CDC for which
+	its specification does actually state the layout (1).
 
 	This descriptor is used first before the other class-specific descriptors in CDC,
-	all to just simply announce the specification version.
+	all to just simply announce the specification version we're complying with.
 
 	(1) "Functional Descriptors" @ Source(6) @ Section(5.2.3) @ AbsPage(43).
 	(2) Header Descriptor Layout @ Source(6) @ Section(5.2.3.1) @ AbsPage(45).
+*/
+
+/* [USB Communication Call Management Functional Descriptor].
+	This CDC-specific descriptor informs the host about the "call management" of the
+	communication. According to (1), this is what it means:
+		> Refers to a process that is responsible for the setting up and tearing down of
+		> calls. This same process also controls the operational parameters of the call.
+		> The term "call," and therefore "call management," describes processes which
+		> refer to a higher level of call control, rather than those processes
+		> responsible for the physical connection.
+
+	To what extend that this actually matters or contributes to opening a virtual COM
+	port to send diagnostics to, I'm not entirely too sure. The particular settings
+	were chosen simply based off of m_usb.c by J. Fiene & J. Romano.
+
+	(1) "Call Management" @ Source(6) @ Section(1.4) @ AbsPage(15).
+	(2) Call Management Descriptor Layout @ Source(6) @ Table(27) @ AbsPage(45-46).
+*/
+
+/* [USB Communication Abstract Control Management Functional Descriptor].
+	This descriptor seems to simply show what things the host can request from the
+	abstract control model, such as requesting or setting baud rates.
+
+	TODO Seems like m_usb handles SET_LINE_CODING and the variants just to ignore
+	it really. So maybe we can remove this capability completely? Or perhaps this
+	will be important in being able to do a baud-touch reset.
+
+	(2) Abstract Control Management Descriptor Layout @ Source(6) @ Table(28) @ AbsPage(46-47).
+*/
+
+/* [USB Communication Union Functional Descriptor].
+	This descriptor groups interfaces together with one of them being the "master" of
+	the rest. Messages sent to the master can in result "act upon the group as a whole",
+	and "notifications for the entire group can be sent from this interface but apply
+	to the entire group...".
+
+	TODO To what extend is this important, I'm not entirely too sure. What does the host
+	do with this information? Can this just be removed?
+
+	(1) Union Descriptor @ Source(6) @ Table(33) @ AbsPage(51).
 */
