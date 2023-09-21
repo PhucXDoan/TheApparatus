@@ -61,9 +61,7 @@ enum PinState
 // USB.
 //
 
-#define USB_ENDPOINT_0_SIZE_TYPE USBEndpointSizeType_8
-#define USB_ENDPOINT_0_SIZE      (8 * (1 << USB_ENDPOINT_0_SIZE_TYPE))
-
+#define SIZEOF_ENDPOINT_SIZE_TYPE(X) (8 * (1 << (X)))
 enum USBEndpointSizeType // See: Source(1) @ Section(22.18.2) @ Page(287).
 {
 	USBEndpointSizeType_8   = 0b000,
@@ -75,43 +73,27 @@ enum USBEndpointSizeType // See: Source(1) @ Section(22.18.2) @ Page(287).
 	USBEndpointSizeType_512 = 0b110,
 };
 
-enum USBEndpointTransferType // See: Source(2) @ Table(9-13) @ Page(270) & Source(1) @ Section(22.18.2) @ Page(286).
+enum USBEndpointTransferType // See: Source(2) @ Table(9-13) @ Page(270) & Source(1) @ Section(22.18.2) @ Page(286) & Source(1) @ Section(4.7) @ Page(20-21).
 {
-	USBEndpointTransferType_control     = 0b00,
-	USBEndpointTransferType_isochronous = 0b01,
-	USBEndpointTransferType_bulk        = 0b10,
-	USBEndpointTransferType_interrupt   = 0b11,
+	USBEndpointTransferType_control     = 0b00, // Guaranteed data delivery. Used by the USB standard to configure devices, but is open to other implementors.
+	USBEndpointTransferType_isochronous = 0b01, // Bounded latency, one-way, guaranteed data bandwidth (but no guarantee of delivery). Ex: audio/video.
+	USBEndpointTransferType_bulk        = 0b10, // No latency guarantees, one-way, large amount of data. Ex: file upload.
+	USBEndpointTransferType_interrupt   = 0b11, // Low-latency, one-way, small amount of data. Ex: keyboard.
 };
 
-enum USBEndpointSyncType // See: Source(2) @ Table(9-13) @ Page(270).
+enum USBRequest // See: Source(2) @ Table(9-3) @ Page(251).
 {
-	USBEndpointSyncType_null     = 0b00,
-	USBEndpointSyncType_async    = 0b01,
-	USBEndpointSyncType_adaptive = 0b10,
-	USBEndpointSyncType_sync     = 0b11,
-};
-
-enum USBEndpointUsageType // See: Source(2) @ Table(9-13) @ Page(270).
-{
-	USBEndpointUsageType_data                   = 0b00,
-	USBEndpointUsageType_feedback               = 0b01,
-	USBEndpointUsageType_implicit_feedback_data = 0b10,
-	USBEndpointUsageType_reserved               = 0b11,
-};
-
-enum USBRequestCode // See: Source(2) @ Table(9-3) @ Page(251).
-{
-	USBRequestCode_get_status        = 0,
-	USBRequestCode_clear_feature     = 1,
-	USBRequestCode_set_feature       = 3, // Note: Skipped 2!
-	USBRequestCode_set_address       = 5, // Note: Skipped 4!
-	USBRequestCode_get_descriptor    = 6,
-	USBRequestCode_set_descriptor    = 7,
-	USBRequestCode_get_configuration = 8,
-	USBRequestCode_set_configuration = 9,
-	USBRequestCode_get_interface     = 10,
-	USBRequestCode_set_interface     = 11,
-	USBRequestCode_synch_frame       = 12,
+	USBRequest_get_status        = 0,
+	USBRequest_clear_feature     = 1,
+	USBRequest_set_feature       = 3, // Note: Skipped 2!
+	USBRequest_set_address       = 5, // Note: Skipped 4!
+	USBRequest_get_descriptor    = 6,
+	USBRequest_set_descriptor    = 7,
+	USBRequest_get_configuration = 8,
+	USBRequest_set_configuration = 9,
+	USBRequest_get_interface     = 10,
+	USBRequest_set_interface     = 11,
+	USBRequest_synch_frame       = 12,
 };
 
 enum USBEndpointAddressFlag // See: "bEndpointAddress" @ Source(2) @ Table(9-13) @ Page(269).
@@ -128,11 +110,11 @@ enum USBConfigurationAttributeFlag // See: Source(2) @ Table(9-10) @ Page(266).
 
 enum USBClass // ID that describes the generic function of the device or interface. This enum is non-exhuastive. See: Source(5).
 {
-	USBClass_null          = 0x00, // When used in device descriptors, the class is determined by the interface descriptors. Cannot otherwise be used in interface descriptors as it is reserved for future use.
-	USBClass_communication = 0x02,
-	USBClass_human         = 0x03,
-	USBClass_mass_storage  = 0x08,
-	USBClass_cdc_data      = 0x0A,
+	USBClass_null               = 0x00, // When used in device descriptors, the class is determined by the interface descriptors. Cannot otherwise be used in interface descriptors as it is reserved for future use.
+	USBClass_communication      = 0x02,
+	USBClass_human              = 0x03,
+	USBClass_mass_storage       = 0x08,
+	USBClass_communication_data = 0x0A,
 };
 
 enum USBDescriptorCommunicationSubtype // This enum is non-exhuastive. See: Source(6) @ Table(25) @ AbsPage(44-45).
@@ -180,7 +162,7 @@ struct USBSetupPacket // See: Source(2) @ Table(9-2) @ Page(248).
 		struct USBSetupPacketUnknown
 		{
 			u8  bmRequestType;
-			u8  bRequest;      // Alias: enum USBRequestCode.
+			u8  bRequest;      // Alias: enum USBRequest.
 			u16 wValue;
 			u16 wIndex;
 			u16 wLength;
@@ -189,7 +171,7 @@ struct USBSetupPacket // See: Source(2) @ Table(9-2) @ Page(248).
 		struct USBSetupPacketGetDescriptor
 		{
 			u8  bmRequestType;    // Must be 0b1000'0000.
-			u8  bRequest;         // Must be USBRequestCode_get_descriptor.
+			u8  bRequest;         // Must be USBRequest_get_descriptor.
 			u8  descriptor_index; // Low byte of wValue.
 			u8  descriptor_type;  // High byte of wValue. Alias: enum USBDescriptorType.
 			u16 language_id;
@@ -199,7 +181,7 @@ struct USBSetupPacket // See: Source(2) @ Table(9-2) @ Page(248).
 		struct USBSetupPacketSetAddress
 		{
 			u8  bmRequestType; // Must be 0b0000'0000.
-			u8  bRequest;      // Must be USBRequestCode_set_address.
+			u8  bRequest;      // Must be USBRequest_set_address.
 			u16 address;
 			u32 zero;          // Expect to be zero.
 		} set_address;
@@ -254,8 +236,8 @@ struct USBDescriptorEndpoint // [USB Endpoint Descriptor].
 	u8  bLength;          // Must be the size of struct USBDescriptorEndpoint.
 	u8  bDescriptorType;  // Aliasing(enum USBDescriptorType). Must be USBDescriptorType_endpoint.
 	u8  bEndpointAddress; // Addresses must be specified in low-nibble. Can be applied with enum USBEndpointAddressFlag.
-	u8  bmAttributes;     // Starting from LSb, attributes include enum USBEndpointTransferType, enum USBEndpointSyncType, and enum USBEndpointUsageType.
-	u16 wMaxPacketSize;   // Bits 10-0 specifies the maximum data-packet size that can be sent/received. Bits 12-11 are reserved for high-speed.
+	u8  bmAttributes;     // Aliasing(enum USBEndpointTransferType). Other bits have meanings too, but only for isochronous endpoints, which we don't use.
+	u16 wMaxPacketSize;   // Bits 10-0 specifies the maximum data-packet size that can be sent/received. Bits 12-11 are reserved for high-speed, which ATmega32U4 isn't capable of.
 	u8  bInterval;        // Amount of frames (~1ms in full-speed USB) that the endpoint will be polled for data. Isochronous must be within [0, 16] and interrupts within [1, 255].
 };
 
@@ -293,7 +275,7 @@ struct USBDescriptorCommunicationUnion // [USB Communication Union Functional De
 	u8 bSlaveInterface[1]; // Index to the slave interface that is controlled by bMasterInterface. A varying amount is allowed here, but an array of 1 is all we'll need.
 };
 
-struct USBConfigurationHierarchy
+struct USBConfigurationHierarchy // This layout is just for our device application. See: Source(4) @ Chapter(5).
 {
 	struct USBDescriptorConfiguration configuration;
 
@@ -314,6 +296,10 @@ struct USBConfigurationHierarchy
 	} interface_1;
 };
 
+#define USB_ENDPOINT_0_SIZE_TYPE USBEndpointSizeType_8  // Also called "default endpoint". This is where control commands are sent.
+#define USB_ENDPOINT_2_SIZE_TYPE USBEndpointSizeType_8  // For CDC's "notification element". Lets the host know of any changes in the communication.
+#define USB_ENDPOINT_3_SIZE_TYPE USBEndpointSizeType_64 // For CDC-Data class to transmit communication data to host.
+#define USB_ENDPOINT_4_SIZE_TYPE USBEndpointSizeType_64 // For CDC-Data class to receive communication data from host.
 
 static const struct USBDescriptorDevice USB_DEVICE_DESCRIPTOR = // TODO PROGMEMify.
 	{
@@ -323,7 +309,7 @@ static const struct USBDescriptorDevice USB_DEVICE_DESCRIPTOR = // TODO PROGMEMi
 		.bDeviceClass       = USBClass_communication, // TODO I think this makes the whole device a CDC. Can we take this out?
 		.bDeviceSubClass    = 0, // Irrelevant for USBClass_communication. See Source(5) & Source(6) @ Table(20) @ AbsPage(42).
 		.bDeviceProtocol    = 0, // Irrelevant for USBClass_communication. See Source(5) & Source(6) @ Table(20) @ AbsPage(42).
-		.bMaxPacketSize0    = USB_ENDPOINT_0_SIZE,
+		.bMaxPacketSize0    = SIZEOF_ENDPOINT_SIZE_TYPE(USB_ENDPOINT_0_SIZE_TYPE),
 		.idVendor           = 0, // Setting to zero doesn't seem to prevent functionality.
 		.idProduct          = 0, // Setting to zero doesn't seem to prevent functionality.
 		.bcdDevice          = 0, // Setting to zero doesn't seem to prevent functionality.
@@ -348,7 +334,7 @@ static const struct USBConfigurationHierarchy USB_CONFIGURATION_HIERARCHY = // S
 			},
 		.interface_0 =
 			{
-				.descriptor = // [USB Communication Interface].
+				.descriptor = // [USB Communication Interface]. TODO How do we know that the CDC class needs these specific functional headers?
 					{
 						.bLength            = sizeof(struct USBDescriptorInterface),
 						.bDescriptorType    = USBDescriptorType_interface,
@@ -357,7 +343,7 @@ static const struct USBConfigurationHierarchy USB_CONFIGURATION_HIERARCHY = // S
 						.bNumEndpoints      = countof(USB_CONFIGURATION_HIERARCHY.interface_0.endpoints),
 						.bInterfaceClass    = USBClass_communication, // See: Source(6) @ Section(4.2) @ AbsPage(39).
 						.bInterfaceSubClass = 0x2, // See: "Abstract Control Model" @ Source(6) @ Section(3.6.2) @ AbsPage(26).
-						.bInterfaceProtocol = 0x1, // See: "V.25ter" @ Source(6) @ Table(17) @ AbsPage(39).
+						.bInterfaceProtocol = 0x1, // See: "V.25ter" @ Source(6) @ Table(17) @ AbsPage(39). TODO Is this protocol needed?
 						.iInterface         = 0,   // Not important; point to empty string.
 					},
 				.communication_header = // [USB Communication Header Functional Descriptor].
@@ -390,49 +376,49 @@ static const struct USBConfigurationHierarchy USB_CONFIGURATION_HIERARCHY = // S
 						.bMasterInterface   = 0,
 						.bSlaveInterface    = { 1 }
 					},
-				.endpoints =
+				.endpoints = // [USB Communication Endpoints].
 					{
 						{
 							.bLength          = sizeof(struct USBDescriptorEndpoint),
 							.bDescriptorType  = USBDescriptorType_endpoint,
-							.bEndpointAddress = USBEndpointAddressFlag_in | 1,
+							.bEndpointAddress = 2 | USBEndpointAddressFlag_in,
 							.bmAttributes     = USBEndpointTransferType_interrupt,
-							.wMaxPacketSize   = 1, // TODO ????
-							.bInterval        = 64, // TODO Why this value specifically?
+							.wMaxPacketSize   = SIZEOF_ENDPOINT_SIZE_TYPE(USB_ENDPOINT_2_SIZE_TYPE),
+							.bInterval        = 64, // TODO We don't care about notifications, so we should max this out.
 						},
 					},
 			},
-		.interface_1 = // TODO What is CDC-data?
+		.interface_1 =
 			{
-				.descriptor =
+				.descriptor = // [USB Communication-Data Interface].
 					{
 						.bLength            = sizeof(struct USBDescriptorInterface),
 						.bDescriptorType    = USBDescriptorType_interface,
 						.bInterfaceNumber   = 1,
 						.bAlternateSetting  = 0,
 						.bNumEndpoints      = countof(USB_CONFIGURATION_HIERARCHY.interface_1.endpoints),
-						.bInterfaceClass    = USBClass_cdc_data, // See: Source(6) @ Section(4.5) @ AbsPage(40).
+						.bInterfaceClass    = USBClass_communication_data, // See: Source(6) @ Section(4.5) @ AbsPage(40).
 						.bInterfaceSubClass = 0, // Should be left alone. See: Source(6) @ Section(4.6) @ AbsPage(40).
-						.bInterfaceProtocol = 0, // Not using any specific communication protocol /* TODO As opposed to what? */. See: Source(6) @ Table(19) @ AbsPage(40-41).
+						.bInterfaceProtocol = 0, // Not using any specific communication protocol. See: Source(6) @ Table(19) @ AbsPage(40-41).
 						.iInterface         = 0, // Not important; point to empty string.
 					},
-				.endpoints =
+				.endpoints = // [USB Communiction-Data Endpoints].
 					{
 						{
 							.bLength          = sizeof(struct USBDescriptorEndpoint),
 							.bDescriptorType  = USBDescriptorType_endpoint,
-							.bEndpointAddress = USBEndpointAddressFlag_in | 2,
+							.bEndpointAddress = 3 | USBEndpointAddressFlag_in,
 							.bmAttributes     = USBEndpointTransferType_bulk,
-							.wMaxPacketSize   = 64, // TODO How large can we make this?
-							.bInterval        = 0, // TODO What does this mean?
+							.wMaxPacketSize   = SIZEOF_ENDPOINT_SIZE_TYPE(USB_ENDPOINT_3_SIZE_TYPE),
+							.bInterval        = 0,
 						},
-						{ // TODO Can we remove the endpoint that sends data from host to device?
+						{
 							.bLength          = sizeof(struct USBDescriptorEndpoint),
 							.bDescriptorType  = USBDescriptorType_endpoint,
-							.bEndpointAddress = 3,
+							.bEndpointAddress = 4,
 							.bmAttributes     = USBEndpointTransferType_bulk,
-							.wMaxPacketSize   = 64, // TODO How large can we make this?
-							.bInterval        = 0, // TODO What does this mean?
+							.wMaxPacketSize   = SIZEOF_ENDPOINT_SIZE_TYPE(USB_ENDPOINT_4_SIZE_TYPE),
+							.bInterval        = 0,
 						},
 					}
 			},
@@ -459,6 +445,14 @@ static const struct USBConfigurationHierarchy USB_CONFIGURATION_HIERARCHY = // S
 	than a byte. That said, it seems like the MCU's opcodes are 16-bits and are stored
 	in little-endian format, so AVR-GCC then also use the same convention for everything
 	else. In short: no padding bytes exist and we are in little-endian.
+
+	The USB protocol is pretty intense. Hopefully this codebase is well documented
+	enough that it is easy to follow along to understand why things are being done
+	the way they are. If they aren't, then many citations and sources are linked to
+	sites, datasheets, specifications, etc. that describes a particular part in more
+	detail. "NEFASTOR ONLINE" (nefastor.com/micrcontrollers/stm32/usb/) contains some
+	articles explaining parts of the USB protocol, and Ben Eater on YouTube goes pretty
+	in-depth on the USB tranmission sides of things.
 
 	* I seem to not be able to find a comprehensive document of v1.2. USB.org has a zip
 	file containing an errata version of v1.2., but even that seem to be missing quite
@@ -531,7 +525,7 @@ static const struct USBConfigurationHierarchy USB_CONFIGURATION_HIERARCHY = // S
 
 	bInterfaceSubClass then further narrows the interface's class down to
 	"Abstract Control Model" (1), which from what I understand, makes the USB device
-	emulate a modem that could then receive and transmit data serially.
+	emulate a COM port that could then receive and transmit data serially.
 
 	TODO
 		For bInterfaceProtocol, I assume we should be using the protocol that interprets
@@ -595,4 +589,46 @@ static const struct USBConfigurationHierarchy USB_CONFIGURATION_HIERARCHY = // S
 	do with this information? Can this just be removed?
 
 	(1) Union Descriptor @ Source(6) @ Table(33) @ AbsPage(51).
+*/
+
+/* [USB Communication Endpoints].
+	It is stated in (1) that every communication class interface must have a
+	"management element", which is just an endpoint that transfer commands to
+	manages the communication between host and device as defined in (2). This
+	management element also happens to be always endpoint 0 for all communication
+	devices.
+
+	As declared in (3), abstract control models need to also have the
+	"notification element". Like with management element, it is just another
+	endpoint, but this time it is used to notify the host of any events,
+	and is often (but not necessarily required) an interrupt transfer typed endpoint
+	(so it can't be endpoint 0).
+
+	TODO probably better in usb.c
+	Every once in a while, the host would send a request defined in (5) to the
+	notification element, and if the device ACKs, TODO what exactly happens???
+
+	(1) Communication Endpoints @ Source(6) @ Section(3.4.1) @ AbsPage(23).
+	(2) "Management Element" @ Source(6) @ Section(1.4) @ AbsPage(16).
+	(3) Endpoints on Abstract Control Models @ Source(6) @ Section(3.6.2) @ AbsPage(26).
+	(4) "Notification Element" @ Source(6) @ Section(1.4) @ AbsPage(16).
+	(5) "Notification Element Notifications" @ Source(6) @ Section(6.3) @ AbsPage(84).
+*/
+
+/* [USB Communication-Data Interface].
+	I'm not entirely too sure what a "data class" is exactly used for here, but based
+	on loose descriptions of its usage, it's to respresent the part of the communication
+	where there might be compression, error correction, modulation, etc. as seen in (1).
+
+	Regardless, this interface is where the I/O streams of the communication between
+	host and device is held.
+
+	(1) Abstract Control Model Diagram @ Source(6) @ Figure(3) @ AbsPage(15).
+*/
+
+/* [USB Communiction-Data Endpoints].
+	Stated by (1), the endpoints that will be carrying data between the host and device
+	must be either both isochronous or both bulk transfer types.
+
+	(1) "Data Class Endpoint Requirements" @ Source(6) @ Section(3.4.2) @ AbsPage(23).
 */

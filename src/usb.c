@@ -67,10 +67,9 @@ ISR(USB_COM_vect)
 	if // [SETUP GetDescriptor].
 	(
 		setup_packet.unknown.bmRequestType == 0b1000'0000
-		&& setup_packet.unknown.bRequest == USBRequestCode_get_descriptor
+		&& setup_packet.unknown.bRequest == USBRequest_get_descriptor
 	)
 	{
-
 		u8  data_remaining = 0;
 		u8* data_cursor    = 0;
 
@@ -112,7 +111,7 @@ ISR(USB_COM_vect)
 		{
 			if (UEINTX & (1 << TXINI))
 			{
-				u8 writes_left = USB_ENDPOINT_0_SIZE;
+				u8 writes_left = SIZEOF_ENDPOINT_SIZE_TYPE(USB_ENDPOINT_0_SIZE_TYPE);
 				if (writes_left > data_remaining)
 				{
 					writes_left = data_remaining;
@@ -139,7 +138,7 @@ ISR(USB_COM_vect)
 	else if // [SETUP SetAddress].
 	(
 		setup_packet.unknown.bmRequestType == 0b0000'0000
-		&& setup_packet.unknown.bRequest == USBRequestCode_set_address
+		&& setup_packet.unknown.bRequest == USBRequest_set_address
 	)
 	{
 		if (setup_packet.set_address.address >= 0b0111'1111)
