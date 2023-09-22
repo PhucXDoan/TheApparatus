@@ -28,8 +28,8 @@ typedef uint64_t b64;
 
 enum PinState
 {
-	PinState_false    = 0b00, // Sink to GND. Alias: false.
-	PinState_true     = 0b01, // Source of 5 volts. Alias: true.
+	PinState_false    = 0b00, // Aliasing(false). Sink to GND.
+	PinState_true     = 0b01, // Aliasing(true). Source of 5 volts.
 	PinState_floating = 0b10, // Unconnected; reading from this pin is unreliable. Also called the "tri-state" or "Hi-Z" state.
 	PinState_input    = 0b11, // Pull-up resistor enabled for reliable reads. A truthy value will be read unless it is tied to GND strongly enough.
 };
@@ -81,19 +81,19 @@ enum USBEndpointTransferType // See: Source(2) @ Table(9-13) @ Page(270) & Sourc
 	USBEndpointTransferType_interrupt   = 0b11, // Low-latency, one-way, small amount of data. Ex: keyboard.
 };
 
-enum USBRequest // See: Source(2) @ Table(9-3) @ Page(251).
+enum USBSetupRequest // See: Source(2) @ Table(9-3) @ Page(251).
 {
-	USBRequest_get_status        = 0,
-	USBRequest_clear_feature     = 1,
-	USBRequest_set_feature       = 3, // Note: Skipped 2!
-	USBRequest_set_address       = 5, // Note: Skipped 4!
-	USBRequest_get_descriptor    = 6,
-	USBRequest_set_descriptor    = 7,
-	USBRequest_get_configuration = 8,
-	USBRequest_set_configuration = 9,
-	USBRequest_get_interface     = 10,
-	USBRequest_set_interface     = 11,
-	USBRequest_synch_frame       = 12,
+	USBSetupRequest_get_status        = 0,
+	USBSetupRequest_clear_feature     = 1,
+	USBSetupRequest_set_feature       = 3, // Note: Skipped 2!
+	USBSetupRequest_set_address       = 5, // Note: Skipped 4!
+	USBSetupRequest_get_descriptor    = 6,
+	USBSetupRequest_set_descriptor    = 7,
+	USBSetupRequest_get_configuration = 8,
+	USBSetupRequest_set_configuration = 9,
+	USBSetupRequest_get_interface     = 10,
+	USBSetupRequest_set_interface     = 11,
+	USBSetupRequest_synch_frame       = 12,
 };
 
 enum USBEndpointAddressFlag // See: "bEndpointAddress" @ Source(2) @ Table(9-13) @ Page(269).
@@ -162,7 +162,7 @@ struct USBSetupPacket // See: Source(2) @ Table(9-2) @ Page(248).
 		struct USBSetupPacketUnknown
 		{
 			u8  bmRequestType;
-			u8  bRequest;      // Alias: enum USBRequest.
+			u8  bRequest;      // Aliasing(enum USBSetupRequest).
 			u16 wValue;
 			u16 wIndex;
 			u16 wLength;
@@ -171,9 +171,9 @@ struct USBSetupPacket // See: Source(2) @ Table(9-2) @ Page(248).
 		struct USBSetupPacketGetDescriptor
 		{
 			u8  bmRequestType;    // Must be 0b1000'0000.
-			u8  bRequest;         // Must be USBRequest_get_descriptor.
-			u8  descriptor_index; // Low byte of wValue.
-			u8  descriptor_type;  // High byte of wValue. Alias: enum USBDescriptorType.
+			u8  bRequest;         // Must be USBSetupRequest_get_descriptor.
+			u8  descriptor_index;
+			u8  descriptor_type;  // Aliasing(enum USBDescriptorType).
 			u16 language_id;
 			u16 wLength;
 		} get_descriptor;
@@ -181,7 +181,7 @@ struct USBSetupPacket // See: Source(2) @ Table(9-2) @ Page(248).
 		struct USBSetupPacketSetAddress
 		{
 			u8  bmRequestType; // Must be 0b0000'0000.
-			u8  bRequest;      // Must be USBRequest_set_address.
+			u8  bRequest;      // Must be USBSetupRequest_set_address.
 			u16 address;
 			u32 zero;          // Expect to be zero.
 		} set_address;

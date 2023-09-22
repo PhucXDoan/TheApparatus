@@ -52,7 +52,8 @@ ISR(USB_GEN_vect)
 ISR(USB_COM_vect)
 { // [Endpoint Interrupt Routine].
 
-	UENUM = 0;
+	UENUM   = 0;
+	UECONX |= (1 << STALLRQC); // See: [Request Error Stall].
 
 	// [Read SETUP Packet].
 	struct USBSetupPacket setup_packet;
@@ -67,78 +68,96 @@ ISR(USB_COM_vect)
 	if // [SETUP GetDescriptor].
 	(
 		setup_packet.unknown.bmRequestType == 0b1000'0000
-		&& setup_packet.unknown.bRequest == USBRequest_get_descriptor
+		&& setup_packet.unknown.bRequest == USBSetupRequest_get_descriptor
 	)
 	{
 		u8  data_remaining = 0;
 		u8* data_cursor    = 0;
 
-		switch (setup_packet.get_descriptor.descriptor_type)
+		if (!setup_packet.get_descriptor.language_id) // We're not going to handle different languages.
 		{
-			case USBDescriptorType_device:
+			if (setup_packet.get_descriptor.descriptor_index) // TODO Does this ever realisitically get executed?
 			{
-				data_cursor    = (u8*) &USB_DEVICE_DESCRIPTOR;
-				data_remaining = sizeof(USB_DEVICE_DESCRIPTOR);
-			} break;
-
-			case USBDescriptorType_configuration:
-			{
-				data_cursor    = (u8*) &USB_CONFIGURATION_HIERARCHY;
-				data_remaining = sizeof(USB_CONFIGURATION_HIERARCHY);
-			} break;
-
-			case USBDescriptorType_string:
-			case USBDescriptorType_interface:
-			case USBDescriptorType_device_qualifier:
-			case USBDescriptorType_other_speed_configuration:
-			case USBDescriptorType_interface_power:
-			default:
-			{
-				debug_halt(3);
-			} break;
-		}
-
-		//
-		// [Transmit IN Data To Host].
-		//
-
-		if (data_remaining > setup_packet.get_descriptor.wLength)
-		{
-			data_remaining = setup_packet.get_descriptor.wLength;
-		}
-
-		while (true) // TODO[IN/OUT Interrupts].
-		{
-			if (UEINTX & (1 << TXINI))
-			{
-				u8 writes_left = SIZEOF_ENDPOINT_SIZE_TYPE(USB_ENDPOINT_0_SIZE_TYPE);
-				if (writes_left > data_remaining)
-				{
-					writes_left = data_remaining;
-				}
-
-				data_remaining -= writes_left;
-				while (writes_left)
-				{
-					UEDATX        = data_cursor[0];
-					data_cursor  += 1;
-					writes_left  -= 1;
-				}
-
-				UEINTX &= ~(1 << TXINI);
+				debug_halt(-1);
 			}
 
-			if (UEINTX & (1 << RXOUTI))
+			switch ((enum USBDescriptorType) setup_packet.get_descriptor.descriptor_type)
 			{
-				UEINTX &= ~(1 << RXOUTI);
-				break;
+				case USBDescriptorType_device:
+				{
+					data_cursor    = (u8*) &USB_DEVICE_DESCRIPTOR;
+					data_remaining = sizeof(USB_DEVICE_DESCRIPTOR);
+				} break;
+
+				case USBDescriptorType_configuration:
+				{
+					data_cursor    = (u8*) &USB_CONFIGURATION_HIERARCHY;
+					data_remaining = sizeof(USB_CONFIGURATION_HIERARCHY);
+				} break;
+
+				case USBDescriptorType_device_qualifier:
+				{
+					// ATmega32U4 does not support anything beyond full-speed, so we have to reply with a request error.
+					// See: Source(2) @ Section(9.6.2) @ Page(264) & [Request Error Stall].
+				} break;
+
+				case USBDescriptorType_string:
+				case USBDescriptorType_interface:
+				case USBDescriptorType_endpoint:
+				case USBDescriptorType_other_speed_configuration:
+				case USBDescriptorType_interface_power:
+				case USBDescriptorType_communication_interface:
+				case USBDescriptorType_communication_endpoint:
+				{
+					debug_halt(3);
+				} break;
 			}
+		}
+
+		if (data_remaining) // [Transmit IN Data To Host].
+		{
+			if (data_remaining > setup_packet.get_descriptor.wLength)
+			{
+				data_remaining = setup_packet.get_descriptor.wLength;
+			}
+
+			while (true) // TODO[IN/OUT Interrupts].
+			{
+				if (UEINTX & (1 << TXINI))
+				{
+					u8 writes_left = SIZEOF_ENDPOINT_SIZE_TYPE(USB_ENDPOINT_0_SIZE_TYPE);
+					if (writes_left > data_remaining)
+					{
+						writes_left = data_remaining;
+					}
+
+					data_remaining -= writes_left;
+					while (writes_left)
+					{
+						UEDATX        = data_cursor[0];
+						data_cursor  += 1;
+						writes_left  -= 1;
+					}
+
+					UEINTX &= ~(1 << TXINI);
+				}
+
+				if (UEINTX & (1 << RXOUTI))
+				{
+					UEINTX &= ~(1 << RXOUTI);
+					break;
+				}
+			}
+		}
+		else // [Request Error Stall].
+		{
+			UECONX |= (1 << STALLRQ);
 		}
 	}
 	else if // [SETUP SetAddress].
 	(
 		setup_packet.unknown.bmRequestType == 0b0000'0000
-		&& setup_packet.unknown.bRequest == USBRequest_set_address
+		&& setup_packet.unknown.bRequest == USBSetupRequest_set_address
 	)
 	{
 		if (setup_packet.set_address.address >= 0b0111'1111)
@@ -153,8 +172,17 @@ ISR(USB_COM_vect)
 
 		UDADDR |= (1 << ADDEN);
 	}
+	else if // [SETUP SetConfiguration].
+	(
+		setup_packet.unknown.bmRequestType == 0b0000'0000
+		&& setup_packet.unknown.bRequest == USBSetupRequest_set_configuration
+	)
+	{
+		debug_halt(4);
+	}
 	else // Unhandled or unknown SETUP command.
 	{
+		debug_u8(setup_packet.unknown.bmRequestType);
 		debug_halt(2);
 	}
 
@@ -436,6 +464,33 @@ ISR(USB_COM_vect)
 
 	(1) "Address Field" @ Source(2) @ Section(8.3.2.1) @ Page(197).
 	(2) "Address Setup" @ Source(1) @ Section(22.7) @ Page(272).
+*/
+
+/* [Request Error Stall].
+	The host might request things from the device such as a descriptor, but the device
+	might not have this information. In this case, we are to reply to the host with a
+	STALL packet (1).
+
+	All requests are made to control endpoints in the form of SETUP data-packets,
+	often just endpoint 0 (3). The ATmega32U4 will always ACK the first stage of the
+	transfer where the host sends this SETUP data-packet. After that, the host will
+	send a series of IN commands to grab the device's response data. If the data
+	requested by the host specified in the SETUP data-packet cannot be retrieved by the
+	device, we send a STALL response to the IN command (or whatever the next command
+	the host sends us after the SETUP packet) (1).
+
+	The control endpoint will continue to respond with STALL (unless it is a SETUP
+	command, to which ATmega32U4 will ACK like always) until we receive another SETUP
+	command, to which we then reset to a non-stall state.
+
+	(1) "Request Error" @ Source(2) @ Section(9.2.7) @ Page(247).
+	(2) "STALL Request" @ Source(1) @ Section(22.11) @ Page(273-274).
+	(3) "USB Device Requests" @ Source(2) @ Section(9.3) @ Page(248).
+	(4) STALL Handshakes @ Source(2) @ Section(8.5.3.4) @ Page(228).
+*/
+
+/* [SETUP SetConfiguration].
+	TODO
 */
 
 /* TODO[Tampered Default Register Values].
