@@ -73,7 +73,7 @@ enum USBEndpointSizeType // See: Source(1) @ Section(22.18.2) @ Page(287).
 	USBEndpointSizeType_512 = 0b110,
 };
 
-enum USBEndpointTransferType // See: Source(2) @ Table(9-13) @ Page(270) & Source(1) @ Section(22.18.2) @ Page(286) & Source(1) @ Section(4.7) @ Page(20-21).
+enum USBEndpointTransferType // See: Source(2) @ Table(9-13) @ Page(270) & Source(1) @ Section(22.18.2) @ Page(286) & Source(2) @ Section(4.7) @ Page(20-21).
 {
 	USBEndpointTransferType_control     = 0b00, // Guaranteed data delivery. Used by the USB standard to configure devices, but is open to other implementors.
 	USBEndpointTransferType_isochronous = 0b01, // Bounded latency, one-way, guaranteed data bandwidth (but no guarantee of delivery). Ex: audio/video.

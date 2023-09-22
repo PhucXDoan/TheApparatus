@@ -27,22 +27,24 @@ usb_init(void)
 	UDCON = 0;
 }
 
-// UENUM must be selected.
 static void
-_usb_send(u8* packet_data, u16 packet_length, u16 endpoint_buffer_size)
-{ // [Transmit IN Data To Host]. TODO Update.
-	// TODO[IN/OUT Interrupts].
-
+_usb_endpoint_0_transmit // [Endpoint 0: Data-Transfer from Device to Host].
+(
+	u8* packet_data,
+	u16 packet_length,
+	u16 endpoint_buffer_size
+)
+{
 	u8* data_cursor    = packet_data;
 	u16 data_remaining = packet_length;
 	while (true)
 	{
-		if (UEINTX & (1 << RXOUTI)) // Did we receive an OUT data-packet from the host?
+		if (UEINTX & (1 << RXOUTI)) // Received OUT-transaction?
 		{
-			UEINTX &= ~(1 << RXOUTI);
+			UEINTX &= ~(1 << RXOUTI); // Tell host that we're ready for the next command now. See: "Control Transfer > Status Stage > IN" @ Source(4) @ Chapter(4).
 			break;
 		}
-		else if (UEINTX & (1 << TXINI)) // Is the transmission buffer ready to be filled?
+		else if (UEINTX & (1 << TXINI)) // Buffer ready to be filled?
 		{
 			u8 writes_left =
 				data_remaining < endpoint_buffer_size
@@ -58,7 +60,7 @@ _usb_send(u8* packet_data, u16 packet_length, u16 endpoint_buffer_size)
 				writes_left  -= 1;
 			}
 
-			UEINTX &= ~(1 << TXINI);
+			UEINTX &= ~(1 << TXINI); // Mark buffer as ready to be sent for IN-transaction.
 		}
 	}
 }
@@ -154,7 +156,7 @@ ISR(USB_COM_vect)
 
 		if (packet_length)
 		{
-			_usb_send
+			_usb_endpoint_0_transmit
 			(
 				packet_data,
 				setup_packet.get_descriptor.wLength < packet_length
@@ -223,7 +225,7 @@ ISR(USB_COM_vect)
 			error_halt();
 		}
 
-		_usb_send
+		_usb_endpoint_0_transmit
 		(
 			(u8*) &USB_COMMUNICATION_LINE_CODING,
 			sizeof(USB_COMMUNICATION_LINE_CODING),
@@ -255,6 +257,9 @@ ISR(USB_COM_vect)
 			((u8*) &line_coding)[i] = UEDATX;
 		}
 		UEINTX &= ~(1 << RXOUTI);
+
+		while (!(UEINTX & (1 << TXINI)));
+		UEINTX &= ~(1 << TXINI);
 
 		if (memcmp(&line_coding, &USB_COMMUNICATION_LINE_CODING, sizeof(line_coding)))
 		{
@@ -289,10 +294,7 @@ ISR(USB_COM_vect)
 
 /* [Power-On USB Pads Regulator].
 	Based off of (1), the USB (pad) regulator simply supplies voltage to the USB data
-	lines and capacitor.
-
-	So this first step is as simple as turning the UVREGE bit in UHWCON to enable this
-	hardware (2).
+	lines and capacitor. So this first step is as simple just enabling this (2).
 
 	(1) "USB Controller Block Diagram Overview" @ Source(1) @ Figure(21-1) @ Page(256).
 	(2) UHWCON, UVREGE @ Source(1) @ Section(21.13.1) @ Page(267).
@@ -334,11 +336,10 @@ ISR(USB_COM_vect)
 	at (2), the FRZCLK bit can only be cleared **AFTER** the USB interface has been
 	enabled. FRZCLK halts the USB clock in order to minimize power consumption (3),
 	but obviously the USB is also disabled, so we want to avoid that. As a result, we
-	just have to assign to USBCON again afterwards to be able to clear the FRZCLK bit.
+	have to assign to USBCON again afterwards to be able to clear the FRZCLK bit.
 
-	We will also set OTGPADE to be able to detect whether or not we are connected to a
-	USB device/host. This connection can be determined by the VBUS bit in the USBSTA
-	register (4).
+	We will also set OTGPADE to be able to detect whether or not we are connected to the
+	host (VBUS bit), and let the host know of our presence when we are plugged in (4).
 
 	(1) "USB interface" @ Source(1) @ Section(22.2) @ Page(270).
 	(2) Crude USB State Machine @ Source(1) @ Figure (21-7) @ Page(260).
@@ -349,20 +350,198 @@ ISR(USB_COM_vect)
 /* [Configure USB Interface].
 	We enable the End-of-Reset interrupt, so when the unenumerated USB device connects
 	and the hosts sees this, the host will pull the data lines to a state to signal
-	that the device should reset, and when the host releases, the
+	that the device should reset (as described by (1)), and when the host releases, the
 	[USB Device Interrupt Routine] is then triggered.
 
 	It is important that we do some of our initializations after the End-of-Reset
-	signal since (1) specifically states that the endpoints will end up disable at the
-	end.
+	signal since (1) specifically states that the endpoints will end up disabled
+	(See: [Endpoints]).
 
 	(1) "USB Reset" @ Source(1) @ Section(22.4) @ Page(271).
 */
 
 /* [Wait For USB VBUS Information Connection].
-	We just allow the device to be able to attach to a host and we're done initializing
-	sthe USB interface. No need to actually wait for a connection.
+	No need to actually wait for a connection. The control flow will continue on as
+	normal; rest of the initialization will be done within the interrupt routines.
 */
+
+/* [Endpoints].
+	All USB devices have "endpoints" which is essentially a buffer where it can be
+	written with data sent by the host and then read by the device, or written by the
+	device to which it is then transmitted to the host.
+
+	Endpoints are assigned a "transfer type" (1) where it is optimized for a specific
+	purpose. For example, bulk-typed endpoints are great for transmitting large amounts
+	of data (e.g. uploading a movie to a flashdrive) but there's no guarantee on when
+	that data may be transmitted, which would actually be important for devices such as
+	keyboards and mouses.
+
+	The only transfer type that is bidirectional is control. What this means is that
+	control-typed endpoints can transmit and also receive data-packets to and from the
+	host using the same buffer. Isochronous, bulk, and interrupts are only
+	unidirectional. These endpoints can only have their buffers be written to or be
+	copied from by the firmware, so data-transfer is more-or-less one-way.
+
+	Every USB device has endpoint 0 as a control-typed endpoint. This endpoint is where
+	all the enumeration (initialization of USB device) happens through, and as so,
+	endpoint 0 is also called the "default endpoint".
+
+	The ATmega32U4 has a total of 7 endpoints, 6 if you don't count endpoint 0 since it
+	is not really programmable as the other ones. The size of the buffers are
+	customizable, with each having their own limitation on the maximum capacity. The
+	endpoint buffers are all manually allocated by the MCU in a single 832-byte
+	arena (2). The ATmega32U4 also has the ability to "double-buffer" or "double-bank"
+	or "ping-pong", meaning that an endpoint can essentially have two buffers in use at
+	the same time. One will be written to or read from by the hardware, while the other
+	is written to or read from by the firmware. This allows us to do something like
+	operate on a data-packet sent from the host while, simultaneously, the bytes of the
+	next data-packet is being copied by the hardware. The role of these two buffers
+	would flip back and forth, hence ping-pong mode.
+
+	(1) Endpoint Transfer Types @ Source(2) @ Table(9-13) @ Page(270) & Source(1) @ Section(22.18.2) @ Page(286) & Source(2) @ Section(4.7) @ Page(20-21).
+	(2) Endpoint Memory @ Source(1) @ Section(21.9) @ Page(263-264).
+*/
+
+/* [Communication Between Host and Device].
+	A packet is the smallest coherent piece of message that is sent to-or-from host and
+	device. The layout of a packet is abstractly structured as so:
+
+		............................
+		:                          :
+		: <SYNC PID STUFF CRC EOP> :
+		:                          :
+		.......... PACKET ..........
+
+		- SYNC announces on the USB that there's an incoming packet. SYNC consists
+		of oscillating D- and D+ signals that calibrates clocks in order to ensure the
+		parsing of the upcoming signal is done correctly.
+
+		- PID is the "packet ID", and this determines the purpose of the packet. PIDs
+		are grouped into four categories: TOKEN, DATA, HANDSHAKE, and SPECIAL (1). For
+		example, ACK and NACK packets are considered HANDSHAKE-typed packets.
+
+		- STUFF is any additional data that is defined by the PID's category. For
+		example, TOKEN-typed packets define the device address and endpoint that the
+		host wants to talk to. For packets belonging to the HANDSHAKE category,
+		there is no additional data. STUFF is where DATA-typed packets obviously
+		transmit the raw bytes.
+
+		- CRC is used for error checking to ensure that the packet was not read in a
+		malformed manner.
+
+		- EOP signals the USB hardware that it has reached the end of the packet.
+
+	Packets are thoroughly explained by (1), and are mostly already handled by the
+	hardware, so the firmware doesn't have to worry about calculating the CRC for
+	instance.
+
+	Packets together form "transactions", which always begins with the host sending a
+	TOKEN-typed packet. This will always be the case since USB is host-centric; thus
+	the USB device can only ever reply the host and never be able to initiate a
+	transaction of its own.
+
+	The exact layout of a transaction varies a lot on factors like endpoint transfer
+	types and error conditions, but I'll describe it in the common case where it's
+	carried out in three stages:
+
+	...................................................................................
+	: ----------------------     ---------------------     -------------------------- :
+	: | TOKEN-TYPED PACKET | ... | DATA-TYPED PACKET | ... | HANDSHAKE-TYPED PACKET | :
+	: ----------------------     ---------------------     -------------------------- :
+	.................................. TRANSACTION ....................................
+
+	The TOKEN-typed packet simply lets the host announce what device it wants to talk
+	to and at which endpoint of that device, along with the purpose of the entire
+	transaction. If the device's USB hardware detects a TOKEN-typed packet, but it is
+	addressed to a different device, then the hardware will ignore it, and thus the
+	firmware will not have to worry about it all.
+
+	Next is the DATA-typed packet which could be sent by the host, by the device, or not
+	at all depending on the PID of the earlier TOKEN-typed packet. There may not be a
+	DATA-typed packet because the transaction would simply not need it, or because there
+	was an error, to which the transaction may go immediately to the HANDSHAKE-typed
+	packet stage.
+
+	The HANDSHAKE-typed packet is the final packet that is sent either by the host or
+	device (or even not at all). The direction of the transfer of this packet is
+	opposite of the DATA-typed packet (if the host sent the data, then the device is
+	the one that responds here). The HANDSHAKE-typed packet is often used by the
+	recipent of the data to ACK or NACK the data that was sent. If the device (and only
+	the device) is in a state where it cannot not handle this transaction, then the
+	device can transmit a STALL packet for the handshake.
+
+	Once again, the layout of a transaction varies case-by-case. For example,
+	isochronous endpoints will engage in transactions with the host where there will
+	never be a HANDSHAKE-typed packet. This is because the entire point of isochronous
+	endpoints is to transmit time-sensitive data quickly (such as a live video or
+	song), but if a DATA-typed packet was dropped here and there, then its no big deal;
+	there's no need to waste USB bandwidth on handshakes.
+
+	The most common transactions are SETUPs, INs, and OUTs.
+
+		- SETUP-transactions are where the host sends the device a DATA-typed packet
+		that specifies what the host wants (see: struct USBSetupPacket). This could be
+		things ranging from requesting a string from the device or setting the device
+		into a specific configuration. In this transaction, the device will be the one
+		to send the host a HANDSHAKE-typed packet. This transaction is only for the
+		control-typed endpoints.
+
+		- IN-transactions are where the device is the one sending data to the host (the
+		naming is always from the host's perspective); that is, the DATA-typed packet
+		is transmitted by the device for the host. In this transaction, the host will
+		be the one to send the HANDSHAKE-typed packet.
+
+		- OUT-transactions are just like the IN-transactions, but the host is the one
+		sending the DATA-typed packets and the device responding with HANDSHAKE-typed
+		packets.
+
+	(1) Packet IDs @ Source(2) @ Table(8-1) @ page(196).
+	(2) Packets @ Source(4) @ Chapter(3).
+*/
+
+/* [Endpoint 0: Data-Transfer from Device to Host].
+	See: [Endpoints].
+	See: [Communication Between Host and Device].
+
+	This procedure is called when we are in a state where endpoint 0 needs to transmit
+	some data to the host in response to a SETUP-transaction. This process is
+	non-trivial since the data that needs to be sent might have to be broken up into
+	multiple transactions and also the fact that the host could abort early.
+
+	Consider the following diagram:
+
+	.......................................................................
+	: =====================     ==================     ================== :
+	: ( SETUP-TRANSACTION ) --> ( IN-TRANSACTION ) --> ( IN-TRANSACTION ) :
+	: =====================     ==================     ================== :
+	:                                                           |         :
+	:                                                           v         :
+	:   ===================     ==================     ================== :
+	:   ( OUT-TRANSACTION ) <-- ( IN-TRANSACTION ) <-- ( IN-TRANSACTION ) :
+	:   ===================     ==================     ================== :
+	............ EXAMPLE OF ENDPOINT 0 SENDING DATA TO THE HOST ...........
+
+	Before this procedure was called, endpoint 0 received a SETUP-transaction where the
+	host, say, asked the device for the string of its manufacturer's name. If
+	endpoint 0's buffer is small enough and/or the requested amount of data is large,
+	then this transferring of data will be done through a series of IN-transactions.
+
+	The procedure will be called to begin handling the series of IN-commands that will
+	be sent by the host. In each IN-transaction, the procedure will fill up
+	endpoint 0's buffer as much as possible.
+
+	The entire conversation will conclude once the OUT-transaction is received by the
+	device. No data will actually be sent to the device since the data-packet here is
+	always zero-length; that is, the DATA-typed packet in the OUT-transaction will be
+	empty.
+
+	The host can "abort" early by sending an OUT-transaction before the device has
+	completely sent all of its data. For example, the host might've asked for 1024 bytes
+	of the string, but for some reason it needed to abort, so it sends an
+	OUT-transaction early even though the device has only sent 256 bytes of the
+	requested 1024 bytes.
+*/
+
 
 /* [USB Device Interrupt Routine].
 	Triggers listed on (1):
@@ -488,37 +667,6 @@ ISR(USB_COM_vect)
 	This is where the host wants to learn more about the device.
 	The host asks about various things such as information about device itself,
 	configurations, strings, etc, all of which are noted in {enum USBDescriptorType}.
-*/
-
-/* [Transmit IN Data To Host].
-	The USB transaction of data from device-to-host begins after the host has already
-	sent the SETUP command (first a TOKEN, then the {struct USBSetupPacket} as the
-	8-byte data packet, finally handshake of ACK). The host now begins to send a series
-	of IN commands to get data from the device.
-
-	The transaction, like with any other, follows the same format: TOKEN, data packet,
-	and finally handshake. The TOKEN is sent by host (since USB is host-centric) with a
-	bit-pattern that signifies an IN command, to which the data-packet that follows it
-	is now being transmitted by the device (rather than from the host like last time
-	with the SETUP data-packet). After the data-packet has been sent, the host is now
-	the one to send the ACK handshake.
-
-	Let's say for endpoint 0 that it has a buffer size of 8 bytes.
-	This will mean that data requested by the host longer than 8 bytes cannot be sent
-	entirely through endpoint 0. This is resolved by having the host perform multiple
-	of these transactions involving the IN commands until the transfer is complete.
-	Data-packets should always be as long as the endpoint's buffer can make it to be,
-	until there is not enough remaining data to send, to which the data-packet can be
-	truncated to a shorter length (e.g. 3 bytes instead of max 8 bytes). In other words,
-	no padding bytes are to be sent.
-
-	After the series of IN commands, the host sends the device an OUT command.
-	This transaction is simply a longer version of the ACK handshake though,
-	since the OUT data-packet that is sent from host to device is zero-lengthed.
-	This is just to let the device know that the host has received all the data.
-
-	An OUT command could also be sent prematurely by the host, even if the device still
-	has remaining data to send. Perhaps the host had enough of the device!
 */
 
 /* [SETUP SetAddress]
