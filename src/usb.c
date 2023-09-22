@@ -27,6 +27,31 @@ usb_init(void)
 	UDCON = 0;
 }
 
+ISR(USB_GEN_vect)
+{ // [USB Device Interrupt Routine and Endpoint 0 Configuration].
+
+	// "Select the endpoint".
+	UENUM = 0;
+
+	// "Activate endpoint".
+	UECONX = (1 << EPEN);
+
+	// "Configure" and "Allocate".
+	UECFG1X = (USB_ENDPOINT_0_SIZE_TYPE << EPSIZE0) | (1 << ALLOC);
+
+	// "Test endpoint configuration".
+	#if 0
+	if (!(UESTA0X & (1 << CFGOK)))
+	{
+		debug_halt(-1);
+	}
+	#endif
+
+	UEIENX = (1 << RXSTPE); // Endpoint 0 will listen to the reception of SETUP-transactions.
+
+	UDINT = 0; // Clear End-of-Reset trigger flag to prevent this routine from executing again.
+}
+
 static void
 _usb_endpoint_0_transmit // [Endpoint 0: Data-Transfer from Device to Host].
 (
@@ -63,28 +88,6 @@ _usb_endpoint_0_transmit // [Endpoint 0: Data-Transfer from Device to Host].
 			UEINTX &= ~(1 << TXINI); // Mark buffer as ready to be sent for IN-transaction.
 		}
 	}
-}
-
-ISR(USB_GEN_vect)
-{ // [USB Device Interrupt Routine].
-
-	// [Endpoint Configuration].
-	UENUM   = 0;
-	UECONX  = (1 << EPEN);
-	UECFG1X = (USB_ENDPOINT_0_SIZE_TYPE << EPSIZE0) | (1 << ALLOC);
-
-	#if 0 // [Endpoint Allocation Check].
-	if (!(UESTA0X & (1 << CFGOK)))
-	{
-		debug_halt(-1);
-	}
-	#endif
-
-	// [Endpoint 0 Interrupts].
-	UEIENX = (1 << RXSTPE);
-
-	// [Clear UDINT].
-	UDINT = 0;
 }
 
 ISR(USB_COM_vect)
@@ -266,9 +269,17 @@ ISR(USB_COM_vect)
 			debug_halt(-1); // TODO Can we ignore the setting of line-coding?
 		}
 	}
+	else if
+	(
+		setup_packet.unknown.bmRequestType == 0b0000'0001
+		&& setup_packet.unknown.bRequest == USBSetupRequest_clear_feature
+	)
+	{
+		debug_halt(5);
+	}
 	else // Unhandled SETUP command.
 	{
-		debug_u8(setup_packet.unknown.bmRequestType);
+		debug_u8(setup_packet.unknown.bRequest);
 		debug_halt(2);
 	}
 
@@ -383,7 +394,7 @@ ISR(USB_COM_vect)
 	copied from by the firmware, so data-transfer is more-or-less one-way.
 
 	Every USB device has endpoint 0 as a control-typed endpoint. This endpoint is where
-	all the enumeration (initialization of USB device) happens through, and as so,
+	all the "enumeration" (initialization of USB device) happens through, and as so,
 	endpoint 0 is also called the "default endpoint".
 
 	The ATmega32U4 has a total of 7 endpoints, 6 if you don't count endpoint 0 since it
@@ -400,6 +411,70 @@ ISR(USB_COM_vect)
 
 	(1) Endpoint Transfer Types @ Source(2) @ Table(9-13) @ Page(270) & Source(1) @ Section(22.18.2) @ Page(286) & Source(2) @ Section(4.7) @ Page(20-21).
 	(2) Endpoint Memory @ Source(1) @ Section(21.9) @ Page(263-264).
+*/
+
+/* [USB Device Interrupt Routine and Endpoint 0 Configuration].
+	See: [Endpoints].
+
+	Triggers listed on (1):
+		[ ] VBUS Plug-In.
+		[ ] Upstream Resume.
+		[ ] End-of-Resume.
+		[ ] Wake Up.
+		[X] End-of-Reset.
+		[ ] Start-of-Frame.
+		[ ] Suspension Detection.
+		[ ] Start-of-Frame CRC Error.
+
+	When an unenumerated device connects to the USB and the host sees this, the host
+	will pull the D+/D- lines to a specific state where it signals to the device that it
+	should reset (4), and when the host releases the D+/D- lines, USB_GEN_vect is then
+	triggered. This is called the "End-of-Reset" event.
+
+	Since (1) specifically states that the endpoints will end up disabled, it is
+	important that we do the rest of our USB initialization after the End-of-Reset.
+
+	The first endpoint that we will initialize is endpoint 0, which we will do by
+	consulting the flowchart in (1):
+		1. Select the endpoint.
+				ATmega32U4 uses the system where writing to and reading from
+				endpoint-specific registers (e.g. UECFG0X) depends on the currently
+				selected endpoint determined by UPNUM (3).
+		2. Activate endpoint.
+				Self-explainatory. The only thing we have to be aware of is that we
+				have to initiate endpoints in sequential order so the memory allocation
+				works out (2).
+		3. Configure.
+				We set the endpoint's transfer type, direction, buffer size, etc.
+		4. Allocate.
+				The hardware does it all on-the-fly (2).
+		5. Test endpoint configuration.
+				Technically the allocation can fail for things like using more than
+				832 bytes of memory or making a buffer larger than what that endpoint
+				can support. This doesn't really need to be addressed, just as long we
+				aren't dynamically reallocating, disabling, etc. endpoints at run-time.
+
+	Endpoint 0 will always be a control-typed endpoint as enforced by the USB
+	specification, so that part of the configuration is straight-forward. For the
+	data-direction of endpoint 0, it seems like the ATmega32U4 datasheet wants us to
+	define endpoint 0 to have an "OUT" direction (5), despite the fact that control-typed
+	endpoints are bidirectional.
+
+	One last thing we want from endpoint 0 is the ability for it to detect when it has
+	received a SETUP-transaction. SETUP-transactions will be described more later on,
+	but it's essentially where the rest of the enumeration will be communicated through.
+	We enable the interrupt for this by using RXSTPE.
+
+	Note that this interrupt is only going to trigger for endpoint 0. So if the host
+	sends a SETUP-transaction to endpoint 3, it'll be ignored (unless the interrupt for
+	that is also enabled) (6).
+
+	(1) USB Device Controller Interrupt System @ Source(1) @ Figure(22-4) @ Page(279).
+	(2) Endpoint Memory Management @ Source(1) @ Section(21.9) @ Page(263-264).
+	(3) "Endpoint Selection" @ Source(1) @ Section(22.5) @ Page(271).
+	(4) "USB Reset" @ Source(1) @ Section(22.4) @ Page(271).
+	(5) EPDIR @ Source(1) @ Section(22.18.2) @ Page(287).
+	(6) "USB Device Controller Endpoint Interrupt System" @ Source(1) @ Figure(22-5) @ Page(280).
 */
 
 /* [Communication Between Host and Device].
@@ -424,7 +499,7 @@ ISR(USB_COM_vect)
 		example, TOKEN-typed packets define the device address and endpoint that the
 		host wants to talk to. For packets belonging to the HANDSHAKE category,
 		there is no additional data. STUFF is where DATA-typed packets obviously
-		transmit the raw bytes.
+		transmit the raw bytes of the data.
 
 		- CRC is used for error checking to ensure that the packet was not read in a
 		malformed manner.
@@ -432,8 +507,8 @@ ISR(USB_COM_vect)
 		- EOP signals the USB hardware that it has reached the end of the packet.
 
 	Packets are thoroughly explained by (1), and are mostly already handled by the
-	hardware, so the firmware doesn't have to worry about calculating the CRC for
-	instance.
+	hardware, so the firmware doesn't have to worry about things like calculating the
+	CRC for instance.
 
 	Packets together form "transactions", which always begins with the host sending a
 	TOKEN-typed packet. This will always be the case since USB is host-centric; thus
@@ -464,8 +539,8 @@ ISR(USB_COM_vect)
 
 	The HANDSHAKE-typed packet is the final packet that is sent either by the host or
 	device (or even not at all). The direction of the transfer of this packet is
-	opposite of the DATA-typed packet (if the host sent the data, then the device is
-	the one that responds here). The HANDSHAKE-typed packet is often used by the
+	opposite of the DATA-typed packet (e.g. if the host sent the data, then the device
+	is the one that responds here). The HANDSHAKE-typed packet is often used by the
 	recipent of the data to ACK or NACK the data that was sent. If the device (and only
 	the device) is in a state where it cannot not handle this transaction, then the
 	device can transmit a STALL packet for the handshake.
@@ -482,9 +557,9 @@ ISR(USB_COM_vect)
 		- SETUP-transactions are where the host sends the device a DATA-typed packet
 		that specifies what the host wants (see: struct USBSetupPacket). This could be
 		things ranging from requesting a string from the device or setting the device
-		into a specific configuration. In this transaction, the device will be the one
-		to send the host a HANDSHAKE-typed packet. This transaction is only for the
-		control-typed endpoints.
+		into a specific configuration. This transaction is reserved only for the
+		control-typed endpoints and the device will be the one to send the host a
+		HANDSHAKE-typed packet.
 
 		- IN-transactions are where the device is the one sending data to the host (the
 		naming is always from the host's perspective); that is, the DATA-typed packet
@@ -492,8 +567,8 @@ ISR(USB_COM_vect)
 		be the one to send the HANDSHAKE-typed packet.
 
 		- OUT-transactions are just like the IN-transactions, but the host is the one
-		sending the DATA-typed packets and the device responding with HANDSHAKE-typed
-		packets.
+		sending the DATA-typed packet and the device responding with a HANDSHAKE-typed
+		packet.
 
 	(1) Packet IDs @ Source(2) @ Table(8-1) @ page(196).
 	(2) Packets @ Source(4) @ Chapter(3).
@@ -523,111 +598,66 @@ ISR(USB_COM_vect)
 
 	Before this procedure was called, endpoint 0 received a SETUP-transaction where the
 	host, say, asked the device for the string of its manufacturer's name. If
-	endpoint 0's buffer is small enough and/or the requested amount of data is large,
+	endpoint 0's buffer is small and/or the requested amount of data is large enough,
 	then this transferring of data will be done through a series of IN-transactions.
 
-	The procedure will be called to begin handling the series of IN-commands that will
-	be sent by the host. In each IN-transaction, the procedure will fill up
-	endpoint 0's buffer as much as possible.
+	The procedure will be called to begin handling the series of IN-transactions that
+	will be sent by the host. In each IN-transaction, the procedure will fill up
+	endpoint 0's buffer as much as possible. Only the data-packet in the last
+	IN-transaction may be smaller than endpoint 0's maximum capacity in the case that
+	the requested amount of data is not a perfect multiple of the buffer size (1). In
+	other words, we should be expecting the host to stop sending IN-transactions when
+	the requested amount of data has been sent or if the data-packet it received is
+	shorter than endpoint 0's maximum capacity.
 
-	The entire conversation will conclude once the OUT-transaction is received by the
-	device. No data will actually be sent to the device since the data-packet here is
+	The entire conversation will conclude once the device receives the OUT-transaction.
+	No data will actually be sent to the device since the data-packet here is
 	always zero-length; that is, the DATA-typed packet in the OUT-transaction will be
 	empty.
 
 	The host can "abort" early by sending an OUT-transaction before the device has
 	completely sent all of its data. For example, the host might've asked for 1024 bytes
-	of the string, but for some reason it needed to abort, so it sends an
-	OUT-transaction early even though the device has only sent 256 bytes of the
-	requested 1024 bytes.
+	of the string, but for some reason it needed to end the transferring early, so it
+	sends an OUT-transaction (instead of another IN-transaction) even though the device
+	has only sent, say, 256 bytes of the requested 1024 bytes.
+
+	(1) Control Transfers @ Source(2) @ Section(8.5.3) @ Page(226).
 */
 
 
-/* [USB Device Interrupt Routine].
-	Triggers listed on (1):
-		[ ] VBUS Plug-In.
-		[ ] Upstream Resume.
-		[ ] End-of-Resume.
-		[ ] Wake Up.
-		[X] End-of-Reset.
-		[ ] Start-of-Frame.
-		[ ] Suspension Detection.
-		[ ] Start-of-Frame CRC Error.
 
-	(1) USB Device Controller Interrupt System @ Source(1) @ Figure(22-4) @ Page(279).
-*/
 
-/* [Endpoint Configuration].
-	We consult the flowchart in (1) where we select our choice of endpoint to modify
-	(dictated by UENUM (3)), enable it via EPEN in UECONX, apply the configurations
-	such as size and banks, and then allocate.
 
-	It should be noted that UECFG0X (2) describes the endpoint's
-	USB transfer type (CONTROL, BULK, ISOCHRONOUS, INTERRUPT) (4).
-	Since endpoint 0 is for setting up the USB device,
-	it can only be the CONTROL type, and it is already so by default.
 
-	UECFG0X also describes the endpoint's direction too (IN/OUT).
-	The description for that configuration bit (EPDIR) seems to imply
-	that CONTROL endpoints can only have an OUT direction.
 
-	UECFG1X (2) has two more settings: endpoint size and endpoint banks.
-	The endpoint sizes can go from 8 to 512 in powers of twos.
-	According to the (5), endpoint 0 has a max size of 64 bytes.
-	Any larger than this will probably cause an allocation failure.
 
-	The other configuration in the UECFG1X register is the ability to pick between one
-	or two banks. This is also called "ping-pong mode".
-	Since endpoint 0 will be communicating from device to host and vice-versa
-	(despite being considered an OUT by UECFG0X), we can't dual-bank (6) (7).
 
-	(1) "Endpoint Activation" @ Source(1) @ Section(22.6) @ Page(271).
-	(2) UECFG0X, UECFG1X @ Source(1) @ Section(22.18.2) @ Page(287-289).
-	(3) "Endpoint Selection" @ Source(1) @ Section(22.5) @ Page(271).
-	(4) USB Transfer Types @ Source(2) @ Section(5.4) @ Page(36-37).
-	(5) USB Device Operating Modes Introduction @ Source(1) @ Section(22.1) @ Page(270).
-	(6) Dual Bank Behavior for OUT Endpoints @ Source(1) @ Section(22.13.2.1) @ 276.
-	(7) Dual Bank Behavior for IN Endpoints @ Source(1) @ Section(22.14.1) @ 276.
-*/
 
-/* [Endpoint Allocation Check].
-	The allocation process can technically fail, as seen in (1),
-	but if we aren't dynamically changing the endpoints around like in (2),
-	then we can safely assume the allocation we do here is successful
-	(we'd only have to check CFGOK in UESTA0X once and then recompile without
-	the asserting code after (3)).
 
-	(1) "Endpoint Activation" @ Source(1) @ Section(22.6) @ Page(271).
-	(2) Allocation and Reorganization USB Memory Flow @ Source(1) @ Table(21-1) @ Page(264).
-	(3) CFGOK, UESTA0X @ Source(1) @ Section(22.18.2) @ Page(287).
-*/
 
-/* [Endpoint 0 Interrupts].
-	Once we have configured and enabled endpoint 0, we can activate the interrupt
-	that'll trigger when we have received some setup commands from the host.
-	This is done with RXSTPE ("Received Setup Enable") bit in the UEIENX register (1).
 
-	Note that this interrupt is only going to trigger for endpoint 0 (2).
-	So if the host sends a setup command to endpoint 3, it'll be ignored
-	(unless the interrupt for that is also enabled).
 
-	[Endpoint Interrupt Routine] handles the interrupts of endpoints.
 
-	(1) UEIENX, RXSTPE @ Source(1) @ Section(22.18.2) @ Page(290-291).
-	(2) "USB Device Controller Endpoint Interrupt System" @ Source(1) @ Figure(22-5) @ Page(280).
-*/
 
-/* [Clear UDINT].
-	The UDINT register has flags that are triggering this interrupt routine,
-	so we'll need to clear them to make sure we don't accidentally go in an infinite
-	loop!
 
-	The only flag-bit we'd need to actually clear is the EORSTI bit,
-	but since we don't care about the other bits and they don't do anything when cleared,
-	we can just go ahead set the entire register to zero (1).
 
-	(1) UDINT, EORSTI @ Source(1) @ Section(22.18.1) @ Page(282).
-*/
+
+
+
+
+
+
+
+
+
+
+
+//
+// TODO Revise.
+//
+
+
+
 
 /* [Endpoint Interrupt Routine].
 	Triggers listed on (1) of when a specific endpoint:
