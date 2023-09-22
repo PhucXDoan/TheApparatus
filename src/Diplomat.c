@@ -3,6 +3,7 @@
 #include <util/delay.h>
 #include <avr/interrupt.h>
 #include <stdint.h>
+#include <string.h>
 #include "defs.h"
 #include "pins.c"
 #include "usb.c"

@@ -94,6 +94,16 @@ enum USBSetupRequest // See: Source(2) @ Table(9-3) @ Page(251).
 	USBSetupRequest_get_interface     = 10,
 	USBSetupRequest_set_interface     = 11,
 	USBSetupRequest_synch_frame       = 12,
+
+	// This is non-exhaustive. See: CDC-Specific Request Codes @ Source(6) @ Table(46) @ Page(64-65).
+	USBSetupRequest_communication_set_line_coding        = 0x20,
+	USBSetupRequest_communication_get_line_coding        = 0x21,
+	USBSetupRequest_communication_set_control_line_state = 0x22,
+};
+
+enum USBCommunicationControlSignalFlag
+{
+	USBCommunicationControlSignalFlag_
 };
 
 enum USBEndpointAddressFlag // See: "bEndpointAddress" @ Source(2) @ Table(9-13) @ Page(269).
@@ -155,20 +165,20 @@ enum USBCommunicationAbstractControlManagementCapabilitiesFlag
 	USBCommunicationAbstractControlManagementCapabilitiesFlag_network_connection = 1 << 3,
 };
 
-struct USBSetupPacket // See: Source(2) @ Table(9-2) @ Page(248).
+struct USBSetupPacket
 {
 	union
 	{
-		struct USBSetupPacketUnknown
+		struct USBSetupPacketUnknown // See: Source(2) @ Table(9-2) @ Page(248).
 		{
-			u8  bmRequestType;
+			u8  bmRequestType; // TODO Have flags for this?
 			u8  bRequest;      // Aliasing(enum USBSetupRequest).
 			u16 wValue;
 			u16 wIndex;
 			u16 wLength;
 		} unknown;
 
-		struct USBSetupPacketGetDescriptor
+		struct USBSetupPacketGetDescriptor // See: Source(2) @ Section(9.4.3) @ Page(253).
 		{
 			u8  bmRequestType;    // Must be 0b1000'0000.
 			u8  bRequest;         // Must be USBSetupRequest_get_descriptor.
@@ -178,14 +188,65 @@ struct USBSetupPacket // See: Source(2) @ Table(9-2) @ Page(248).
 			u16 wLength;
 		} get_descriptor;
 
-		struct USBSetupPacketSetAddress
+		struct USBSetupPacketSetAddress // See: Source(2) @ Section(9.4.6) @ Page(256).
 		{
 			u8  bmRequestType; // Must be 0b0000'0000.
 			u8  bRequest;      // Must be USBSetupRequest_set_address.
 			u16 address;
 			u32 zero;          // Expect to be zero.
 		} set_address;
+
+
+		struct USBSetupPacketSetConfiguration // See: Source(2) @ Section(9.4.7) @ Page(257).
+		{
+			u8  bmRequestType;       // Must be 0b0000'0000.
+			u8  bRequest;            // Must be USBSetupRequest_set_configuration.
+			u16 configuration_value; // Configuration that the host wants to set the device to. Zero is reserved for making the device be in "Address State", so 1 must be used.
+			u32 zero;                // Expect to be zero.
+		} set_configuration;
+
+		struct USBSetupPacketCommunicationGetLineCoding // See: Source(6) @ Section(6.2.13) @ AbsPage(69).
+		{
+			u8  bmRequestType;   // Must be 0b1010'0001.
+			u8  bRequest;        // Must be USBSetupRequest_communication_get_line_coding.
+			u16 zero;            // Expect zero.
+			u16 interface_index; // Index of the communication interface to get the line-coding from.
+			u16 structure_size;  // Must be size of struct USBCommunicationLineCoding.
+		} communication_get_line_coding;
+
+		struct USBSetupPacketCommunicationSetLineCoding // See: Source(6) @ Section(6.2.12) @ AbsPage(68-69).
+		{
+			u8  bmRequestType;   // Must be 0b0010'0001.
+			u8  bRequest;        // Must be USBSetupRequest_communication_set_line_coding.
+			u16 zero;            // Expect zero.
+			u16 interface_index; // Index of the communication interface to set the line-coding from.
+			u16 structure_size;  // Must be size of struct USBCommunicationLineCoding.
+		} communication_set_line_coding;
 	};
+};
+
+enum USBCommunicationLineCodingStopBit // See: "Stop Bits" @ Source(6) @ Table(50) @ AbsPage(69).
+{
+	USBCommunicationLineCodingStopBit_1   = 0,
+	USBCommunicationLineCodingStopBit_1_5 = 1,
+	USBCommunicationLineCodingStopBit_2   = 2,
+};
+
+enum USBCommunicationLineCodingParity // See: "Parity Type" @ Source(6) @ Table(50) @ AbsPage(69).
+{
+	USBCommunicationLineCodingParity_none  = 0,
+	USBCommunicationLineCodingParity_odd   = 1,
+	USBCommunicationLineCodingParity_even  = 2,
+	USBCommunicationLineCodingParity_mark  = 3,
+	USBCommunicationLineCodingParity_space = 4,
+};
+
+struct USBCommunicationLineCoding // See: Source(6) @ Table(50) @ Page(69).
+{
+	u32 dwDTERate;   // Baud rate.
+	u8  bCharFormat; // Aliasing(enum USBCommunicationLineCodingStopBit).
+	u8  bParityType; // Aliasing(enum USBCommunicationLineCodingParity).
+	u8  bDataBits;   // Must be 5, 6, 7, 8, or 16.
 };
 
 struct USBDescriptorDevice // [USB Device Descriptor].
@@ -422,6 +483,14 @@ static const struct USBConfigurationHierarchy USB_CONFIGURATION_HIERARCHY = // S
 						},
 					}
 			},
+	};
+
+static const struct USBCommunicationLineCoding USB_COMMUNICATION_LINE_CODING =
+	{
+		.dwDTERate   = 9600,
+		.bCharFormat = USBCommunicationLineCodingStopBit_1,
+		.bParityType = USBCommunicationLineCodingParity_none,
+		.bDataBits   = 8,
 	};
 
 //
