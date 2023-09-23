@@ -53,12 +53,7 @@ ISR(USB_GEN_vect)
 }
 
 static void
-_usb_endpoint_0_transmit // [Endpoint 0: Data-Transfer from Device to Host].
-(
-	u8* packet_data,
-	u16 packet_length,
-	u16 endpoint_buffer_size
-)
+_usb_endpoint_0_transmit(u8* packet_data, u16 packet_length) // [Endpoint 0: Data-Transfer from Device to Host].
 {
 	u8* data_cursor    = packet_data;
 	u16 data_remaining = packet_length;
@@ -72,9 +67,9 @@ _usb_endpoint_0_transmit // [Endpoint 0: Data-Transfer from Device to Host].
 		else if (UEINTX & (1 << TXINI)) // Buffer ready to be filled?
 		{
 			u8 writes_left =
-				data_remaining < endpoint_buffer_size
+				data_remaining < USB_ENDPOINT_0_BUFFER_SIZE
 					? data_remaining
-					: endpoint_buffer_size;
+					: USB_ENDPOINT_0_BUFFER_SIZE;
 
 			data_remaining -= writes_left;
 
@@ -91,20 +86,18 @@ _usb_endpoint_0_transmit // [Endpoint 0: Data-Transfer from Device to Host].
 }
 
 ISR(USB_COM_vect)
-{ // [Endpoint Interrupt Routine].
+{
 
 	UENUM   = 0;
-	UECONX |= (1 << STALLRQC); // See: [Request Error Stall].
+	UECONX |= (1 << STALLRQC);
 
-	// [Read SETUP Packet].
 	struct USBSetup setup_packet;
 	for (u8 i = 0; i < sizeof(setup_packet); i += 1)
 	{
 		((u8*) &setup_packet)[i] = UEDATX;
 	}
 
-	// Let the interrupt routine know that we have copied the SETUP data. See: Source(1) @ Section(22.12) @ Page(274).
-	UEINTX &= ~(1 << RXSTPI);
+	UEINTX &= ~(1 << RXSTPI); // Let the interrupt routine know that we have copied the SETUP data. See: Source(1) @ Section(22.12) @ Page(274).
 
 	switch (setup_packet.type)
 	{
@@ -129,7 +122,7 @@ ISR(USB_COM_vect)
 						static_assert(sizeof(USB_DEVICE_DESCRIPTOR) < (((u64) 1) << (sizeof(packet_length) * 8)))
 					} break;
 
-					case USBDescType_config:
+					case USBDescType_config: // See: [Interfaces, Configurations, and Classes].
 					{
 						packet_data   = (u8*) &USB_CONFIGURATION_HIERARCHY;
 						packet_length = sizeof(USB_CONFIGURATION_HIERARCHY);
@@ -138,8 +131,7 @@ ISR(USB_COM_vect)
 
 					case USBDescType_device_qualifier:
 					{
-						// ATmega32U4 does not support anything beyond full-speed, so we have to reply with a request error.
-						// See: Source(2) @ Section(9.6.2) @ Page(264) & [Request Error Stall].
+						// ATmega32U4 does not support anything beyond full-speed, so we have to reply with a request error. See: Source(2) @ Section(9.6.2) @ Page(264) & [Request Error Stall].
 					} break;
 
 					case USBDescType_string:
@@ -162,8 +154,7 @@ ISR(USB_COM_vect)
 					packet_data,
 					setup_packet.get_descriptor.requested_amount < packet_length
 						? setup_packet.get_descriptor.requested_amount
-						: packet_length,
-					USB_ENDPOINT_0_BUFFER_SIZE
+						: packet_length
 				);
 			}
 			else // [Request Error Stall].
@@ -192,7 +183,7 @@ ISR(USB_COM_vect)
 			switch (setup_packet.set_config.value)
 			{
 				case 0:
-				case 1:
+				case USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE:
 				{
 					// We either move to or remain at the "address state" of the device,
 					// but since we only have one configuration, it doesn't really matter;
@@ -220,8 +211,7 @@ ISR(USB_COM_vect)
 			_usb_endpoint_0_transmit
 			(
 				(u8*) &USB_COMMUNICATION_LINE_CODING,
-				sizeof(USB_COMMUNICATION_LINE_CODING),
-				USB_ENDPOINT_0_BUFFER_SIZE // TODO remove
+				sizeof(USB_COMMUNICATION_LINE_CODING)
 			);
 		} break;
 
@@ -612,19 +602,169 @@ ISR(USB_COM_vect)
 	(1) Control Transfers @ Source(2) @ Section(8.5.3) @ Page(226).
 */
 
+/* [Interfaces, Configurations, and Classes].
+	An "interface" of a USB device is just a group of endpoints that are used for a
+	specific purpose. A simple mouse, for instance, may only just have a single
+	interface that simply reports the delta-movement to the host. A fancier mouse with
+	a numberpad on the side may have two interfaces: one for the mouse functionality and
+	the other for the keyboard of the numberpad.
 
+	A set of interfaces is called a "configuration", and the host must choose the most
+	appropriate configuration for the device. The ability of having multiple
+	configurations allows greater flexibility of when and where the device can be used.
+	For example, if the host is a laptop that is currently on battery-power, the host
+	may choose a device configuration that is more power-efficient. When the laptop is
+	plugged in, it may reconfigure the device to now use as much power as it wants.
 
+	The functionality of an interface is determined by the "class" (specifically
+	bInterfaceClass). An example would be HID (human-interface device) which include,
+	mouses, keyboards, data-gloves, etc. The USB specification does not detail much at
+	all about these classes; the corresponding class specification must be consulted.
 
+	The entire USB device optionally be labeled as a single class (via bDeviceClass).
+	This seems to be useful for the host in loading the necessary drivers, according
+	to (1).
 
+	We define a single configuration, and within it we implement interfaces for each of
+	the following classes:
 
+		- Communication Devices Class (CDC).
+			// TODO Organize.
 
+			// "The Communication Class interface is a management interface and is required of all communication devices." @ Source(6) @ Section(3.3) @ AbsPage(20).
+			// "The Data Class interface can be used to transport data whose structure and usage is not defined by any other class, such as Audio. The format of the data moving over this interface can be identified using the associated Communication Class interface." @ Source(6) @ Section(3.3) @ AbsPage(20).
+			// "The data is always a byte stream. The Data Class does not define the format of the stream, unless a protocol data wrapper is used." @ Source(6) @ Section(3.3.2) @ AbsPage(21).
 
+			// Device Management:
+			//     "Device management includes the requests that manage the operational state of the device, the device responses, and event notifications." @ Source(6) @ Section(3.3.1) @ AbsPage(20).
 
+			// Call Management:
+			//     "Call management includes the requests for setting up and tearing down calls, and the managing of their operational parameters." @ Source(6) @ Section(3.3.1) @ AbsPage(20).
 
+			// Management Element:
+			//     "The management element configures and controls the device, and consists of endpoint 0." @ Source(6) @ Section(3.3.1) @ AbsPage(20).
 
+			// Notification Element:
+			//     "The notification element transports events to the host, and in most cases, consists of a interrupt endpoint. Notification elements pass messages via an interrupt or bulk endpoint, using a standardized format. Messages are formatted as a standardized 8-byte header, followed by a variable-length data field. The header identifies the kind of notification, and the interface associated with the notification; it also indicates the length of the variable length portion of the message." @ Source(6) @ Section(3.3.1) @ AbsPage(20).
 
+				This interface sets up the first half of the CDC (Communications Device Class)
+				interface so we can send diagnostic information to the host. I will admit that
+				I am quite too young to even begin to understand what modems are or the old ways of
+				technology before the internet became hip and cool. Nonetheless, I will document
+				my understanding of what has to be done in order to set the communication interface
+				up.
 
+				We set bInterfaceClass to USBClass_cdc to indicate to the host that this
+				interface is for the communication class, and as a result will contain specific
+				information that is not specified at all within the USB specification.
 
+				bInterfaceSubClass then further narrows the interface's class down to
+				"Abstract Control Model" (1), which from what I understand, makes the USB device
+				emulate a COM port that could then receive and transmit data serially.
+
+				TODO
+					For bInterfaceProtocol, I assume we should be using the protocol that interprets
+					AT/V250/V.25ter/Hayes commands, since (2) says that the abstract control model
+					understands these. But I don't think we use this obscure system anymore...
+					So can we remove it? (3) says that if the control model doesn't require it,
+					which PSTN that defines ACM doesn't seem to enforce, then we should set it to 0.
+
+				(1) "Abstract Control Model" @ Source(6) @ Section(3.6.2) @ AbsPage(26).
+				(2) ACM with AT Commands @ Source(7) @ Section(3.2.2) @ AbsPage(15).
+				(3) Control Model on Protocols @ Source(6) @ Section(4.4) @ AbsPage(40).
+
+				It is stated in (1) that every communication class interface must have a
+				"management element", which is just an endpoint that transfer commands to
+				manages the communication between host and device as defined in (2). This
+				management element also happens to be always endpoint 0 for all communication
+				devices.
+
+				As declared in (3), abstract control models need to also have the
+				"notification element". Like with management element, it is just another
+				endpoint, but this time it is used to notify the host of any events,
+				and is often (but not necessarily required) an interrupt transfer typed endpoint
+				(so it can't be endpoint 0).
+
+				TODO probably better in usb.c
+				Every once in a while, the host would send a request defined in (5) to the
+				notification element, and if the device ACKs, TODO what exactly happens???
+
+				(1) CDC Endpoints @ Source(6) @ Section(3.4.1) @ AbsPage(23).
+				(2) "Management Element" @ Source(6) @ Section(1.4) @ AbsPage(16).
+				(3) Endpoints on Abstract Control Models @ Source(6) @ Section(3.6.2) @ AbsPage(26).
+				(4) "Notification Element" @ Source(6) @ Section(1.4) @ AbsPage(16).
+				(5) "Notification Element Notifications" @ Source(6) @ Section(6.3) @ AbsPage(84).
+
+				I'm not entirely too sure what a "data class" is exactly used for here, but based
+				on loose descriptions of its usage, it's to respresent the part of the communication
+				where there might be compression, error correction, modulation, etc. as seen in (1).
+
+				Regardless, this interface is where the I/O streams of the communication between
+				host and device is held.
+
+				(1) Abstract Control Model Diagram @ Source(6) @ Figure(3) @ AbsPage(15).
+
+				Stated by (1), the endpoints that will be carrying data between the host and device
+				must be either both isochronous or both bulk transfer types.
+
+				(1) "Data Class Endpoint Requirements" @ Source(6) @ Section(3.4.2) @ AbsPage(23).
+
+		- Human Interface Device (HID) Class.
+			TODO
+
+		- Mass Storage Device Class.
+			TODO
+
+	(1) Device and Configuration Descriptors @ Source(4) @ Chapter(5).
+*/
+
+/* TODO[Tampered Default Register Values].
+	- Does bootloader modify initial registers?
+	- Is there a way to reset all registers, even if bootloader did mess with them?
+	- Perhaps USB End Of Reset event is sufficient to reset the USB state?
+	To my great dismay, some registers used in the initialization process are already tampered with.
+	I strongly believe this is due to the fact that the Arduino Leonardo's bootloader, which uses USB,
+	is not cleaning up after itself. This can be seen in the default bits in USBCON being different after
+	the bootloader finishes running, but are the expected values after power-cycling.
+	I don't know if there's a source online that could definitively confirm this however.
+	The datasheet also shows a crude figure of a state machine going between the RESET and IDLE states,
+	but doing USBE=0 doesn't seem to actually completely reset all register states, so this is useless.
+	So for now, we are just gonna enforce that the board is power-cycled after each flash.
+	See: UHWCON, USBCON @ Source(1) @ Section(21.13.1) @ Page(267).
+	See: Crude USB State Machine @ Source(1) @ Figure (22-1) @ Page(270).
+*/
+
+/* TODO[USB Regulator vs Interface]
+	There's a different bit for enabling the USB pad regulator and USB interface,
+	but why are these separate? Perhaps for saving state?
+*/
+
+/* TODO Endpoint 0 Size?
+	How does the size affect endpoint 0?
+	Could we just be cheap and have 8 bytes?
+*/
+
+/* TODO 512 Byte Endpoint?
+	The datasheet claims that an endpoint size can be 512 bytes,
+	but makes no other mention to this at all. The introduction
+	states that endpoint 1 can have a "FIFO up to 256 bytes in ping-pong mode",
+	while the others have it up to 64 bytes. So how could an endpoint ever get to 512 bytes?
+	Maybe it's saying that for endpoint 1 that one bank is 256 bytes, and
+	in ping-pong mode, it's another 256 bytes, and 512 bytes total,
+	but this still doesn't really make sense as to why we can
+	configure an endpoint in UECFG1X to be have 512 bytes!
+	* UECFG1X @ Source(1) @ Section(22.18.2) @ Page(287).
+	* Endpoint Size Statements @ Source(1) @ Section(22.1) @ Page(270).
+*/
+
+/* TODO[IN/OUT Interrupts].
+	In theory, using interrupts to trigger on IN/OUT commands to handle should be
+	identical to spinlocking for those commands, but it turns out not. I'm not entirely
+	too sure why. Perhaps I am not understanding the exact semantic of the endpoint
+	interrupts for these cases, or that the CPU can't handle the interrupt in time
+	because USB is just so fast. It could also very well be neither of those cases and
+	it's something else entirely!
+*/
 
 
 
@@ -734,67 +874,4 @@ ISR(USB_COM_vect)
 	(2) "STALL Request" @ Source(1) @ Section(22.11) @ Page(273-274).
 	(3) "USB Device Requests" @ Source(2) @ Section(9.3) @ Page(248).
 	(4) STALL Handshakes @ Source(2) @ Section(8.5.3.4) @ Page(228).
-*/
-
-/* [SETUP SetConfiguration].
-	TODO
-*/
-
-/* [SETUP Communication GetLineCoding].
-	TODO
-*/
-
-/* [SETUP Communication SetControlLineState].
-	TODO
-*/
-
-/* [SETUP Communication SetLineCoding].
-*/
-
-/* TODO[Tampered Default Register Values].
-	- Does bootloader modify initial registers?
-	- Is there a way to reset all registers, even if bootloader did mess with them?
-	- Perhaps USB End Of Reset event is sufficient to reset the USB state?
-	To my great dismay, some registers used in the initialization process are already tampered with.
-	I strongly believe this is due to the fact that the Arduino Leonardo's bootloader, which uses USB,
-	is not cleaning up after itself. This can be seen in the default bits in USBCON being different after
-	the bootloader finishes running, but are the expected values after power-cycling.
-	I don't know if there's a source online that could definitively confirm this however.
-	The datasheet also shows a crude figure of a state machine going between the RESET and IDLE states,
-	but doing USBE=0 doesn't seem to actually completely reset all register states, so this is useless.
-	So for now, we are just gonna enforce that the board is power-cycled after each flash.
-	See: UHWCON, USBCON @ Source(1) @ Section(21.13.1) @ Page(267).
-	See: Crude USB State Machine @ Source(1) @ Figure (22-1) @ Page(270).
-*/
-
-/* TODO[USB Regulator vs Interface]
-	There's a different bit for enabling the USB pad regulator and USB interface,
-	but why are these separate? Perhaps for saving state?
-*/
-
-/* TODO Endpoint 0 Size?
-	How does the size affect endpoint 0?
-	Could we just be cheap and have 8 bytes?
-*/
-
-/* TODO 512 Byte Endpoint?
-	The datasheet claims that an endpoint size can be 512 bytes,
-	but makes no other mention to this at all. The introduction
-	states that endpoint 1 can have a "FIFO up to 256 bytes in ping-pong mode",
-	while the others have it up to 64 bytes. So how could an endpoint ever get to 512 bytes?
-	Maybe it's saying that for endpoint 1 that one bank is 256 bytes, and
-	in ping-pong mode, it's another 256 bytes, and 512 bytes total,
-	but this still doesn't really make sense as to why we can
-	configure an endpoint in UECFG1X to be have 512 bytes!
-	* UECFG1X @ Source(1) @ Section(22.18.2) @ Page(287).
-	* Endpoint Size Statements @ Source(1) @ Section(22.1) @ Page(270).
-*/
-
-/* TODO[IN/OUT Interrupts].
-	In theory, using interrupts to trigger on IN/OUT commands to handle should be
-	identical to spinlocking for those commands, but it turns out not. I'm not entirely
-	too sure why. Perhaps I am not understanding the exact semantic of the endpoint
-	interrupts for these cases, or that the CPU can't handle the interrupt in time
-	because USB is just so fast. It could also very well be neither of those cases and
-	it's something else entirely!
 */

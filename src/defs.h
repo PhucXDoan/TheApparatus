@@ -80,23 +80,20 @@ enum USBEndpointTransferType // See: Source(2) @ Table(9-13) @ Page(270) & Sourc
 	USBEndpointTransferType_interrupt   = 0b11, // Low-latency, one-way, small amount of data. Ex: keyboard.
 };
 
-// This enum is non-exhaustive; that is, not all possible SETUP-transactions are described here.
-// ATmega32U4 is being compiled as little-endian, so the LSB of this enum value
-// will correspond to "bmRequestType" and the MSB is "bRequest". See: Source(2) @ Table(9-2) @ Page(248).
-enum USBSetupType
+enum USBSetupType // LSB corresponds to "bmRequestType" and MSB to "bRequest". See: Source(2) @ Table(9-2) @ Page(248).
 {
-	// See: Source(2) @ Table(9-3) @ Page(250) & Source(2) @ Table(9-4) @ Page(251).
+	// Non-exhaustive. See: Source(2) @ Table(9-3) @ Page(250) & Source(2) @ Table(9-4) @ Page(251).
 	USBSetupType_get_descriptor = 0b10000000 | (((u16) 6) << 8),
 	USBSetupType_set_address    = 0b00000000 | (((u16) 5) << 8),
 	USBSetupType_set_config     = 0b00000000 | (((u16) 9) << 8),
 
-	// See: Source(6) @ Table(44) @ AbsPage(62-63) & Source(6) @ Table(46) @ AbsPage(64-65).
+	// Non-exhaustive. See: Source(6) @ Table(44) @ AbsPage(62-63) & Source(6) @ Table(46) @ AbsPage(64-65).
 	USBSetupType_cdc_get_line_coding        = 0b10100001 | (((u16) 0x21) << 8),
 	USBSetupType_cdc_set_line_coding        = 0b00100001 | (((u16) 0x20) << 8),
 	USBSetupType_cdc_set_control_line_state = 0b00100001 | (((u16) 0x22) << 8),
 };
 
-enum USBClass // Non-exhuastive. See: Source(5).
+enum USBClass // Non-exhaustive. See: Source(5).
 {
 	USBClass_null         = 0x00, // When used in device descriptors, the class is determined by the interface descriptors. Cannot be used in interface descriptors as it is "reserved for future use".
 	USBClass_cdc          = 0x02, // See: "Communication Class Device" @ Source(6) @ Section(1) @ AbsPage(11).
@@ -105,8 +102,9 @@ enum USBClass // Non-exhuastive. See: Source(5).
 	USBClass_cdc_data     = 0x0A, // See: "Data Interface Class" @ Source(6) @ Section(1) @ AbsPage(11).
 };
 
-enum USBDescType // See: Source(2) @ Table(9-5) @ Page(251).
+enum USBDescType
 {
+	// See: Source(2) @ Table(9-5) @ Page(251).
 	USBDescType_device             = 1,
 	USBDescType_config             = 2,
 	USBDescType_string             = 3,
@@ -121,27 +119,12 @@ enum USBDescType // See: Source(2) @ Table(9-5) @ Page(251).
 	USBDescType_cdc_endpoint  = 0x25,
 };
 
-enum USBDescCDCSubtype // Non-exhuastive. See: Source(6) @ Table(25) @ AbsPage(44-45).
+enum USBDescCDCSubtype // Non-exhaustive. See: Source(6) @ Table(25) @ AbsPage(44-45).
 {
 	USBDescCDCSubtype_header          = 0x00,
 	USBDescCDCSubtype_call_management = 0x01,
 	USBDescCDCSubtype_acm_management  = 0x02,
 	USBDescCDCSubtype_union           = 0x06,
-};
-
-enum USBMiscEnum
-{
-	// See: Line Coding's Stop Bits @ Source(6) @ Table(50) @ AbsPage(69).
-	USBMiscEnum_cdc_lc_stop_bit_1   = 0,
-	USBMiscEnum_cdc_lc_stop_bit_1_5 = 1,
-	USBMiscEnum_cdc_lc_stop_bit_2   = 2,
-
-	// See: Line Coding's Parity Type @ Source(6) @ Table(50) @ AbsPage(69).
-	USBMiscEnum_cdc_lc_parity_none  = 0,
-	USBMiscEnum_cdc_lc_parity_odd   = 1,
-	USBMiscEnum_cdc_lc_parity_even  = 2,
-	USBMiscEnum_cdc_lc_parity_mark  = 3,
-	USBMiscEnum_cdc_lc_parity_space = 4,
 };
 
 enum USBMiscFlag
@@ -165,7 +148,22 @@ enum USBMiscFlag
 	USBMiscFlag_acm_management_network_connection = 1 << 3,
 };
 
-struct USBCDCLineCoding // See: Source(6) @ Table(50) @ Page(69).
+enum USBMiscEnum
+{
+	// See: Line-Coding's Stop Bits @ Source(6) @ Table(50) @ AbsPage(69).
+	USBMiscEnum_cdc_lc_stop_bit_1   = 0,
+	USBMiscEnum_cdc_lc_stop_bit_1_5 = 1,
+	USBMiscEnum_cdc_lc_stop_bit_2   = 2,
+
+	// See: Line-Coding's Parity Type @ Source(6) @ Table(50) @ AbsPage(69).
+	USBMiscEnum_cdc_lc_parity_none  = 0,
+	USBMiscEnum_cdc_lc_parity_odd   = 1,
+	USBMiscEnum_cdc_lc_parity_even  = 2,
+	USBMiscEnum_cdc_lc_parity_mark  = 3,
+	USBMiscEnum_cdc_lc_parity_space = 4,
+};
+
+struct USBCDCLineCoding // See: Source(6) @ Table(50) @ Page(69).  // TODO What is Line-Coding?
 {
 	u32 dwDTERate;   // Baud rate.
 	u8  bCharFormat; // Aliasing(enum USBMiscEnum_lc_stop_bit).
@@ -173,7 +171,7 @@ struct USBCDCLineCoding // See: Source(6) @ Table(50) @ Page(69).
 	u8  bDataBits;   // Must be 5, 6, 7, 8, or 16.
 };
 
-struct USBSetup // The data-packet that is sent in a SETUP-typed transaction. See: Source(2) @ Table(9-2) @ Page(248).
+struct USBSetup // The data-packet that is sent in the SETUP-typed transaction. See: Source(2) @ Table(9-2) @ Page(248).
 {
 	u16 type; // Aliasing(enum USBSetupType). The "bmRequestType" and "bRequest" bytes are combined into a single word here.
 	union
@@ -181,7 +179,7 @@ struct USBSetup // The data-packet that is sent in a SETUP-typed transaction. Se
 		struct // See: Source(2) @ Section(9.4.3) @ Page(253).
 		{
 			u8  descriptor_index;
-			u8  descriptor_type;   // Aliasing(enum USBDescType).
+			u8  descriptor_type;  // Aliasing(enum USBDescType).
 			u16 language_id;
 			u16 requested_amount;
 		} get_descriptor;
@@ -273,7 +271,7 @@ struct USBDescCDCHeader // Source(6) @ Section(5.2.3.1) @ AbsPage(45) & "Functio
 	u16 bcdCDC;             // CDC specification version that's being complied with.
 };
 
-struct USBDescCDCCallManagement // See: Source(6) @ Table(27) @ AbsPage(45-46) & "Call Management" @ Source(6) @ Section(1.4) @ AbsPage(15).
+struct USBDescCDCCallManagement // See: Source(6) @ Table(27) @ AbsPage(45-46) & "Call Management" @ Source(6) @ Section(1.4) @ AbsPage(15). // TODO What is call-management?
 {
 	u8 bLength;            // Must be the size of struct USBDescCDCCallManagement.
 	u8 bDescriptorType;    // Must be USBDescType_cdc_interface.
@@ -283,7 +281,7 @@ struct USBDescCDCCallManagement // See: Source(6) @ Table(27) @ AbsPage(45-46) &
 };
 
 // TODO Seems like m_usb handles SET_LINE_CODING and the variants just to ignore it really. So maybe we can remove this capability completely? Or perhaps this will be important in being able to do a baud-touch reset.
-struct USBDescCDCACMManagement // See: Source(6) @ Table(28) @ AbsPage(46-47).
+struct USBDescCDCACMManagement // See: Source(6) @ Table(28) @ AbsPage(46-47). // TODO What is Abstract Control Management?
 {
 	u8 bLength;            // Must be the size of struct USBDescCDCAbstractControlManagement.
 	u8 bDescriptorType;    // Must be USBDescType_cdc_interface.
@@ -292,7 +290,7 @@ struct USBDescCDCACMManagement // See: Source(6) @ Table(28) @ AbsPage(46-47).
 };
 
 // TODO To what extend is this important, I'm not entirely too sure. What does the host do with this information? Can this just be removed?
-struct USBDescCDCUnion // See: Source(6) @ Table(33) @ AbsPage(51).
+struct USBDescCDCUnion // See: Source(6) @ Table(33) @ AbsPage(51). // TODO What is CDC Union?
 {
 	u8 bLength;            // Must be the size of struct USBDescCDCUnion.
 	u8 bDescriptorType;    // Must be USBDescType_cdc_interface.
@@ -301,28 +299,7 @@ struct USBDescCDCUnion // See: Source(6) @ Table(33) @ AbsPage(51).
 	u8 bSlaveInterface[1]; // Index to the slave interface that is controlled by bMasterInterface. A varying amount is allowed here, but an array of 1 is all we'll need.
 };
 
-struct USBConfigHierarchy // This layout is uniquely just for our device application. See: Source(4) @ Chapter(5).
-{
-	struct USBDescConfig config;
-
-	struct
-	{
-		struct USBDescInterface         descriptor;
-		struct USBDescCDCHeader         cdc_header;
-		struct USBDescCDCCallManagement cdc_call_management;
-		struct USBDescCDCACMManagement  cdc_acm_management;
-		struct USBDescCDCUnion          cdc_union;
-		struct USBDescEndpoint          endpoints[1];
-	} interface_0;
-
-	struct
-	{
-		struct USBDescInterface descriptor;
-		struct USBDescEndpoint  endpoints[2];
-	} interface_1;
-};
-
-// Endpoint buffer sizes must be one of enum USBEndpointSizeCode.
+// Endpoint buffer sizes must be one of the names of enum USBEndpointSizeCode.
 // The maximum capacity between endpoints also differ. See: Source(1) @ Section(22.1) @ Page(270).
 #define USB_ENDPOINT_0_BUFFER_SIZE 8
 #define USB_ENDPOINT_2_BUFFER_SIZE 8  // CDC's "notification element".
@@ -335,18 +312,40 @@ static const struct USBDescDevice USB_DEVICE_DESCRIPTOR = // TODO PROGMEMify.
 		.bDescriptorType    = USBDescType_device,
 		.bcdUSB             = 0x0200,
 		.bDeviceClass       = USBClass_cdc, // TODO I think this makes the whole device a CDC. Can we take this out?
-		.bDeviceSubClass    = 0, // Irrelevant for USBClass_cdc. See Source(5) & Source(6) @ Table(20) @ AbsPage(42).
-		.bDeviceProtocol    = 0, // Irrelevant for USBClass_cdc. See Source(5) & Source(6) @ Table(20) @ AbsPage(42).
+		.bDeviceSubClass    = 0, // Irrelevant when with USBClass_cdc. See Source(5) & Source(6) @ Table(20) @ AbsPage(42). TODO If we make the whole device not CDC, then we should be able to ignore this entirely.
+		.bDeviceProtocol    = 0, // Irrelevant when with USBClass_cdc. See Source(5) & Source(6) @ Table(20) @ AbsPage(42). TODO If we make the whole device not CDC, then we should be able to ignore this entirely.
 		.bMaxPacketSize0    = USB_ENDPOINT_0_BUFFER_SIZE,
-		.idVendor           = 0, // Setting to zero doesn't seem to prevent functionality.
-		.idProduct          = 0, // Setting to zero doesn't seem to prevent functionality.
-		.bcdDevice          = 0, // Setting to zero doesn't seem to prevent functionality.
-		.iManufacturer      = 0, // Not important; point to empty string.
-		.iProduct           = 0, // Not important; point to empty string.
-		.iSerialNumber      = 0, // Not important; point to empty string.
+		.idVendor           = 0, // IDC; doesn't seem to affect functionality.
+		.idProduct          = 0, // IDC; doesn't seem to affect functionality.
+		.bcdDevice          = 0, // IDC; doesn't seem to affect functionality.
+		.iManufacturer      = 0, // IDC.
+		.iProduct           = 0, // IDC.
+		.iSerialNumber      = 0, // IDC.
 		.bNumConfigurations = 1
 	};
 
+struct USBConfigHierarchy // This layout is defined uniquely for our device application. See: Source(4) @ Chapter(5).
+{
+	struct USBDescConfig config;
+
+	struct
+	{
+		struct USBDescInterface         descriptor;
+		struct USBDescCDCHeader         cdc_header;
+		struct USBDescCDCCallManagement cdc_call_management;
+		struct USBDescCDCACMManagement  cdc_acm_management;
+		struct USBDescCDCUnion          cdc_union;
+		struct USBDescEndpoint          endpoints[1];
+	} cdc;
+
+	struct
+	{
+		struct USBDescInterface descriptor;
+		struct USBDescEndpoint  endpoints[2];
+	} cdc_data;
+};
+
+#define USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE 1 // Argument used for "SetConfiguration" command. Zero resets the device's configuration state, so 1 is used instead. See: Soure(2) @ Figure(11-10) @ Page(310).
 static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 	{
 		.config =
@@ -355,33 +354,33 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 				.bDescriptorType     = USBDescType_config,
 				.wTotalLength        = sizeof(struct USBConfigHierarchy),
 				.bNumInterfaces      = 2,
-				.bConfigurationValue = 1, // Argument used for SetConfiguration command to select this configuration. Zero resets the device's configuration state, so 1 is used instead. See: Soure(2) @ Figure(11-10) @ Page(310).
-				.iConfiguration      = 0, // Description of this configuration is not important.
+				.bConfigurationValue = USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE,
+				.iConfiguration      = 0, // IDC.
 				.bmAttributes        = USBMiscFlag_config_attr_reserved_one | USBMiscFlag_config_attr_self_powered, // TODO We should calculate our power consumption!
 				.bMaxPower           = 50, // TODO We should calculate our power consumption!
 			},
-		.interface_0 =
+		.cdc =
 			{
-				.descriptor = // [USB CDC Interface]. TODO How do we know that the CDC class needs these specific functional headers?
+				.descriptor = // TODO How do we know that the CDC class needs these specific functional headers?
 					{
 						.bLength            = sizeof(struct USBDescInterface),
 						.bDescriptorType    = USBDescType_interface,
 						.bInterfaceNumber   = 0,
 						.bAlternateSetting  = 0,
-						.bNumEndpoints      = countof(USB_CONFIGURATION_HIERARCHY.interface_0.endpoints),
+						.bNumEndpoints      = countof(USB_CONFIGURATION_HIERARCHY.cdc.endpoints),
 						.bInterfaceClass    = USBClass_cdc, // See: Source(6) @ Section(4.2) @ AbsPage(39).
 						.bInterfaceSubClass = 0x2, // See: "Abstract Control Model" @ Source(6) @ Section(3.6.2) @ AbsPage(26).
 						.bInterfaceProtocol = 0x1, // See: "V.25ter" @ Source(6) @ Table(17) @ AbsPage(39). TODO Is this protocol needed?
-						.iInterface         = 0,   // Not important; point to empty string.
+						.iInterface         = 0,   // IDC.
 					},
-				.cdc_header = // [USB CDC Header Functional Descriptor].
+				.cdc_header =
 					{
 						.bLength            = sizeof(struct USBDescCDCHeader),
 						.bDescriptorType    = USBDescType_cdc_interface,
 						.bDescriptorSubtype = USBDescCDCSubtype_header,
 						.bcdCDC             = 0x0110,
 					},
-				.cdc_call_management = // [USB CDC Call Management Functional Descriptor].
+				.cdc_call_management =
 					{
 						.bLength            = sizeof(struct USBDescCDCCallManagement),
 						.bDescriptorType    = USBDescType_cdc_interface,
@@ -389,14 +388,14 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 						.bmCapabilities     = USBMiscFlag_call_management_self_managed_device,
 						.bDataInterface     = 1,
 					},
-				.cdc_acm_management = // [USB CDC Abstract Control Management Functional Descriptor].
+				.cdc_acm_management =
 					{
 						.bLength            = sizeof(struct USBDescCDCACMManagement),
 						.bDescriptorType    = USBDescType_cdc_interface,
 						.bDescriptorSubtype = USBDescCDCSubtype_acm_management,
 						.bmCapabilities     = USBMiscFlag_acm_management_line_group | USBMiscFlag_acm_management_send_break,
 					},
-				.cdc_union = // [USB CDC Union Functional Descriptor].
+				.cdc_union =
 					{
 						.bLength            = sizeof(struct USBDescCDCUnion),
 						.bDescriptorType    = USBDescType_cdc_interface,
@@ -404,7 +403,7 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 						.bMasterInterface   = 0,
 						.bSlaveInterface    = { 1 }
 					},
-				.endpoints = // [USB CDC Endpoints].
+				.endpoints =
 					{
 						{
 							.bLength          = sizeof(struct USBDescEndpoint),
@@ -412,25 +411,25 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 							.bEndpointAddress = 2 | USBMiscFlag_endpoint_address_in,
 							.bmAttributes     = USBEndpointTransferType_interrupt,
 							.wMaxPacketSize   = USB_ENDPOINT_2_BUFFER_SIZE,
-							.bInterval        = 64, // TODO We don't care about notifications, so we should max this out.
+							.bInterval        = 64, // TODO We don't care about notifications, so we should probably max this out.
 						},
 					},
 			},
-		.interface_1 =
+		.cdc_data =
 			{
-				.descriptor = // [USB CDC-Data Interface].
+				.descriptor =
 					{
 						.bLength            = sizeof(struct USBDescInterface),
 						.bDescriptorType    = USBDescType_interface,
 						.bInterfaceNumber   = 1,
 						.bAlternateSetting  = 0,
-						.bNumEndpoints      = countof(USB_CONFIGURATION_HIERARCHY.interface_1.endpoints),
+						.bNumEndpoints      = countof(USB_CONFIGURATION_HIERARCHY.cdc_data.endpoints),
 						.bInterfaceClass    = USBClass_cdc_data, // See: Source(6) @ Section(4.5) @ AbsPage(40).
 						.bInterfaceSubClass = 0, // Should be left alone. See: Source(6) @ Section(4.6) @ AbsPage(40).
 						.bInterfaceProtocol = 0, // Not using any specific communication protocol. See: Source(6) @ Table(19) @ AbsPage(40-41).
-						.iInterface         = 0, // Not important; point to empty string.
+						.iInterface         = 0, // IDC.
 					},
-				.endpoints = // [USB CDCData Endpoints].
+				.endpoints =
 					{
 						{
 							.bLength          = sizeof(struct USBDescEndpoint),
@@ -495,94 +494,4 @@ static const struct USBCDCLineCoding USB_COMMUNICATION_LINE_CODING = // TODO How
 	a lot of information compared to v1.1. Perhaps we're supposed to use the errata for
 	the more up-to-date details, but fallback to v1.1 when needed. Regardless, USB
 	should be quite backwards-compatiable, so we should be fine with v1.1.
-*/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//
-// TODO Revise.
-//
-
-/* [USB CDC Interface].
-	This interface sets up the first half of the CDC (Communications Device Class)
-	interface so we can send diagnostic information to the host. I will admit that
-	I am quite too young to even begin to understand what modems are or the old ways of
-	technology before the internet became hip and cool. Nonetheless, I will document
-	my understanding of what has to be done in order to set the communication interface
-	up.
-
-	We set bInterfaceClass to USBClass_cdc to indicate to the host that this
-	interface is for the communication class, and as a result will contain specific
-	information that is not specified at all within the USB specification.
-
-	bInterfaceSubClass then further narrows the interface's class down to
-	"Abstract Control Model" (1), which from what I understand, makes the USB device
-	emulate a COM port that could then receive and transmit data serially.
-
-	TODO
-		For bInterfaceProtocol, I assume we should be using the protocol that interprets
-		AT/V250/V.25ter/Hayes commands, since (2) says that the abstract control model
-		understands these. But I don't think we use this obscure system anymore...
-		So can we remove it? (3) says that if the control model doesn't require it,
-		which PSTN that defines ACM doesn't seem to enforce, then we should set it to 0.
-
-	(1) "Abstract Control Model" @ Source(6) @ Section(3.6.2) @ AbsPage(26).
-	(2) ACM with AT Commands @ Source(7) @ Section(3.2.2) @ AbsPage(15).
-	(3) Control Model on Protocols @ Source(6) @ Section(4.4) @ AbsPage(40).
-*/
-
-/* [USB CDC Endpoints].
-	It is stated in (1) that every communication class interface must have a
-	"management element", which is just an endpoint that transfer commands to
-	manages the communication between host and device as defined in (2). This
-	management element also happens to be always endpoint 0 for all communication
-	devices.
-
-	As declared in (3), abstract control models need to also have the
-	"notification element". Like with management element, it is just another
-	endpoint, but this time it is used to notify the host of any events,
-	and is often (but not necessarily required) an interrupt transfer typed endpoint
-	(so it can't be endpoint 0).
-
-	TODO probably better in usb.c
-	Every once in a while, the host would send a request defined in (5) to the
-	notification element, and if the device ACKs, TODO what exactly happens???
-
-	(1) CDC Endpoints @ Source(6) @ Section(3.4.1) @ AbsPage(23).
-	(2) "Management Element" @ Source(6) @ Section(1.4) @ AbsPage(16).
-	(3) Endpoints on Abstract Control Models @ Source(6) @ Section(3.6.2) @ AbsPage(26).
-	(4) "Notification Element" @ Source(6) @ Section(1.4) @ AbsPage(16).
-	(5) "Notification Element Notifications" @ Source(6) @ Section(6.3) @ AbsPage(84).
-*/
-
-/* [USB CDC-Data Interface].
-	I'm not entirely too sure what a "data class" is exactly used for here, but based
-	on loose descriptions of its usage, it's to respresent the part of the communication
-	where there might be compression, error correction, modulation, etc. as seen in (1).
-
-	Regardless, this interface is where the I/O streams of the communication between
-	host and device is held.
-
-	(1) Abstract Control Model Diagram @ Source(6) @ Figure(3) @ AbsPage(15).
-*/
-
-/* [USB CDCData Endpoints].
-	Stated by (1), the endpoints that will be carrying data between the host and device
-	must be either both isochronous or both bulk transfer types.
-
-	(1) "Data Class Endpoint Requirements" @ Source(6) @ Section(3.4.2) @ AbsPage(23).
 */
