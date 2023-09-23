@@ -37,7 +37,7 @@ ISR(USB_GEN_vect)
 	UECONX = (1 << EPEN);
 
 	// "Configure" and "Allocate".
-	UECFG1X = (USB_ENDPOINT_0_SIZE_TYPE << EPSIZE0) | (1 << ALLOC);
+	UECFG1X = (concat(USBEndpointSizeCode_, USB_ENDPOINT_0_BUFFER_SIZE) << EPSIZE0) | (1 << ALLOC);
 
 	// "Test endpoint configuration".
 	#if 0
@@ -97,7 +97,7 @@ ISR(USB_COM_vect)
 	UECONX |= (1 << STALLRQC); // See: [Request Error Stall].
 
 	// [Read SETUP Packet].
-	struct USBSetupPacket setup_packet;
+	struct USBSetup setup_packet;
 	for (u8 i = 0; i < sizeof(setup_packet); i += 1)
 	{
 		((u8*) &setup_packet)[i] = UEDATX;
@@ -106,184 +106,172 @@ ISR(USB_COM_vect)
 	// Let the interrupt routine know that we have copied the SETUP data. See: Source(1) @ Section(22.12) @ Page(274).
 	UEINTX &= ~(1 << RXSTPI);
 
-	if // [SETUP GetDescriptor].
-	(
-		setup_packet.unknown.bmRequestType == 0b1000'0000
-		&& setup_packet.unknown.bRequest == USBSetupRequest_get_descriptor
-	)
+	switch (setup_packet.type)
 	{
-		u8  packet_length = 0; // Packets will not exceed 255 bytes.
-		u8* packet_data   = 0;
-
-		if (!setup_packet.get_descriptor.language_id) // We're not going to handle different languages.
+		case USBSetupType_get_descriptor:
 		{
-			if (setup_packet.get_descriptor.descriptor_index) // TODO Does this ever realisitically get executed?
+			u8  packet_length = 0; // Packets will not exceed 255 bytes.
+			u8* packet_data   = 0;
+
+			if (!setup_packet.get_descriptor.language_id) // We're not going to handle different languages.
 			{
-				debug_halt(-1);
+				if (setup_packet.get_descriptor.descriptor_index) // TODO Does this ever realisitically get executed?
+				{
+					debug_halt(-1);
+				}
+
+				switch ((enum USBDescType) setup_packet.get_descriptor.descriptor_type)
+				{
+					case USBDescType_device:
+					{
+						packet_data   = (u8*) &USB_DEVICE_DESCRIPTOR;
+						packet_length = sizeof(USB_DEVICE_DESCRIPTOR);
+						static_assert(sizeof(USB_DEVICE_DESCRIPTOR) < (((u64) 1) << (sizeof(packet_length) * 8)))
+					} break;
+
+					case USBDescType_config:
+					{
+						packet_data   = (u8*) &USB_CONFIGURATION_HIERARCHY;
+						packet_length = sizeof(USB_CONFIGURATION_HIERARCHY);
+						static_assert(sizeof(USB_CONFIGURATION_HIERARCHY) < (((u64) 1) << (sizeof(packet_length) * 8)))
+					} break;
+
+					case USBDescType_device_qualifier:
+					{
+						// ATmega32U4 does not support anything beyond full-speed, so we have to reply with a request error.
+						// See: Source(2) @ Section(9.6.2) @ Page(264) & [Request Error Stall].
+					} break;
+
+					case USBDescType_string:
+					case USBDescType_interface:
+					case USBDescType_endpoint:
+					case USBDescType_other_speed_config:
+					case USBDescType_interface_power:
+					case USBDescType_cdc_interface:
+					case USBDescType_cdc_endpoint:
+					{
+						debug_halt(3);
+					} break;
+				}
 			}
 
-			switch ((enum USBDescriptorType) setup_packet.get_descriptor.descriptor_type)
+			if (packet_length)
 			{
-				case USBDescriptorType_device:
+				_usb_endpoint_0_transmit
+				(
+					packet_data,
+					setup_packet.get_descriptor.requested_amount < packet_length
+						? setup_packet.get_descriptor.requested_amount
+						: packet_length,
+					USB_ENDPOINT_0_BUFFER_SIZE
+				);
+			}
+			else // [Request Error Stall].
+			{
+				UECONX |= (1 << STALLRQ);
+			}
+		} break;
+
+		case USBSetupType_set_address:
+		{
+			if (setup_packet.set_address.address >= 0b0111'1111)
+			{
+				error_halt();
+			}
+
+			UDADDR = setup_packet.set_address.address;
+
+			UEINTX &= ~(1 << TXINI);
+			while (!(UEINTX & (1 << TXINI)));
+
+			UDADDR |= (1 << ADDEN);
+		} break;
+
+		case USBSetupType_set_config:
+		{
+			switch (setup_packet.set_config.value)
+			{
+				case 0:
+				case 1:
 				{
-					packet_data   = (u8*) &USB_DEVICE_DESCRIPTOR;
-					packet_length = sizeof(USB_DEVICE_DESCRIPTOR);
-					static_assert(sizeof(USB_DEVICE_DESCRIPTOR) < (((u64) 1) << (sizeof(packet_length) * 8)))
+					// We either move to or remain at the "address state" of the device,
+					// but since we only have one configuration, it doesn't really matter;
+					// we don't have to do anything on our side here.
 				} break;
 
-				case USBDescriptorType_configuration:
+				default:
 				{
-					packet_data   = (u8*) &USB_CONFIGURATION_HIERARCHY;
-					packet_length = sizeof(USB_CONFIGURATION_HIERARCHY);
-					static_assert(sizeof(USB_CONFIGURATION_HIERARCHY) < (((u64) 1) << (sizeof(packet_length) * 8)))
-				} break;
-
-				case USBDescriptorType_device_qualifier:
-				{
-					// ATmega32U4 does not support anything beyond full-speed, so we have to reply with a request error.
-					// See: Source(2) @ Section(9.6.2) @ Page(264) & [Request Error Stall].
-				} break;
-
-				case USBDescriptorType_string:
-				case USBDescriptorType_interface:
-				case USBDescriptorType_endpoint:
-				case USBDescriptorType_other_speed_configuration:
-				case USBDescriptorType_interface_power:
-				case USBDescriptorType_communication_interface:
-				case USBDescriptorType_communication_endpoint:
-				{
-					debug_halt(3);
+					UECONX |= (1 << STALLRQ); // See: "Address State" @ Source(2) @ Section(9.4.7) @ Page(257).
 				} break;
 			}
-		}
+		} break;
 
-		if (packet_length)
+		case USBSetupType_cdc_get_line_coding:
 		{
+			if
+			(
+				setup_packet.cdc_get_line_coding.interface_index // This should for the only CDC interface. See: USB_CONFIGURATION_HIERARCHY.
+				&& setup_packet.cdc_get_line_coding.structure_size != sizeof(struct USBCDCLineCoding) // Probably fine without this line.
+			)
+			{
+				error_halt();
+			}
+
 			_usb_endpoint_0_transmit
 			(
-				packet_data,
-				setup_packet.get_descriptor.wLength < packet_length
-					? setup_packet.get_descriptor.wLength
-					: packet_length,
-				SIZEOF_ENDPOINT_SIZE_TYPE(USB_ENDPOINT_0_SIZE_TYPE)
+				(u8*) &USB_COMMUNICATION_LINE_CODING,
+				sizeof(USB_COMMUNICATION_LINE_CODING),
+				USB_ENDPOINT_0_BUFFER_SIZE // TODO remove
 			);
-		}
-		else // [Request Error Stall].
-		{
-			UECONX |= (1 << STALLRQ);
-		}
-	}
-	else if // [SETUP SetAddress].
-	(
-		setup_packet.unknown.bmRequestType == 0b0000'0000
-		&& setup_packet.unknown.bRequest == USBSetupRequest_set_address
-	)
-	{
-		if (setup_packet.set_address.address >= 0b0111'1111)
-		{
-			error_halt();
-		}
+		} break;
 
-		UDADDR = setup_packet.set_address.address;
-
-		UEINTX &= ~(1 << TXINI);
-		while (!(UEINTX & (1 << TXINI)));
-
-		UDADDR |= (1 << ADDEN);
-	}
-	else if // [SETUP SetConfiguration].
-	(
-		setup_packet.unknown.bmRequestType == 0b0000'0000
-		&& setup_packet.unknown.bRequest == USBSetupRequest_set_configuration
-	)
-	{
-		switch (setup_packet.set_configuration.configuration_value)
+		case USBSetupType_cdc_set_control_line_state:
 		{
-			case 0:
-			case 1:
+			while (!(UEINTX & (1 << TXINI)));
+			UEINTX &= ~(1 << TXINI); // TODO Optimize?
+		} break;
+
+		case USBSetupType_cdc_set_line_coding:
+		{
+			// TODO Is it possible for the host to abort sending data?
+
+			static_assert(sizeof(struct USBCDCLineCoding) < USB_ENDPOINT_0_BUFFER_SIZE);
+			while (!(UEINTX & (1 << RXOUTI)));
+			struct USBCDCLineCoding line_coding;
+			for (u8 i = 0; i < sizeof(line_coding); i += 1)
 			{
-				// We either move to or remain at the "address state" of the device,
-				// but since we only have one configuration, it doesn't really matter;
-				// we don't have to do anything on our side here.
-			} break;
+				((u8*) &line_coding)[i] = UEDATX;
+			}
+			UEINTX &= ~(1 << RXOUTI);
 
-			default:
+			while (!(UEINTX & (1 << TXINI)));
+			UEINTX &= ~(1 << TXINI);
+
+			if (memcmp(&line_coding, &USB_COMMUNICATION_LINE_CODING, sizeof(line_coding)))
 			{
-				UECONX |= (1 << STALLRQ); // See: "Address State" @ Source(2) @ Section(9.4.7) @ Page(257).
-			} break;
-		}
-	}
-	else if // [SETUP Communication GetLineCoding].
-	(
-		setup_packet.unknown.bmRequestType == 0b1010'0001
-		&& setup_packet.unknown.bRequest == USBSetupRequest_communication_get_line_coding
-	)
-	{
-		if
-		(
-			setup_packet.communication_get_line_coding.interface_index // This should for the only CDC interface. See: USB_CONFIGURATION_HIERARCHY.
-			&& setup_packet.communication_get_line_coding.structure_size != sizeof(struct USBCommunicationLineCoding) // Probably fine without this line.
-		)
+				debug_halt(-1); // TODO Can we ignore the setting of line-coding?
+			}
+		} break;
+
+		default:
 		{
-			error_halt();
-		}
+			for (;;)
+			{
+				for (u8 i = 0; i < 10; i += 1)
+				{
+					debug_u8(0xAA);
+					_delay_ms(100.0);
+					debug_u8(0x55);
+					_delay_ms(100.0);
+				}
 
-		_usb_endpoint_0_transmit
-		(
-			(u8*) &USB_COMMUNICATION_LINE_CODING,
-			sizeof(USB_COMMUNICATION_LINE_CODING),
-			SIZEOF_ENDPOINT_SIZE_TYPE(USB_ENDPOINT_0_SIZE_TYPE)
-		);
+				debug_u8(setup_packet.type);
+				_delay_ms(3000.0);
+				debug_u8(setup_packet.type >> 8);
+				_delay_ms(3000.0);
+			}
+		} break;
 	}
-	else if // [SETUP Communication SetControlLineState].
-	(
-		setup_packet.unknown.bmRequestType == 0b0010'0001
-		&& setup_packet.unknown.bRequest == USBSetupRequest_communication_set_control_line_state
-	)
-	{
-		while (!(UEINTX & (1 << TXINI)));
-		UEINTX &= ~(1 << TXINI); // TODO Optimize?
-	}
-	else if // [SETUP Communication SetLineCoding].
-	(
-		setup_packet.unknown.bmRequestType == 0b0010'0001
-		&& setup_packet.unknown.bRequest == USBSetupRequest_communication_set_line_coding
-	)
-	{
-		// TODO Is it possible for the host to abort sending data?
-
-		static_assert(sizeof(struct USBCommunicationLineCoding) < SIZEOF_ENDPOINT_SIZE_TYPE(USB_ENDPOINT_0_SIZE_TYPE));
-		while (!(UEINTX & (1 << RXOUTI)));
-		struct USBCommunicationLineCoding line_coding;
-		for (u8 i = 0; i < sizeof(line_coding); i += 1)
-		{
-			((u8*) &line_coding)[i] = UEDATX;
-		}
-		UEINTX &= ~(1 << RXOUTI);
-
-		while (!(UEINTX & (1 << TXINI)));
-		UEINTX &= ~(1 << TXINI);
-
-		if (memcmp(&line_coding, &USB_COMMUNICATION_LINE_CODING, sizeof(line_coding)))
-		{
-			debug_halt(-1); // TODO Can we ignore the setting of line-coding?
-		}
-	}
-	else if
-	(
-		setup_packet.unknown.bmRequestType == 0b0000'0001
-		&& setup_packet.unknown.bRequest == USBSetupRequest_clear_feature
-	)
-	{
-		debug_halt(5);
-	}
-	else // Unhandled SETUP command.
-	{
-		debug_u8(setup_packet.unknown.bRequest);
-		debug_halt(2);
-	}
-
-	return;
 }
 
 //
@@ -555,7 +543,7 @@ ISR(USB_COM_vect)
 	The most common transactions are SETUPs, INs, and OUTs.
 
 		- SETUP-transactions are where the host sends the device a DATA-typed packet
-		that specifies what the host wants (see: struct USBSetupPacket). This could be
+		that specifies what the host wants (see: struct USBSetup). This could be
 		things ranging from requesting a string from the device or setting the device
 		into a specific configuration. This transaction is reserved only for the
 		control-typed endpoints and the device will be the one to send the host a
@@ -675,7 +663,7 @@ ISR(USB_COM_vect)
 /* [Read SETUP Packet].
 	The host first sends the device a TOKEN that signifies a SETUP command.
 	After that token is a DATA packet consisting of 8 bytes,
-	the layout of which is detailed by {struct USBSetupPacket}.
+	the layout of which is detailed by struct USBSetup.
 	After this data packet is a handshake (also called the status stage)
 	given to the host that the device acknowledged the transaction,
 	which according to (1), is always done automatically for CONTROL typed endpoints
@@ -696,7 +684,7 @@ ISR(USB_COM_vect)
 /* [SETUP GetDescriptor].
 	This is where the host wants to learn more about the device.
 	The host asks about various things such as information about device itself,
-	configurations, strings, etc, all of which are noted in {enum USBDescriptorType}.
+	configurations, strings, etc, all of which are noted in {enum USBDescType}.
 */
 
 /* [SETUP SetAddress]
