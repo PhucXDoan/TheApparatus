@@ -30,24 +30,24 @@ usb_init(void)
 ISR(USB_GEN_vect)
 { // [USB Device Interrupt Routine, Endpoint 0 Configuration, and Endpoint Interrupts].
 
-	// "Select the endpoint".
-	UENUM = 0;
-
-	// "Activate endpoint".
-	UECONX = (1 << EPEN);
-
-	// "Configure" and "Allocate".
-	UECFG1X = (concat(USBEndpointSizeCode_, USB_ENDPOINT_0_BUFFER_SIZE) << EPSIZE0) | (1 << ALLOC);
-
-	// "Test endpoint configuration".
-	#if 0
-	if (!(UESTA0X & (1 << CFGOK)))
+	UENUM = 0; // "Select the endpoint".
 	{
-		debug_halt(-1);
-	}
-	#endif
+		// "Activate endpoint".
+		UECONX = (1 << EPEN);
 
-	UEIENX = (1 << RXSTPE); // Endpoint 0 will listen to the reception of SETUP-transactions.
+		// "Configure" and "Allocate".
+		UECFG1X = (concat(USBEndpointSizeCode_, USB_ENDPOINT_0_BUFFER_SIZE) << EPSIZE0) | (1 << ALLOC);
+
+		// "Test endpoint configuration".
+		#if 0
+		if (!(UESTA0X & (1 << CFGOK)))
+		{
+			debug_halt(-1);
+		}
+		#endif
+
+		UEIENX = (1 << RXSTPE); // Endpoint 0 will listen to the reception of SETUP-transactions.
+	}
 
 	UDINT = 0; // Clear End-of-Reset trigger flag to prevent this routine from executing again.
 }
@@ -176,9 +176,67 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
-			case USBSetupRequestType_set_config: // [Endpoint 0: SETUP-Transaction's SetConfiguration].
+			case USBSetupRequestType_set_config: // [Endpoint 0: SETUP-Transaction's SetConfiguration]. TODO Revise.
 			{
-				if (!(request.set_config.value == 0 || request.set_config.value == USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE))
+				if (request.set_config.value == 0)
+				{
+					debug_halt(5);
+				}
+				else if (request.set_config.value == USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE)
+				{
+					UENUM = 2;
+					{
+						UECONX = (1 << EPEN);
+
+						UECFG0X = (USBEndpointTransferType_interrupt << EPTYPE0) | (1 << EPDIR);
+						UECFG1X = (concat(USBEndpointSizeCode_, USB_ENDPOINT_2_BUFFER_SIZE) << EPSIZE0) | (1 << ALLOC);
+
+						#if 1
+						if (!(UESTA0X & (1 << CFGOK)))
+						{
+							debug_halt(-1);
+						}
+						#endif
+
+						UEIENX = (1 << TXINE);
+					}
+
+					UENUM = 3;
+					{
+						UECONX = (1 << EPEN);
+
+						UECFG0X = (USBEndpointTransferType_bulk << EPTYPE0) | (1 << EPDIR);
+						UECFG1X = (concat(USBEndpointSizeCode_, USB_ENDPOINT_3_BUFFER_SIZE) << EPSIZE0) | (1 << ALLOC);
+
+						#if 1
+						if (!(UESTA0X & (1 << CFGOK)))
+						{
+							debug_halt(-1);
+						}
+						#endif
+
+						UEIENX = (1 << TXINE);
+					}
+
+					UENUM = 4;
+					{
+						UECONX = (1 << EPEN);
+
+						UECFG0X = (USBEndpointTransferType_bulk << EPTYPE0);
+						UECFG1X = (concat(USBEndpointSizeCode_, USB_ENDPOINT_4_BUFFER_SIZE) << EPSIZE0) | (1 << ALLOC);
+
+						#if 1
+						if (!(UESTA0X & (1 << CFGOK)))
+						{
+							debug_halt(-1);
+						}
+						#endif
+
+						UEIENX = (1 << RXOUTE);
+					}
+
+				}
+				else
 				{
 					UECONX |= (1 << STALLRQ);
 				}
@@ -249,6 +307,39 @@ ISR(USB_COM_vect)
 				}
 			} break;
 		}
+	}
+
+	UENUM = 2;
+	if (UEINTX & (1 << TXINI))
+	{
+		static u8 TEMP = 0;
+		//debug_u8(TEMP += 1);
+		UEINTX &= ~(1 << TXINI);
+		UEINTX &= ~(1 << FIFOCON);
+	}
+
+	UENUM = 3;
+	if (UEINTX & (1 << TXINI))
+	{
+		static u8 TEMP = 0;
+		debug_u8(TEMP += 1);
+
+		for (u8 i = 0; i < 26; i += 1)
+		{
+			UEDATX = 'A' + i;
+		}
+
+		UEINTX &= ~(1 << TXINI);
+		UEINTX &= ~(1 << FIFOCON);
+	}
+
+	UENUM = 4;
+	if (UEINTX & (1 << RXOUTI))
+	{
+		// static u8 TEMP = 0;
+		// debug_u8(TEMP += 1);
+		UEINTX &= ~(1 << RXOUTI);
+		UEINTX &= ~(1 << FIFOCON);
 	}
 }
 
