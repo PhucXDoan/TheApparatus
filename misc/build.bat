@@ -38,33 +38,39 @@ pushd W:\build\
 	set PROGRAM_MCU=ATmega32U4
 	set PROGRAM_NAME=Diplomat
 	set PROGRAMMER=avr109
-	set COM_INDEX=4
+	set BOOTLOADER_COM=4
+	set DIAGNOSTIC_COM=5
 
-	avr-gcc !AVR_GCC_FLAGS! -Os -mmcu=%PROGRAM_MCU% -c W:\src\%PROGRAM_NAME%.c
+	avr-gcc !AVR_GCC_FLAGS! -Os -mmcu=!PROGRAM_MCU! -c W:\src\!PROGRAM_NAME!.c
 	if not !ERRORLEVEL! == 0 (
 		goto ABORT
 	)
 
-	avr-gcc -mmcu=%PROGRAM_MCU% -o %PROGRAM_NAME%.elf %PROGRAM_NAME%.o
+	avr-gcc -mmcu=!PROGRAM_MCU! -o !PROGRAM_NAME!.elf !PROGRAM_NAME!.o
 	if not !ERRORLEVEL! == 0 (
 		goto ABORT
 	)
 
-	avr-objcopy -O ihex %PROGRAM_NAME%.elf %PROGRAM_NAME%.hex
+	avr-objcopy -O ihex !PROGRAM_NAME!.elf !PROGRAM_NAME!.hex
 	if not !ERRORLEVEL! == 0 (
 		goto ABORT
 	)
 
-	avrdude -p %PROGRAM_MCU% -c %PROGRAMMER% -V -P COM%COM_INDEX% -D -Uflash:w:%PROGRAM_NAME%.hex
+	avrdude -p !PROGRAM_MCU! -c !PROGRAMMER! -V -P COM!BOOTLOADER_COM! -D -Uflash:w:!PROGRAM_NAME!.hex
 	if not !ERRORLEVEL! == 0 (
 		goto ABORT
 	)
 
-	REM TODO(COM Port)
-	RME     Once we can get a virtual COM port set up,
-	REM     we can begin diagnostic outputs.
-	REM
-	REM start putty.exe -load "COM3_settings"
+	for /L %%n in (1,1,500) do (
+		mode | findstr "COM5:"
+		if !ERRORLEVEL! == 0 (
+			start putty.exe -load "Default Settings" -serial COM!DIAGNOSTIC_COM!
+			goto BREAKOUT
+		) else (
+			ping 127.0.0.1 -n 1 -w 500 >nul
+		)
+	)
+	:BREAKOUT
 
 	del *.o > nul 2>&1
 	:ABORT

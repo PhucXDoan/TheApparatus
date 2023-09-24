@@ -4,7 +4,8 @@ usb_init(void)
 
 	if (USBCON != 0b0010'0000) // TODO[Tampered Default Register Values].
 	{
-		debug_halt(1);
+		wdt_enable(WDTO_15MS);
+		for (;;);
 	}
 
 	// [Power-On USB Pads Regulator].
@@ -29,7 +30,6 @@ usb_init(void)
 
 ISR(USB_GEN_vect)
 { // [USB Device Interrupt Routine, Endpoint 0 Configuration, and Endpoint Interrupts].
-
 	UENUM = 0; // "Select the endpoint".
 	{
 		// "Activate endpoint".
@@ -38,15 +38,15 @@ ISR(USB_GEN_vect)
 		// "Configure" and "Allocate".
 		UECFG1X = (concat(USBEndpointSizeCode_, USB_ENDPOINT_0_BUFFER_SIZE) << EPSIZE0) | (1 << ALLOC);
 
+		UEIENX = (1 << RXSTPE); // Endpoint 0 will listen to the reception of SETUP-transactions.
+
 		// "Test endpoint configuration".
-		#if 0
+		#if 1
 		if (!(UESTA0X & (1 << CFGOK)))
 		{
-			debug_halt(-1);
+			debug_halt(3);
 		}
 		#endif
-
-		UEIENX = (1 << RXSTPE); // Endpoint 0 will listen to the reception of SETUP-transactions.
 	}
 
 	UDINT = 0; // Clear End-of-Reset trigger flag to prevent this routine from executing again.
@@ -175,10 +175,13 @@ ISR(USB_COM_vect)
 			{
 				if (request.set_config.value == 0)
 				{
-					debug_halt(5);
+					debug_halt(4);
 				}
 				else if (request.set_config.value == USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE)
 				{
+					UEINTX &= ~(1 << TXINI);
+					while (!(UEINTX & (1 << TXINI)));
+
 					UENUM = 3;
 					{
 						UECONX = (1 << EPEN);
@@ -189,7 +192,7 @@ ISR(USB_COM_vect)
 						#if 1
 						if (!(UESTA0X & (1 << CFGOK)))
 						{
-							debug_halt(-1);
+							debug_halt(5);
 						}
 						#endif
 
@@ -206,13 +209,15 @@ ISR(USB_COM_vect)
 						#if 1
 						if (!(UESTA0X & (1 << CFGOK)))
 						{
-							debug_halt(-1);
+							debug_halt(6);
 						}
 						#endif
 
 						UEIENX = (1 << RXOUTE);
 					}
 
+					UERST = 0x1E; // TODO ???
+					UERST = 0;
 				}
 				else
 				{
@@ -222,6 +227,9 @@ ISR(USB_COM_vect)
 
 			// TODO Understand and Explain.
 			case USBSetupRequestType_cdc_get_line_coding:
+			{
+				UECONX |= (1 << STALLRQ);
+			} break;
 			case USBSetupRequestType_cdc_set_control_line_state:
 			{
 				UECONX |= (1 << STALLRQ);
@@ -258,13 +266,13 @@ ISR(USB_COM_vect)
 		}
 	}
 
-	static u16 TEMP = 0;
-	static char TEMPY = ' ';
+	static u16 TEMP_ASD = 0;
+	static char TEMPY_ASD = ' ';
 
 	UENUM = 3;
 	if (UEINTX & (1 << TXINI))
 	{
-		if (!TEMP)
+		if (!TEMP_ASD)
 		{
 			char message[] = "The work is mysterious and important.\n";
 			for (u8 i = 0; i < countof(message) - 1; i += 1)
@@ -272,12 +280,12 @@ ISR(USB_COM_vect)
 				UEDATX = message[i];
 			}
 
-			UEDATX = TEMPY;
+			UEDATX = TEMPY_ASD;
 
-			TEMP = 8192;
+			TEMP_ASD = 8192;
 		}
 
-		TEMP -= 1;
+		TEMP_ASD -= 1;
 
 		UEINTX &= ~(1 << TXINI);
 		UEINTX &= ~(1 << FIFOCON);
@@ -286,8 +294,8 @@ ISR(USB_COM_vect)
 	UENUM = 4;
 	if (UEINTX & (1 << RXOUTI))
 	{
-		TEMP = 0;
-		TEMPY = UEDATX;
+		TEMP_ASD = 0;
+		TEMPY_ASD = UEDATX;
 		UEINTX &= ~(1 << RXOUTI);
 		UEINTX &= ~(1 << FIFOCON);
 	}

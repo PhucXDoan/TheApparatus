@@ -133,7 +133,7 @@ debug_halt(u8 flashes)
 				debug_pin_set(2 + j, !debug_pin_read(2 + j));
 				_delay_ms(200.0);
 			}
-			_delay_ms(1000.0);
+			_delay_ms(500.0);
 		}
 	}
 }
