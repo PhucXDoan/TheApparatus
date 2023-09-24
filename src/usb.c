@@ -28,7 +28,7 @@ usb_init(void)
 }
 
 ISR(USB_GEN_vect)
-{ // [USB Device Interrupt Routine and Endpoint 0 Configuration].
+{ // [USB Device Interrupt Routine, Endpoint 0 Configuration, and Endpoint Interrupts].
 
 	// "Select the endpoint".
 	UENUM = 0;
@@ -86,52 +86,49 @@ _usb_endpoint_0_transmit(u8* packet_data, u16 packet_length) // [Endpoint 0: Dat
 }
 
 ISR(USB_COM_vect)
-{
+{ // See: [USB Device Interrupt Routine, Endpoint 0 Configuration, and Endpoint Interrupts].
 
-	UENUM   = 0;
-	UECONX |= (1 << STALLRQC);
-
-	struct USBSetup setup_packet;
-	for (u8 i = 0; i < sizeof(setup_packet); i += 1)
+	UENUM = 0;
+	if (UEINTX & (1 << RXSTPI)) // [Endpoint 0: SETUP-Transactions].
 	{
-		((u8*) &setup_packet)[i] = UEDATX;
-	}
+		UECONX |= (1 << STALLRQC); // SETUP-transactions lift STALL conditions. See: Source(2) @ Section(8.5.3.4) @ Page(228) & [Endpoint 0: Request Error].
 
-	UEINTX &= ~(1 << RXSTPI); // Let the interrupt routine know that we have copied the SETUP data. See: Source(1) @ Section(22.12) @ Page(274).
-
-	switch (setup_packet.type)
-	{
-		case USBSetupType_get_descriptor:
+		struct USBSetupRequest request = {0};
+		for (u8 i = 0; i < sizeof(request); i += 1)
 		{
-			u8  packet_length = 0; // Packets will not exceed 255 bytes.
-			u8* packet_data   = 0;
+			((u8*) &request)[i] = UEDATX;
+		}
+		UEINTX &= ~(1 << RXSTPI); // Clear the endpoint bank. See: Source(1) @ Section(22.12) @ Page(274).
 
-			if (!setup_packet.get_descriptor.language_id) // We're not going to handle different languages.
+		switch (request.type)
+		{
+			case USBSetupRequestType_get_descriptor: // [Endpoint 0: SETUP-Transaction's GetDescriptor].
 			{
-				if (setup_packet.get_descriptor.descriptor_index) // TODO Does this ever realisitically get executed?
-				{
-					debug_halt(-1);
-				}
+				u8  payload_length = 0; // Any payload we send will not exceed 255 bytes.
+				u8* payload_data   = 0;
 
-				switch ((enum USBDescType) setup_packet.get_descriptor.descriptor_type)
+				switch ((enum USBDescType) request.get_descriptor.descriptor_type)
 				{
-					case USBDescType_device:
+					case USBDescType_device: // See: [Endpoint 0: SETUP-Transaction's GetDescriptor].
 					{
-						packet_data   = (u8*) &USB_DEVICE_DESCRIPTOR;
-						packet_length = sizeof(USB_DEVICE_DESCRIPTOR);
-						static_assert(sizeof(USB_DEVICE_DESCRIPTOR) < (((u64) 1) << (sizeof(packet_length) * 8)))
+						payload_data   = (u8*) &USB_DEVICE_DESCRIPTOR;
+						payload_length = sizeof(USB_DEVICE_DESCRIPTOR);
+						static_assert(sizeof(USB_DEVICE_DESCRIPTOR) < (((u64) 1) << (sizeof(payload_length) * 8)))
 					} break;
 
-					case USBDescType_config: // See: [Interfaces, Configurations, and Classes].
+					case USBDescType_config: // [Interfaces, Configurations, and Classes].
 					{
-						packet_data   = (u8*) &USB_CONFIGURATION_HIERARCHY;
-						packet_length = sizeof(USB_CONFIGURATION_HIERARCHY);
-						static_assert(sizeof(USB_CONFIGURATION_HIERARCHY) < (((u64) 1) << (sizeof(packet_length) * 8)))
+						if (!request.get_descriptor.descriptor_index) // We only have a single configuration.
+						{
+							payload_data   = (u8*) &USB_CONFIGURATION_HIERARCHY;
+							payload_length = sizeof(USB_CONFIGURATION_HIERARCHY);
+							static_assert(sizeof(USB_CONFIGURATION_HIERARCHY) < (((u64) 1) << (sizeof(payload_length) * 8)))
+						}
 					} break;
 
 					case USBDescType_device_qualifier:
 					{
-						// ATmega32U4 does not support anything beyond full-speed, so we have to reply with a request error. See: Source(2) @ Section(9.6.2) @ Page(264) & [Request Error Stall].
+						// ATmega32U4 does not support anything beyond full-speed, so this is a request error. See: Source(2) @ Section(9.6.2) @ Page(264) & [Endpoint 0: Request Error].
 					} break;
 
 					case USBDescType_string:
@@ -145,122 +142,113 @@ ISR(USB_COM_vect)
 						debug_halt(3);
 					} break;
 				}
-			}
 
-			if (packet_length)
+				if (payload_length)
+				{
+					_usb_endpoint_0_transmit
+					(
+						payload_data,
+						request.get_descriptor.requested_amount < payload_length
+							? request.get_descriptor.requested_amount
+							: payload_length
+					);
+				}
+				else
+				{
+					UECONX |= (1 << STALLRQ); // [Endpoint 0: Request Error].
+				}
+			} break;
+
+			case USBSetupRequestType_set_address: // [Endpoint 0: SETUP-Transaction's SetAddress].
 			{
-				_usb_endpoint_0_transmit
+				if (request.set_address.address < 0b0111'1111)
+				{
+					UDADDR = request.set_address.address;
+
+					UEINTX &= ~(1 << TXINI);
+					while (!(UEINTX & (1 << TXINI)));
+
+					UDADDR |= (1 << ADDEN);
+				}
+				else
+				{
+					UECONX |= (1 << STALLRQ);
+				}
+			} break;
+
+			case USBSetupRequestType_set_config: // [Endpoint 0: SETUP-Transaction's SetConfiguration].
+			{
+				if (!(request.set_config.value == 0 || request.set_config.value == USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE))
+				{
+					UECONX |= (1 << STALLRQ);
+				}
+			} break;
+
+			case USBSetupRequestType_cdc_get_line_coding: // TODO Understand and Explain
+			{
+				if
 				(
-					packet_data,
-					setup_packet.get_descriptor.requested_amount < packet_length
-						? setup_packet.get_descriptor.requested_amount
-						: packet_length
-				);
-			}
-			else // [Request Error Stall].
-			{
-				UECONX |= (1 << STALLRQ);
-			}
-		} break;
-
-		case USBSetupType_set_address:
-		{
-			if (setup_packet.set_address.address >= 0b0111'1111)
-			{
-				error_halt();
-			}
-
-			UDADDR = setup_packet.set_address.address;
-
-			UEINTX &= ~(1 << TXINI);
-			while (!(UEINTX & (1 << TXINI)));
-
-			UDADDR |= (1 << ADDEN);
-		} break;
-
-		case USBSetupType_set_config:
-		{
-			switch (setup_packet.set_config.value)
-			{
-				case 0:
-				case USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE:
+					request.cdc_get_line_coding.interface_index // This should for the only CDC interface. See: USB_CONFIGURATION_HIERARCHY.
+					&& request.cdc_get_line_coding.structure_size != sizeof(struct USBCDCLineCoding) // Probably fine without this line.
+				)
 				{
-					// We either move to or remain at the "address state" of the device,
-					// but since we only have one configuration, it doesn't really matter;
-					// we don't have to do anything on our side here.
-				} break;
-
-				default:
-				{
-					UECONX |= (1 << STALLRQ); // See: "Address State" @ Source(2) @ Section(9.4.7) @ Page(257).
-				} break;
-			}
-		} break;
-
-		case USBSetupType_cdc_get_line_coding:
-		{
-			if
-			(
-				setup_packet.cdc_get_line_coding.interface_index // This should for the only CDC interface. See: USB_CONFIGURATION_HIERARCHY.
-				&& setup_packet.cdc_get_line_coding.structure_size != sizeof(struct USBCDCLineCoding) // Probably fine without this line.
-			)
-			{
-				error_halt();
-			}
-
-			_usb_endpoint_0_transmit
-			(
-				(u8*) &USB_COMMUNICATION_LINE_CODING,
-				sizeof(USB_COMMUNICATION_LINE_CODING)
-			);
-		} break;
-
-		case USBSetupType_cdc_set_control_line_state:
-		{
-			while (!(UEINTX & (1 << TXINI)));
-			UEINTX &= ~(1 << TXINI); // TODO Optimize?
-		} break;
-
-		case USBSetupType_cdc_set_line_coding:
-		{
-			// TODO Is it possible for the host to abort sending data?
-
-			static_assert(sizeof(struct USBCDCLineCoding) < USB_ENDPOINT_0_BUFFER_SIZE);
-			while (!(UEINTX & (1 << RXOUTI)));
-			struct USBCDCLineCoding line_coding;
-			for (u8 i = 0; i < sizeof(line_coding); i += 1)
-			{
-				((u8*) &line_coding)[i] = UEDATX;
-			}
-			UEINTX &= ~(1 << RXOUTI);
-
-			while (!(UEINTX & (1 << TXINI)));
-			UEINTX &= ~(1 << TXINI);
-
-			if (memcmp(&line_coding, &USB_COMMUNICATION_LINE_CODING, sizeof(line_coding)))
-			{
-				debug_halt(-1); // TODO Can we ignore the setting of line-coding?
-			}
-		} break;
-
-		default:
-		{
-			for (;;)
-			{
-				for (u8 i = 0; i < 10; i += 1)
-				{
-					debug_u8(0xAA);
-					_delay_ms(100.0);
-					debug_u8(0x55);
-					_delay_ms(100.0);
+					error_halt();
 				}
 
-				debug_u8(setup_packet.type);
-				_delay_ms(3000.0);
-				debug_u8(setup_packet.type >> 8);
-				_delay_ms(3000.0);
-			}
-		} break;
+				_usb_endpoint_0_transmit
+				(
+					(u8*) &USB_COMMUNICATION_LINE_CODING,
+					sizeof(USB_COMMUNICATION_LINE_CODING)
+				);
+			} break;
+
+			case USBSetupRequestType_cdc_set_control_line_state: // TODO Understand and Explain
+			{
+				while (!(UEINTX & (1 << TXINI)));
+				UEINTX &= ~(1 << TXINI); // TODO Optimize?
+			} break;
+
+			case USBSetupRequestType_cdc_set_line_coding: // TODO Understand and Explain
+			{
+				// TODO Is it possible for the host to abort sending data?
+
+				static_assert(sizeof(struct USBCDCLineCoding) < USB_ENDPOINT_0_BUFFER_SIZE);
+				while (!(UEINTX & (1 << RXOUTI)));
+				struct USBCDCLineCoding line_coding;
+				for (u8 i = 0; i < sizeof(line_coding); i += 1)
+				{
+					((u8*) &line_coding)[i] = UEDATX;
+				}
+				UEINTX &= ~(1 << RXOUTI);
+
+				while (!(UEINTX & (1 << TXINI)));
+				UEINTX &= ~(1 << TXINI);
+
+				if (memcmp(&line_coding, &USB_COMMUNICATION_LINE_CODING, sizeof(line_coding)))
+				{
+					debug_halt(-1); // TODO Can we ignore the setting of line-coding?
+				}
+			} break;
+
+			default:
+			{
+				for (;;)
+				{
+					for (u8 i = 0; i < 10; i += 1)
+					{
+						debug_u8(0xF0);
+						_delay_ms(100.0);
+						debug_u8(0x0F);
+						_delay_ms(100.0);
+					}
+
+					debug_u8(request.type);
+					_delay_ms(3000.0);
+					debug_u8(request.type >> 8);
+					_delay_ms(3000.0);
+				}
+			} break;
+		}
 	}
 }
 
@@ -391,10 +379,10 @@ ISR(USB_COM_vect)
 	(2) Endpoint Memory @ Source(1) @ Section(21.9) @ Page(263-264).
 */
 
-/* [USB Device Interrupt Routine and Endpoint 0 Configuration].
+/* [USB Device Interrupt Routine, Endpoint 0 Configuration, and Endpoint Interrupts].
 	See: [Endpoints].
 
-	Triggers listed on (1):
+	Triggers for USB_GEN_vect are listed on (1):
 		[ ] VBUS Plug-In.
 		[ ] Upstream Resume.
 		[ ] End-of-Resume.
@@ -441,7 +429,8 @@ ISR(USB_COM_vect)
 	One last thing we want from endpoint 0 is the ability for it to detect when it has
 	received a SETUP-transaction. SETUP-transactions will be described more later on,
 	but it's essentially where the rest of the enumeration will be communicated through.
-	We enable the interrupt for this by using RXSTPE.
+	We enable the interrupt vector USB_COM_vect for this by using RXSTPE (7). The
+	USB_COM_vect is the interrupt routine for any event related to endpoints themselves.
 
 	Note that this interrupt is only going to trigger for endpoint 0. So if the host
 	sends a SETUP-transaction to endpoint 3, it'll be ignored (unless the interrupt for
@@ -453,13 +442,15 @@ ISR(USB_COM_vect)
 	(4) "USB Reset" @ Source(1) @ Section(22.4) @ Page(271).
 	(5) EPDIR @ Source(1) @ Section(22.18.2) @ Page(287).
 	(6) "USB Device Controller Endpoint Interrupt System" @ Source(1) @ Figure(22-5) @ Page(280).
+	(7) "Endpoint Interrupt" @ Source(1) @ Figure(22-5) @ Page(280).
 */
 
-/* [Communication Between Host and Device].
-	A packet is the smallest coherent piece of message that is sent to-or-from host and
-	device. The layout of a packet is abstractly structured as so:
+/* [Packets and Transactions].
+	A packet is the smallest coherent piece of message that the host can send to the
+	device, or the device send to the host. The layout of a packet is abstractly
+	structured as so:
 
-		............................
+		....... HOST / DEVICE ......
 		:                          :
 		: <SYNC PID STUFF CRC EOP> :
 		:                          :
@@ -498,7 +489,7 @@ ISR(USB_COM_vect)
 	carried out in three stages:
 
 	...................................................................................
-	: ----------------------     ---------------------     -------------------------- :
+	:-------- HOST ---------     --- HOST / DEVICE ---     ----- HOST / DEVICE ------ :
 	: | TOKEN-TYPED PACKET | ... | DATA-TYPED PACKET | ... | HANDSHAKE-TYPED PACKET | :
 	: ----------------------     ---------------------     -------------------------- :
 	.................................. TRANSACTION ....................................
@@ -513,7 +504,7 @@ ISR(USB_COM_vect)
 	at all depending on the PID of the earlier TOKEN-typed packet. There may not be a
 	DATA-typed packet because the transaction would simply not need it, or because there
 	was an error, to which the transaction may go immediately to the HANDSHAKE-typed
-	packet stage.
+	packet stage (see: [Endpoint 0: Request Error]).
 
 	The HANDSHAKE-typed packet is the final packet that is sent either by the host or
 	device (or even not at all). The direction of the transfer of this packet is
@@ -521,7 +512,8 @@ ISR(USB_COM_vect)
 	is the one that responds here). The HANDSHAKE-typed packet is often used by the
 	recipent of the data to ACK or NACK the data that was sent. If the device (and only
 	the device) is in a state where it cannot not handle this transaction, then the
-	device can transmit a STALL packet for the handshake.
+	device can transmit a STALL-HANDSHAKE packet for the handshake (see:
+	[Endpoint 0: Request Error]).
 
 	Once again, the layout of a transaction varies case-by-case. For example,
 	isochronous endpoints will engage in transactions with the host where there will
@@ -533,7 +525,7 @@ ISR(USB_COM_vect)
 	The most common transactions are SETUPs, INs, and OUTs.
 
 		- SETUP-transactions are where the host sends the device a DATA-typed packet
-		that specifies what the host wants (see: struct USBSetup). This could be
+		that specifies what the host wants (see: struct USBSetupRequest). This could be
 		things ranging from requesting a string from the device or setting the device
 		into a specific configuration. This transaction is reserved only for the
 		control-typed endpoints and the device will be the one to send the host a
@@ -554,7 +546,7 @@ ISR(USB_COM_vect)
 
 /* [Endpoint 0: Data-Transfer from Device to Host].
 	See: [Endpoints].
-	See: [Communication Between Host and Device].
+	See: [Packets and Transactions].
 
 	This procedure is called when we are in a state where endpoint 0 needs to transmit
 	some data to the host in response to a SETUP-transaction. This process is
@@ -572,7 +564,7 @@ ISR(USB_COM_vect)
 	:   ===================     ==================     ================== :
 	:   ( OUT-TRANSACTION ) <-- ( IN-TRANSACTION ) <-- ( IN-TRANSACTION ) :
 	:   ===================     ==================     ================== :
-	............ EXAMPLE OF ENDPOINT 0 SENDING DATA TO THE HOST ...........
+	........... EXAMPLE OF ENDPOINT 0 SENDING DATA TO THE HOST ............
 
 	Before this procedure was called, endpoint 0 received a SETUP-transaction where the
 	host, say, asked the device for the string of its manufacturer's name. If
@@ -602,12 +594,162 @@ ISR(USB_COM_vect)
 	(1) Control Transfers @ Source(2) @ Section(8.5.3) @ Page(226).
 */
 
+/* [Endpoint 0: SETUP-Transactions].
+	SETUP-transactions are exclusive to control-typed endpoints (which endpoint 0 is
+	always defined as). It is the first of many transactions sent by the host to load
+	appropriate drivers and perform the enumeration process to get the USB device up
+	and running.
+
+	A timeline inside of a SETUP-transaction:
+
+		..................................................
+		:            -------- HOST --------              :
+		:            | SETUP-TOKEN PACKET |              :
+		:            ----------------------              :
+		:                                                :
+		............ SETUP-TRANSACTION (1/3) .............
+
+		First, the host sends a packet addressed to the device at endpoint 0 with the
+		PID of "SETUP" (1).
+
+		..................................................
+		:            -------- HOST --------              :
+		:            | SETUP-TOKEN PACKET |              :
+		:            ----------------------              :
+		:                      :                         :
+		:                      :                         :
+		:                                                :
+		: ------------------- HOST --------------------- :
+		: | DATA-TYPED PACKET (struct USBSetupRequest) | :
+		: ---------------------------------------------- :
+		:                                                :
+		............ SETUP-TRANSACTION (2/3) .............
+
+		After that, the host sends another packet, specifically a DATA-typed packet.
+		The data that is transmitted here is struct USBSetupRequest (4).
+
+		..................................................
+		:            -------- HOST --------              :
+		:            | SETUP-TOKEN PACKET |              :
+		:            ----------------------              :
+		:                      :                         :
+		:                      :                         :
+		:                                                :
+		: ------------------- HOST --------------------- :
+		: | DATA-TYPED PACKET (struct USBSetupRequest) | :
+		: ---------------------------------------------- :
+		:                      :                         :
+		:                      :                         :
+		:                                                :
+		:           -------- DEVICE --------             :
+		:           | ACK-HANDSHAKE PACKET |             :
+		:           ------------------------             :
+		:                                                :
+		............ SETUP-TRANSACTION (3/3) .............
+
+		Up to this point, the host had no idea whether or not the device is receiving
+		any of this information. This is where the last stage of the transaction comes
+		in. According to (2), the ATmega32U4 will always send an ACK-HANDSHAKE packet (1)
+		as a response for any control-typed endpoint that is involvegd in this
+		SETUP-transaction. This is also when the USB_COM_vect interrupt would be
+		triggered.
+
+	Within USB_COM_vect, we can copy the the host's DATA-typed packet of the
+	SETUP-transaction via UEDATX, byte-by-byte.
+
+	As seen in (3), the first byte of the setup data is "bmRequestType" which is a
+	bitmap detailing the characteristics of the host's request. The byte after that is
+	the specific request that the host is asking for. In the majority of cases, we can
+	just simply represent these two bytes as a single integer word, and this ends up
+	being the ".type" field of USBSetupRequest. See: USBSetupRequestType.
+
+	(1) PIDs @ Source(2) @ Table(8-1) @ Page(196).
+	(2) "CONTROL Endpoint Management" @ Source(1) @ Section(22.12) @ Page(274).
+	(3) "Format of Setup Data" @ Source(2) @ Table(9-2) @ Page(248).
+	(4) "Every Setup packet has eight bytes." @ Source(2) @ Section(9.3) @ Page(248).
+*/
+
+/* [Endpoint 0: Request Error].
+	If the host requested some piece of information from the device, then a successful
+	data-transferring process would look something like this:
+	.......................................................................
+	: =====================     ==================     ================== :
+	: ( SETUP-TRANSACTION ) --> ( IN-TRANSACTION ) --> ( IN-TRANSACTION ) :
+	: =====================     ==================     ================== :
+	:                                                           |         :
+	:                                                           v         :
+	:   ===================     ==================     ================== :
+	:   ( OUT-TRANSACTION ) <-- ( IN-TRANSACTION ) <-- ( IN-TRANSACTION ) :
+	:   ===================     ==================     ================== :
+	........... EXAMPLE OF ENDPOINT 0 SENDING DATA TO THE HOST ............
+
+	If the host requested some piece of information that the device does not have, or
+	some other request that the device cannot carry out, then a STALL-HANDSHAKE packet
+	must be sent as soon as possible. This is also synonomously referred to as a
+	"Request Error" (3).
+
+	A STALL-HANDSHAKE packet cannot be given to the host during the SETUP-transaction,
+	since (1) specifically states that control-typed endpoints handling
+	SETUP-transactions will always ACK it. Furthermore, the firmware at this point
+	haven't copied and parsed the data-packet sent by the host to determine that it
+	wouldn't be able to fulfill it. Thus, the earliest that the STALL packet can be
+	sent is whenever the next transaction arrives. This is expected, as stated in (3).
+
+	So this is what it'd look like inside of a IN-transaction that is successful:
+	..............................................................................
+	: ------ HOST -------     ------ DEVICE -------     --------- HOST --------- :
+	: | IN-TOKEN PACKET | ... | DATA-TYPED PACKET | ... | ACK-HANDSHAKE PACKET | :
+	: -------------------     ---------------------     ------------------------ :
+	........................ SUCCESSFUL IN-TRANSACTION ...........................
+
+	But if we want to abort the request, then we skip the DATA-typed packet stage
+	entirely and have ourselves send a HANDSHAKE-typed packet with a PID of "STALL"
+	instead.
+	......................................................
+	: ------ HOST -------     --------- DEVICE --------- :
+	: | IN-TOKEN PACKET | ... | STALL-HANDSHAKE PACKET | :
+	: -------------------     -------------------------- :
+	............. STALLED IN-TRANSACTION .................
+
+	And from here onwards, endpoint 0 will continiously send a STALL-HANDSHAKE packet
+	as a response to the host. We exit the "STALL condition" once we receive the next
+	SETUP-transaction (2) and can begin ACK'ing once more.
+
+	(1) "CONTROL Endpoint Management" @ Source(1) @ Section(22.12) @ Page(274).
+	(2) "STALL Handshakes Returned by Control Pipes" @ Source(2) @ Section(8.5.3.4) @ Page(228) & [Endpoint 0: Request Error].
+	(3) "Request Error" @ Source(2) @ Section(9.2.7) @ Page(247).
+*/
+
+/* [Endpoint 0: SETUP-Transaction's GetDescriptor].
+	The host sent a SETUP-transaction with a request, as described in the DATA-typed
+	packet laid out in USBSetupRequest, telling the device to tell the host more about
+	itself, hence "descriptor".
+
+	One of the things the host might ask is what the device itself is. This is detailed
+	within USB_DEVICE_DESCRIPTOR. Things such as the device's vendor and the amount of
+	ways the device can be configured is transmitted to the host.
+
+	Not all descriptors can be fulfilled. In this case, the device will send the host a
+	STALL-HANDSHAKE packet as a response. See [Endpoint 0: Request Error].
+*/
+
 /* [Interfaces, Configurations, and Classes].
 	An "interface" of a USB device is just a group of endpoints that are used for a
-	specific purpose. A simple mouse, for instance, may only just have a single
-	interface that simply reports the delta-movement to the host. A fancier mouse with
-	a numberpad on the side may have two interfaces: one for the mouse functionality and
-	the other for the keyboard of the numberpad.
+	specific functionality. A simple mouse, for instance, may only just have a single
+	interface with one endpoint that simply reports the delta-movement to the host.
+	A fancier mouse with a numberpad on the side may have two interfaces: one for the
+	mouse functionality and the other for the keyboard of the numberpad. A flashdrive
+	can have two endpoints: transmitting and receiving files to and from the host. The
+	two endpoints here would be grouped together into one interface.
+
+	The functionality of an interface is determined by the "class" (specifically
+	bInterfaceClass). An example would be HID (human-interface device) which include,
+	mouses, keyboards, data-gloves, etc. The USB specification does not detail much at
+	all about these classes; that is, the corresponding class specification must be
+	consulted. The entire USB device can optionally be labeled as a single class (via
+	bDeviceClass). This seems to be useful for the host in loading the necessary
+	drivers, according to (1), but it is not required for the device to be classified as
+	anything specific.
 
 	A set of interfaces is called a "configuration", and the host must choose the most
 	appropriate configuration for the device. The ability of having multiple
@@ -616,106 +758,215 @@ ISR(USB_COM_vect)
 	may choose a device configuration that is more power-efficient. When the laptop is
 	plugged in, it may reconfigure the device to now use as much power as it wants.
 
-	The functionality of an interface is determined by the "class" (specifically
-	bInterfaceClass). An example would be HID (human-interface device) which include,
-	mouses, keyboards, data-gloves, etc. The USB specification does not detail much at
-	all about these classes; the corresponding class specification must be consulted.
-
-	The entire USB device optionally be labeled as a single class (via bDeviceClass).
-	This seems to be useful for the host in loading the necessary drivers, according
-	to (1).
-
-	We define a single configuration, and within it we implement interfaces for each of
-	the following classes:
-
-		- Communication Devices Class (CDC).
-			// TODO Organize.
-
-			// "The Communication Class interface is a management interface and is required of all communication devices." @ Source(6) @ Section(3.3) @ AbsPage(20).
-			// "The Data Class interface can be used to transport data whose structure and usage is not defined by any other class, such as Audio. The format of the data moving over this interface can be identified using the associated Communication Class interface." @ Source(6) @ Section(3.3) @ AbsPage(20).
-			// "The data is always a byte stream. The Data Class does not define the format of the stream, unless a protocol data wrapper is used." @ Source(6) @ Section(3.3.2) @ AbsPage(21).
-
-			// Device Management:
-			//     "Device management includes the requests that manage the operational state of the device, the device responses, and event notifications." @ Source(6) @ Section(3.3.1) @ AbsPage(20).
-
-			// Call Management:
-			//     "Call management includes the requests for setting up and tearing down calls, and the managing of their operational parameters." @ Source(6) @ Section(3.3.1) @ AbsPage(20).
-
-			// Management Element:
-			//     "The management element configures and controls the device, and consists of endpoint 0." @ Source(6) @ Section(3.3.1) @ AbsPage(20).
-
-			// Notification Element:
-			//     "The notification element transports events to the host, and in most cases, consists of a interrupt endpoint. Notification elements pass messages via an interrupt or bulk endpoint, using a standardized format. Messages are formatted as a standardized 8-byte header, followed by a variable-length data field. The header identifies the kind of notification, and the interface associated with the notification; it also indicates the length of the variable length portion of the message." @ Source(6) @ Section(3.3.1) @ AbsPage(20).
-
-				This interface sets up the first half of the CDC (Communications Device Class)
-				interface so we can send diagnostic information to the host. I will admit that
-				I am quite too young to even begin to understand what modems are or the old ways of
-				technology before the internet became hip and cool. Nonetheless, I will document
-				my understanding of what has to be done in order to set the communication interface
-				up.
-
-				We set bInterfaceClass to USBClass_cdc to indicate to the host that this
-				interface is for the communication class, and as a result will contain specific
-				information that is not specified at all within the USB specification.
-
-				bInterfaceSubClass then further narrows the interface's class down to
-				"Abstract Control Model" (1), which from what I understand, makes the USB device
-				emulate a COM port that could then receive and transmit data serially.
-
-				TODO
-					For bInterfaceProtocol, I assume we should be using the protocol that interprets
-					AT/V250/V.25ter/Hayes commands, since (2) says that the abstract control model
-					understands these. But I don't think we use this obscure system anymore...
-					So can we remove it? (3) says that if the control model doesn't require it,
-					which PSTN that defines ACM doesn't seem to enforce, then we should set it to 0.
-
-				(1) "Abstract Control Model" @ Source(6) @ Section(3.6.2) @ AbsPage(26).
-				(2) ACM with AT Commands @ Source(7) @ Section(3.2.2) @ AbsPage(15).
-				(3) Control Model on Protocols @ Source(6) @ Section(4.4) @ AbsPage(40).
-
-				It is stated in (1) that every communication class interface must have a
-				"management element", which is just an endpoint that transfer commands to
-				manages the communication between host and device as defined in (2). This
-				management element also happens to be always endpoint 0 for all communication
-				devices.
-
-				As declared in (3), abstract control models need to also have the
-				"notification element". Like with management element, it is just another
-				endpoint, but this time it is used to notify the host of any events,
-				and is often (but not necessarily required) an interrupt transfer typed endpoint
-				(so it can't be endpoint 0).
-
-				TODO probably better in usb.c
-				Every once in a while, the host would send a request defined in (5) to the
-				notification element, and if the device ACKs, TODO what exactly happens???
-
-				(1) CDC Endpoints @ Source(6) @ Section(3.4.1) @ AbsPage(23).
-				(2) "Management Element" @ Source(6) @ Section(1.4) @ AbsPage(16).
-				(3) Endpoints on Abstract Control Models @ Source(6) @ Section(3.6.2) @ AbsPage(26).
-				(4) "Notification Element" @ Source(6) @ Section(1.4) @ AbsPage(16).
-				(5) "Notification Element Notifications" @ Source(6) @ Section(6.3) @ AbsPage(84).
-
-				I'm not entirely too sure what a "data class" is exactly used for here, but based
-				on loose descriptions of its usage, it's to respresent the part of the communication
-				where there might be compression, error correction, modulation, etc. as seen in (1).
-
-				Regardless, this interface is where the I/O streams of the communication between
-				host and device is held.
-
-				(1) Abstract Control Model Diagram @ Source(6) @ Figure(3) @ AbsPage(15).
-
-				Stated by (1), the endpoints that will be carrying data between the host and device
-				must be either both isochronous or both bulk transfer types.
-
-				(1) "Data Class Endpoint Requirements" @ Source(6) @ Section(3.4.2) @ AbsPage(23).
-
-		- Human Interface Device (HID) Class.
-			TODO
-
-		- Mass Storage Device Class.
-			TODO
+	We define a single configuration (consult (2) for how configuration descriptor is
+	laid out), and within it, we implement interfaces for each of the following classes:
+		- [CDC - Communication Class Device].
+		- [HID - Human Interface Device Class].
+		- [Mass Storage Device Class].
 
 	(1) Device and Configuration Descriptors @ Source(4) @ Chapter(5).
+	(2) "USB Descriptors" @ Source(4) @ Chapter(5).
+*/
+
+/* [CDC - Communication Class Device]. TODO Relook
+	The USB communication devices class is designed for all sorts of communication
+	devices, such as modems, telephones, ethernet hubs, etc. The reason why we implement
+	this class for the device is so we can transmit data to the host for diagnostic
+	purposes.
+
+	To even begin to understand our implementation of CDC, we must rewind far back into
+	the history of a communication system called POTS (Plain Old Telephone Service):
+	.......................................................................
+	.                                                                     :
+	:                    ||                         ||                    :
+	:                  |=||=|~~~~~~~~~~~~~~~~~~~~~|=||=|                  :
+	:                    ||            ^            ||                    :
+	:  /=========\       ||   (PURE ANALOG SIGNAL)  ||       /=========\  :
+	: (O) |===| (O)      ||                         ||      (O) |===| (O) :
+	:    / (#) \         ||                         ||         / (#) \    :
+	:    \_____/~~~~~~~~~||                         ||~~~~~~~~~\_____/    :
+	:                    ||                         ||                    :
+	:.....................................................................:
+	With many simplications, we can see that two plain old telephones would communicate
+	to each other via analog signals travelling down some copper wires. This is great
+	for humans to exchange pleasantries, but computers, however, cannot use these analog
+	signals; it must be in the form of digital signals. That is, there needs to exist
+	a device that "modulates" digital signals into analog signals, and a device to
+	"demodulate" analog signals back into the original digital signals.
+	This modulator-demodulator is the "modem".
+	.......................................................................
+	.                                                                     :
+	:                    ||                         ||                    :
+	:                  |=||=|~~~~~~~~~~~~~~~~~~~~~|=||=|                  :
+	:                    ||            ^            ||                    :
+	:  /=========\       ||   (PURE ANALOG SIGNAL)  ||       /=========\  :
+	: (O) |===| (O)      ||                         ||      (O) |===| (O) :
+	:    / (#) \         ||                         ||         / (#) \    :
+	:    \_____/~~~~~~~~~||                         ||~~~~~~~~~\_____/    :
+	:       ~            ||                         ||            ~       :
+	:       ~                                                     ~       :
+	:       ~             _______             _______             ~       :
+	:    =======         ||.....||           ||.....||         =======    :
+	:    |MODEM| 1010101 ||.....||           ||.....|| 1010101 |MODEM|    :
+	:    =======    ^    ||_____||           ||_____||    ^    =======    :
+	:               |    [  -=.  ]           [  -=.  ]    |               :
+	:               |    =========           =========    |               :
+	:               |                                     |               :
+	:               -------- (PURE DIGITAL SIGNAL) --------               :
+	:.....................................................................:
+
+	This is also where the name "terminal" come from. The computers that'd display the
+	received information were quite literally the terminal endings of communication
+	systems such as this.
+
+	Thus, we can essentially use CDC to mimick our device to be something like a modem
+	and serially transmit data to the host (the fact we aren't really a modem that's
+	working with analog signals doesn't really matter). Since we are going to define
+	a couple interfaces for CDC later on, so we will need to declare the device's class
+	as being CDC in the device descriptor (see: USB_DEVICE_DESCRIPTOR) as mentioned in
+	(5).
+
+	As stated earlier, there are many communication devices that the CDC specification
+	wants to be compatiable with. The one that will be the most applicable for us is the
+	"Abstract Control Model" as seen in (4). Based on the figure, the specification
+	is assuming we are some sort of device that has components for data-compression,
+	error-correction, etc. just like a modem might have. But once again, this doesn't
+	really matter; we're just sending pure binary data-packets to the host via USB.
+
+	Within our device configuration (see: USB_CONFIGURATION_HIERARCHY), we define the
+	"Communication Class Interface". This interface is responsible for
+	"device management" and "call management", and is required for all communication
+	devices, according to (1). As for what device and call management entails:
+
+		- "Device Management" is any operation the host would want to do to "control
+		and configure the operational state of the device" (3). These operations would
+		be carried out by the "management element" which is just a fancy name for
+		endpoint 0 (2). The host would send CDC-specific requests to endpoint 0 for
+		things like "ringing the auxillary phone jack", all of which is detailed in (6).
+		For the most part, we really don't care about these requests.
+
+		- "Call Management" is "responsible for setting up and tearing down of calls"
+		(7). As to what specific things are done in call management, I'm actually not
+		too sure. The specification wasn't too clear on this, but I think it's
+		more-or-less a subset of the management element requests of things like hanging
+		up phones (SET_HOOK_STATE) or dialing numbers (DIAL_DIGITS). This is further
+		supported by the fact that an example configuration in (8) states that the
+		"management element will transport both call management element and device
+		management element commands".
+
+	The CDC interface is also required to have the "notification element" (9) which
+	simply lets the host know of certain events like whether or not the phone is hooked
+	or not (10). Like with the management element, the notification element is just
+	another endpoint, but this time it's not endpoint 0. We are to give up an endpoint
+	and it seems like it's usually an interrupt-typed endpoint as stated in (11),
+	but (12) states that it could also be a bulk-typed endpoint.
+
+	After we define the CDC interface descriptor, we then list a series of "functional
+	descriptors" (13) which are proprietary to the CDC specification. Each functional
+	descriptor just state some small piece of information related to the communication
+	device we are using for the host.
+
+		- "Header Functional Descriptor" is always the first functional descriptor and
+		it only lists the CDC specification we are using. That's all there is to it.
+
+		- "Call Management Functional Descriptor" TODO (15).
+
+		- "Abstract Control Management Functional Descriptor" TODO (16).
+
+		- "Union Functional Descriptor" (17) is used to group all the interfaces that
+		support the communication functionality together. It is a required descriptor
+		(18) that is is probably more apparently useful in communication devices that
+		involve things like audio and video, but given that we only have two interfaces
+		(this CDC interface and the following CDC-data interface), we can just say that
+		this CDC interface is the "master" and the other CDC-data interface is the
+		"slave". Thus, any events relating to this group will be made aware of to the
+		master interface.
+
+	So in short, the CDC interface is used by the host to determine what kind
+	communication device it's talking to and its properties.
+
+	(1) "Interface Definitions" @ Source(6) @ Section(3.3) @ AbsPage(20).
+	(2) "Communication Class Interface" @ Source(6) @ Section(3.3.1) @ AbsPage(20).
+	(3) Device Management Definition @ Source(6) @ Section(1.4) @ AbsPage(15).
+	(4) "Abstract Control Model" @ Source(6) @ Section(3.6.2) @ AbsPage(26).
+	(5) Communication Device Class Code @ Source(6) @ Section(3.2) @ AbsPage(20).
+	(6) "Management Element Request" @ Source(6) @ Section(6.2) @ AbsPage(62).
+	(7) Call Management Definition @ Source(6) @ Section(1.4) @ AbsPage(15).
+	(8) Example Configurations @ Source(6) @ Section(3.3.1) @ AbsPagee(21).
+	(9) Endpoints on Abstract Control Models @ Source(6) @ Section(3.6.2) @ AbsPage(26).
+	(10) "Notification Element Notifications" @ Source(6) @ Section(6.3) @ AbsPage(84).
+	(11) Notification Element Definition @ Source(6) @ Section(1.4) @ AbsPage(16).
+	(12) Notification Element Endpoint @ Source(6) @ Section(3.3.1) @ AbsPage(20).
+	(13) Functional Descriptors @ Source(6) @ Section(5.2.3) @ AbsPage(43).
+	(14) "Header Functional Descriptor" @ Source(6) @ Section(5.2.3.1) @ AbsPage(45).
+	(15) "Call Management Functional Descriptor" @ Source(6) @ Section(5.2.3.2) @ AbsPage(45-46).
+	(16) "Abstract Control Management Functional Descriptor" @ Source(6) @ Section(5.2.3.3) @ AbsPage(46-47).
+	(17) "Union Functional Descriptor" @ Source(6) @ Section(5.2.3.8) @ AbsPage(51).
+	(18) "Communication Device Management" @ Source(6) @ Section(3.1.1.) @ AbsPage(19).
+*/
+
+/* [HID - Human Interface Device Class].
+	TODO
+*/
+
+/* [Mass Storage Device Class].
+	TODO
+*/
+
+/* [Endpoint 0: SETUP-Transaction's SetAddress].
+	The host would like to set the device's address, which at this point is zero by
+	default (as with any other USB device when it first connects). The desired address
+	is stated within the SETUP-transaction's data-packet's 16-bit wIndex field (3).
+
+	According to (1), any address is a 7-bit unsigned integer, so if we received a
+	desired address from the host that can't fit into that, then something has gone
+	quite wrong.
+
+	Once we have the desired address, we set it as so in the UDADDR register, but don't
+	actually enable it until later, as stated in (2).
+
+	So after the host sent the SETUP-transaction asking to set the device's address,
+	a IN-transaction (still to address 0 (4)) is sent by the host to test whether or not
+	the device understood the request. We don't actually have to send any meaningful
+	content to the host, just a zero-lengthed data-packet. This is done by not writing
+	anything to UEDATX and then clearing TXINI.
+
+	Just because we clear TXINI doesn't mean that we the device has sent the DATA-typed
+	packet for the IN-transaction however. The hardware is possibily still waiting for
+	that IN-TOKEN packet to initiate the transaction, or possibly is currently in the
+	middle of transmitting the DATA-typed packet (just because it's zero-lengthed
+	doesn't mean no signal is being sent; the PID for instance still has to be
+	transmitted. See: [Packets and Transactions]). Thus, if we set ADDEN to enable the
+	new USB device address too soon, then we might fail to actually perform the
+	IN-transaction with the host.
+
+	Therefore we have to spinlock on TXINI until it is set, which is how we can find out
+	when the endpoint buffer has been transmitted entirely. It is only after this that
+	we then can enable the address.
+
+	(1) "Address Field" @ Source(2) @ Section(8.3.2.1) @ Page(197).
+	(2) "Address Setup" @ Source(1) @ Section(22.7) @ Page(272).
+	(3) SetAddress Data-Packet Layout @ Source(2) @ Section(9.4.6) @ Page(256).
+	(4) "Set Address Processing" @ Source(2) @ Section(9.2.6.3) @ Page(246).
+*/
+
+/* [Endpoint 0: SETUP-Transaction's SetConfiguration].
+	This is where the host obviously set the configuration of the device. We only have
+	a single configuration defined, so we already pretty much set for that. The host
+	could send a 0 to indicate that we should be in the "address state" (1), which is
+	the state a USB device is in after it has been assigned an address. But once again,
+	since we only have configuration and we're already prepped for that, there really
+	isn't anything we have to do here.
+
+	When the host wants to set the device to our only configuration
+	(USB_CONFIGURATION_HIERARCHY), it must provide the value
+	USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE, the very same value within
+	USB_CONFIGURATION_HIERARCHY.
+
+	If the host sends us some other configuration value, then we will report this as
+	a request error.
+
+	(1) "Address State" @ Source(2) @ Section(9.4.7) @ Page(257).
 */
 
 /* TODO[Tampered Default Register Values].
@@ -764,114 +1015,4 @@ ISR(USB_COM_vect)
 	interrupts for these cases, or that the CPU can't handle the interrupt in time
 	because USB is just so fast. It could also very well be neither of those cases and
 	it's something else entirely!
-*/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//
-// TODO Revise.
-//
-
-
-
-
-/* [Endpoint Interrupt Routine].
-	Triggers listed on (1) of when a specific endpoint:
-		[ ] is ready to supply data for IN packets to send to the host.
-		[ ] received OUT data from the host.
-		[X] received a SETUP command.
-		[ ] has a stalled packet.
-		[ ] has a CRC mismatch on OUT data (isochronous mode).
-		[ ] has an overflow/underflow (isochronous mode).
-		[ ] has a NAK on IN/OUT.
-
-	(1) "Endpoint Interrupt" @ Source(1) @ Figure(22-5) @ Page(280).
-*/
-
-/* [Read SETUP Packet].
-	The host first sends the device a TOKEN that signifies a SETUP command.
-	After that token is a DATA packet consisting of 8 bytes,
-	the layout of which is detailed by struct USBSetup.
-	After this data packet is a handshake (also called the status stage)
-	given to the host that the device acknowledged the transaction,
-	which according to (1), is always done automatically for CONTROL typed endpoints
-	to SETUP commands.
-
-	We can read the data sent by the host byte-by-byte from UEDATX.
-	The amount of bytes within the buffer is UEBCX (2), but since SETUP data packets
-	are already 8 bytes always, we can assume that it is so. If it isn't,
-	then there's a very unlikely chance that there'll be a successful enumeration;
-	no need to waste program memory here.
-
-	(1) CONTROL Endpoint Management @ Source(1) @ Section(22.12) @ Page(274).
-	(2) UEDATX, UEBCX @ Source(1) @ Section(22.18.2) @ Page(291).
-
-	* "Standard Device Requests" @ Source(2) @ Table(9-3) @ Page(250).
-*/
-
-/* [SETUP GetDescriptor].
-	This is where the host wants to learn more about the device.
-	The host asks about various things such as information about device itself,
-	configurations, strings, etc, all of which are noted in {enum USBDescType}.
-*/
-
-/* [SETUP SetAddress]
-	The host would like to set the device's address, which at this point is zero by
-	default, as with any other USB device when it first connect. The desired address
-	is stated within the SETUP data-packet that the host sent to endpoint 0,
-	specifically in a 16-bit field.
-
-	According to (1), any address is a 7-bit unsigned integer, so if we received a
-	desired address from the host that can't fit into that, then something has gone
-	quite wrong.
-
-	Once we have the desired address, we set it as so in the UDADDR register, but don't
-	actually enable it until later, as stated in (2).
-
-	So the host sent a SETUP command asking to set the device's address, which we ACK'd
-	and processed. After that SETUP command is an IN command (still to address 0) to
-	make sure the device has processed it. We can signal to the host that we have indeed
-	so by sending a zero-lengthed data-packet in response.
-
-	The ATmega32U4 datasheet makes no mention of this at all, but it seems like we can
-	only enable the address **AFTER** we have completely sent the zero-lengthed
-	data-packet. So we just simply spinlock until endpoint 0's buffer is free.
-
-	(1) "Address Field" @ Source(2) @ Section(8.3.2.1) @ Page(197).
-	(2) "Address Setup" @ Source(1) @ Section(22.7) @ Page(272).
-*/
-
-/* [Request Error Stall].
-	The host might request things from the device such as a descriptor, but the device
-	might not have this information. In this case, we are to reply to the host with a
-	STALL packet (1).
-
-	All requests are made to control endpoints in the form of SETUP data-packets,
-	often just endpoint 0 (3). The ATmega32U4 will always ACK the first stage of the
-	transfer where the host sends this SETUP data-packet. After that, the host will
-	send a series of IN commands to grab the device's response data. If the data
-	requested by the host specified in the SETUP data-packet cannot be retrieved by the
-	device, we send a STALL response to the IN command (or whatever the next command
-	the host sends us after the SETUP packet) (1).
-
-	The control endpoint will continue to respond with STALL (unless it is a SETUP
-	command, to which ATmega32U4 will ACK like always) until we receive another SETUP
-	command, to which we then reset to a non-stall state.
-
-	(1) "Request Error" @ Source(2) @ Section(9.2.7) @ Page(247).
-	(2) "STALL Request" @ Source(1) @ Section(22.11) @ Page(273-274).
-	(3) "USB Device Requests" @ Source(2) @ Section(9.3) @ Page(248).
-	(4) STALL Handshakes @ Source(2) @ Section(8.5.3.4) @ Page(228).
 */

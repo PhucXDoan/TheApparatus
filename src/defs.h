@@ -80,22 +80,22 @@ enum USBEndpointTransferType // See: Source(2) @ Table(9-13) @ Page(270) & Sourc
 	USBEndpointTransferType_interrupt   = 0b11, // Low-latency, one-way, small amount of data. Ex: keyboard.
 };
 
-enum USBSetupType // LSB corresponds to "bmRequestType" and MSB to "bRequest". See: Source(2) @ Table(9-2) @ Page(248).
+enum USBSetupRequestType // LSB corresponds to "bmRequestType" and MSB to "bRequest". See: Source(2) @ Table(9-2) @ Page(248).
 {
 	// Non-exhaustive. See: Source(2) @ Table(9-3) @ Page(250) & Source(2) @ Table(9-4) @ Page(251).
-	USBSetupType_get_descriptor = 0b10000000 | (((u16) 6) << 8),
-	USBSetupType_set_address    = 0b00000000 | (((u16) 5) << 8),
-	USBSetupType_set_config     = 0b00000000 | (((u16) 9) << 8),
+	USBSetupRequestType_get_descriptor = 0b10000000 | (((u16) 6) << 8),
+	USBSetupRequestType_set_address    = 0b00000000 | (((u16) 5) << 8),
+	USBSetupRequestType_set_config     = 0b00000000 | (((u16) 9) << 8),
 
 	// Non-exhaustive. See: Source(6) @ Table(44) @ AbsPage(62-63) & Source(6) @ Table(46) @ AbsPage(64-65).
-	USBSetupType_cdc_get_line_coding        = 0b10100001 | (((u16) 0x21) << 8),
-	USBSetupType_cdc_set_line_coding        = 0b00100001 | (((u16) 0x20) << 8),
-	USBSetupType_cdc_set_control_line_state = 0b00100001 | (((u16) 0x22) << 8),
+	USBSetupRequestType_cdc_get_line_coding        = 0b10100001 | (((u16) 0x21) << 8),
+	USBSetupRequestType_cdc_set_line_coding        = 0b00100001 | (((u16) 0x20) << 8),
+	USBSetupRequestType_cdc_set_control_line_state = 0b00100001 | (((u16) 0x22) << 8),
 };
 
 enum USBClass // Non-exhaustive. See: Source(5).
 {
-	USBClass_null         = 0x00, // When used in device descriptors, the class is determined by the interface descriptors. Cannot be used in interface descriptors as it is "reserved for future use".
+	USBClass_null         = 0x00, // See: [About: USBClass_null].
 	USBClass_cdc          = 0x02, // See: "Communication Class Device" @ Source(6) @ Section(1) @ AbsPage(11).
 	USBClass_hid          = 0x03, // TODO
 	USBClass_mass_storage = 0x08, // TODO
@@ -107,7 +107,7 @@ enum USBDescType
 	// See: Source(2) @ Table(9-5) @ Page(251).
 	USBDescType_device             = 1,
 	USBDescType_config             = 2,
-	USBDescType_string             = 3,
+	USBDescType_string             = 3, // See: [USB Strings].
 	USBDescType_interface          = 4,
 	USBDescType_endpoint           = 5,
 	USBDescType_device_qualifier   = 6,
@@ -171,16 +171,16 @@ struct USBCDCLineCoding // See: Source(6) @ Table(50) @ Page(69).  // TODO What 
 	u8  bDataBits;   // Must be 5, 6, 7, 8, or 16.
 };
 
-struct USBSetup // The data-packet that is sent in the SETUP-typed transaction. See: Source(2) @ Table(9-2) @ Page(248).
+struct USBSetupRequest // The data-packet that is sent in the SETUP-typed transaction. See: Source(2) @ Table(9-2) @ Page(248).
 {
-	u16 type; // Aliasing(enum USBSetupType). The "bmRequestType" and "bRequest" bytes are combined into a single word here.
+	u16 type; // Aliasing(enum USBSetupRequestType). The "bmRequestType" and "bRequest" bytes are combined into a single word here.
 	union
 	{
 		struct // See: Source(2) @ Section(9.4.3) @ Page(253).
 		{
-			u8  descriptor_index;
+			u8  descriptor_index; // Only for USBDescType_string or USBDescType_config. See: Source(2) @ Section(9.4.3) @ Page(253) & [USB Strings].
 			u8  descriptor_type;  // Aliasing(enum USBDescType).
-			u16 language_id;
+			u16 language_id;      // Only for USBDescType_string. See: Source(2) @ Section(9.4.3) @ Page(253) & [USB Strings].
 			u16 requested_amount;
 		} get_descriptor;
 
@@ -222,9 +222,9 @@ struct USBDescDevice // See: Source(2) @ Table(9-8) @ Page(262-263).
 	u16 idVendor;           // UID assigned by the USB-IF organization for a company. This with idProduct apparently helps the host find the most appropriate driver for the device (see: Source(4) @ Chapter(5)).
 	u16 idProduct;          // UID arbitrated by the vendor for a specific device made by them.
 	u16 bcdDevice;          // Version number of the device.
-	u8  iManufacturer;      // Index of string descriptor for the manufacturer description.
-	u8  iProduct;           // Index of string descriptor for the product description.
-	u8  iSerialNumber;      // Index of string descriptor for the device's serial number.
+	u8  iManufacturer;      // See: [USB Strings].
+	u8  iProduct;           // See: [USB Strings].
+	u8  iSerialNumber;      // See: [USB Strings].
 	u8  bNumConfigurations; // Count of configurations the device can be set to. See: Source(4) @ Chapter(5).
 };
 
@@ -235,7 +235,7 @@ struct USBDescConfig // See: Source(2) @ Table(9-10) @ Page(265) & About Configu
 	u16 wTotalLength;        // Amount of bytes describing the entire configuration including the configuration descriptor, endpoints, etc. See: Configuration Hierarchy Diagram @ Source(4) @ Chapter(5).
 	u8  bNumInterfaces;      // Amount of interfaces that this configuration has.
 	u8  bConfigurationValue; // "Value to use as an argument to the SetConfiguration() request to select this configuration". See: Source(2) @ Table(9-10) @ Page(265).
-	u8  iConfiguration;      // Index of string descriptor describing this configuration for diagnostics.
+	u8  iConfiguration;      // See: [USB Strings].
 	u8  bmAttributes;        // Aliasing(enum USBMiscFlag_config_attr).
 	u8  bMaxPower;           // Expressed in units of 2mA (e.g. bMaxPower = 50 -> 100mA usage).
 };
@@ -250,7 +250,7 @@ struct USBDescInterface // See: Source(2) @ Table(9-12) @ Page(268-269) & About 
 	u8 bInterfaceClass;    // Aliasing(enum USBClass). Value of USBClass_null is reserved.
 	u8 bInterfaceSubClass; // Might be used to further subdivide the interface class.
 	u8 bInterfaceProtocol; // Might be used to indicate to the host on how to communicate with the device.
-	u8 iInterface;         // Index of string descriptor that describes this interface.
+	u8 iInterface;         // See: [USB Strings].
 };
 
 struct USBDescEndpoint // See: Source(2) @ Table(9-13) @ Page(269-271) & Configuration Hierarchy Diagram @ Source(4) @ Chapter(5).
@@ -311,16 +311,13 @@ static const struct USBDescDevice USB_DEVICE_DESCRIPTOR = // TODO PROGMEMify.
 		.bLength            = sizeof(struct USBDescDevice),
 		.bDescriptorType    = USBDescType_device,
 		.bcdUSB             = 0x0200,
-		.bDeviceClass       = USBClass_cdc, // TODO I think this makes the whole device a CDC. Can we take this out?
-		.bDeviceSubClass    = 0, // Irrelevant when with USBClass_cdc. See Source(5) & Source(6) @ Table(20) @ AbsPage(42). TODO If we make the whole device not CDC, then we should be able to ignore this entirely.
-		.bDeviceProtocol    = 0, // Irrelevant when with USBClass_cdc. See Source(5) & Source(6) @ Table(20) @ AbsPage(42). TODO If we make the whole device not CDC, then we should be able to ignore this entirely.
+		.bDeviceClass       = USBClass_cdc, // We use a CDC and CDC-data interfaces, so we have to assign CDC here. See: Source(6) @ Section(3.2) @ AbsPage(20).
+		.bDeviceSubClass    = 0,            // Unused. See: Source(6) @ Table(20) @ AbsPage(42).
+		.bDeviceProtocol    = 0,            // Unused. See: Source(6) @ Table(20) @ AbsPage(42).
 		.bMaxPacketSize0    = USB_ENDPOINT_0_BUFFER_SIZE,
 		.idVendor           = 0, // IDC; doesn't seem to affect functionality.
 		.idProduct          = 0, // IDC; doesn't seem to affect functionality.
 		.bcdDevice          = 0, // IDC; doesn't seem to affect functionality.
-		.iManufacturer      = 0, // IDC.
-		.iProduct           = 0, // IDC.
-		.iSerialNumber      = 0, // IDC.
 		.bNumConfigurations = 1
 	};
 
@@ -355,13 +352,12 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 				.wTotalLength        = sizeof(struct USBConfigHierarchy),
 				.bNumInterfaces      = 2,
 				.bConfigurationValue = USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE,
-				.iConfiguration      = 0, // IDC.
 				.bmAttributes        = USBMiscFlag_config_attr_reserved_one | USBMiscFlag_config_attr_self_powered, // TODO We should calculate our power consumption!
 				.bMaxPower           = 50, // TODO We should calculate our power consumption!
 			},
 		.cdc =
 			{
-				.descriptor = // TODO How do we know that the CDC class needs these specific functional headers?
+				.descriptor =
 					{
 						.bLength            = sizeof(struct USBDescInterface),
 						.bDescriptorType    = USBDescType_interface,
@@ -371,7 +367,6 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 						.bInterfaceClass    = USBClass_cdc, // See: Source(6) @ Section(4.2) @ AbsPage(39).
 						.bInterfaceSubClass = 0x2, // See: "Abstract Control Model" @ Source(6) @ Section(3.6.2) @ AbsPage(26).
 						.bInterfaceProtocol = 0x1, // See: "V.25ter" @ Source(6) @ Table(17) @ AbsPage(39). TODO Is this protocol needed?
-						.iInterface         = 0,   // IDC.
 					},
 				.cdc_header =
 					{
@@ -427,7 +422,6 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 						.bInterfaceClass    = USBClass_cdc_data, // See: Source(6) @ Section(4.5) @ AbsPage(40).
 						.bInterfaceSubClass = 0, // Should be left alone. See: Source(6) @ Section(4.6) @ AbsPage(40).
 						.bInterfaceProtocol = 0, // Not using any specific communication protocol. See: Source(6) @ Table(19) @ AbsPage(40-41).
-						.iInterface         = 0, // IDC.
 					},
 				.endpoints =
 					{
@@ -470,7 +464,6 @@ static const struct USBCDCLineCoding USB_COMMUNICATION_LINE_CODING = // TODO How
 	Source(4) := USB in a NutShell by BeyondLogic (Accessed: September 19, 2023).
 	Source(5) := USB-IF Defined Class Codes (usb.org/defined-class-codes) (Accessed: September 19, 2023).
 	*Source(6) := USB CDC Specification v1.1 (Dated: January 19, 1999).
-	Source(7) := USB PSTN Specification v1.2 (Dated: February 9, 2007).
 
 	We are working within the environment of the ATmega32U4 microcontroller,
 	which is an 8-bit CPU. This consequently means that there are no padding bytes to
@@ -494,4 +487,24 @@ static const struct USBCDCLineCoding USB_COMMUNICATION_LINE_CODING = // TODO How
 	a lot of information compared to v1.1. Perhaps we're supposed to use the errata for
 	the more up-to-date details, but fallback to v1.1 when needed. Regardless, USB
 	should be quite backwards-compatiable, so we should be fine with v1.1.
+*/
+
+/* [USB Strings].
+	USB devices can return strings of usually human-readable text back to the host for
+	things such as the name of the manufacturer. (1), however, states that devices are
+	not required at all to implement this, and thus we will not bother with string
+	descriptors.
+
+	(1) "String" @ Source(2) @ Section(9.6.7) @ Page(273).
+*/
+
+/* [About: USBClass_null].
+	When USBClass_null is used in device descriptors (bDeviceClass), the class is
+	determined by the interfaces of the configurations (bInterfaceClass). (1) says that
+	USBClass_null cannot be used in interface descriptors as it is "reserved for future
+	use". However, (2) states that it is for the "null class code triple" now,
+	whatever that means!
+
+	(1) "bInterfaceClass" @ Source(2) @ Table(9-12) @ Page(268).
+	(2) "Base Class 00h (Device)" @ Source(5).
 */
