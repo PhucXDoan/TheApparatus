@@ -13,15 +13,14 @@ main(void)
 {
 	sei(); // Activates global interrupts. See: Source(1) @ Section(4.4) @ Page(11).
 
-	debug_u8(0);
-
 	usb_init();
 
+	pin_output(2);
 	while (true)
 	{
-		debug_u8(0xAA);
+		pin_high(2);
 		_delay_ms(1000.0);
-		debug_u8(0x55);
+		pin_low(2);
 		_delay_ms(1000.0);
 	}
 }

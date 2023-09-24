@@ -30,7 +30,7 @@ enum PinState
 {
 	PinState_false    = 0b00, // Aliasing(false). Sink to GND.
 	PinState_true     = 0b01, // Aliasing(true). Source of 5 volts.
-	PinState_floating = 0b10, // Unconnected; reading from this pin is unreliable.
+	PinState_floating = 0b10, // Default state; reading from this pin is unreliable.
 	PinState_input    = 0b11, // Pull-up resistor enabled for reliable reads. A truthy value will be read unless it is tied to GND strongly enough.
 };
 
