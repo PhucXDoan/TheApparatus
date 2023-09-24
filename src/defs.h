@@ -114,7 +114,7 @@ enum USBDescType
 	USBDescType_other_speed_config = 7,
 	USBDescType_interface_power    = 8,
 
-	// Non-exhaustive. See: Source(6) @ Table(24) @ AbsPage(44).
+	// See: Source(6) @ Table(24) @ AbsPage(44).
 	USBDescType_cdc_interface = 0x24,
 	USBDescType_cdc_endpoint  = 0x25,
 };
@@ -136,39 +136,6 @@ enum USBMiscFlag
 	USBMiscFlag_config_attr_remote_wakeup = 1 << 5,
 	USBMiscFlag_config_attr_self_powered  = 1 << 6,
 	USBMiscFlag_config_attr_reserved_one  = 1 << 7, // Must always be set.
-
-	// See: "bmCapabilities" @ Source(6) @ Table(27) @ AbsPage(46).
-	USBMiscFlag_call_management_self_managed_device     = 1 << 0,
-	USBMiscFlag_call_management_managable_by_data_class = 1 << 1,
-
-	// See: "bmCapabilities" @ Source(6) @ Table(28) @ AbsPage(47).
-	USBMiscFlag_acm_management_comm_group         = 1 << 0,
-	USBMiscFlag_acm_management_line_group         = 1 << 1,
-	USBMiscFlag_acm_management_send_break         = 1 << 2,
-	USBMiscFlag_acm_management_network_connection = 1 << 3,
-};
-
-enum USBMiscEnum
-{
-	// See: Line-Coding's Stop Bits @ Source(6) @ Table(50) @ AbsPage(69).
-	USBMiscEnum_cdc_lc_stop_bit_1   = 0,
-	USBMiscEnum_cdc_lc_stop_bit_1_5 = 1,
-	USBMiscEnum_cdc_lc_stop_bit_2   = 2,
-
-	// See: Line-Coding's Parity Type @ Source(6) @ Table(50) @ AbsPage(69).
-	USBMiscEnum_cdc_lc_parity_none  = 0,
-	USBMiscEnum_cdc_lc_parity_odd   = 1,
-	USBMiscEnum_cdc_lc_parity_even  = 2,
-	USBMiscEnum_cdc_lc_parity_mark  = 3,
-	USBMiscEnum_cdc_lc_parity_space = 4,
-};
-
-struct USBCDCLineCoding // See: Source(6) @ Table(50) @ Page(69).  // TODO What is Line-Coding?
-{
-	u32 dwDTERate;   // Baud rate.
-	u8  bCharFormat; // Aliasing(enum USBMiscEnum_lc_stop_bit).
-	u8  bParityType; // Aliasing(enum USBMiscEnum_lc_parity).
-	u8  bDataBits;   // Must be 5, 6, 7, 8, or 16.
 };
 
 struct USBSetupRequest // The data-packet that is sent in the SETUP-typed transaction. See: Source(2) @ Table(9-2) @ Page(248).
@@ -193,20 +160,6 @@ struct USBSetupRequest // The data-packet that is sent in the SETUP-typed transa
 		{
 			u16 value; // Configuration that the host wants to set the device to. Zero is reserved for making the device be in "Address State".
 		} set_config;
-
-		struct // See: Source(6) @ Section(6.2.13) @ AbsPage(69).
-		{
-			u16 _zero;
-			u16 interface_index; // Index of the CDC interface that this SETUP-transaction is for.
-			u16 structure_size;  // Must be sizeof(struct USBCDCLineCoding).
-		} cdc_get_line_coding;
-
-		struct // See: Source(6) @ Section(6.2.12) @ AbsPage(68-69).
-		{
-			u16 _zero;
-			u16 interface_index; // Index of the CDC interface that this SETUP-transaction is for.
-			u16 structure_size;  // Must be sizeof(struct USBCDCLineCoding).
-		} cdc_set_line_coding;
 	};
 };
 
@@ -302,7 +255,6 @@ struct USBDescCDCUnion // See: Source(6) @ Table(33) @ AbsPage(51). // TODO What
 // Endpoint buffer sizes must be one of the names of enum USBEndpointSizeCode.
 // The maximum capacity between endpoints also differ. See: Source(1) @ Section(22.1) @ Page(270).
 #define USB_ENDPOINT_0_BUFFER_SIZE 8
-#define USB_ENDPOINT_2_BUFFER_SIZE 8  // CDC's "notification element".
 #define USB_ENDPOINT_3_BUFFER_SIZE 64 // CDC-Data class to transmit communication data to host.
 #define USB_ENDPOINT_4_BUFFER_SIZE 64 // CDC-Data class to receive communication data from host.
 
@@ -332,7 +284,6 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 		struct USBDescCDCCallManagement cdc_call_management;
 		struct USBDescCDCACMManagement  cdc_acm_management;
 		struct USBDescCDCUnion          cdc_union;
-		struct USBDescEndpoint          endpoints[1];
 	} cdc;
 
 	struct
@@ -363,7 +314,7 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 						.bDescriptorType    = USBDescType_interface,
 						.bInterfaceNumber   = 0,
 						.bAlternateSetting  = 0,
-						.bNumEndpoints      = countof(USB_CONFIGURATION_HIERARCHY.cdc.endpoints),
+						.bNumEndpoints      = 0,
 						.bInterfaceClass    = USBClass_cdc, // See: Source(6) @ Section(4.2) @ AbsPage(39).
 						.bInterfaceSubClass = 0x2, // See: "Abstract Control Model" @ Source(6) @ Section(3.6.2) @ AbsPage(26).
 						.bInterfaceProtocol = 0x1, // See: "V.25ter" @ Source(6) @ Table(17) @ AbsPage(39). TODO Is this protocol needed?
@@ -380,7 +331,7 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 						.bLength            = sizeof(struct USBDescCDCCallManagement),
 						.bDescriptorType    = USBDescType_cdc_interface,
 						.bDescriptorSubtype = USBDescCDCSubtype_call_management,
-						.bmCapabilities     = USBMiscFlag_call_management_self_managed_device,
+						.bmCapabilities     = 0,
 						.bDataInterface     = 1,
 					},
 				.cdc_acm_management =
@@ -388,7 +339,7 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 						.bLength            = sizeof(struct USBDescCDCACMManagement),
 						.bDescriptorType    = USBDescType_cdc_interface,
 						.bDescriptorSubtype = USBDescCDCSubtype_acm_management,
-						.bmCapabilities     = USBMiscFlag_acm_management_line_group | USBMiscFlag_acm_management_send_break,
+						.bmCapabilities     = 0,
 					},
 				.cdc_union =
 					{
@@ -397,17 +348,6 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 						.bDescriptorSubtype = USBDescCDCSubtype_union,
 						.bMasterInterface   = 0,
 						.bSlaveInterface    = { 1 }
-					},
-				.endpoints =
-					{
-						{
-							.bLength          = sizeof(struct USBDescEndpoint),
-							.bDescriptorType  = USBDescType_endpoint,
-							.bEndpointAddress = 2 | USBMiscFlag_endpoint_address_in,
-							.bmAttributes     = USBEndpointTransferType_interrupt,
-							.wMaxPacketSize   = USB_ENDPOINT_2_BUFFER_SIZE,
-							.bInterval        = 64, // TODO We don't care about notifications, so we should probably max this out.
-						},
 					},
 			},
 		.cdc_data =
@@ -443,14 +383,6 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 						},
 					}
 			},
-	};
-
-static const struct USBCDCLineCoding USB_COMMUNICATION_LINE_CODING = // TODO How important is this?
-	{
-		.dwDTERate   = 9600,
-		.bCharFormat = USBMiscEnum_cdc_lc_stop_bit_1,
-		.bParityType = USBMiscEnum_cdc_lc_parity_none,
-		.bDataBits   = 8,
 	};
 
 //

@@ -19,9 +19,9 @@ main(void)
 
 	while (true)
 	{
-	//	debug_u8(0xAA);
-	//	_delay_ms(1000.0);
-	//	debug_u8(0x55);
-	//	_delay_ms(1000.0);
+		debug_u8(0xAA);
+		_delay_ms(1000.0);
+		debug_u8(0x55);
+		_delay_ms(1000.0);
 	}
 }

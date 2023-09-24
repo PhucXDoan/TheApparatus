@@ -126,20 +126,15 @@ ISR(USB_COM_vect)
 						}
 					} break;
 
-					case USBDescType_device_qualifier:
+					case USBDescType_device_qualifier:   // ATmega32U4 does not support anything beyond full-speed, so this is a request error. See: Source(2) @ Section(9.6.2) @ Page(264) & [Endpoint 0: Request Error].
+					case USBDescType_string:             // TODO Check if it's okay to be able to send a STALL here.
+					case USBDescType_interface:          // TODO Check if it's okay to be able to send a STALL here.
+					case USBDescType_endpoint:           // TODO Check if it's okay to be able to send a STALL here.
+					case USBDescType_other_speed_config: // TODO Check if it's okay to be able to send a STALL here.
+					case USBDescType_interface_power:    // TODO Check if it's okay to be able to send a STALL here.
+					case USBDescType_cdc_interface:      // TODO Check if it's okay to be able to send a STALL here.
+					case USBDescType_cdc_endpoint:       // TODO Check if it's okay to be able to send a STALL here.
 					{
-						// ATmega32U4 does not support anything beyond full-speed, so this is a request error. See: Source(2) @ Section(9.6.2) @ Page(264) & [Endpoint 0: Request Error].
-					} break;
-
-					case USBDescType_string:
-					case USBDescType_interface:
-					case USBDescType_endpoint:
-					case USBDescType_other_speed_config:
-					case USBDescType_interface_power:
-					case USBDescType_cdc_interface:
-					case USBDescType_cdc_endpoint:
-					{
-						debug_halt(3);
 					} break;
 				}
 
@@ -184,23 +179,6 @@ ISR(USB_COM_vect)
 				}
 				else if (request.set_config.value == USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE)
 				{
-					UENUM = 2;
-					{
-						UECONX = (1 << EPEN);
-
-						UECFG0X = (USBEndpointTransferType_interrupt << EPTYPE0) | (1 << EPDIR);
-						UECFG1X = (concat(USBEndpointSizeCode_, USB_ENDPOINT_2_BUFFER_SIZE) << EPSIZE0) | (1 << ALLOC);
-
-						#if 1
-						if (!(UESTA0X & (1 << CFGOK)))
-						{
-							debug_halt(-1);
-						}
-						#endif
-
-						UEIENX = (1 << TXINE);
-					}
-
 					UENUM = 3;
 					{
 						UECONX = (1 << EPEN);
@@ -242,50 +220,21 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
-			case USBSetupRequestType_cdc_get_line_coding: // TODO Understand and Explain
+			// TODO Understand and Explain.
+			case USBSetupRequestType_cdc_get_line_coding:
+			case USBSetupRequestType_cdc_set_control_line_state:
 			{
-				if
-				(
-					request.cdc_get_line_coding.interface_index // This should for the only CDC interface. See: USB_CONFIGURATION_HIERARCHY.
-					&& request.cdc_get_line_coding.structure_size != sizeof(struct USBCDCLineCoding) // Probably fine without this line.
-				)
-				{
-					error_halt();
-				}
-
-				_usb_endpoint_0_transmit
-				(
-					(u8*) &USB_COMMUNICATION_LINE_CODING,
-					sizeof(USB_COMMUNICATION_LINE_CODING)
-				);
+				UECONX |= (1 << STALLRQ);
 			} break;
 
-			case USBSetupRequestType_cdc_set_control_line_state: // TODO Understand and Explain
+			// TODO Understand and Explain
+			case USBSetupRequestType_cdc_set_line_coding:
 			{
-				while (!(UEINTX & (1 << TXINI)));
-				UEINTX &= ~(1 << TXINI); // TODO Optimize?
-			} break;
-
-			case USBSetupRequestType_cdc_set_line_coding: // TODO Understand and Explain
-			{
-				// TODO Is it possible for the host to abort sending data?
-
-				static_assert(sizeof(struct USBCDCLineCoding) < USB_ENDPOINT_0_BUFFER_SIZE);
 				while (!(UEINTX & (1 << RXOUTI)));
-				struct USBCDCLineCoding line_coding;
-				for (u8 i = 0; i < sizeof(line_coding); i += 1)
-				{
-					((u8*) &line_coding)[i] = UEDATX;
-				}
 				UEINTX &= ~(1 << RXOUTI);
 
 				while (!(UEINTX & (1 << TXINI)));
 				UEINTX &= ~(1 << TXINI);
-
-				if (memcmp(&line_coding, &USB_COMMUNICATION_LINE_CODING, sizeof(line_coding)))
-				{
-					debug_halt(-1); // TODO Can we ignore the setting of line-coding?
-				}
 			} break;
 
 			default:
@@ -309,25 +258,26 @@ ISR(USB_COM_vect)
 		}
 	}
 
-	UENUM = 2;
-	if (UEINTX & (1 << TXINI))
-	{
-		static u8 TEMP = 0;
-		//debug_u8(TEMP += 1);
-		UEINTX &= ~(1 << TXINI);
-		UEINTX &= ~(1 << FIFOCON);
-	}
+	static u16 TEMP = 0;
+	static char TEMPY = ' ';
 
 	UENUM = 3;
 	if (UEINTX & (1 << TXINI))
 	{
-		static u8 TEMP = 0;
-		debug_u8(TEMP += 1);
-
-		for (u8 i = 0; i < 26; i += 1)
+		if (!TEMP)
 		{
-			UEDATX = 'A' + i;
+			char message[] = "The work is mysterious and important.\n";
+			for (u8 i = 0; i < countof(message) - 1; i += 1)
+			{
+				UEDATX = message[i];
+			}
+
+			UEDATX = TEMPY;
+
+			TEMP = 8192;
 		}
+
+		TEMP -= 1;
 
 		UEINTX &= ~(1 << TXINI);
 		UEINTX &= ~(1 << FIFOCON);
@@ -336,8 +286,8 @@ ISR(USB_COM_vect)
 	UENUM = 4;
 	if (UEINTX & (1 << RXOUTI))
 	{
-		// static u8 TEMP = 0;
-		// debug_u8(TEMP += 1);
+		TEMP = 0;
+		TEMPY = UEDATX;
 		UEINTX &= ~(1 << RXOUTI);
 		UEINTX &= ~(1 << FIFOCON);
 	}
@@ -945,7 +895,7 @@ ISR(USB_COM_vect)
 		"management element will transport both call management element and device
 		management element commands".
 
-	The CDC interface is also required to have the "notification element" (9) which
+	The CDC interface is also required to have the "notification element" (9) which // TODO WE DONT USE NOTIFICATION ELEMENT??
 	simply lets the host know of certain events like whether or not the phone is hooked
 	or not (10). Like with the management element, the notification element is just
 	another endpoint, but this time it's not endpoint 0. We are to give up an endpoint

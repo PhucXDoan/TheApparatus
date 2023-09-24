@@ -66,7 +66,6 @@ debug_u8(u8 byte)
 static void
 error_halt(void) // TODO Figure out a good error signaling method that isn't potentially bloated.
 {
-	cli();
 	while (true)
 	{
 		debug_u8(0);
