@@ -41,6 +41,11 @@ pushd W:\build\
 	set BOOTLOADER_COM=4
 	set DIAGNOSTIC_COM=5
 
+	mode | findstr "COM!BOOTLOADER_COM!:" > nul
+	if not !ERRORLEVEL! == 0 (
+		mode COM!DIAGNOSTIC_COM!: BAUD=1200 > nul
+	)
+
 	avr-gcc !AVR_GCC_FLAGS! -Os -mmcu=!PROGRAM_MCU! -c W:\src\!PROGRAM_NAME!.c
 	if not !ERRORLEVEL! == 0 (
 		goto ABORT
@@ -56,21 +61,36 @@ pushd W:\build\
 		goto ABORT
 	)
 
+	for /L %%n in (1,1,100) do (
+		mode | findstr "COM!BOOTlOADER_COM!:" > nul
+		if !ERRORLEVEL! == 0 (
+			goto BREAK_WAITING_FOR_BOOTlOADER_COM
+		) else (
+			ping 127.0.0.1 -n 1 -w 500 >nul
+		)
+	)
+	echo No bootloader found.
+	goto ABORT
+	:BREAK_WAITING_FOR_BOOTlOADER_COM
+
 	avrdude -p !PROGRAM_MCU! -c !PROGRAMMER! -V -P COM!BOOTLOADER_COM! -D -Uflash:w:!PROGRAM_NAME!.hex
 	if not !ERRORLEVEL! == 0 (
 		goto ABORT
 	)
 
 	for /L %%n in (1,1,500) do (
-		mode | findstr "COM5:"
+		mode | findstr "COM5:" > nul
 		if !ERRORLEVEL! == 0 (
-			start putty.exe -load "Default Settings" -serial COM!DIAGNOSTIC_COM!
-			goto BREAKOUT
+			goto BREAK_WAITING_FOR_DIAGNOSTIC_COM
 		) else (
 			ping 127.0.0.1 -n 1 -w 500 >nul
 		)
 	)
-	:BREAKOUT
+	echo No diagnostic COM found.
+	goto ABORT
+	:BREAK_WAITING_FOR_DIAGNOSTIC_COM
+
+	start putty.exe -load "Default Settings" -serial COM!DIAGNOSTIC_COM!
 
 	del *.o > nul 2>&1
 	:ABORT

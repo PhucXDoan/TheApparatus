@@ -225,24 +225,38 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
-			// TODO Understand and Explain.
-			case USBSetupRequestType_cdc_get_line_coding:
-			{
-				UECONX |= (1 << STALLRQ);
-			} break;
-			case USBSetupRequestType_cdc_set_control_line_state:
+			case USBSetupRequestType_cdc_get_line_coding: // TODO Understand and Explain.
+			case USBSetupRequestType_cdc_set_control_line_state: // TODO Understand and Explain.
 			{
 				UECONX |= (1 << STALLRQ);
 			} break;
 
-			// TODO Understand and Explain
-			case USBSetupRequestType_cdc_set_line_coding:
+			case USBSetupRequestType_cdc_set_line_coding: // TODO Understand and Explain
 			{
-				while (!(UEINTX & (1 << RXOUTI)));
-				UEINTX &= ~(1 << RXOUTI);
+				if (request.set_line_coding.incoming_line_coding_datapacket_size == sizeof(struct USBCDCLineCoding))
+				{
+					while (!(UEINTX & (1 << RXOUTI)));
+					struct USBCDCLineCoding desired_line_coding = {0};
+					for (u8 i = 0; i < sizeof(struct USBCDCLineCoding); i += 1)
+					{
+						((u8*) &desired_line_coding)[i] = UEDATX;
+					}
+					UEINTX &= ~(1 << RXOUTI);
 
-				while (!(UEINTX & (1 << TXINI)));
-				UEINTX &= ~(1 << TXINI);
+					while (!(UEINTX & (1 << TXINI)));
+					UEINTX &= ~(1 << TXINI);
+
+					if (desired_line_coding.dwDTERate == 1200)
+					{
+						*(u16*)0x0800 = 0x7777; // https://github.com/PaxInstruments/ATmega32U4-bootloader/blob/bf5d4d1edff529d5cc8229f15463720250c7bcd3/avr/cores/arduino/CDC.cpp#L99C14-L99C14
+						wdt_enable(WDTO_15MS);
+						for(;;);
+					}
+				}
+				else
+				{
+					UECONX |= (1 << STALLRQ);
+				}
 			} break;
 
 			default:

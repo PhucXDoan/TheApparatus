@@ -160,7 +160,22 @@ struct USBSetupRequest // The data-packet that is sent in the SETUP-typed transa
 		{
 			u16 value; // Configuration that the host wants to set the device to. Zero is reserved for making the device be in "Address State".
 		} set_config;
+
+		struct // See : Soure(2) @ Setion(6.2.12) @ AbsPage(68).
+		{
+			u16 _zero;
+			u16 designated_interface_index;
+			u16 incoming_line_coding_datapacket_size;
+		} set_line_coding;
 	};
+};
+
+struct USBCDCLineCoding // See: Source(6) @ Table(50) @ AbsPage(69).
+{
+	u32 dwDTERate;
+	u8  bCharFormat;
+	u8  bParityType;
+	u8  bDataBits;
 };
 
 struct USBDescDevice // See: Source(2) @ Table(9-8) @ Page(262-263).

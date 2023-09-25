@@ -13,6 +13,7 @@ int
 main(void)
 {
 	sei();
+
 	usb_init();
 
 	debug_halt(1);
