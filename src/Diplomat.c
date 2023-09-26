@@ -22,12 +22,10 @@ main(void)
 	pin_output(2);
 	for (;;)
 	{
-		pin_high(2);
-		usb_in_cstr("meow!\n");
-		_delay_ms(100.0);
-
-		pin_low(2);
-		usb_in_cstr("bark!\n");
+		char buf[16] = {0};
+		usb_out_chars(buf, sizeof(buf) - 1);
+		usb_in_cstr(buf);
+		usb_in_cstr("meow\n");
 		_delay_ms(100.0);
 	}
 }

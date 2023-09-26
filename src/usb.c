@@ -16,6 +16,26 @@ usb_in_cstr(char* value) // TODO Document
 	}
 }
 
+static u8 // TODO Does windows/PuTTY really just send a /r on enter?
+usb_out_chars(char* dst, u8 dst_length) // TODO Document
+{
+	u8 result = 0;
+
+	while
+	(
+		result < dst_length &&
+		((usb_cdc_out_read_cursor + 1) & (countof(usb_cdc_out_buffer) - 1)) !=
+		( usb_cdc_out_write_cursor     & (countof(usb_cdc_out_buffer) - 1)) // Our read-cursor is right before the interrupt's write-cursor.
+	) // TODO memcpy?
+	{
+		dst[result]              = usb_cdc_out_buffer[(usb_cdc_out_read_cursor + 1) & (countof(usb_cdc_out_buffer) - 1)];
+		usb_cdc_out_read_cursor += 1;
+		result                  += 1;
+	}
+
+	return result;
+}
+
 static void
 usb_init(void)
 { // [USB Initialization Process].
@@ -75,8 +95,8 @@ ISR(USB_GEN_vect)
 		{
 			while ((UEINTX & (1 << RWAL)) && ((usb_cdc_in_read_cursor + 1) & (countof(usb_cdc_in_buffer) - 1)) != (usb_cdc_in_write_cursor & (countof(usb_cdc_in_buffer) - 1)))
 			{
-				UEDATX                  = usb_cdc_in_buffer[usb_cdc_in_read_cursor & (countof(usb_cdc_in_buffer) - 1)];
 				usb_cdc_in_read_cursor += 1;
+				UEDATX                  = usb_cdc_in_buffer[usb_cdc_in_read_cursor & (countof(usb_cdc_in_buffer) - 1)];
 			}
 
 			UEINTX &= ~(1 << TXINI);
@@ -86,8 +106,21 @@ ISR(USB_GEN_vect)
 		UENUM = USB_ENDPOINT_CDC_OUT;
 		if (putty_opened && (UEINTX & (1 << RXOUTI)))
 		{
-			UEINTX &= ~(1 << RXOUTI);
-			UEINTX &= ~(1 << FIFOCON);
+			if (UEINTX & (1 << RWAL))
+			{
+				while ((UEINTX & (1 << RWAL)) && (usb_cdc_out_write_cursor & (countof(usb_cdc_out_buffer) - 1)) != (usb_cdc_out_read_cursor & (countof(usb_cdc_out_buffer) - 1)))
+				{
+					usb_cdc_out_buffer[usb_cdc_out_write_cursor & (countof(usb_cdc_out_buffer) - 1)] = UEDATX;
+					usb_cdc_out_write_cursor += 1;
+				}
+
+				UEINTX &= ~(1 << RXOUTI);
+
+				if (!(UEINTX & (1 << RWAL)))
+				{
+					UEINTX &= ~(1 << FIFOCON); // TODO This disregards unread parts!!!!!
+				}
+			}
 		}
 	}
 
@@ -292,7 +325,7 @@ ISR(USB_COM_vect)
 					while (!(UEINTX & (1 << TXINI)));
 					UEINTX &= ~(1 << TXINI);
 
-					if (desired_line_coding.dwDTERate == 1200)
+					if (desired_line_coding.dwDTERate == 1200) // TODO Have macro define this BAUD.
 					{
 						*(u16*)0x0800 = 0x7777; // https://github.com/PaxInstruments/ATmega32U4-bootloader/blob/bf5d4d1edff529d5cc8229f15463720250c7bcd3/avr/cores/arduino/CDC.cpp#L99C14-L99C14
 						wdt_enable(WDTO_15MS);
