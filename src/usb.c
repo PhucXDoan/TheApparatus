@@ -21,27 +21,28 @@ usb_init(void)
 	USBCON = (1 << USBE);
 	USBCON = (1 << USBE) | (1 << OTGPADE);
 
-	// [Configure USB Interface].
-	UDIEN = (1 << EORSTE);
+	// [Configure USB Interface] TODO Update.
+	UDIEN = (1 << EORSTE) | (1 << SOFI); // TODO FNCERR ?
 
 	// [Wait For USB VBUS Information Connection].
 	UDCON = 0;
 }
 
 ISR(USB_GEN_vect)
-{ // [USB Device Interrupt Routine, Endpoint 0 Configuration, and Endpoint Interrupts].
+{ // [USB Device Interrupt Routine, Endpoint 0 Configuration, and Endpoint Interrupts] TODO Update.
+
 	UENUM = 0; // "Select the endpoint".
 	{
 		// "Activate endpoint".
 		UECONX = (1 << EPEN);
 
 		// "Configure" and "Allocate".
-		UECFG1X = (concat(USBEndpointSizeCode_, USB_ENDPOINT_0_BUFFER_SIZE) << EPSIZE0) | (1 << ALLOC);
+		UECFG1X = (USB_ENDPOINT_DFLT_SIZE << EPSIZE0) | (1 << ALLOC);
 
 		UEIENX = (1 << RXSTPE); // Endpoint 0 will listen to the reception of SETUP-transactions.
 
 		// "Test endpoint configuration".
-		#if 1
+		#if 1 // TODO disable
 		if (!(UESTA0X & (1 << CFGOK)))
 		{
 			debug_halt(3);
@@ -49,7 +50,42 @@ ISR(USB_GEN_vect)
 		#endif
 	}
 
-	UDINT = 0; // Clear End-of-Reset trigger flag to prevent this routine from executing again.
+	static u8 TEMP_ASD = 0;
+	static char TEMPY_ASD = ' ';
+
+	if (UDINT & (1 << SOFI))
+	{
+		UENUM = USB_ENDPOINT_CDC_IN;
+		if ((UESTA0X & (1 << CFGOK)) && (UEINTX & (1 << TXINI)))
+		{
+			if (!TEMP_ASD)
+			{
+				char message[] = "The work is mysterious and important.\n";
+				for (u8 i = 0; i < countof(message) - 1; i += 1)
+				{
+					UEDATX = message[i];
+				}
+
+				UEDATX = TEMPY_ASD;
+			}
+
+			TEMP_ASD -= 1;
+
+			UEINTX &= ~(1 << TXINI);
+			UEINTX &= ~(1 << FIFOCON);
+		}
+
+		UENUM = USB_ENDPOINT_CDC_OUT;
+		if ((UESTA0X & (1 << CFGOK)) && (UEINTX & (1 << RXOUTI)))
+		{
+			TEMP_ASD = 0;
+			TEMPY_ASD = UEDATX;
+			UEINTX &= ~(1 << RXOUTI);
+			UEINTX &= ~(1 << FIFOCON);
+		}
+	}
+
+	UDINT = 0; // Clear End-of-Reset trigger flag to prevent this routine from executing again. // TODO Update
 }
 
 static void
@@ -67,9 +103,9 @@ _usb_endpoint_0_transmit(u8* packet_data, u16 packet_length) // [Endpoint 0: Dat
 		else if (UEINTX & (1 << TXINI)) // Buffer ready to be filled?
 		{
 			u8 writes_left =
-				data_remaining < USB_ENDPOINT_0_BUFFER_SIZE
+				data_remaining < USB_ENDPOINT_DFLT_SIZE
 					? data_remaining
-					: USB_ENDPOINT_0_BUFFER_SIZE;
+					: USB_ENDPOINT_DFLT_SIZE;
 
 			data_remaining -= writes_left;
 
@@ -182,12 +218,12 @@ ISR(USB_COM_vect)
 					UEINTX &= ~(1 << TXINI);
 					while (!(UEINTX & (1 << TXINI)));
 
-					UENUM = 3;
+					UENUM = USB_ENDPOINT_CDC_IN;
 					{
 						UECONX = (1 << EPEN);
 
 						UECFG0X = (USBEndpointTransferType_bulk << EPTYPE0) | (1 << EPDIR);
-						UECFG1X = (concat(USBEndpointSizeCode_, USB_ENDPOINT_3_BUFFER_SIZE) << EPSIZE0) | (1 << ALLOC);
+						UECFG1X = (USB_ENDPOINT_CDC_IN_SIZE_CODE << EPSIZE0) | (1 << ALLOC);
 
 						#if 1
 						if (!(UESTA0X & (1 << CFGOK)))
@@ -195,16 +231,14 @@ ISR(USB_COM_vect)
 							debug_halt(5);
 						}
 						#endif
-
-						UEIENX = (1 << TXINE);
 					}
 
-					UENUM = 4;
+					UENUM = USB_ENDPOINT_CDC_OUT;
 					{
 						UECONX = (1 << EPEN);
 
 						UECFG0X = (USBEndpointTransferType_bulk << EPTYPE0);
-						UECFG1X = (concat(USBEndpointSizeCode_, USB_ENDPOINT_4_BUFFER_SIZE) << EPSIZE0) | (1 << ALLOC);
+						UECFG1X = (USB_ENDPOINT_CDC_OUT_SIZE_CODE << EPSIZE0) | (1 << ALLOC);
 
 						#if 1
 						if (!(UESTA0X & (1 << CFGOK)))
@@ -212,8 +246,6 @@ ISR(USB_COM_vect)
 							debug_halt(6);
 						}
 						#endif
-
-						UEIENX = (1 << RXOUTE);
 					}
 
 					UERST = 0x1E; // TODO ???
@@ -278,40 +310,6 @@ ISR(USB_COM_vect)
 				}
 			} break;
 		}
-	}
-
-	static u16 TEMP_ASD = 0;
-	static char TEMPY_ASD = ' ';
-
-	UENUM = 3;
-	if (UEINTX & (1 << TXINI))
-	{
-		if (!TEMP_ASD)
-		{
-			char message[] = "The work is mysterious and important.\n";
-			for (u8 i = 0; i < countof(message) - 1; i += 1)
-			{
-				UEDATX = message[i];
-			}
-
-			UEDATX = TEMPY_ASD;
-
-			TEMP_ASD = 8192;
-		}
-
-		TEMP_ASD -= 1;
-
-		UEINTX &= ~(1 << TXINI);
-		UEINTX &= ~(1 << FIFOCON);
-	}
-
-	UENUM = 4;
-	if (UEINTX & (1 << RXOUTI))
-	{
-		TEMP_ASD = 0;
-		TEMPY_ASD = UEDATX;
-		UEINTX &= ~(1 << RXOUTI);
-		UEINTX &= ~(1 << FIFOCON);
 	}
 }
 
@@ -511,7 +509,7 @@ ISR(USB_COM_vect)
 /* [Packets and Transactions].
 	A packet is the smallest coherent piece of message that the host can send to the
 	device, or the device send to the host. The layout of a packet is abstractly
-	structured as so:
+	structured as so: // TODO SOF packet
 
 		....... HOST / DEVICE ......
 		:                          :

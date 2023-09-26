@@ -269,9 +269,21 @@ struct USBDescCDCUnion // See: Source(6) @ Table(33) @ AbsPage(51). // TODO What
 
 // Endpoint buffer sizes must be one of the names of enum USBEndpointSizeCode.
 // The maximum capacity between endpoints also differ. See: Source(1) @ Section(22.1) @ Page(270).
-#define USB_ENDPOINT_0_BUFFER_SIZE 8
-#define USB_ENDPOINT_3_BUFFER_SIZE 64 // CDC-Data class to transmit communication data to host.
-#define USB_ENDPOINT_4_BUFFER_SIZE 64 // CDC-Data class to receive communication data from host.
+
+#define USB_ENDPOINT_DFLT                  0
+#define USB_ENDPOINT_DFLT_SIZE             8
+#define USB_ENDPOINT_DFLT_TRANSFER_TYPE    control
+#define USB_ENDPOINT_DFLT_CODE_SIZE        concat(USBEndpointSizeCode_, USB_ENDPOINT_DFLT_SIZE)
+
+#define USB_ENDPOINT_CDC_IN                2
+#define USB_ENDPOINT_CDC_IN_SIZE           64
+#define USB_ENDPOINT_CDC_IN_TRANSFER_TYPE  bulk
+#define USB_ENDPOINT_CDC_IN_SIZE_CODE      concat(USBEndpointSizeCode_, USB_ENDPOINT_CDC_IN_SIZE)
+
+#define USB_ENDPOINT_CDC_OUT               3
+#define USB_ENDPOINT_CDC_OUT_SIZE          64
+#define USB_ENDPOINT_CDC_OUT_TRANSFER_TYPE bulk
+#define USB_ENDPOINT_CDC_OUT_SIZE_CODE     concat(USBEndpointSizeCode_, USB_ENDPOINT_CDC_OUT_SIZE)
 
 static const struct USBDescDevice USB_DEVICE_DESCRIPTOR = // TODO PROGMEMify.
 	{
@@ -281,7 +293,7 @@ static const struct USBDescDevice USB_DEVICE_DESCRIPTOR = // TODO PROGMEMify.
 		.bDeviceClass       = USBClass_cdc, // We use a CDC and CDC-data interfaces, so we have to assign CDC here. See: Source(6) @ Section(3.2) @ AbsPage(20).
 		.bDeviceSubClass    = 0,            // Unused. See: Source(6) @ Table(20) @ AbsPage(42).
 		.bDeviceProtocol    = 0,            // Unused. See: Source(6) @ Table(20) @ AbsPage(42).
-		.bMaxPacketSize0    = USB_ENDPOINT_0_BUFFER_SIZE,
+		.bMaxPacketSize0    = USB_ENDPOINT_DFLT_SIZE,
 		.idVendor           = 0, // IDC; doesn't seem to affect functionality.
 		.idProduct          = 0, // IDC; doesn't seem to affect functionality.
 		.bcdDevice          = 0, // IDC; doesn't seem to affect functionality.
@@ -383,17 +395,17 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 						{
 							.bLength          = sizeof(struct USBDescEndpoint),
 							.bDescriptorType  = USBDescType_endpoint,
-							.bEndpointAddress = 3 | USBMiscFlag_endpoint_address_in,
+							.bEndpointAddress = USB_ENDPOINT_CDC_IN | USBMiscFlag_endpoint_address_in,
 							.bmAttributes     = USBEndpointTransferType_bulk,
-							.wMaxPacketSize   = USB_ENDPOINT_3_BUFFER_SIZE,
+							.wMaxPacketSize   = USB_ENDPOINT_CDC_IN_SIZE,
 							.bInterval        = 0,
 						},
 						{
 							.bLength          = sizeof(struct USBDescEndpoint),
 							.bDescriptorType  = USBDescType_endpoint,
-							.bEndpointAddress = 4,
+							.bEndpointAddress = USB_ENDPOINT_CDC_OUT,
 							.bmAttributes     = USBEndpointTransferType_bulk,
-							.wMaxPacketSize   = USB_ENDPOINT_4_BUFFER_SIZE,
+							.wMaxPacketSize   = USB_ENDPOINT_CDC_OUT_SIZE,
 							.bInterval        = 0,
 						},
 					}

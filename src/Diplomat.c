@@ -16,5 +16,12 @@ main(void)
 
 	usb_init();
 
-	debug_halt(1);
+	pin_output(2);
+	for (;;)
+	{
+		pin_high(2);
+		_delay_ms(1000.0);
+		pin_low(2);
+		_delay_ms(1000.0);
+	}
 }
