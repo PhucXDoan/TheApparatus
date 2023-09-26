@@ -7,6 +7,7 @@
 #define concat_(X, Y)    X##Y
 #define concat(X, Y)     concat_(X, Y)
 #define countof(...)     (sizeof(__VA_ARGS__)/sizeof((__VA_ARGS__)[0]))
+#define bitsof(...)      (sizeof(__VA_ARGS__) * 8)
 #define static_assert(X) _Static_assert((X), #X);
 
 typedef uint8_t  u8;
@@ -411,6 +412,19 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 					}
 			},
 	};
+
+static          u8 usb_cdc_in_buffer[USB_ENDPOINT_CDC_IN_SIZE] = {0};
+static          u8 usb_cdc_in_write_cursor                     = 0;
+static volatile u8 usb_cdc_in_read_cursor                      = -1; // Must be before usb_cdc_in_write_cursor.
+
+// Cursors must be able to read/write any element.
+static_assert(countof(usb_cdc_in_buffer) < (((u64) 1) << bitsof(usb_cdc_in_read_cursor )));
+static_assert(countof(usb_cdc_in_buffer) < (((u64) 1) << bitsof(usb_cdc_in_write_cursor)));
+
+// Buffer must be power of two.
+static_assert(countof(usb_cdc_in_buffer) && !(countof(usb_cdc_in_buffer) & (countof(usb_cdc_in_buffer) - 1)));
+
+static b8 putty_opened = false;
 
 //
 // Internal Documentation.

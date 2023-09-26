@@ -1,4 +1,22 @@
 static void
+usb_in_cstr(char* value) // TODO Document
+{
+	char* ptr = value;
+	while (*ptr)
+	{
+		while
+		(
+			(usb_cdc_in_write_cursor & (countof(usb_cdc_in_buffer) - 1)) ==
+			(usb_cdc_in_read_cursor  & (countof(usb_cdc_in_buffer) - 1))
+		); // Our write-cursor reached the interrupt's read-cursor.
+
+		usb_cdc_in_buffer[usb_cdc_in_write_cursor & (countof(usb_cdc_in_buffer) - 1)] = *ptr;
+		usb_cdc_in_write_cursor += 1;
+		ptr += 1;
+	}
+}
+
+static void
 usb_init(void)
 { // [USB Initialization Process].
 
@@ -50,36 +68,24 @@ ISR(USB_GEN_vect)
 		#endif
 	}
 
-	static u8 TEMP_ASD = 0;
-	static char TEMPY_ASD = ' ';
-
 	if (UDINT & (1 << SOFI))
 	{
 		UENUM = USB_ENDPOINT_CDC_IN;
-		if ((UESTA0X & (1 << CFGOK)) && (UEINTX & (1 << TXINI)))
+		if (putty_opened && (UEINTX & (1 << TXINI)))
 		{
-			if (!TEMP_ASD)
+			while ((UEINTX & (1 << RWAL)) && ((usb_cdc_in_read_cursor + 1) & (countof(usb_cdc_in_buffer) - 1)) != (usb_cdc_in_write_cursor & (countof(usb_cdc_in_buffer) - 1)))
 			{
-				char message[] = "The work is mysterious and important.\n";
-				for (u8 i = 0; i < countof(message) - 1; i += 1)
-				{
-					UEDATX = message[i];
-				}
-
-				UEDATX = TEMPY_ASD;
+				UEDATX                  = usb_cdc_in_buffer[usb_cdc_in_read_cursor & (countof(usb_cdc_in_buffer) - 1)];
+				usb_cdc_in_read_cursor += 1;
 			}
-
-			TEMP_ASD -= 1;
 
 			UEINTX &= ~(1 << TXINI);
 			UEINTX &= ~(1 << FIFOCON);
 		}
 
 		UENUM = USB_ENDPOINT_CDC_OUT;
-		if ((UESTA0X & (1 << CFGOK)) && (UEINTX & (1 << RXOUTI)))
+		if (putty_opened && (UEINTX & (1 << RXOUTI)))
 		{
-			TEMP_ASD = 0;
-			TEMPY_ASD = UEDATX;
 			UEINTX &= ~(1 << RXOUTI);
 			UEINTX &= ~(1 << FIFOCON);
 		}
@@ -149,7 +155,7 @@ ISR(USB_COM_vect)
 					{
 						payload_data   = (u8*) &USB_DEVICE_DESCRIPTOR;
 						payload_length = sizeof(USB_DEVICE_DESCRIPTOR);
-						static_assert(sizeof(USB_DEVICE_DESCRIPTOR) < (((u64) 1) << (sizeof(payload_length) * 8)))
+						static_assert(sizeof(USB_DEVICE_DESCRIPTOR) < (((u64) 1) << bitsof(payload_length)))
 					} break;
 
 					case USBDescType_config: // [Interfaces, Configurations, and Classes].
@@ -158,11 +164,14 @@ ISR(USB_COM_vect)
 						{
 							payload_data   = (u8*) &USB_CONFIGURATION_HIERARCHY;
 							payload_length = sizeof(USB_CONFIGURATION_HIERARCHY);
-							static_assert(sizeof(USB_CONFIGURATION_HIERARCHY) < (((u64) 1) << (sizeof(payload_length) * 8)))
+							static_assert(sizeof(USB_CONFIGURATION_HIERARCHY) < (((u64) 1) << bitsof(payload_length)))
 						}
 					} break;
 
 					case USBDescType_device_qualifier:   // ATmega32U4 does not support anything beyond full-speed, so this is a request error. See: Source(2) @ Section(9.6.2) @ Page(264) & [Endpoint 0: Request Error].
+					{
+					} break;
+
 					case USBDescType_string:             // TODO Check if it's okay to be able to send a STALL here.
 					case USBDescType_interface:          // TODO Check if it's okay to be able to send a STALL here.
 					case USBDescType_endpoint:           // TODO Check if it's okay to be able to send a STALL here.
@@ -171,6 +180,7 @@ ISR(USB_COM_vect)
 					case USBDescType_cdc_interface:      // TODO Check if it's okay to be able to send a STALL here.
 					case USBDescType_cdc_endpoint:       // TODO Check if it's okay to be able to send a STALL here.
 					{
+						debug_halt(-1);
 					} break;
 				}
 
@@ -218,6 +228,8 @@ ISR(USB_COM_vect)
 					UEINTX &= ~(1 << TXINI);
 					while (!(UEINTX & (1 << TXINI)));
 
+					static_assert(USB_ENDPOINT_DFLT < USB_ENDPOINT_CDC_IN);
+
 					UENUM = USB_ENDPOINT_CDC_IN;
 					{
 						UECONX = (1 << EPEN);
@@ -232,6 +244,8 @@ ISR(USB_COM_vect)
 						}
 						#endif
 					}
+
+					static_assert(USB_ENDPOINT_CDC_IN < USB_ENDPOINT_CDC_OUT);
 
 					UENUM = USB_ENDPOINT_CDC_OUT;
 					{
@@ -283,6 +297,10 @@ ISR(USB_COM_vect)
 						*(u16*)0x0800 = 0x7777; // https://github.com/PaxInstruments/ATmega32U4-bootloader/blob/bf5d4d1edff529d5cc8229f15463720250c7bcd3/avr/cores/arduino/CDC.cpp#L99C14-L99C14
 						wdt_enable(WDTO_15MS);
 						for(;;);
+					}
+					else if (desired_line_coding.dwDTERate == 1201)
+					{
+						putty_opened = true;
 					}
 				}
 				else

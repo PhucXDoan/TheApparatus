@@ -12,7 +12,10 @@
 int
 main(void)
 {
+	UENUM = 1;
 	sei();
+
+	usb_in_cstr("aslkdjlasjdlksajd!\n");
 
 	usb_init();
 
@@ -20,8 +23,11 @@ main(void)
 	for (;;)
 	{
 		pin_high(2);
-		_delay_ms(1000.0);
+		usb_in_cstr("meow!\n");
+		_delay_ms(100.0);
+
 		pin_low(2);
-		_delay_ms(1000.0);
+		usb_in_cstr("bark!\n");
+		_delay_ms(100.0);
 	}
 }
