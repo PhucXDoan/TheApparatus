@@ -1,8 +1,8 @@
-#define pin_input(P)  pin_input_##P()
-#define pin_output(P) pin_output_##P()
-#define pin_low(P)    pin_low_##P()
-#define pin_high(P)   pin_high_##P()
-#define pin_read(P)   pin_read_##P()
+#define pin_input(P)  concat(pin_input_ , P)()
+#define pin_output(P) concat(pin_output_, P)()
+#define pin_low(P)    concat(pin_low_   , P)()
+#define pin_high(P)   concat(pin_high_  , P)()
+#define pin_read(P)   concat(pin_read_  , P)()
 
 #define COMMON(NAME, BODY) __attribute__((always_inline)) static inline void NAME(void) { BODY; }
 	#define PIN_INPUT(P, X, N)  COMMON(pin_input_##P , DDR##X  &= ~(1 << DD##X##N  ))
@@ -30,40 +30,36 @@ PIN_XMDT(PIN_READ)
 
 __attribute__((noreturn))
 static void
-error(void)
+error_pin(enum PinErrorSource source)
 {
 	cli();
-	pin_output(2);
-	pin_output(3);
-	pin_output(4);
-	pin_output(5);
-	pin_output(6);
-	pin_output(7);
-	pin_output(8);
-	pin_output(9);
-	while (true)
+
+	pin_output(PIN_LED_ERROR);
+	for (;;)
 	{
-		pin_high(2);
-		pin_high(3);
-		pin_high(4);
-		pin_high(5);
-		pin_high(6);
-		pin_high(7);
-		pin_high(8);
-		pin_high(9);
-		_delay_ms(50.0);
-		pin_low(2);
-		pin_low(3);
-		pin_low(4);
-		pin_low(5);
-		pin_low(6);
-		pin_low(7);
-		pin_low(8);
-		pin_low(9);
-		_delay_ms(50.0);
+		for (u8 i = 0; i < 8; i += 1)
+		{
+			pin_high(PIN_LED_ERROR);
+			_delay_ms(50.0);
+			pin_low(PIN_LED_ERROR);
+			_delay_ms(50.0);
+		}
+
+		_delay_ms(1000.0);
+
+		for (u8 i = 0; i < source; i += 1)
+		{
+			pin_high(PIN_LED_ERROR);
+			_delay_ms(150.0);
+			pin_low(PIN_LED_ERROR);
+			_delay_ms(150.0);
+		}
+
+		_delay_ms(1000.0);
 	}
 }
 
+#if DEBUG
 static void
 debug_pin_set(u8 pin, enum PinState state)
 {
@@ -105,7 +101,9 @@ debug_pin_set(u8 pin, enum PinState state)
 		}
 	}
 }
+#endif
 
+#if DEBUG
 static b8
 debug_pin_read(u8 pin)
 {
@@ -118,7 +116,9 @@ debug_pin_read(u8 pin)
 		default: return false;
 	}
 }
+#endif
 
+#if DEBUG
 static void
 debug_halt(u8 flashes)
 {
@@ -137,7 +137,9 @@ debug_halt(u8 flashes)
 		}
 	}
 }
+#endif
 
+#if DEBUG
 static void
 debug_u8(u8 byte)
 {
@@ -150,6 +152,7 @@ debug_u8(u8 byte)
 	debug_pin_set(8, (byte >> 6) & 1);
 	debug_pin_set(9, (byte >> 7) & 1);
 }
+#endif
 
 //
 // Internal Documentation.

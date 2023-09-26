@@ -1,3 +1,5 @@
+#define error error_pin(PinErrorSource_usb)
+
 static void
 usb_in_cstr(char* value) // TODO Document
 {
@@ -344,25 +346,13 @@ ISR(USB_COM_vect)
 
 			default:
 			{
-				for (;;)
-				{
-					for (u8 i = 0; i < 10; i += 1)
-					{
-						debug_u8(0xF0);
-						_delay_ms(100.0);
-						debug_u8(0x0F);
-						_delay_ms(100.0);
-					}
-
-					debug_u8(request.type);
-					_delay_ms(3000.0);
-					debug_u8(request.type >> 8);
-					_delay_ms(3000.0);
-				}
+				error;
 			} break;
 		}
 	}
 }
+
+#undef error
 
 //
 // Internal Documentation.

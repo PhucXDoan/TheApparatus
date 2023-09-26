@@ -27,6 +27,13 @@ typedef uint64_t b64;
 // Pins.
 //
 
+#define PIN_LED_ERROR 2
+enum PinErrorSource
+{
+	PinErrorSource_diplomat = 0,
+	PinErrorSource_usb      = 1,
+};
+
 enum PinState
 {
 	PinState_false    = 0b00, // Aliasing(false). Sink to GND.
