@@ -1,51 +1,13 @@
 #define error error_pin(PinErrorSource_usb)
 
 static void
-usb_in_cstr(char* value) // TODO Document
-{
-	char* ptr = value;
-	while (*ptr)
-	{
-		while
-		(
-			(usb_cdc_in_write_cursor & (countof(usb_cdc_in_buffer) - 1)) ==
-			(usb_cdc_in_read_cursor  & (countof(usb_cdc_in_buffer) - 1))
-		); // Our write-cursor reached the interrupt's read-cursor.
-
-		usb_cdc_in_buffer[usb_cdc_in_write_cursor & (countof(usb_cdc_in_buffer) - 1)] = *ptr;
-		usb_cdc_in_write_cursor += 1;
-		ptr += 1;
-	}
-}
-
-static u8 // TODO Does windows/PuTTY really just send a /r on enter?
-usb_out_chars(char* dst, u8 dst_length) // TODO Document
-{
-	u8 result = 0;
-
-	while
-	(
-		result < dst_length &&
-		((usb_cdc_out_read_cursor + 1) & (countof(usb_cdc_out_buffer) - 1)) !=
-		( usb_cdc_out_write_cursor     & (countof(usb_cdc_out_buffer) - 1)) // Our read-cursor is right before the interrupt's write-cursor.
-	) // TODO memcpy?
-	{
-		dst[result]              = usb_cdc_out_buffer[(usb_cdc_out_read_cursor + 1) & (countof(usb_cdc_out_buffer) - 1)];
-		usb_cdc_out_read_cursor += 1;
-		result                  += 1;
-	}
-
-	return result;
-}
-
-static void
 usb_init(void)
 { // [USB Initialization Process].
 
-	if (USBCON != 0b0010'0000) // TODO[Tampered Default Register Values].
+	if (USBCON != 0b0010'0000) // TODO[Tampered Default Register Values] TODO Update.
 	{
 		wdt_enable(WDTO_15MS);
-		for (;;);
+		for(;;);
 	}
 
 	// [Power-On USB Pads Regulator].
@@ -67,6 +29,46 @@ usb_init(void)
 	// [Wait For USB VBUS Information Connection].
 	UDCON = 0;
 }
+
+#if DEBUG
+static void
+debug_chars(char* value, u16 value_size)
+{
+	for (u16 i = 0; i < value_size; i += 1) // TODO memcpy
+	{
+		// Our write-cursor reached the interrupt's read-cursor.
+		while (usb_cdc_in_writer_masked(0) == usb_cdc_in_reader_masked(0));
+
+		usb_cdc_in_buffer[usb_cdc_in_writer_masked(0)] = value[i];
+		usb_cdc_in_writer += 1;
+	}
+}
+#endif
+
+#if DEBUG
+static void
+debug_cstr(char* value)
+{
+	debug_chars(value, strlen(value));
+}
+#endif
+
+#if DEBUG
+static u8
+debug_read(char* dst, u8 dst_length) // TODO Document // TODO Does windows/PuTTY really just send a /r on enter?
+{
+	u8 result = 0;
+
+	while (result < dst_length && usb_cdc_out_reader_masked(1) != usb_cdc_out_writer_masked(0)) // Our read-cursor is right before the interrupt's write-cursor.  // TODO memcpy?
+	{
+		dst[result]         = usb_cdc_out_buffer[usb_cdc_out_reader_masked(1)];
+		usb_cdc_out_reader += 1;
+		result             += 1;
+	}
+
+	return result;
+}
+#endif
 
 ISR(USB_GEN_vect)
 { // [USB Device Interrupt Routine, Endpoint 0 Configuration, and Endpoint Interrupts] TODO Update.
@@ -95,10 +97,10 @@ ISR(USB_GEN_vect)
 		UENUM = USB_ENDPOINT_CDC_IN;
 		if (putty_opened && (UEINTX & (1 << TXINI)))
 		{
-			while ((UEINTX & (1 << RWAL)) && ((usb_cdc_in_read_cursor + 1) & (countof(usb_cdc_in_buffer) - 1)) != (usb_cdc_in_write_cursor & (countof(usb_cdc_in_buffer) - 1)))
+			while ((UEINTX & (1 << RWAL)) && usb_cdc_in_reader_masked(1) != usb_cdc_in_writer_masked(0))
 			{
-				usb_cdc_in_read_cursor += 1;
-				UEDATX                  = usb_cdc_in_buffer[usb_cdc_in_read_cursor & (countof(usb_cdc_in_buffer) - 1)];
+				usb_cdc_in_reader += 1;
+				UEDATX             = usb_cdc_in_buffer[usb_cdc_in_reader_masked(0)];
 			}
 
 			UEINTX &= ~(1 << TXINI);
@@ -110,10 +112,10 @@ ISR(USB_GEN_vect)
 		{
 			if (UEINTX & (1 << RWAL))
 			{
-				while ((UEINTX & (1 << RWAL)) && (usb_cdc_out_write_cursor & (countof(usb_cdc_out_buffer) - 1)) != (usb_cdc_out_read_cursor & (countof(usb_cdc_out_buffer) - 1)))
+				while ((UEINTX & (1 << RWAL)) && usb_cdc_out_writer_masked(0) != usb_cdc_out_reader_masked(0))
 				{
-					usb_cdc_out_buffer[usb_cdc_out_write_cursor & (countof(usb_cdc_out_buffer) - 1)] = UEDATX;
-					usb_cdc_out_write_cursor += 1;
+					usb_cdc_out_buffer[usb_cdc_out_writer_masked(0)] = UEDATX;
+					usb_cdc_out_writer += 1;
 				}
 
 				UEINTX &= ~(1 << RXOUTI);
@@ -130,7 +132,7 @@ ISR(USB_GEN_vect)
 }
 
 static void
-_usb_endpoint_0_transmit(u8* packet_data, u16 packet_length) // [Endpoint 0: Data-Transfer from Device to Host].
+_usb_endpoint_dflt_in(u8* packet_data, u16 packet_length) // TODO Revise [Endpoint 0: Data-Transfer from Device to Host].
 {
 	u8* data_cursor    = packet_data;
 	u16 data_remaining = packet_length;
@@ -138,7 +140,7 @@ _usb_endpoint_0_transmit(u8* packet_data, u16 packet_length) // [Endpoint 0: Dat
 	{
 		if (UEINTX & (1 << RXOUTI)) // Received OUT-transaction?
 		{
-			UEINTX &= ~(1 << RXOUTI); // Tell host that we're ready for the next command now. See: "Control Transfer > Status Stage > IN" @ Source(4) @ Chapter(4).
+			UEINTX &= ~(1 << RXOUTI); // We're ready for the next command now. See: "Control Transfer > Status Stage > IN" @ Source(4) @ Chapter(4).
 			break;
 		}
 		else if (UEINTX & (1 << TXINI)) // Buffer ready to be filled?
@@ -203,7 +205,7 @@ ISR(USB_COM_vect)
 						}
 					} break;
 
-					case USBDescType_device_qualifier:   // ATmega32U4 does not support anything beyond full-speed, so this is a request error. See: Source(2) @ Section(9.6.2) @ Page(264) & [Endpoint 0: Request Error].
+					case USBDescType_device_qualifier: // ATmega32U4 does not support anything beyond full-speed, so this is a request error. See: Source(2) @ Section(9.6.2) @ Page(264) & [Endpoint 0: Request Error].
 					{
 					} break;
 
@@ -215,13 +217,13 @@ ISR(USB_COM_vect)
 					case USBDescType_cdc_interface:      // TODO Check if it's okay to be able to send a STALL here.
 					case USBDescType_cdc_endpoint:       // TODO Check if it's okay to be able to send a STALL here.
 					{
-						debug_halt(-1);
+						error;
 					} break;
 				}
 
 				if (payload_length)
 				{
-					_usb_endpoint_0_transmit
+					_usb_endpoint_dflt_in // TODO Inline?
 					(
 						payload_data,
 						request.get_descriptor.requested_amount < payload_length
@@ -239,16 +241,16 @@ ISR(USB_COM_vect)
 			{
 				if (request.set_address.address < 0b0111'1111)
 				{
-					UDADDR = request.set_address.address;
+					UDADDR = request.set_address.address; // We're going to trust that ".address" is within 7-bits.
 
-					UEINTX &= ~(1 << TXINI);
-					while (!(UEINTX & (1 << TXINI)));
+					UEINTX &= ~(1 << TXINI);          // Send out zero-length data-packet for the upcoming IN-transaction.
+					while (!(UEINTX & (1 << TXINI))); // Wait for the IN-transaction to be completed.
 
 					UDADDR |= (1 << ADDEN);
 				}
 				else
 				{
-					UECONX |= (1 << STALLRQ);
+					error;
 				}
 			} break;
 
@@ -256,7 +258,7 @@ ISR(USB_COM_vect)
 			{
 				if (request.set_config.value == 0)
 				{
-					debug_halt(4);
+					error;
 				}
 				else if (request.set_config.value == USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE)
 				{
@@ -302,7 +304,7 @@ ISR(USB_COM_vect)
 				}
 				else
 				{
-					UECONX |= (1 << STALLRQ);
+					error;
 				}
 			} break;
 
@@ -316,26 +318,35 @@ ISR(USB_COM_vect)
 			{
 				if (request.set_line_coding.incoming_line_coding_datapacket_size == sizeof(struct USBCDCLineCoding))
 				{
+					// Wait to receive data-packet of OUT-transaction.
 					while (!(UEINTX & (1 << RXOUTI)));
+
+					// Copy data-packet of OUT-transaction.
 					struct USBCDCLineCoding desired_line_coding = {0};
 					for (u8 i = 0; i < sizeof(struct USBCDCLineCoding); i += 1)
 					{
 						((u8*) &desired_line_coding)[i] = UEDATX;
 					}
+
 					UEINTX &= ~(1 << RXOUTI);
 
+					// Acknowledge the upcoming IN-transaction.
 					while (!(UEINTX & (1 << TXINI)));
 					UEINTX &= ~(1 << TXINI);
 
-					if (desired_line_coding.dwDTERate == 1200) // TODO Have macro define this BAUD.
+					switch (desired_line_coding.dwDTERate)
 					{
-						*(u16*)0x0800 = 0x7777; // https://github.com/PaxInstruments/ATmega32U4-bootloader/blob/bf5d4d1edff529d5cc8229f15463720250c7bcd3/avr/cores/arduino/CDC.cpp#L99C14-L99C14
-						wdt_enable(WDTO_15MS);
-						for(;;);
-					}
-					else if (desired_line_coding.dwDTERate == 1201)
-					{
-						putty_opened = true;
+						case BOOTLOADER_BAUD_SIGNAL:
+						{
+							*(u16*)0x0800 = 0x7777; // https://github.com/PaxInstruments/ATmega32U4-bootloader/blob/bf5d4d1edff529d5cc8229f15463720250c7bcd3/avr/cores/arduino/CDC.cpp#L99C14-L99C14
+							wdt_enable(WDTO_15MS);
+							for(;;);
+						} break;
+
+						case DIAGNOSTIC_BAUD_SIGNAL:
+						{
+							putty_opened = true;
+						} break;
 					}
 				}
 				else
@@ -646,7 +657,7 @@ ISR(USB_COM_vect)
 	(2) Packets @ Source(4) @ Chapter(3).
 */
 
-/* [Endpoint 0: Data-Transfer from Device to Host].
+/* TODO Revise [Endpoint 0: Data-Transfer from Device to Host].
 	See: [Endpoints].
 	See: [Packets and Transactions].
 

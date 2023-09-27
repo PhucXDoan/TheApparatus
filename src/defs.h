@@ -420,26 +420,31 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 			},
 	};
 
-static          u8 usb_cdc_in_buffer[USB_ENDPOINT_CDC_IN_SIZE] = {0};
-static          u8 usb_cdc_in_write_cursor                     = 0;
-static volatile u8 usb_cdc_in_read_cursor                      = -1; // Must be before usb_cdc_in_write_cursor.
+static u8 usb_cdc_in_buffer [USB_ENDPOINT_CDC_IN_SIZE ] = {0};
+static u8 usb_cdc_out_buffer[USB_ENDPOINT_CDC_OUT_SIZE] = {0};
 
-static          u8 usb_cdc_out_buffer[USB_ENDPOINT_CDC_OUT_SIZE] = {0};
-static volatile u8 usb_cdc_out_write_cursor                      = 0;
-static          u8 usb_cdc_out_read_cursor                       = -1; // Must be before usb_cdc_out_write_cursor.
+static          u8 usb_cdc_in_writer  = 0;
+static volatile u8 usb_cdc_in_reader  = -1; // Must be before usb_cdc_in_writer.
+static volatile u8 usb_cdc_out_writer = 0;
+static          u8 usb_cdc_out_reader = -1; // Must be before usb_cdc_out_writer.
+
+#define usb_cdc_in_writer_masked(OFFSET)  ((usb_cdc_in_writer  + (OFFSET)) & (countof(usb_cdc_in_buffer ) - 1))
+#define usb_cdc_in_reader_masked(OFFSET)  ((usb_cdc_in_reader  + (OFFSET)) & (countof(usb_cdc_in_buffer ) - 1))
+#define usb_cdc_out_writer_masked(OFFSET) ((usb_cdc_out_writer + (OFFSET)) & (countof(usb_cdc_out_buffer) - 1))
+#define usb_cdc_out_reader_masked(OFFSET) ((usb_cdc_out_reader + (OFFSET)) & (countof(usb_cdc_out_buffer) - 1))
 
 // Changing the indexing cursor size to something greater than a byte will make "atomic" operations more difficult to guarantee.
 static_assert
 (
-	sizeof(usb_cdc_in_write_cursor ) == 1 &&
-	sizeof(usb_cdc_in_read_cursor  ) == 1 &&
-	sizeof(usb_cdc_out_write_cursor) == 1 &&
-	sizeof(usb_cdc_out_read_cursor ) == 1
+	sizeof(usb_cdc_in_writer ) == 1 &&
+	sizeof(usb_cdc_in_reader ) == 1 &&
+	sizeof(usb_cdc_out_writer) == 1 &&
+	sizeof(usb_cdc_out_reader) == 1
 );
 
 // Cursors must be able to read/write any element.
-static_assert(countof(usb_cdc_in_buffer) < (((u64) 1) << bitsof(usb_cdc_in_read_cursor )));
-static_assert(countof(usb_cdc_in_buffer) < (((u64) 1) << bitsof(usb_cdc_in_write_cursor)));
+static_assert(countof(usb_cdc_in_buffer) < (((u64) 1) << bitsof(usb_cdc_in_reader)));
+static_assert(countof(usb_cdc_in_buffer) < (((u64) 1) << bitsof(usb_cdc_in_writer)));
 
 // Buffer must be power of two.
 static_assert(countof(usb_cdc_in_buffer) && !(countof(usb_cdc_in_buffer) & (countof(usb_cdc_in_buffer) - 1)));

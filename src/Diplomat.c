@@ -3,6 +3,7 @@
 #include <util/delay.h>
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
+#include <avr/pgmspace.h>
 #include <stdint.h>
 #include <string.h>
 #include "defs.h"
@@ -10,13 +11,15 @@
 #include "usb.c"
 #define error error_pin(PinErrorSource_diplomat)
 
+static const char message[] PROGMEM = "The work is mysterious and important.\n";
+
 int
 main(void)
 {
 	UENUM = 1;
 	sei();
 
-	usb_in_cstr("aslkdjlasjdlksajd!\n");
+	debug_cstr("The work is mysterious and important.\n");
 
 	usb_init();
 
@@ -24,9 +27,10 @@ main(void)
 	for (;;)
 	{
 		char buf[16] = {0};
-		usb_out_chars(buf, sizeof(buf) - 1);
-		usb_in_cstr(buf);
-		usb_in_cstr(__FILE_NAME__ "\n");
+		debug_read(buf, sizeof(buf) - 1);
+		debug_cstr(buf);
+
+		debug_cstr(__FILE_NAME__ "\n");
 		_delay_ms(100.0);
 	}
 }
