@@ -34,14 +34,14 @@ error_pin(enum PinErrorSource source)
 {
 	cli();
 
-	pin_output(PIN_LED_ERROR);
+	pin_output(PIN_ERROR);
 	for (;;)
 	{
 		for (u8 i = 0; i < 8; i += 1)
 		{
-			pin_high(PIN_LED_ERROR);
+			pin_high(PIN_ERROR);
 			_delay_ms(50.0);
-			pin_low(PIN_LED_ERROR);
+			pin_low(PIN_ERROR);
 			_delay_ms(50.0);
 		}
 
@@ -49,9 +49,9 @@ error_pin(enum PinErrorSource source)
 
 		for (u8 i = 0; i < source; i += 1)
 		{
-			pin_high(PIN_LED_ERROR);
+			pin_high(PIN_ERROR);
 			_delay_ms(150.0);
-			pin_low(PIN_LED_ERROR);
+			pin_low(PIN_ERROR);
 			_delay_ms(150.0);
 		}
 
@@ -139,21 +139,6 @@ debug_halt(u8 flashes)
 }
 #endif
 
-#if DEBUG
-static void
-debug_u8(u8 byte)
-{
-	debug_pin_set(2, (byte >> 0) & 1);
-	debug_pin_set(3, (byte >> 1) & 1);
-	debug_pin_set(4, (byte >> 2) & 1);
-	debug_pin_set(5, (byte >> 3) & 1);
-	debug_pin_set(6, (byte >> 4) & 1);
-	debug_pin_set(7, (byte >> 5) & 1);
-	debug_pin_set(8, (byte >> 6) & 1);
-	debug_pin_set(9, (byte >> 7) & 1);
-}
-#endif
-
 //
 // Internal Documentation.
 //
@@ -182,7 +167,7 @@ debug_u8(u8 byte)
 		- Output, High : The GPIO pin will act as a source; that is, VCC of ~5 volts.
 		Reading from this pin will result in a truthy value.
 
-	The error procedure is defined here since making the program blink IO pins
+	The error_pin procedure is defined here since making the program blink IO pins
 	indefinitely is the most error-free of displaying the error condition. I'd put the
 	procedure somewhere else, but C is stuck in the land of in-order compilation, and I
 	don't like the idea of having forward declarations.

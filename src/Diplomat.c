@@ -29,8 +29,6 @@ main(void)
 		char buf[16] = {0};
 		debug_read(buf, sizeof(buf) - 1);
 		debug_cstr(buf);
-
-		debug_cstr(__FILE_NAME__ "\n");
 		_delay_ms(100.0);
 	}
 }

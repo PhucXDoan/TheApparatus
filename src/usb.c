@@ -37,10 +37,10 @@ debug_chars(char* value, u16 value_size)
 	for (u16 i = 0; i < value_size; i += 1) // TODO memcpy
 	{
 		// Our write-cursor reached the interrupt's read-cursor.
-		while (usb_cdc_in_writer_masked(0) == usb_cdc_in_reader_masked(0));
+		while (_usb_cdc_in_writer_masked(0) == _usb_cdc_in_reader_masked(0));
 
-		usb_cdc_in_buffer[usb_cdc_in_writer_masked(0)] = value[i];
-		usb_cdc_in_writer += 1;
+		_usb_cdc_in_buffer[_usb_cdc_in_writer_masked(0)] = value[i];
+		_usb_cdc_in_writer += 1;
 	}
 }
 #endif
@@ -59,10 +59,10 @@ debug_read(char* dst, u8 dst_length) // TODO Document // TODO Does windows/PuTTY
 {
 	u8 result = 0;
 
-	while (result < dst_length && usb_cdc_out_reader_masked(1) != usb_cdc_out_writer_masked(0)) // Our read-cursor is right before the interrupt's write-cursor.  // TODO memcpy?
+	while (result < dst_length && _usb_cdc_out_reader_masked(1) != _usb_cdc_out_writer_masked(0)) // Our read-cursor is right before the interrupt's write-cursor.  // TODO memcpy?
 	{
-		dst[result]         = usb_cdc_out_buffer[usb_cdc_out_reader_masked(1)];
-		usb_cdc_out_reader += 1;
+		dst[result]         = _usb_cdc_out_buffer[_usb_cdc_out_reader_masked(1)];
+		_usb_cdc_out_reader += 1;
 		result             += 1;
 	}
 
@@ -95,12 +95,12 @@ ISR(USB_GEN_vect)
 	if (UDINT & (1 << SOFI))
 	{
 		UENUM = USB_ENDPOINT_CDC_IN;
-		if (putty_opened && (UEINTX & (1 << TXINI)))
+		if (debug_usb_rx_diagnostic_signal && (UEINTX & (1 << TXINI)))
 		{
-			while ((UEINTX & (1 << RWAL)) && usb_cdc_in_reader_masked(1) != usb_cdc_in_writer_masked(0))
+			while ((UEINTX & (1 << RWAL)) && _usb_cdc_in_reader_masked(1) != _usb_cdc_in_writer_masked(0))
 			{
-				usb_cdc_in_reader += 1;
-				UEDATX             = usb_cdc_in_buffer[usb_cdc_in_reader_masked(0)];
+				_usb_cdc_in_reader += 1;
+				UEDATX              = _usb_cdc_in_buffer[_usb_cdc_in_reader_masked(0)];
 			}
 
 			UEINTX &= ~(1 << TXINI);
@@ -108,14 +108,14 @@ ISR(USB_GEN_vect)
 		}
 
 		UENUM = USB_ENDPOINT_CDC_OUT;
-		if (putty_opened && (UEINTX & (1 << RXOUTI)))
+		if (debug_usb_rx_diagnostic_signal && (UEINTX & (1 << RXOUTI)))
 		{
 			if (UEINTX & (1 << RWAL))
 			{
-				while ((UEINTX & (1 << RWAL)) && usb_cdc_out_writer_masked(0) != usb_cdc_out_reader_masked(0))
+				while ((UEINTX & (1 << RWAL)) && _usb_cdc_out_writer_masked(0) != _usb_cdc_out_reader_masked(0))
 				{
-					usb_cdc_out_buffer[usb_cdc_out_writer_masked(0)] = UEDATX;
-					usb_cdc_out_writer += 1;
+					_usb_cdc_out_buffer[_usb_cdc_out_writer_masked(0)] = UEDATX;
+					_usb_cdc_out_writer += 1;
 				}
 
 				UEINTX &= ~(1 << RXOUTI);
@@ -181,12 +181,12 @@ ISR(USB_COM_vect)
 
 		switch (request.type)
 		{
-			case USBSetupRequestType_get_descriptor: // [Endpoint 0: SETUP-Transaction's GetDescriptor].
+			case USBSetupRequestType_get_desc: // [Endpoint 0: SETUP-Transaction's GetDescriptor].
 			{
 				u8  payload_length = 0; // Any payload we send will not exceed 255 bytes.
 				u8* payload_data   = 0;
 
-				switch ((enum USBDescType) request.get_descriptor.descriptor_type)
+				switch ((enum USBDescType) request.get_desc.desc_type)
 				{
 					case USBDescType_device: // See: [Endpoint 0: SETUP-Transaction's GetDescriptor].
 					{
@@ -197,7 +197,7 @@ ISR(USB_COM_vect)
 
 					case USBDescType_config: // [Interfaces, Configurations, and Classes].
 					{
-						if (!request.get_descriptor.descriptor_index) // We only have a single configuration.
+						if (!request.get_desc.desc_index) // We only have a single configuration.
 						{
 							payload_data   = (u8*) &USB_CONFIGURATION_HIERARCHY;
 							payload_length = sizeof(USB_CONFIGURATION_HIERARCHY);
@@ -226,8 +226,8 @@ ISR(USB_COM_vect)
 					_usb_endpoint_dflt_in // TODO Inline?
 					(
 						payload_data,
-						request.get_descriptor.requested_amount < payload_length
-							? request.get_descriptor.requested_amount
+						request.get_desc.requested_amount < payload_length
+							? request.get_desc.requested_amount
 							: payload_length
 					);
 				}
@@ -316,7 +316,7 @@ ISR(USB_COM_vect)
 
 			case USBSetupRequestType_cdc_set_line_coding: // TODO Understand and Explain
 			{
-				if (request.set_line_coding.incoming_line_coding_datapacket_size == sizeof(struct USBCDCLineCoding))
+				if (request.cdc_set_line_coding.incoming_line_coding_datapacket_size == sizeof(struct USBCDCLineCoding))
 				{
 					// Wait to receive data-packet of OUT-transaction.
 					while (!(UEINTX & (1 << RXOUTI)));
@@ -345,7 +345,7 @@ ISR(USB_COM_vect)
 
 						case DIAGNOSTIC_BAUD_SIGNAL:
 						{
-							putty_opened = true;
+							debug_usb_rx_diagnostic_signal = true;
 						} break;
 					}
 				}
