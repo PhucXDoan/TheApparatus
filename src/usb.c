@@ -45,7 +45,7 @@ ISR(USB_GEN_vect)
 			#if DEBUG
 			if (!(UESTA0X & (1 << CFGOK)))
 			{
-				error;
+				error; // Hardware determine that this endpoint's configuration is invalid.
 			}
 			#endif
 		}
@@ -101,7 +101,7 @@ ISR(USB_GEN_vect)
 }
 
 static void
-_usb_endpoint_dflt_in(u8* packet_data, u16 packet_length)
+_usb_endpoint_0_in(u8* packet_data, u16 packet_length)
 { // [Endpoint 0: Data-Transfer from Device to Host].
 
 	u8* data_cursor    = packet_data;
@@ -147,7 +147,7 @@ ISR(USB_COM_vect)
 		{
 			((u8*) &request)[i] = UEDATX;
 		}
-		UEINTX &= ~(1 << RXSTPI); // Clear the endpoint bank. See: Source(1) @ Section(22.12) @ Page(274).
+		UEINTX &= ~(1 << RXSTPI); // Let the hardware know that we finished copying the SETUP-transaction's data-packet. See: Source(1) @ Section(22.12) @ Page(274).
 
 		switch (request.type)
 		{
@@ -175,25 +175,26 @@ ISR(USB_COM_vect)
 						}
 					} break;
 
-					case USBDescType_device_qualifier: // ATmega32U4 does not support anything beyond full-speed, so this is a request error. See: Source(2) @ Section(9.6.2) @ Page(264) & [Endpoint 0: Request Error].
+					case USBDescType_device_qualifier: // See: Source(2) @ Section(9.6.2) @ Page(264).
+					case USBDescType_string:           // See: [USB Strings] @ defs.h.
 					{
+						// We induce STALL condition. See: [Endpoint 0: Request Error].
 					} break;
 
-					case USBDescType_string:             // TODO Check if it's okay to be able to send a STALL here.
-					case USBDescType_interface:          // TODO Check if it's okay to be able to send a STALL here.
-					case USBDescType_endpoint:           // TODO Check if it's okay to be able to send a STALL here.
-					case USBDescType_other_speed_config: // TODO Check if it's okay to be able to send a STALL here.
-					case USBDescType_interface_power:    // TODO Check if it's okay to be able to send a STALL here.
-					case USBDescType_cdc_interface:      // TODO Check if it's okay to be able to send a STALL here.
-					case USBDescType_cdc_endpoint:       // TODO Check if it's okay to be able to send a STALL here.
+					case USBDescType_interface:
+					case USBDescType_endpoint:
+					case USBDescType_other_speed_config:
+					case USBDescType_interface_power:
+					case USBDescType_cdc_interface:
+					case USBDescType_cdc_endpoint:
 					{
-						error;
+						error; // We can probably address some of these cases, but we won't do it if it doesn't seem to inhibit base functionality of USB.
 					} break;
 				}
 
 				if (payload_length)
 				{
-					_usb_endpoint_dflt_in // TODO Inline?
+					_usb_endpoint_0_in // TODO Inline?
 					(
 						payload_data,
 						request.get_desc.requested_amount < payload_length
@@ -203,7 +204,7 @@ ISR(USB_COM_vect)
 				}
 				else
 				{
-					UECONX |= (1 << STALLRQ); // [Endpoint 0: Request Error].
+					UECONX |= (1 << STALLRQ); // See: [Endpoint 0: Request Error].
 				}
 			} break;
 
@@ -211,7 +212,7 @@ ISR(USB_COM_vect)
 			{
 				if (request.set_address.address < 0b0111'1111)
 				{
-					UDADDR = request.set_address.address; // We're going to trust that ".address" is within 7-bits.
+					UDADDR = request.set_address.address;
 
 					UEINTX &= ~(1 << TXINI);          // Send out zero-length data-packet for the upcoming IN-transaction.
 					while (!(UEINTX & (1 << TXINI))); // Wait for the IN-transaction to be completed.
@@ -220,61 +221,66 @@ ISR(USB_COM_vect)
 				}
 				else
 				{
-					error;
+					error; // The host somehow sent us an address that's not within 7-bits. See: Source(2) @ Section(8.3.2.1) @ Page(197).
 				}
 			} break;
 
 			case USBSetupRequestType_set_config: // [Endpoint 0: SETUP-Transaction's SetConfiguration]. TODO Revise.
 			{
-				if (request.set_config.value == 0)
+				switch (request.set_config.value)
 				{
-					error;
-				}
-				else if (request.set_config.value == USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE)
-				{
-					UEINTX &= ~(1 << TXINI);
-					while (!(UEINTX & (1 << TXINI)));
-
-					static_assert(USB_ENDPOINT_DFLT < USB_ENDPOINT_CDC_IN);
-
-					UENUM = USB_ENDPOINT_CDC_IN;
+					case 0:
 					{
-						UECONX = (1 << EPEN);
+						error; // In the case that the host, for some reason, wants to set the device back to the "Address State", we should handle this.
+					} break;
 
-						UECFG0X = (USBEndpointTransferType_bulk << EPTYPE0) | (1 << EPDIR);
-						UECFG1X = (USB_ENDPOINT_CDC_IN_SIZE_CODE << EPSIZE0) | (1 << ALLOC);
-
-						#if DEBUG
-						if (!(UESTA0X & (1 << CFGOK)))
-						{
-							error;
-						}
-						#endif
-					}
-
-					static_assert(USB_ENDPOINT_CDC_IN < USB_ENDPOINT_CDC_OUT);
-
-					UENUM = USB_ENDPOINT_CDC_OUT;
+					case USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE:
 					{
-						UECONX = (1 << EPEN);
+						UEINTX &= ~(1 << TXINI);
+						while (!(UEINTX & (1 << TXINI)));
 
-						UECFG0X = (USBEndpointTransferType_bulk << EPTYPE0);
-						UECFG1X = (USB_ENDPOINT_CDC_OUT_SIZE_CODE << EPSIZE0) | (1 << ALLOC);
+						static_assert(USB_ENDPOINT_DFLT < USB_ENDPOINT_CDC_IN);
 
-						#if DEBUG
-						if (!(UESTA0X & (1 << CFGOK)))
+						UENUM = USB_ENDPOINT_CDC_IN;
 						{
-							error;
-						}
-						#endif
-					}
+							UECONX = (1 << EPEN);
 
-					UERST = 0x1E; // TODO ???
-					UERST = 0;
-				}
-				else
-				{
-					error;
+							UECFG0X = (USBEndpointTransferType_bulk << EPTYPE0) | (1 << EPDIR);
+							UECFG1X = (USB_ENDPOINT_CDC_IN_SIZE_CODE << EPSIZE0) | (1 << ALLOC);
+
+							#if DEBUG
+							if (!(UESTA0X & (1 << CFGOK)))
+							{
+								error; // Hardware determine that this endpoint's configuration is invalid.
+							}
+							#endif
+						}
+
+						static_assert(USB_ENDPOINT_CDC_IN < USB_ENDPOINT_CDC_OUT);
+
+						UENUM = USB_ENDPOINT_CDC_OUT;
+						{
+							UECONX = (1 << EPEN);
+
+							UECFG0X = (USBEndpointTransferType_bulk << EPTYPE0);
+							UECFG1X = (USB_ENDPOINT_CDC_OUT_SIZE_CODE << EPSIZE0) | (1 << ALLOC);
+
+							#if DEBUG
+							if (!(UESTA0X & (1 << CFGOK)))
+							{
+								error; // Hardware determine that this endpoint's configuration is invalid.
+							}
+							#endif
+						}
+
+						UERST = 0x1E; // TODO ???
+						UERST = 0;
+					} break;
+
+					default:
+					{
+						error;
+					} break;
 				}
 			} break;
 
@@ -653,7 +659,7 @@ debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just se
 	triggered in USB_COM_vect, but these interrupts would be executed so often that it'll grind the
 	MCU down to a halt.
 
-	(1) USB Device Controller Interrupt System @ Source(1) @ Figure(22-4) @ Page(279).
+	(1) "USB Device Controller Interrupt System" @ Source(1) @ Figure(22-4) @ Page(279).
 	(2) Endpoint Memory Management @ Source(1) @ Section(21.9) @ Page(263-264).
 	(3) "Endpoint Selection" @ Source(1) @ Section(22.5) @ Page(271).
 	(4) "USB Reset" @ Source(1) @ Section(22.4) @ Page(271).
@@ -714,7 +720,17 @@ debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just se
 */
 
 /* [USB Endpoint Interrupt Routine].
-	TODO
+	This interrupt routine is where the meat of all the enumeration is taken place. It handles
+	any events related to endpoints, all listed in (1):
+		- An endpoint's buffer is ready to be filled with data to be sent to the host.
+		- An endpoint's buffer is filled with data sent by the host.
+		- A control-typed endpoint received a SETUP-transaction.
+		- An endpoint replied with a STALL-HANDSHAKE packet.
+		- An isochronous endpoint detected a CRC mismatch.
+		- An isochronous endpoint underwent overflow/underflow of data.
+		- An endpoint replied with a NACK-HANDSHAKE packet.
+
+	(1) "USB Device Controller Endpoint Interrupt System" @ Source(1) @ Figure(22-5) @ Page(280).
 */
 
 /* [Endpoint 0: SETUP-Transactions].
@@ -853,7 +869,7 @@ debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just se
 	ways the device can be configured is transmitted to the host.
 
 	Not all descriptors can be fulfilled. In this case, the device will send the host a
-	STALL-HANDSHAKE packet as a response. See [Endpoint 0: Request Error].
+	STALL-HANDSHAKE packet as a response. See: [Endpoint 0: Request Error].
 */
 
 /* [Interfaces, Configurations, and Classes].
@@ -891,14 +907,15 @@ debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just se
 	(2) "USB Descriptors" @ Source(4) @ Chapter(5).
 */
 
-/* [CDC - Communication Class Device]. TODO Relook
-	The USB communication devices class is designed for all sorts of communication
-	devices, such as modems, telephones, ethernet hubs, etc. The reason why we implement
+/* [CDC - Communication Class Device].
+	The USB communication devices class is designed for all sorts of... well... communication
+	devices... such as modems, telephones, ethernet hubs, etc. The reason why we implement
 	this class for the device is so we can transmit data to the host for diagnostic
 	purposes.
 
-	To even begin to understand our implementation of CDC, we must rewind far back into
-	the history of a communication system called POTS (Plain Old Telephone Service):
+	Although not super important, it's nice to begin building our understanding of CDC by rewinding
+	far back into the history of a communication systems, starting at the age old thing called
+	POTS (Plain Old Telephone Service):
 	.......................................................................
 	.                                                                     :
 	:                    ||                         ||                    :
@@ -942,71 +959,89 @@ debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just se
 	received information were quite literally the terminal endings of communication
 	systems such as this.
 
-	Thus, we can essentially use CDC to mimick our device to be something like a modem
-	and serially transmit data to the host (the fact we aren't really a modem that's
-	working with analog signals doesn't really matter). Since we are going to define
-	a couple interfaces for CDC later on, so we will need to declare the device's class
-	as being CDC in the device descriptor (see: USB_DEVICE_DESCRIPTOR) as mentioned in
-	(5).
+	Thus, (from my limited understanding of how this CDC implementation is done) we can essentially
+	use CDC to mimick our device to be something like a modem and serially transmit data to the host
+	(the fact we aren't really a modem that's working with analog signals doesn't really matter).
+	We are going to define a couple interfaces for CDC later on, so we will need to declare
+	the entire device as being a communication device in USB_DEVICE_DESCRIPTOR as mentioned in (5).
 
 	As stated earlier, there are many communication devices that the CDC specification
 	wants to be compatiable with. The one that will be the most applicable for us is the
 	"Abstract Control Model" as seen in (4). Based on the figure, the specification
 	is assuming we are some sort of device that has components for data-compression,
-	error-correction, etc. just like a modem might have. But once again, this doesn't
-	really matter; we're just sending pure binary data-packets to the host via USB.
+	error-correction, etc. just like a modem might have. But a lot of this doesn't actually really
+	matter at all; we're still sending pure binary data-packets to the host via USB.
 
-	Within our device configuration (see: USB_CONFIGURATION_HIERARCHY), we define the
-	"Communication Class Interface". This interface is responsible for
-	"device management" and "call management", and is required for all communication
-	devices, according to (1). As for what device and call management entails:
+	Within our USB_CONFIGURATION_HIERARCHY, we define the "Communication Class Interface".
+	This interface is responsible for "device management" and "call management", and is required
+	for all communication devices, according to (1). As for what device and call management
+	entails:
 
 		- "Device Management" is any operation the host would want to do to "control
 		and configure the operational state of the device" (3). These operations would
 		be carried out by the "management element" which is just a fancy name for
 		endpoint 0 (2). The host would send CDC-specific requests to endpoint 0 for
 		things like "ringing the auxillary phone jack", all of which is detailed in (6).
-		For the most part, we really don't care about these requests.
+		Once again, we can ignore a lot of these commands.
 
 		- "Call Management" is "responsible for setting up and tearing down of calls"
 		(7). As to what specific things are done in call management, I'm actually not
 		too sure. The specification wasn't too clear on this, but I think it's
-		more-or-less a subset of the management element requests of things like hanging
+		more-or-less a subset of the management element requests for things like hanging
 		up phones (SET_HOOK_STATE) or dialing numbers (DIAL_DIGITS). This is further
 		supported by the fact that an example configuration in (8) states that the
 		"management element will transport both call management element and device
-		management element commands".
+		management element commands". But in the end it doesn't matter again; we're
+		going to never really encounter any of these commands.
 
-	The CDC interface is also required to have the "notification element" (9) which // TODO WE DONT USE NOTIFICATION ELEMENT??
-	simply lets the host know of certain events like whether or not the phone is hooked
-	or not (10). Like with the management element, the notification element is just
-	another endpoint, but this time it's not endpoint 0. We are to give up an endpoint
-	and it seems like it's usually an interrupt-typed endpoint as stated in (11),
-	but (12) states that it could also be a bulk-typed endpoint.
+	The CDC interface is also apparently required (9) to have the "notification element" which
+	simply lets the host know of certain events like whether or not "the phone is hooked or not"
+	(10). Like with the management element, the notification element is just another endpoint,
+	but this time it's not endpoint 0, and is instead usually some other interrupt-typed endpoint
+	(11), or maybe a bulk-typed endpoint (12). Although the specification is worded where it
+	states that the abstract control model is supposed to have a minimum of two pipes (endpoint 0
+	for management element and some other endpoint for the notification element), it seems like
+	Windows and PuTTY is completely fine without the notification element. So this isn't exactly
+	standard compliant, I will admit, but CDC is implemented for this device for diagnostics and
+	easy reprogramming, so does it really matter? Besides, even if I did waste an entire endpoint
+	just for it to do nothing, how can we be confident that everything else coded in this repo is
+	standard compliant? Do you even know what the hell "Data Compression (V.42bis)" even mean in
+	(19)? No? Then don't complain. If you do know what it means, then please email me:
+	phucxdoan@gmail.com. I'd be happy to learn!
 
-	After we define the CDC interface descriptor, we then list a series of "functional
-	descriptors" (13) which are proprietary to the CDC specification. Each functional
-	descriptor just state some small piece of information related to the communication
-	device we are using for the host.
+	Within the CDC interface itself is a list of "functional descriptors" (13) which are
+	proprietary to the CDC specification. Each functional descriptor just state some small piece of
+	information related to the communication device we are using for the host:
 
-		- "Header Functional Descriptor" is always the first functional descriptor and
-		it only lists the CDC specification we are using. That's all there is to it.
+		- "Header Functional Descriptor" (14).
+			Always the first functional descriptor and it only lists the CDC specification we are
+			using. That's all there is to it.
 
-		- "Call Management Functional Descriptor" TODO (15).
+		- "Call Management Functional Descriptor" (15).
+			This just tells the host whether or not the device can handle call management itself,
+			and if call management commands can be transferred over the endpoints that we'll be
+			using for transferring diagnostics. Doesn't seem relevant at all for actually making
+			the CDC function, but still nonetheless needs to exist for some reason.
 
-		- "Abstract Control Management Functional Descriptor" TODO (16).
+		- "Abstract Control Management Functional Descriptor" (16).
+			Like with "Call Management Functional Descriptor", this one just tells the host what
+			commands and notifications it can expect from the device. Seems to also not be very
+			relevant for making CDC functional, but also needs to be defined for the enumeration to
+			be successful.
 
-		- "Union Functional Descriptor" (17) is used to group all the interfaces that
-		support the communication functionality together. It is a required descriptor
-		(18) that is is probably more apparently useful in communication devices that
-		involve things like audio and video, but given that we only have two interfaces
-		(this CDC interface and the following CDC-data interface), we can just say that
-		this CDC interface is the "master" and the other CDC-data interface is the
-		"slave". Thus, any events relating to this group will be made aware of to the
-		master interface.
+		- "Union Functional Descriptor" (17).
+			This descriptor is probably the most useful one compared to the previous three; it is
+			used to group all the interfaces that contribute into creating the communication
+			functionality altogether (18). This is probably more apparently useful in communication
+			devices that involve things like audio and video. Without this, the host probably can't
+			determine which CDC-interfaces would go with which other interfaces that are used to
+			transfer the communication itself.
 
-	So in short, the CDC interface is used by the host to determine what kind
-	communication device it's talking to and its properties.
+	After all that, we then define the CDC-data class (20). This one seems pretty straight-forward;
+	we just kinda specify some endpoints that'll be used for transferring data to and from the
+	host. It can be used for sending raw data, or some sort of structured format that the
+	specification didn't define. In any case, this is where we define the endpoints that'll be
+	transmitting diagnostics and to receive input from the host.
 
 	(1) "Interface Definitions" @ Source(6) @ Section(3.3) @ AbsPage(20).
 	(2) "Communication Class Interface" @ Source(6) @ Section(3.3.1) @ AbsPage(20).
@@ -1025,7 +1060,9 @@ debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just se
 	(15) "Call Management Functional Descriptor" @ Source(6) @ Section(5.2.3.2) @ AbsPage(45-46).
 	(16) "Abstract Control Management Functional Descriptor" @ Source(6) @ Section(5.2.3.3) @ AbsPage(46-47).
 	(17) "Union Functional Descriptor" @ Source(6) @ Section(5.2.3.8) @ AbsPage(51).
-	(18) "Communication Device Management" @ Source(6) @ Section(3.1.1.) @ AbsPage(19).
+	(18) "Communication Device Management" @ Source(6) @ Section(3.1.1) @ AbsPage(19-20).
+	(19) "Data Compression (V.42bis)" @ Source(6) @ Figure(3) @ AbsPage(26).
+	(20) "Data Class Interface" @ Source(6) @ Section(3.3.2) @ AbsPage(21).
 */
 
 /* [HID - Human Interface Device Class].
@@ -1059,7 +1096,7 @@ debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just se
 	that IN-TOKEN packet to initiate the transaction, or possibly is currently in the
 	middle of transmitting the DATA-typed packet (just because it's zero-lengthed
 	doesn't mean no signal is being sent; the PID for instance still has to be
-	transmitted. See: [Packets and Transactions]). Thus, if we set ADDEN to enable the
+	transmitted. See: [About: Packets and Transactions]). Thus, if we set ADDEN to enable the
 	new USB device address too soon, then we might fail to actually perform the
 	IN-transaction with the host.
 

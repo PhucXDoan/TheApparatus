@@ -392,8 +392,8 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 						.bAlternateSetting  = 0,
 						.bNumEndpoints      = countof(USB_CONFIGURATION_HIERARCHY.cdc_data.endpoints),
 						.bInterfaceClass    = USBClass_cdc_data, // See: Source(6) @ Section(4.5) @ AbsPage(40).
-						.bInterfaceSubClass = 0, // Should be left alone. See: Source(6) @ Section(4.6) @ AbsPage(40).
-						.bInterfaceProtocol = 0, // Seems irrelevant for functionality. See: Source(6) @ Table(19) @ AbsPage(40-41).
+						.bInterfaceSubClass = 0,                 // Should be left alone. See: Source(6) @ Section(4.6) @ AbsPage(40).
+						.bInterfaceProtocol = 0,                 // Seems irrelevant for functionality. See: Source(6) @ Table(19) @ AbsPage(40-41).
 					},
 				.endpoints =
 					{
