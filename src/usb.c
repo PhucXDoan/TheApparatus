@@ -4,145 +4,124 @@ static void
 usb_init(void)
 { // [USB Initialization Process].
 
-	// "Power-On USB Pads Regulator".
+	// 1. "Power on USB pads regulator".
 	UHWCON = (1 << UVREGE);
 
-	// "Configure PLL Interface and Enable PLL".
+	// 2. "Configure PLL interface and enable PLL".
 	PLLCSR = (1 << PINDIV) | (1 << PLLE);
 
-	// "Check PLL Lock".
+	// 3. "Check PLL lock".
 	while (!(PLLCSR & (1 << PLOCK)));
 
-	// "Enable USB Interface".
+	// 4. "Enable USB interface".
 	USBCON = (1 << USBE);
 	USBCON = (1 << USBE) | (1 << OTGPADE);
 
-	// "Configure USB Interface"
+	// 5. "Configure USB interface".
 	UDIEN = (1 << EORSTE) | (1 << SOFI);
 	UDCON = 0; // Clearing the DETACH bit allows the device to be connected to the host. See: Source(1) @ Section(22.18.1) @ Page(281).
 
-	// [Wait For USB VBUS Information Connection].
+	// 6. "Wait for USB VBUS information connection".
 	#if DEBUG
 	while (!debug_usb_rx_diagnostic_signal);
 	#endif
 }
 
-#if DEBUG
-static void
-debug_tx_chars(char* value, u16 value_size)
-{
-	for (u16 i = 0; i < value_size; i += 1)
-	{
-		while (_usb_cdc_in_writer_masked(1) == _usb_cdc_in_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
-		_usb_cdc_in_buffer[_usb_cdc_in_writer_masked(0)] = value[i];
-		_usb_cdc_in_writer += 1;
-	}
-}
-#endif
-
-#if DEBUG
-static void
-debug_tx_cstr(char* value)
-{
-	debug_tx_chars(value, strlen(value));
-}
-#endif
-
-#if DEBUG
-static u8 // Amount of data copied into dst.
-debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just send a /r on enter?
-{
-	u8 result = 0;
-
-	while (result < dst_max_length && _usb_cdc_out_reader_masked(0) != _usb_cdc_out_writer_masked(0))
-	{
-		dst[result]          = _usb_cdc_out_buffer[_usb_cdc_out_reader_masked(0)];
-		_usb_cdc_out_reader += 1;
-		result              += 1;
-	}
-
-	return result;
-}
-#endif
-
 ISR(USB_GEN_vect)
-{ // [USB Device Interrupt Routine, Endpoint 0 Configuration, and Endpoint Interrupts] TODO Update.
+{ // [USB Device Interrupt Routine].
 
-	UENUM = 0; // "Select the endpoint".
+	if (UDINT & (1 << EORSTI)) // End-of-Reset.
 	{
-		// "Activate endpoint".
-		UECONX = (1 << EPEN);
-
-		// "Configure" and "Allocate".
-		UECFG1X = (USB_ENDPOINT_DFLT_SIZE << EPSIZE0) | (1 << ALLOC);
-
-		UEIENX = (1 << RXSTPE); // Endpoint 0 will listen to the reception of SETUP-transactions.
-
-		// "Test endpoint configuration".
-		#if 1 // TODO disable
-		if (!(UESTA0X & (1 << CFGOK)))
+		UENUM = 0; // 1. "Select the endpoint".
 		{
-			debug_halt(3);
+			// 2. "Activate endpoint".
+			UECONX = (1 << EPEN);
+
+			// 3. "Configure and allocate".
+			UEIENX  = (1 << RXSTPE); // Endpoint 0 will listen to the reception of SETUP-transactions.
+			UECFG1X = (USB_ENDPOINT_DFLT_SIZE << EPSIZE0) | (1 << ALLOC);
+
+			// 4. "Test endpoint configuration".
+			#if DEBUG
+			if (!(UESTA0X & (1 << CFGOK)))
+			{
+				error;
+			}
+			#endif
 		}
-		#endif
 	}
 
-	if (UDINT & (1 << SOFI))
+	if (UDINT & (1 << SOFI)) // Start-of-Frame.
 	{
 		UENUM = USB_ENDPOINT_CDC_IN;
-		if (UEINTX & (1 << TXINI))
+		if (UEINTX & (1 << TXINI)) // Endpoint's buffer is ready to be filled up with data to send to the host.
 		{
-			while ((UEINTX & (1 << RWAL)) && _usb_cdc_in_reader_masked(0) != _usb_cdc_in_writer_masked(0))
+			while
+			(
+				(UEINTX & (1 << RWAL)) &&                                    // Endpoint's buffer still has some space left.
+				_usb_cdc_in_reader_masked(0) != _usb_cdc_in_writer_masked(0) // Our ring buffer still has some data left.
+			)
 			{
 				UEDATX              = _usb_cdc_in_buffer[_usb_cdc_in_reader_masked(0)];
 				_usb_cdc_in_reader += 1;
 			}
 
-			UEINTX &= ~(1 << TXINI);
-			UEINTX &= ~(1 << FIFOCON);
+			UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
+			UEINTX &= ~(1 << FIFOCON); // We are done writing to the bank, either because the endpoint's buffer is full or because there's no more deta to provide.
 		}
 
 		UENUM = USB_ENDPOINT_CDC_OUT;
-		if (UEINTX & (1 << RXOUTI))
+		if (UEINTX & (1 << RXOUTI)) // Endpoint's buffer has data from the host to be copied.
 		{
-			while ((UEINTX & (1 << RWAL)) && _usb_cdc_out_writer_masked(1) != _usb_cdc_out_reader_masked(0))
+			while
+			(
+				(UEINTX & (1 << RWAL)) &&                                      // Endpoint's buffer still has some data left to be copied.
+				_usb_cdc_out_writer_masked(1) != _usb_cdc_out_reader_masked(0) // Our ring buffer still has some space left.
+			)
 			{
 				_usb_cdc_out_buffer[_usb_cdc_out_writer_masked(0)] = UEDATX;
 				_usb_cdc_out_writer += 1;
 			}
 
-			if (!(UEINTX & (1 << RWAL)))
+			if (UEINTX & (1 << RWAL)) // Endpoint's buffer still remaining data to be copied.
 			{
-				UEINTX &= ~(1 << RXOUTI);
-				UEINTX &= ~(1 << FIFOCON);
+				// The data that has yet to be copied from will still remain in the endpoint's buffer.
+				// Any incoming IN-TOKEN packets by the host will be replied with a NACK-HANDSHAKE packet by the device.
+				// See: Timing Diagram @ Source(1) @ Section(22.13.1) @ Page(276).
+			}
+			else // Endpoint's buffer has been completely copied.
+			{
+				UEINTX &= ~(1 << RXOUTI);  // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.13.1) @ Page(275).
+				UEINTX &= ~(1 << FIFOCON); // We free up the endpoint's buffer so we can accept the next OUT-transaction to this endpoint.
 			}
 		}
 	}
 
-	UDINT = 0; // Clear End-of-Reset trigger flag to prevent this routine from executing again. // TODO Update
+	UDINT = 0; // Clear interrupt flags to prevent this routine from executing again.
 }
 
 static void
-_usb_endpoint_dflt_in(u8* packet_data, u16 packet_length) // TODO Revise [Endpoint 0: Data-Transfer from Device to Host].
-{
+_usb_endpoint_dflt_in(u8* packet_data, u16 packet_length)
+{ // [Endpoint 0: Data-Transfer from Device to Host].
+
 	u8* data_cursor    = packet_data;
 	u16 data_remaining = packet_length;
 	while (true)
 	{
 		if (UEINTX & (1 << RXOUTI)) // Received OUT-transaction?
 		{
-			UEINTX &= ~(1 << RXOUTI); // We're ready for the next command now. See: "Control Transfer > Status Stage > IN" @ Source(4) @ Chapter(4).
+			UEINTX &= ~(1 << RXOUTI); // Clear interrupt flag for this OUT-transaction. See: Pseudocode @ Source(2) @ Section(22.12.2) @ Page(275).
 			break;
 		}
-		else if (UEINTX & (1 << TXINI)) // Buffer ready to be filled?
+		else if (UEINTX & (1 << TXINI)) // Endpoint 0's buffer ready to be filled?
 		{
-			u8 writes_left =
-				data_remaining < USB_ENDPOINT_DFLT_SIZE
-					? data_remaining
-					: USB_ENDPOINT_DFLT_SIZE;
+			u8 writes_left = data_remaining;
+			if (writes_left > USB_ENDPOINT_DFLT_SIZE)
+			{
+				writes_left = USB_ENDPOINT_DFLT_SIZE;
+			}
 
 			data_remaining -= writes_left;
-
 			while (writes_left)
 			{
 				UEDATX        = data_cursor[0];
@@ -150,13 +129,13 @@ _usb_endpoint_dflt_in(u8* packet_data, u16 packet_length) // TODO Revise [Endpoi
 				writes_left  -= 1;
 			}
 
-			UEINTX &= ~(1 << TXINI); // Mark buffer as ready to be sent for IN-transaction.
+			UEINTX &= ~(1 << TXINI); // Endpoint 0's buffer is ready for the next IN-transaction.
 		}
 	}
 }
 
 ISR(USB_COM_vect)
-{ // See: [USB Device Interrupt Routine, Endpoint 0 Configuration, and Endpoint Interrupts].
+{ // See: [USB Endpoint Interrupt Routine].
 
 	UENUM = 0;
 	if (UEINTX & (1 << RXSTPI)) // [Endpoint 0: SETUP-Transactions].
@@ -265,10 +244,10 @@ ISR(USB_COM_vect)
 						UECFG0X = (USBEndpointTransferType_bulk << EPTYPE0) | (1 << EPDIR);
 						UECFG1X = (USB_ENDPOINT_CDC_IN_SIZE_CODE << EPSIZE0) | (1 << ALLOC);
 
-						#if 1
+						#if DEBUG
 						if (!(UESTA0X & (1 << CFGOK)))
 						{
-							debug_halt(5);
+							error;
 						}
 						#endif
 					}
@@ -282,10 +261,10 @@ ISR(USB_COM_vect)
 						UECFG0X = (USBEndpointTransferType_bulk << EPTYPE0);
 						UECFG1X = (USB_ENDPOINT_CDC_OUT_SIZE_CODE << EPSIZE0) | (1 << ALLOC);
 
-						#if 1
+						#if DEBUG
 						if (!(UESTA0X & (1 << CFGOK)))
 						{
-							debug_halt(6);
+							error;
 						}
 						#endif
 					}
@@ -354,6 +333,44 @@ ISR(USB_COM_vect)
 	}
 }
 
+#if DEBUG
+static void
+debug_tx_chars(char* value, u16 value_size)
+{
+	for (u16 i = 0; i < value_size; i += 1)
+	{
+		while (_usb_cdc_in_writer_masked(1) == _usb_cdc_in_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
+		_usb_cdc_in_buffer[_usb_cdc_in_writer_masked(0)] = value[i];
+		_usb_cdc_in_writer += 1;
+	}
+}
+#endif
+
+#if DEBUG
+static void
+debug_tx_cstr(char* value)
+{
+	debug_tx_chars(value, strlen(value));
+}
+#endif
+
+#if DEBUG
+static u8 // Amount of data copied into dst.
+debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just send a /r on enter?
+{
+	u8 result = 0;
+
+	while (result < dst_max_length && _usb_cdc_out_reader_masked(0) != _usb_cdc_out_writer_masked(0))
+	{
+		dst[result]          = _usb_cdc_out_buffer[_usb_cdc_out_reader_masked(0)];
+		_usb_cdc_out_reader += 1;
+		result              += 1;
+	}
+
+	return result;
+}
+#endif
+
 #undef error
 
 //
@@ -362,16 +379,17 @@ ISR(USB_COM_vect)
 
 /* [Overview].
 	TODO
+	TODO Mention [About: Endpoints].
 */
 
 /* [USB Initialization Process].
 	We carry out the following steps specified by (1):
 
-		1. "Power-On USB Pads Regulator".
+		1. "Power on USB pads regulator".
 			Based off of (2), the USB regulator simply supplies voltage to the USB data lines
 			and the capacitor. So this first step is just as simple enabling UVREGE (3).
 
-		2. [Configure PLL Interface and Enable PLL].
+		2. "Configure PLL interface and enable PLL".
 			PLL refers to a phase-locked-loop device. I don't know much about the mechanisms of
 			the circuit, but it seems like you give it some input frequency and it'll output a
 			higher frequency after it has synced up onto it.
@@ -388,11 +406,11 @@ ISR(USB_COM_vect)
 			shown in the default bits in (4) and table (5). We want 48MHz since this is what
 			the USB interface expects as shown by (2).
 
-		3. "Check PLL Lock".
+		3. "Check PLL lock".
 			We just wait until the PLL stablizes and is "locked" onto the expected frequency,
 			which apparently can take some milliseconds according to (7).
 
-		4. "Enable USB Interface".
+		4. "Enable USB interface".
 			The "USB interface" is synonymous with "USB device controller" or simply
 			"USB controller" (8). We can enable the controller with the USBE bit in USBCON.
 
@@ -405,7 +423,7 @@ ISR(USB_COM_vect)
 			We will also set OTGPADE to be able to detect whether or not we are connected to the
 			host (VBUS bit), and let the host know of our presence when we are plugged in (11).
 
-		5. "Configure USB Interface".
+		5. "Configure USB interface".
 			We enable the End-of-Reset interrupt, so when the unenumerated USB device connects
 			and the hosts sees this, the host will pull the data lines to a state to signal
 			that the device should reset (as described by (1)), and when the host releases, the
@@ -419,7 +437,7 @@ ISR(USB_COM_vect)
 			whenever the host wanted to do a transaction, but this happens so frequently that it
 			really ends up bogging the main program down too much.
 
-		6. "Wait For USB VBUS Information Connection".
+		6. "Wait for USB VBUS information connection".
 			At this point, the rest of USB initialization will be done in the USB_GEN_vect interrupt
 			routine. If we're in DEBUG mode, we'll wait for PuTTY to open up so we won't miss any
 			diagnostic outputs.
@@ -437,17 +455,14 @@ ISR(USB_COM_vect)
 	(12) "USB Reset" @ Source(1) @ Section(22.4) @ Page(271).
 */
 
-/* [Wait For USB VBUS Information Connection].
-*/
-
-/* [Endpoints].
+/* [About: Endpoints].
 	All USB devices have "endpoints" which is essentially a buffer where it can be
 	written with data sent by the host and then read by the device, or written by the
 	device to which it is then transmitted to the host.
 
 	Endpoints are assigned a "transfer type" (1) where it is optimized for a specific
 	purpose. For example, bulk-typed endpoints are great for transmitting large amounts
-	of data (e.g. uploading a movie to a flashdrive) but there's no guarantee on when
+	of data (e.g. uploading a movie to a flash-drive) but there's no guarantee on when
 	that data may be transmitted, which would actually be important for devices such as
 	keyboards and mouses.
 
@@ -463,87 +478,22 @@ ISR(USB_COM_vect)
 
 	The ATmega32U4 has a total of 7 endpoints, 6 if you don't count endpoint 0 since it
 	is not really programmable as the other ones. The size of the buffers are
-	customizable, with each having their own limitation on the maximum capacity. The
+	customizable, with each having their own limitation on the maximum capacity (3). The
 	endpoint buffers are all manually allocated by the MCU in a single 832-byte
 	arena (2). The ATmega32U4 also has the ability to "double-buffer" or "double-bank"
 	or "ping-pong", meaning that an endpoint can essentially have two buffers in use at
 	the same time. One will be written to or read from by the hardware, while the other
-	is written to or read from by the firmware. This allows us to do something like
+	is read from or written to by the firmware. This allows us to do something like
 	operate on a data-packet sent from the host while, simultaneously, the bytes of the
 	next data-packet is being copied by the hardware. The role of these two buffers
 	would flip back and forth, hence ping-pong mode.
 
 	(1) Endpoint Transfer Types @ Source(2) @ Table(9-13) @ Page(270) & Source(1) @ Section(22.18.2) @ Page(286) & Source(2) @ Section(4.7) @ Page(20-21).
 	(2) Endpoint Memory @ Source(1) @ Section(21.9) @ Page(263-264).
+	(3) Endpoint FIFO Limitations @ Source(1) @ Section(22.1) @ Page(270).
 */
 
-/* [USB Device Interrupt Routine, Endpoint 0 Configuration, and Endpoint Interrupts].
-	See: [Endpoints].
-
-	Triggers for USB_GEN_vect are listed on (1):
-		[ ] VBUS Plug-In.
-		[ ] Upstream Resume.
-		[ ] End-of-Resume.
-		[ ] Wake Up.
-		[X] End-of-Reset.
-		[ ] Start-of-Frame.
-		[ ] Suspension Detection.
-		[ ] Start-of-Frame CRC Error.
-
-	When an unenumerated device connects to the USB and the host sees this, the host
-	will pull the D+/D- lines to a specific state where it signals to the device that it
-	should reset (4), and when the host releases the D+/D- lines, USB_GEN_vect is then
-	triggered. This is called the "End-of-Reset" event.
-
-	Since (1) specifically states that the endpoints will end up disabled, it is
-	important that we do the rest of our USB initialization after the End-of-Reset.
-
-	The first endpoint that we will initialize is endpoint 0, which we will do by
-	consulting the flowchart in (1):
-		1. Select the endpoint.
-				ATmega32U4 uses the system where writing to and reading from
-				endpoint-specific registers (e.g. UECFG0X) depends on the currently
-				selected endpoint determined by UPNUM (3).
-		2. Activate endpoint.
-				Self-explainatory. The only thing we have to be aware of is that we
-				have to initiate endpoints in sequential order so the memory allocation
-				works out (2).
-		3. Configure.
-				We set the endpoint's transfer type, direction, buffer size, etc.
-		4. Allocate.
-				The hardware does it all on-the-fly (2).
-		5. Test endpoint configuration.
-				Technically the allocation can fail for things like using more than
-				832 bytes of memory or making a buffer larger than what that endpoint
-				can support. This doesn't really need to be addressed, just as long we
-				aren't dynamically reallocating, disabling, etc. endpoints at run-time.
-
-	Endpoint 0 will always be a control-typed endpoint as enforced by the USB
-	specification, so that part of the configuration is straight-forward. For the
-	data-direction of endpoint 0, it seems like the ATmega32U4 datasheet wants us to
-	define endpoint 0 to have an "OUT" direction (5), despite the fact that control-typed
-	endpoints are bidirectional.
-
-	One last thing we want from endpoint 0 is the ability for it to detect when it has
-	received a SETUP-transaction. SETUP-transactions will be described more later on,
-	but it's essentially where the rest of the enumeration will be communicated through.
-	We enable the interrupt vector USB_COM_vect for this by using RXSTPE (7). The
-	USB_COM_vect is the interrupt routine for any event related to endpoints themselves.
-
-	Note that this interrupt is only going to trigger for endpoint 0. So if the host
-	sends a SETUP-transaction to endpoint 3, it'll be ignored (unless the interrupt for
-	that is also enabled) (6).
-
-	(1) USB Device Controller Interrupt System @ Source(1) @ Figure(22-4) @ Page(279).
-	(2) Endpoint Memory Management @ Source(1) @ Section(21.9) @ Page(263-264).
-	(3) "Endpoint Selection" @ Source(1) @ Section(22.5) @ Page(271).
-	(4) "USB Reset" @ Source(1) @ Section(22.4) @ Page(271).
-	(5) EPDIR @ Source(1) @ Section(22.18.2) @ Page(287).
-	(6) "USB Device Controller Endpoint Interrupt System" @ Source(1) @ Figure(22-5) @ Page(280).
-	(7) "Endpoint Interrupt" @ Source(1) @ Figure(22-5) @ Page(280).
-*/
-
-/* [Packets and Transactions].
+/* [About: Packets and Transactions].
 	A packet is the smallest coherent piece of message that the host can send to the
 	device, or the device send to the host. The layout of a packet is abstractly
 	structured as so: // TODO SOF packet
@@ -642,10 +592,76 @@ ISR(USB_COM_vect)
 	(2) Packets @ Source(4) @ Chapter(3).
 */
 
-/* TODO Revise [Endpoint 0: Data-Transfer from Device to Host].
-	See: [Endpoints].
-	See: [Packets and Transactions].
+/* [USB Device Interrupt Routine].
+	This interrupt routine is triggered whenever an event that's related to the USB controller (and
+	not to the endpoints) has occured. This would be anything listed on (1):
+		- VBUS Plug-In.
+		- Upstream Resume.
+		- End-of-Resume.
+		- Wake Up.
+		- End-of-Reset.
+		- Start-of-Frame.
+		- Suspension Detection.
+		- Start-of-Frame CRC Error.
 
+	When an unenumerated device connects to the USB and the host sees this, the host
+	will pull the D+/D- lines to a specific state where it signals to the device that it
+	should reset (4), and when the host releases the D+/D- lines, USB_GEN_vect is then triggered
+	for the "End-of-Reset" event. We care about this End-of-Reset event since (1) specifically
+	states that any endpoints we configure will just end up being disabled.
+
+	The first endpoint that we will initialize is endpoint 0 (USB_ENDPOINT_DFLT), which we will do
+	by consulting the flowchart in (1):
+
+		1. "Select the endpoint".
+			ATmega32U4 uses the system where writing to and reading from
+			endpoint-specific registers (e.g. UECFG0X) depends on the currently
+			selected endpoint determined by UENUM (3).
+
+		2. "Activate endpoint."
+			Self-explainatory. The only thing we have to be aware of is that we
+			have to initiate endpoints in sequential order so the memory allocation
+			works out (2).
+
+		3. "Configure and allocate".
+			We set the endpoint's transfer type, direction, buffer size, interrupts, etc.
+			For anything related to memory, the hardware does it all on-the-fly (2).
+
+			For UECFG0X, endpoint 0 will always be a control-typed endpoint as enforced
+			by the USB specification, so that part of the configuration is straight-forward.
+			For the data-direction of endpoint 0, it seems like the ATmega32U4 datasheet wants
+			us to define endpoint 0 to have an "OUT" direction (5), despite the fact that
+			control-typed endpoints are bidirectional.
+
+			We also want from endpoint 0 the ability for it to detect when it has received a
+			SETUP-transaction as it is where the rest of the enumeration will be communicated
+			through, and USB_COM_vect will be the one to carry that out. Note that the interrupt
+			USB_COM_vect is only going to trigger for endpoint 0. So if the host sends a
+			SETUP-transaction to endpoint 3, it'll be ignored (unless the interrupt for that is
+			also enabled) (6).
+
+		4. "Test endpoint configuration".
+			The allocation can technically fail for things like using more than
+			832 bytes of memory or making a buffer larger than what that endpoint
+			can support. This doesn't really need to be addressed, just as long we
+			aren't dynamically reallocating, disabling, etc. endpoints at run-time.
+
+	This interrupt routine also handle the Start-of-Frame event that the host sends to the device
+	every ~1ms (for full-speed USB devices). This part of the interrupt is pretty much used for
+	sending out buffered data or to copy an endpoint's buffer into our own ring buffer. An
+	interrupt could be made for each specific endpoint within Start-of-Frame event to be instead
+	triggered in USB_COM_vect, but these interrupts would be executed so often that it'll grind the
+	MCU down to a halt.
+
+	(1) USB Device Controller Interrupt System @ Source(1) @ Figure(22-4) @ Page(279).
+	(2) Endpoint Memory Management @ Source(1) @ Section(21.9) @ Page(263-264).
+	(3) "Endpoint Selection" @ Source(1) @ Section(22.5) @ Page(271).
+	(4) "USB Reset" @ Source(1) @ Section(22.4) @ Page(271).
+	(5) EPDIR @ Source(1) @ Section(22.18.2) @ Page(287).
+	(6) "USB Device Controller Endpoint Interrupt System" @ Source(1) @ Figure(22-5) @ Page(280).
+*/
+
+/* [Endpoint 0: Data-Transfer from Device to Host].
 	This procedure is called when we are in a state where endpoint 0 needs to transmit
 	some data to the host in response to a SETUP-transaction. This process is
 	non-trivial since the data that needs to be sent might have to be broken up into
@@ -679,9 +695,8 @@ ISR(USB_COM_vect)
 	shorter than endpoint 0's maximum capacity.
 
 	The entire conversation will conclude once the device receives the OUT-transaction.
-	No data will actually be sent to the device since the data-packet here is
-	always zero-length; that is, the DATA-typed packet in the OUT-transaction will be
-	empty.
+	No data will actually be sent to the device since the data-packet in the OUT-transaction is
+	always zero-length, i.e. empty.
 
 	The host can "abort" early by sending an OUT-transaction before the device has
 	completely sent all of its data. For example, the host might've asked for 1024 bytes
@@ -689,7 +704,17 @@ ISR(USB_COM_vect)
 	sends an OUT-transaction (instead of another IN-transaction) even though the device
 	has only sent, say, 256 bytes of the requested 1024 bytes.
 
+	The ATmega32U4 actually seems to send a NACK-HANDSHAKE packet to the terminating
+	OUT-transaction (2), and it is only the one after that (when the host attempts again to get an
+	ACK) that the USB controller actually acknowledges it, but really this is just an insignificant
+	implementation detail if anything.
+
 	(1) Control Transfers @ Source(2) @ Section(8.5.3) @ Page(226).
+	(2) Control Read Timing Diagram @ Source(2) @ Section(22.12.2) @ Page(275).
+*/
+
+/* [USB Endpoint Interrupt Routine].
+	TODO
 */
 
 /* [Endpoint 0: SETUP-Transactions].

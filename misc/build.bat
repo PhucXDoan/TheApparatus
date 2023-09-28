@@ -42,11 +42,13 @@ pushd W:\build\
 	REM Compile C source code into ELF (describes memory layout of main program).
 	REM
 
-	avr-gcc ^
+	set AVR_GCC_ARGS= ^
 		!AVR_GCC_FLAGS! -mmcu=!PROGRAM_MCU! ^
 		-D BOOTLOADER_BAUD_SIGNAL=!BOOTLOADER_BAUD_SIGNAL! ^
-		-D DIAGNOSTIC_BAUD_SIGNAL=!DIAGNOSTIC_BAUD_SIGNAL! ^
-		-o W:\build\!PROGRAM_NAME!.elf W:\src\!PROGRAM_NAME!.c
+		-D DIAGNOSTIC_BAUD_SIGNAL=!DIAGNOSTIC_BAUD_SIGNAL!
+
+	avr-gcc !AVR_GCC_ARGS! -S -fverbose-asm               W:\src\!PROGRAM_NAME!.c
+	avr-gcc !AVR_GCC_ARGS! -o W:\build\!PROGRAM_NAME!.elf W:\src\!PROGRAM_NAME!.c
 	if not !ERRORLEVEL! == 0 (
 		goto ABORT
 	)

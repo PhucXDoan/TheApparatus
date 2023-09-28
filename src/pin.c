@@ -118,27 +118,6 @@ debug_pin_read(u8 pin)
 }
 #endif
 
-#if DEBUG
-static void
-debug_halt(u8 flashes)
-{
-	while (true)
-	{
-		for (u8 j = 0; j < 8; j += 1)
-		{
-			for (u8 i = 0; i < flashes; i += 1)
-			{
-				debug_pin_set(2 + j, !debug_pin_read(2 + j));
-				_delay_ms(200.0);
-				debug_pin_set(2 + j, !debug_pin_read(2 + j));
-				_delay_ms(200.0);
-			}
-			_delay_ms(500.0);
-		}
-	}
-}
-#endif
-
 //
 // Documentation.
 //
