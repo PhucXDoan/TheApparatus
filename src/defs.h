@@ -280,18 +280,35 @@ struct USBCDCLineCoding // See: Source(6) @ Table(50) @ AbsPage(69).
 
 #define USB_ENDPOINT_DFLT                  0                               // "Default Endpoint" is synonymous with endpoint 0.
 #define USB_ENDPOINT_DFLT_TRANSFER_TYPE    USBEndpointTransferType_control // The default endpoint is always a control-typed endpoint.
+#define USB_ENDPOINT_DFLT_TRANSFER_DIR     0                               // See: [ATmega32U4's Configuration of Endpoint 0].
 #define USB_ENDPOINT_DFLT_SIZE             8
-#define USB_ENDPOINT_DFLT_CODE_SIZE        concat(USBEndpointSizeCode_, USB_ENDPOINT_DFLT_SIZE)
+#define USB_ENDPOINT_DFLT_SIZE_CODE        concat(USBEndpointSizeCode_, USB_ENDPOINT_DFLT_SIZE)
 
 #define USB_ENDPOINT_CDC_IN                2
 #define USB_ENDPOINT_CDC_IN_TRANSFER_TYPE  USBEndpointTransferType_bulk
+#define USB_ENDPOINT_CDC_IN_TRANSFER_DIR   USBEndpointAddressFlag_in
 #define USB_ENDPOINT_CDC_IN_SIZE           64
 #define USB_ENDPOINT_CDC_IN_SIZE_CODE      concat(USBEndpointSizeCode_, USB_ENDPOINT_CDC_IN_SIZE)
 
 #define USB_ENDPOINT_CDC_OUT               3
-#define USB_ENDPOINT_CDC_OUT_TRANSFER_TYPE USBTransferType_bulk
+#define USB_ENDPOINT_CDC_OUT_TRANSFER_TYPE USBEndpointTransferType_bulk
+#define USB_ENDPOINT_CDC_OUT_TRANSFER_DIR  0
 #define USB_ENDPOINT_CDC_OUT_SIZE          64
 #define USB_ENDPOINT_CDC_OUT_SIZE_CODE     concat(USBEndpointSizeCode_, USB_ENDPOINT_CDC_OUT_SIZE)
+
+static const u8 USB_ENDPOINT_UECFGNX[][2] = // UECFG0X and UECFG1X that an endpoint will be configured with.
+	{
+		#define MAKE(ENDPOINT_NAME) \
+			[USB_ENDPOINT_##ENDPOINT_NAME] = \
+				{ \
+					(USB_ENDPOINT_##ENDPOINT_NAME##_TRANSFER_TYPE << EPTYPE0) | ((!!USB_ENDPOINT_##ENDPOINT_NAME##_TRANSFER_DIR) << EPDIR), \
+					(USB_ENDPOINT_##ENDPOINT_NAME##_SIZE_CODE << EPSIZE0) | (1 << ALLOC), \
+				},
+		MAKE(DFLT   )
+		MAKE(CDC_IN )
+		MAKE(CDC_OUT)
+		#undef MAKE
+	};
 
 static const struct USBDescDevice USB_DEVICE_DESCRIPTOR = // TODO PROGMEMify.
 	{
@@ -400,7 +417,7 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 						{
 							.bLength          = sizeof(struct USBDescEndpoint),
 							.bDescriptorType  = USBDescType_endpoint,
-							.bEndpointAddress = USB_ENDPOINT_CDC_IN | USBEndpointAddressFlag_in,
+							.bEndpointAddress = USB_ENDPOINT_CDC_IN | USB_ENDPOINT_CDC_IN_TRANSFER_DIR,
 							.bmAttributes     = USBEndpointTransferType_bulk,
 							.wMaxPacketSize   = USB_ENDPOINT_CDC_IN_SIZE,
 							.bInterval        = 0,
@@ -408,7 +425,7 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 						{
 							.bLength          = sizeof(struct USBDescEndpoint),
 							.bDescriptorType  = USBDescType_endpoint,
-							.bEndpointAddress = USB_ENDPOINT_CDC_OUT,
+							.bEndpointAddress = USB_ENDPOINT_CDC_OUT | USB_ENDPOINT_CDC_OUT_TRANSFER_DIR,
 							.bmAttributes     = USBEndpointTransferType_bulk,
 							.wMaxPacketSize   = USB_ENDPOINT_CDC_OUT_SIZE,
 							.bInterval        = 0,
@@ -501,4 +518,14 @@ static volatile b8 debug_usb_rx_diagnostic_signal = false;
 
 	(1) "bInterfaceClass" @ Source(2) @ Table(9-12) @ Page(268).
 	(2) "Base Class 00h (Device)" @ Source(5).
+*/
+
+/* [ATmega32U4's Configuration of Endpoint 0].
+	For UECFG0X, endpoint 0 will always be a control-typed endpoint as enforced
+	by the USB specification, so that part of the configuration is straight-forward.
+	For the data-direction of endpoint 0, it seems like the ATmega32U4 datasheet wants
+	us to define endpoint 0 to have an "OUT" direction (1), despite the fact that
+	control-typed endpoints are bidirectional.
+
+	(1) EPDIR @ Source(1) @ Section(22.18.2) @ Page(287).
 */

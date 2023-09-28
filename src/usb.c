@@ -32,23 +32,30 @@ ISR(USB_GEN_vect)
 
 	if (UDINT & (1 << EORSTI)) // End-of-Reset.
 	{
-		UENUM = 0; // 1. "Select the endpoint".
+		for (u8 i = 0; i < countof(USB_ENDPOINT_UECFGNX); i += 1)
 		{
-			// 2. "Activate endpoint".
-			UECONX = (1 << EPEN);
-
-			// 3. "Configure and allocate".
-			UEIENX  = (1 << RXSTPE); // Endpoint 0 will listen to the reception of SETUP-transactions.
-			UECFG1X = (USB_ENDPOINT_DFLT_SIZE << EPSIZE0) | (1 << ALLOC);
-
-			// 4. "Test endpoint configuration".
-			#if DEBUG
-			if (!(UESTA0X & (1 << CFGOK)))
+			if (USB_ENDPOINT_UECFGNX[i][1]) // Elements that aren't explicitly assigned in USB_ENDPOINT_UECFGNX will have the ALLOC bit cleared.
 			{
-				error; // Hardware determine that this endpoint's configuration is invalid.
+				UENUM   = i;           // "Select the endpoint".
+				UECONX  = (1 << EPEN); // "Activate endpoint".
+
+				// "Configure and allocate".
+				UECFG0X = USB_ENDPOINT_UECFGNX[i][0];
+				UECFG1X = USB_ENDPOINT_UECFGNX[i][1];
+
+				// "Test endpoint configuration".
+				#if DEBUG
+				if (!(UESTA0X & (1 << CFGOK)))
+				{
+					error; // Hardware determine that this endpoint's configuration is invalid.
+				}
+				#endif
 			}
-			#endif
 		}
+
+		// Enable the interrupt source of the event that endpoint 0 receives a SETUP-transaction.
+		UENUM  = 0;
+		UEIENX = (1 << RXSTPE);
 	}
 
 	if (UDINT & (1 << SOFI)) // Start-of-Frame.
@@ -138,7 +145,7 @@ ISR(USB_COM_vect)
 { // See: [USB Endpoint Interrupt Routine].
 
 	UENUM = 0;
-	if (UEINTX & (1 << RXSTPI)) // [Endpoint 0: SETUP-Transactions].
+	if (UEINTX & (1 << RXSTPI)) // [Endpoint 0: SETUP-Transactions]. // TODO Remove this if-statement if we in the end aren't adding any other interrupt source.
 	{
 		UECONX |= (1 << STALLRQC); // SETUP-transactions lift STALL conditions. See: Source(2) @ Section(8.5.3.4) @ Page(228) & [Endpoint 0: Request Error].
 
@@ -225,56 +232,18 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
-			case USBSetupRequestType_set_config: // [Endpoint 0: SETUP-Transaction's SetConfiguration]. TODO Revise.
+			case USBSetupRequestType_set_config: // [Endpoint 0: SETUP-Transaction's SetConfiguration].
 			{
 				switch (request.set_config.value)
 				{
 					case 0:
 					{
-						error; // In the case that the host, for some reason, wants to set the device back to the "Address State", we should handle this.
+						error; // In the case that the host, for some reason, wants to set the device back to the "address state", we should handle this.
 					} break;
 
 					case USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE:
 					{
-						UEINTX &= ~(1 << TXINI);
-						while (!(UEINTX & (1 << TXINI)));
-
-						static_assert(USB_ENDPOINT_DFLT < USB_ENDPOINT_CDC_IN);
-
-						UENUM = USB_ENDPOINT_CDC_IN;
-						{
-							UECONX = (1 << EPEN);
-
-							UECFG0X = (USBEndpointTransferType_bulk << EPTYPE0) | (1 << EPDIR);
-							UECFG1X = (USB_ENDPOINT_CDC_IN_SIZE_CODE << EPSIZE0) | (1 << ALLOC);
-
-							#if DEBUG
-							if (!(UESTA0X & (1 << CFGOK)))
-							{
-								error; // Hardware determine that this endpoint's configuration is invalid.
-							}
-							#endif
-						}
-
-						static_assert(USB_ENDPOINT_CDC_IN < USB_ENDPOINT_CDC_OUT);
-
-						UENUM = USB_ENDPOINT_CDC_OUT;
-						{
-							UECONX = (1 << EPEN);
-
-							UECFG0X = (USBEndpointTransferType_bulk << EPTYPE0);
-							UECFG1X = (USB_ENDPOINT_CDC_OUT_SIZE_CODE << EPSIZE0) | (1 << ALLOC);
-
-							#if DEBUG
-							if (!(UESTA0X & (1 << CFGOK)))
-							{
-								error; // Hardware determine that this endpoint's configuration is invalid.
-							}
-							#endif
-						}
-
-						UERST = 0x1E; // TODO ???
-						UERST = 0;
+						UEINTX &= ~(1 << TXINI); // Send out zero-length data-packet for the host's upcoming IN-transaction to acknowledge this request.
 					} break;
 
 					default:
@@ -502,7 +471,7 @@ debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just se
 /* [About: Packets and Transactions].
 	A packet is the smallest coherent piece of message that the host can send to the
 	device, or the device send to the host. The layout of a packet is abstractly
-	structured as so: // TODO SOF packet
+	structured as so:
 
 		....... HOST / DEVICE ......
 		:                          :
@@ -518,10 +487,10 @@ debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just se
 		are grouped into four categories: TOKEN, DATA, HANDSHAKE, and SPECIAL (1). For
 		example, ACK and NACK packets are considered HANDSHAKE-typed packets.
 
-		- STUFF is any additional data that is defined by the PID's category. For
-		example, TOKEN-typed packets define the device address and endpoint that the
-		host wants to talk to. For packets belonging to the HANDSHAKE category,
-		there is no additional data. STUFF is where DATA-typed packets obviously
+		- STUFF is any additional data that the packet with a specific PID might have. For
+		example, TOKEN-typed packets (except for SOF) define the device address and
+		endpoint that the host wants to talk to. For packets belonging to the HANDSHAKE
+		category, there is no additional data. STUFF is where DATA-typed packets obviously
 		transmit the raw bytes of the data.
 
 		- CRC is used for error checking to ensure that the packet was not read in a
@@ -614,10 +583,9 @@ debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just se
 	will pull the D+/D- lines to a specific state where it signals to the device that it
 	should reset (4), and when the host releases the D+/D- lines, USB_GEN_vect is then triggered
 	for the "End-of-Reset" event. We care about this End-of-Reset event since (1) specifically
-	states that any endpoints we configure will just end up being disabled.
+	states that any endpoints we configure before the reset will just end up being disabled.
 
-	The first endpoint that we will initialize is endpoint 0 (USB_ENDPOINT_DFLT), which we will do
-	by consulting the flowchart in (1):
+	And thus, we now use this opportunity to configure endpoints by consulting the flowchart in (1):
 
 		1. "Select the endpoint".
 			ATmega32U4 uses the system where writing to and reading from
@@ -627,30 +595,26 @@ debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just se
 		2. "Activate endpoint."
 			Self-explainatory. The only thing we have to be aware of is that we
 			have to initiate endpoints in sequential order so the memory allocation
-			works out (2).
+			works out (2), but this is pretty much automatically handled by the for-loop too.
 
 		3. "Configure and allocate".
-			We set the endpoint's transfer type, direction, buffer size, interrupts, etc.
-			For anything related to memory, the hardware does it all on-the-fly (2).
-
-			For UECFG0X, endpoint 0 will always be a control-typed endpoint as enforced
-			by the USB specification, so that part of the configuration is straight-forward.
-			For the data-direction of endpoint 0, it seems like the ATmega32U4 datasheet wants
-			us to define endpoint 0 to have an "OUT" direction (5), despite the fact that
-			control-typed endpoints are bidirectional.
-
-			We also want from endpoint 0 the ability for it to detect when it has received a
-			SETUP-transaction as it is where the rest of the enumeration will be communicated
-			through, and USB_COM_vect will be the one to carry that out. Note that the interrupt
-			USB_COM_vect is only going to trigger for endpoint 0. So if the host sends a
-			SETUP-transaction to endpoint 3, it'll be ignored (unless the interrupt for that is
-			also enabled) (6).
+			We set the endpoint's transfer type, direction, buffer size, interrupts, etc., which
+			are described in the UECFG0X and UECFG1X registers. To make things sleek and automatic,
+			the actual values that'll be assigned to these registers are stored compactly within
+			USB_ENDPOINT_UECFGNX.
 
 		4. "Test endpoint configuration".
-			The allocation can technically fail for things like using more than
+			The memory allocation can technically fail for things like using more than
 			832 bytes of memory or making a buffer larger than what that endpoint
-			can support. This doesn't really need to be addressed, just as long we
+			can support. This doesn't really need to be addressed much, just as long we
 			aren't dynamically reallocating, disabling, etc. endpoints at run-time.
+
+	We also want from endpoint 0 the ability for it to detect when it has received a
+	SETUP-transaction as it is where the rest of the enumeration will be communicated
+	through, and USB_COM_vect will be the one to carry that out. Note that the
+	interrupt USB_COM_vect is only going to trigger for endpoint 0. So if the host
+	sends a SETUP-transaction to endpoint 3, it'll be ignored (unless the interrupt
+	for that is also enabled) (5).
 
 	This interrupt routine also handle the Start-of-Frame event that the host sends to the device
 	every ~1ms (for full-speed USB devices). This part of the interrupt is pretty much used for
@@ -663,8 +627,7 @@ debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just se
 	(2) Endpoint Memory Management @ Source(1) @ Section(21.9) @ Page(263-264).
 	(3) "Endpoint Selection" @ Source(1) @ Section(22.5) @ Page(271).
 	(4) "USB Reset" @ Source(1) @ Section(22.4) @ Page(271).
-	(5) EPDIR @ Source(1) @ Section(22.18.2) @ Page(287).
-	(6) "USB Device Controller Endpoint Interrupt System" @ Source(1) @ Figure(22-5) @ Page(280).
+	(5) "USB Device Controller Endpoint Interrupt System" @ Source(1) @ Figure(22-5) @ Page(280).
 */
 
 /* [Endpoint 0: Data-Transfer from Device to Host].
@@ -729,6 +692,8 @@ debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just se
 		- An isochronous endpoint detected a CRC mismatch.
 		- An isochronous endpoint underwent overflow/underflow of data.
 		- An endpoint replied with a NACK-HANDSHAKE packet.
+
+	But this is pretty much just for endpoint 0's SETUP-transactions.
 
 	(1) "USB Device Controller Endpoint Interrupt System" @ Source(1) @ Figure(22-5) @ Page(280).
 */
@@ -1111,20 +1076,13 @@ debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just se
 */
 
 /* [Endpoint 0: SETUP-Transaction's SetConfiguration].
-	This is where the host obviously set the configuration of the device. We only have
-	a single configuration defined, so we already pretty much set for that. The host
-	could send a 0 to indicate that we should be in the "address state" (1), which is
-	the state a USB device is in after it has been assigned an address. But once again,
-	since we only have configuration and we're already prepped for that, there really
-	isn't anything we have to do here.
-
-	When the host wants to set the device to our only configuration
-	(USB_CONFIGURATION_HIERARCHY), it must provide the value
-	USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE, the very same value within
-	USB_CONFIGURATION_HIERARCHY.
-
-	If the host sends us some other configuration value, then we will report this as
-	a request error.
+	This is where the host obviously set the configuration of the device. The host could send a 0
+	to indicate that we should be in the "address state" (1), which is the state a USB device is in
+	after it has been just assigned an address; more likely though the host will send a
+	configuration value of USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE (which it got from
+	GetDescriptor) to set to our only configuration that is USB_CONFIGURATION_HIERARCHY. This
+	request would only really matter when we have multiple configurations that the host may choose
+	from.
 
 	(1) "Address State" @ Source(2) @ Section(9.4.7) @ Page(257).
 */
@@ -1132,11 +1090,6 @@ debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just se
 /* TODO[USB Regulator vs Interface]
 	There's a different bit for enabling the USB pad regulator and USB interface,
 	but why are these separate? Perhaps for saving state?
-*/
-
-/* TODO Endpoint 0 Size?
-	How does the size affect endpoint 0?
-	Could we just be cheap and have 8 bytes?
 */
 
 /* TODO 512 Byte Endpoint?
@@ -1150,13 +1103,4 @@ debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just se
 	configure an endpoint in UECFG1X to be have 512 bytes!
 	* UECFG1X @ Source(1) @ Section(22.18.2) @ Page(287).
 	* Endpoint Size Statements @ Source(1) @ Section(22.1) @ Page(270).
-*/
-
-/* TODO[IN/OUT Interrupts].
-	In theory, using interrupts to trigger on IN/OUT commands to handle should be
-	identical to spinlocking for those commands, but it turns out not. I'm not entirely
-	too sure why. Perhaps I am not understanding the exact semantic of the endpoint
-	interrupts for these cases, or that the CPU can't handle the interrupt in time
-	because USB is just so fast. It could also very well be neither of those cases and
-	it's something else entirely!
 */
