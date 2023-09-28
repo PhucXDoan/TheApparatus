@@ -9,6 +9,7 @@
 #include "defs.h"
 #include "pin.c"
 #include "usb.c"
+#include "misc.c"
 #define error error_pin(PinErrorSource_diplomat)
 
 int
@@ -24,28 +25,25 @@ main(void)
 
 	usb_init();
 
-	u32 i = 0;
-	b8  j = false;
-	pin_output(2);
+	u64 counter = 0;
 	for (;;)
 	{
-		char buf[128] = {0};
-		debug_rx(buf, sizeof(buf) - 1);
-		debug_tx_cstr(buf);
-
-		i += 1;
-		if (i > (((u32) 1) << 16))
+		char key_buffer[8];
+		u8   key_length = debug_rx(key_buffer, countof(key_buffer));
+		for (u8 key_index = 0; key_index < key_length; key_index += 1)
 		{
-			if (j)
-			{
-				debug_tx_cstr("Bullies are nothing but Bull and Lies.\n");
-			}
-			else
-			{
-				debug_tx_cstr("The work is mysterious and important.\n");
-			}
-			j = !j;
-			i = 0;
+			char serialized_counter_buffer[20];
+			u8   serialized_counter_length = serialize_u64(serialized_counter_buffer, countof(serialized_counter_buffer), counter);
+
+			char serialized_key_buffer[20];
+			u8   serialized_key_length = serialize_u64(serialized_key_buffer, countof(serialized_key_buffer), key_buffer[key_index]);
+
+			debug_tx_chars(serialized_counter_buffer, serialized_counter_length);
+			debug_tx_cstr(" : '");
+			debug_tx_chars(serialized_key_buffer, serialized_key_length);
+			debug_tx_cstr("'\n");
+
+			counter += 1;
 		}
 	}
 }

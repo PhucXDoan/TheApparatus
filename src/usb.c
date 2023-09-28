@@ -149,7 +149,7 @@ ISR(USB_COM_vect)
 	{
 		UECONX |= (1 << STALLRQC); // SETUP-transactions lift STALL conditions. See: Source(2) @ Section(8.5.3.4) @ Page(228) & [Endpoint 0: Request Error].
 
-		struct USBSetupRequest request = {0};
+		struct USBSetupRequest request;
 		for (u8 i = 0; i < sizeof(request); i += 1)
 		{
 			((u8*) &request)[i] = UEDATX;
@@ -253,45 +253,46 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
-			case USBSetupRequestType_cdc_get_line_coding: // TODO Understand and Explain.
-			case USBSetupRequestType_cdc_set_control_line_state: // TODO Understand and Explain.
+			// These requests need to be handled in order for the enumeration to be successful, but other than that, they seem pretty irrelevant for functionality.
+			case USBSetupRequestType_cdc_get_line_coding:        // See: Source(6) @ Section(6.2.13) @ AbsPage(69).
+			case USBSetupRequestType_cdc_set_control_line_state: // See: Source(6) @ Section(6.2.14) @ AbsPage(69-70).
 			{
 				UECONX |= (1 << STALLRQ);
 			} break;
 
-			case USBSetupRequestType_cdc_set_line_coding: // TODO Understand and Explain
+			case USBSetupRequestType_cdc_set_line_coding: // [Endpoint 0: CDC-Specific SETUP-Transaction's SetLineCoding].
 			{
 				if (request.cdc_set_line_coding.incoming_line_coding_datapacket_size == sizeof(struct USBCDCLineCoding))
 				{
-					// Wait to receive data-packet of OUT-transaction.
-					while (!(UEINTX & (1 << RXOUTI)));
+					while (!(UEINTX & (1 << RXOUTI))); // Wait for the completion of an OUT-transaction.
 
 					// Copy data-packet of OUT-transaction.
-					struct USBCDCLineCoding desired_line_coding = {0};
+					struct USBCDCLineCoding desired_line_coding;
 					for (u8 i = 0; i < sizeof(struct USBCDCLineCoding); i += 1)
 					{
 						((u8*) &desired_line_coding)[i] = UEDATX;
 					}
 
-					UEINTX &= ~(1 << RXOUTI);
-
-					// Acknowledge the upcoming IN-transaction.
-					while (!(UEINTX & (1 << TXINI)));
-					UEINTX &= ~(1 << TXINI);
+					// These two lines can't be combined. I'm guessing because the USB hardware will get confused and think whatever's in
+					// endpoint 0's buffer from the OUT-transaction is what we want to send to the host for the IN-transaction.
+					UEINTX &= ~(1 << RXOUTI); // Let the hardware know that we finished copying the OUT-transaction's data-packet.
+					UEINTX &= ~(1 << TXINI);  // Send a zero-length data-packet for the upcoming IN-transaction to acknowledge the host's SetLineCoding request.
 
 					switch (desired_line_coding.dwDTERate)
 					{
 						case BOOTLOADER_BAUD_SIGNAL:
 						{
-							*(u16*)0x0800 = 0x7777; // https://github.com/PaxInstruments/ATmega32U4-bootloader/blob/bf5d4d1edff529d5cc8229f15463720250c7bcd3/avr/cores/arduino/CDC.cpp#L99C14-L99C14
+							*(u16*) 0x0800 = 0x7777; // Magic!
 							wdt_enable(WDTO_15MS);
 							for(;;);
 						} break;
 
+						#if DEBUG
 						case DIAGNOSTIC_BAUD_SIGNAL:
 						{
 							debug_usb_rx_diagnostic_signal = true;
 						} break;
+						#endif
 					}
 				}
 				else
@@ -330,8 +331,10 @@ debug_tx_cstr(char* value)
 #endif
 
 #if DEBUG
+// It seems like pressing keyboard "ENTER" sends only a carriage return ('\r', 0x10).
+// This may differ on other platforms though, so who knows why it's like this!
 static u8 // Amount of data copied into dst.
-debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just send a /r on enter?
+debug_rx(char* dst, u8 dst_max_length)
 {
 	u8 result = 0;
 
@@ -1085,6 +1088,41 @@ debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just se
 	from.
 
 	(1) "Address State" @ Source(2) @ Section(9.4.7) @ Page(257).
+*/
+
+/* [Endpoint 0: CDC-Specific SETUP-Transaction's SetLineCoding].
+	This request is supposed to be used by the host to configure aspects of the device's
+	serial communication (e.g. baud-rate). The way we are using it, however, is for the host to
+	send signals to the device without relying on something else like an IO pin or using the
+	diagnostics channels.
+
+	The host sends us a struct USBCDCLineCoding detailing the settings the device should be in now,
+	and we assigned specific baud-rates beforehand to do certain things. For example, receiving a
+	baud-rate of DIAGNOSTIC_BAUD_SIGNAL will mean that PuTTY (or whatever terminal is used) has
+	opened the diagnostic pipes. This prevents from any diagnostic messages early on from being
+	sent to the void because the terminal couldn't open up the COM port quick enough.
+
+	The more important (as in: convenient) signal is BOOTLOADER_BAUD_SIGNAL. This signal is
+	when we should hand the execution back to the booloader so we can reprogram the MCU without
+	having to manually put the RST pin low. You'd think it'd be a trivial task to do right? Just
+	jump to some random address in program memory of where the bootloader would be and that'll be
+	it. Nope. There's very little resources online that detail on how the bootloader is implemented
+	on this ATmega32U4 I have. Are there multiple bootloaders, or are there only one? I don't know.
+	Is there an implementation of an ATmega32U4 bootloader, the very same one that's flashed onto
+	mine? I don't know. All I know is that it's not as simple as jumping to the bootloader's
+	address (wherever that might be!) since it might first check whether or not the MCU has
+	restarted from an external reset (RST pin pulled low), and if not, it just hands the execution
+	back to the main program. So how does Arduino manage to do it then? I can't even say for
+	certain either, but from a public repo in (1), there's this single line of code (which I will
+	mention lacks ANY sort of explaination!) that writes to some seemingly arbitrary address with
+	some seemingly arbritary value. The crazy thing about this is that if we then perform a
+	watchdog reset afterwards, the bootloader actually runs. What does the line even do? I have no
+	goddamn idea. I'm guessing that this is writing some special magic value in a specific spot of
+	memory (probably where the bootloader resides). How does this write persist through a watchdog
+	reset? I'm not even sure. I hate writing code that I just copy-paste and leave not knowing how
+	it works at all, but this is probably better as a TODO to figured out later...
+
+	(1) Magic Bootloader Signal @ Site(github.com/PaxInstruments/ATmega32U4-bootloader/blob/bf5d4d1edff529d5cc8229f15463720250c7bcd3/avr/cores/arduino/CDC.cpp#L99C14-L99C14).
 */
 
 /* TODO[USB Regulator vs Interface]

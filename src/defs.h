@@ -269,10 +269,10 @@ struct USBDescCDCUnion // See: Source(6) @ Table(33) @ AbsPage(51).
 
 struct USBCDCLineCoding // See: Source(6) @ Table(50) @ AbsPage(69).
 {
-	u32 dwDTERate;
-	u8  bCharFormat;
-	u8  bParityType;
-	u8  bDataBits;
+	u32 dwDTERate;   // Essentially baud-rate.
+	u8  bCharFormat; // Describes amount of stop-bits.
+	u8  bParityType; // Describes mode of parity-bits.
+	u8  bDataBits;   // Describes amount of data-bits.
 };
 
 // Endpoint buffer sizes must be one of the names of enum USBEndpointSizeCode.
