@@ -140,7 +140,7 @@ debug_halt(u8 flashes)
 #endif
 
 //
-// Internal Documentation.
+// Documentation.
 //
 
 /* [Overview].

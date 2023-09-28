@@ -420,10 +420,10 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
 static u8 _usb_cdc_in_buffer [USB_ENDPOINT_CDC_IN_SIZE ] = {0};
 static u8 _usb_cdc_out_buffer[USB_ENDPOINT_CDC_OUT_SIZE] = {0};
 
-static          u8 _usb_cdc_in_writer  =  0; // Main program writes.
-static volatile u8 _usb_cdc_in_reader  = -1; // Interrupt routine reads. Must be before _usb_cdc_in_writer.
-static volatile u8 _usb_cdc_out_writer =  0; // Interrupt routine writes.
-static          u8 _usb_cdc_out_reader = -1; // Main program reads. Must be before _usb_cdc_out_writer.
+static volatile u8 _usb_cdc_in_writer  = 0; // Main program writes.
+static volatile u8 _usb_cdc_in_reader  = 0; // Interrupt routine reads.
+static volatile u8 _usb_cdc_out_writer = 0; // Interrupt routine writes.
+static volatile u8 _usb_cdc_out_reader = 0; // Main program reads.
 
 #define _usb_cdc_in_writer_masked(OFFSET)  ((_usb_cdc_in_writer  + (OFFSET)) & (countof(_usb_cdc_in_buffer ) - 1))
 #define _usb_cdc_in_reader_masked(OFFSET)  ((_usb_cdc_in_reader  + (OFFSET)) & (countof(_usb_cdc_in_buffer ) - 1))
@@ -444,11 +444,11 @@ static_assert(countof(_usb_cdc_in_buffer ) && !(countof(_usb_cdc_in_buffer ) & (
 static_assert(countof(_usb_cdc_out_buffer) && !(countof(_usb_cdc_out_buffer) & (countof(_usb_cdc_out_buffer) - 1)));
 
 #if DEBUG
-static b8 debug_usb_rx_diagnostic_signal = false;
+static volatile b8 debug_usb_rx_diagnostic_signal = false;
 #endif
 
 //
-// Internal Documentation.
+// Documentation.
 //
 
 /*

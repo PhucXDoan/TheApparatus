@@ -4,41 +4,36 @@ static void
 usb_init(void)
 { // [USB Initialization Process].
 
-	if (USBCON != 0b0010'0000) // TODO[Tampered Default Register Values] TODO Update.
-	{
-		wdt_enable(WDTO_15MS);
-		for(;;);
-	}
-
-	// [Power-On USB Pads Regulator].
+	// "Power-On USB Pads Regulator".
 	UHWCON = (1 << UVREGE);
 
-	// [Configure PLL Interface].
+	// "Configure PLL Interface and Enable PLL".
 	PLLCSR = (1 << PINDIV) | (1 << PLLE);
 
-	// [Check PLL Lock].
+	// "Check PLL Lock".
 	while (!(PLLCSR & (1 << PLOCK)));
 
-	// [Enable USB Interface].
+	// "Enable USB Interface".
 	USBCON = (1 << USBE);
 	USBCON = (1 << USBE) | (1 << OTGPADE);
 
-	// [Configure USB Interface] TODO Update.
-	UDIEN = (1 << EORSTE) | (1 << SOFI); // TODO FNCERR ?
+	// "Configure USB Interface"
+	UDIEN = (1 << EORSTE) | (1 << SOFI);
+	UDCON = 0; // Clearing the DETACH bit allows the device to be connected to the host. See: Source(1) @ Section(22.18.1) @ Page(281).
 
 	// [Wait For USB VBUS Information Connection].
-	UDCON = 0;
+	#if DEBUG
+	while (!debug_usb_rx_diagnostic_signal);
+	#endif
 }
 
 #if DEBUG
 static void
-debug_chars(char* value, u16 value_size)
+debug_tx_chars(char* value, u16 value_size)
 {
-	for (u16 i = 0; i < value_size; i += 1) // TODO memcpy
+	for (u16 i = 0; i < value_size; i += 1)
 	{
-		// Our write-cursor reached the interrupt's read-cursor.
-		while (_usb_cdc_in_writer_masked(0) == _usb_cdc_in_reader_masked(0));
-
+		while (_usb_cdc_in_writer_masked(1) == _usb_cdc_in_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
 		_usb_cdc_in_buffer[_usb_cdc_in_writer_masked(0)] = value[i];
 		_usb_cdc_in_writer += 1;
 	}
@@ -47,23 +42,23 @@ debug_chars(char* value, u16 value_size)
 
 #if DEBUG
 static void
-debug_cstr(char* value)
+debug_tx_cstr(char* value)
 {
-	debug_chars(value, strlen(value));
+	debug_tx_chars(value, strlen(value));
 }
 #endif
 
 #if DEBUG
-static u8
-debug_read(char* dst, u8 dst_length) // TODO Document // TODO Does windows/PuTTY really just send a /r on enter?
+static u8 // Amount of data copied into dst.
+debug_rx(char* dst, u8 dst_max_length) // TODO Does windows/PuTTY really just send a /r on enter?
 {
 	u8 result = 0;
 
-	while (result < dst_length && _usb_cdc_out_reader_masked(1) != _usb_cdc_out_writer_masked(0)) // Our read-cursor is right before the interrupt's write-cursor.  // TODO memcpy?
+	while (result < dst_max_length && _usb_cdc_out_reader_masked(0) != _usb_cdc_out_writer_masked(0))
 	{
-		dst[result]         = _usb_cdc_out_buffer[_usb_cdc_out_reader_masked(1)];
+		dst[result]          = _usb_cdc_out_buffer[_usb_cdc_out_reader_masked(0)];
 		_usb_cdc_out_reader += 1;
-		result             += 1;
+		result              += 1;
 	}
 
 	return result;
@@ -95,12 +90,12 @@ ISR(USB_GEN_vect)
 	if (UDINT & (1 << SOFI))
 	{
 		UENUM = USB_ENDPOINT_CDC_IN;
-		if (debug_usb_rx_diagnostic_signal && (UEINTX & (1 << TXINI)))
+		if (UEINTX & (1 << TXINI))
 		{
-			while ((UEINTX & (1 << RWAL)) && _usb_cdc_in_reader_masked(1) != _usb_cdc_in_writer_masked(0))
+			while ((UEINTX & (1 << RWAL)) && _usb_cdc_in_reader_masked(0) != _usb_cdc_in_writer_masked(0))
 			{
-				_usb_cdc_in_reader += 1;
 				UEDATX              = _usb_cdc_in_buffer[_usb_cdc_in_reader_masked(0)];
+				_usb_cdc_in_reader += 1;
 			}
 
 			UEINTX &= ~(1 << TXINI);
@@ -108,22 +103,18 @@ ISR(USB_GEN_vect)
 		}
 
 		UENUM = USB_ENDPOINT_CDC_OUT;
-		if (debug_usb_rx_diagnostic_signal && (UEINTX & (1 << RXOUTI)))
+		if (UEINTX & (1 << RXOUTI))
 		{
-			if (UEINTX & (1 << RWAL))
+			while ((UEINTX & (1 << RWAL)) && _usb_cdc_out_writer_masked(1) != _usb_cdc_out_reader_masked(0))
 			{
-				while ((UEINTX & (1 << RWAL)) && _usb_cdc_out_writer_masked(0) != _usb_cdc_out_reader_masked(0))
-				{
-					_usb_cdc_out_buffer[_usb_cdc_out_writer_masked(0)] = UEDATX;
-					_usb_cdc_out_writer += 1;
-				}
+				_usb_cdc_out_buffer[_usb_cdc_out_writer_masked(0)] = UEDATX;
+				_usb_cdc_out_writer += 1;
+			}
 
+			if (!(UEINTX & (1 << RWAL)))
+			{
 				UEINTX &= ~(1 << RXOUTI);
-
-				if (!(UEINTX & (1 << RWAL)))
-				{
-					UEINTX &= ~(1 << FIFOCON); // TODO This disregards unread parts!!!!!
-				}
+				UEINTX &= ~(1 << FIFOCON);
 			}
 		}
 	}
@@ -366,93 +357,87 @@ ISR(USB_COM_vect)
 #undef error
 
 //
-// Internal Documentation.
+// Documentation.
 //
+
+/* [Overview].
+	TODO
+*/
 
 /* [USB Initialization Process].
 	We carry out the following steps specified by (1):
-		1. [Power-On USB Pads Regulator].
-		2. [Configure PLL Interface].
-		3. [Enable PLL].
-		4. [Check PLL Lock].
-		5. [Enable USB Interface].
-		6. [Configure USB Interface].
-		7. [Wait For USB VBUS Information Connection].
+
+		1. "Power-On USB Pads Regulator".
+			Based off of (2), the USB regulator simply supplies voltage to the USB data lines
+			and the capacitor. So this first step is just as simple enabling UVREGE (3).
+
+		2. [Configure PLL Interface and Enable PLL].
+			PLL refers to a phase-locked-loop device. I don't know much about the mechanisms of
+			the circuit, but it seems like you give it some input frequency and it'll output a
+			higher frequency after it has synced up onto it.
+
+			I've heard that using the default 16MHz clock signal is more reliable as the input to
+			the PLL (TODO Citation!), especially when using full-speed USB connection. So that's
+			what we'll be using.
+
+			But we can't actually use the 16MHz frequency directly since the actual PLL unit itself
+			expects 8MHz, so we'll need to half our 16MHz clock to get that. Luckily, there's a
+			PLL clock prescaler as seen in (2) that just does this for us.
+
+			From there, we enable the PLL and it'll output a 48MHz frequency by default, as
+			shown in the default bits in (4) and table (5). We want 48MHz since this is what
+			the USB interface expects as shown by (2).
+
+		3. "Check PLL Lock".
+			We just wait until the PLL stablizes and is "locked" onto the expected frequency,
+			which apparently can take some milliseconds according to (7).
+
+		4. "Enable USB Interface".
+			The "USB interface" is synonymous with "USB device controller" or simply
+			"USB controller" (8). We can enable the controller with the USBE bit in USBCON.
+
+			But... based off of some experiments and the crude figure of the USB state machine
+			at (9), the FRZCLK bit can only be cleared **AFTER** the USB interface has been
+			enabled. FRZCLK halts the USB clock in order to minimize power consumption (10),
+			but obviously the USB is also disabled, so we want to avoid that. As a result, we
+			have to assign to USBCON again afterwards to be able to clear the FRZCLK bit.
+
+			We will also set OTGPADE to be able to detect whether or not we are connected to the
+			host (VBUS bit), and let the host know of our presence when we are plugged in (11).
+
+		5. "Configure USB Interface".
+			We enable the End-of-Reset interrupt, so when the unenumerated USB device connects
+			and the hosts sees this, the host will pull the data lines to a state to signal
+			that the device should reset (as described by (1)), and when the host releases, the
+			USB_GEN_vect is then triggered. It is important that we do some of our initializations
+			after the End-of-Reset signal since (12) specifically states that all of our endpoints
+			will end up disabled.
+
+			We also enable the Start-of-Frame interrupt which is a signal that's sent by the host
+			every frame (~1ms for full-speed USB). This is used to flush out data to be sent to the
+			host or data to be received. The alternative would've been to have an interrupt for
+			whenever the host wanted to do a transaction, but this happens so frequently that it
+			really ends up bogging the main program down too much.
+
+		6. "Wait For USB VBUS Information Connection".
+			At this point, the rest of USB initialization will be done in the USB_GEN_vect interrupt
+			routine. If we're in DEBUG mode, we'll wait for PuTTY to open up so we won't miss any
+			diagnostic outputs.
 
 	(1) "Power On the USB interface" @ Source(1) @ Section(21.12) @ Page(266).
-*/
-
-/* [Power-On USB Pads Regulator].
-	Based off of (1), the USB (pad) regulator simply supplies voltage to the USB data
-	lines and capacitor. So this first step is as simple just enabling this (2).
-
-	(1) "USB Controller Block Diagram Overview" @ Source(1) @ Figure(21-1) @ Page(256).
-	(2) UHWCON, UVREGE @ Source(1) @ Section(21.13.1) @ Page(267).
-*/
-
-/* [Configure PLL Interface].
-	PLL refers to a phase-locked-loop device. I don't know much about the mechanisms of
-	it, but it seems like you give it some input frequency and it'll output a higher
-	frequency after it has synced up onto it.
-
-	I've heard that using the default 16MHz clock signal is more reliable (TODO Prove),
-	especially when using full-speed USB connection. So that's what we'll be using.
-
-	We don't actually use the 16MHz frequency directly, but put it through a PLL clock
-	prescaler first, as seen in (1). The actual PLL unit itself expects 8MHz, so we'll
-	need to half our 16MHz clock to get that.
-
-	From there, we enable the PLL and it will output a 48MHz frequency by default, as
-	shown in the default bits in (2) and table (3). We want 48MHz since this is what
-	the USB interface expects as shown by (1).
-
-	(1) "USB Controller Block Diagram Overview" @ Source(1) @ Figure(21-1) @ Page(256).
-	(2) PDIV @ Source(1) @ Section(6.11.6) @ Page(41).
-	(3) PDIV Table @ Source(1) @ Section(6.11.6) @ Page(42).
-*/
-
-/* [Check PLL Lock].
-	We just wait until the PLL stablizes and is "locked" onto the expected frequency,
-	which apparently can take some milliseconds according to (1).
-
-	(1) PLOCK @ Source(1) @ Section(6.11.5) @ Page(41).
-*/
-
-/* [Enable USB Interface].
-	The "USB interface" is synonymous with "USB device controller" or simply
-	"USB controller" (1). We can enable the controller with the USBE bit in USBCON.
-
-	But... based off of some experiments and the crude figure of the USB state machine
-	at (2), the FRZCLK bit can only be cleared **AFTER** the USB interface has been
-	enabled. FRZCLK halts the USB clock in order to minimize power consumption (3),
-	but obviously the USB is also disabled, so we want to avoid that. As a result, we
-	have to assign to USBCON again afterwards to be able to clear the FRZCLK bit.
-
-	We will also set OTGPADE to be able to detect whether or not we are connected to the
-	host (VBUS bit), and let the host know of our presence when we are plugged in (4).
-
-	(1) "USB interface" @ Source(1) @ Section(22.2) @ Page(270).
-	(2) Crude USB State Machine @ Source(1) @ Figure (21-7) @ Page(260).
-	(3) FRZCLK @ Source(1) @ Section(21.13.1) @ Page(267).
-	(4) VBUS, USBSTA @ Source(1) @ Section(21.13.1) @ Page(268).
-*/
-
-/* [Configure USB Interface].
-	We enable the End-of-Reset interrupt, so when the unenumerated USB device connects
-	and the hosts sees this, the host will pull the data lines to a state to signal
-	that the device should reset (as described by (1)), and when the host releases, the
-	[USB Device Interrupt Routine] is then triggered.
-
-	It is important that we do some of our initializations after the End-of-Reset
-	signal since (1) specifically states that the endpoints will end up disabled
-	(See: [Endpoints]).
-
-	(1) "USB Reset" @ Source(1) @ Section(22.4) @ Page(271).
+	(2) "USB Controller Block Diagram Overview" @ Source(1) @ Figure(21-1) @ Page(256).
+	(3) UHWCON, UVREGE @ Source(1) @ Section(21.13.1) @ Page(267).
+	(4) PDIV @ Source(1) @ Section(6.11.6) @ Page(41).
+	(5) PDIV Table @ Source(1) @ Section(6.11.6) @ Page(42).
+	(7) PLOCK @ Source(1) @ Section(6.11.5) @ Page(41).
+	(8) "USB interface" @ Source(1) @ Section(22.2) @ Page(270).
+	(9) Crude USB State Machine @ Source(1) @ Figure (21-7) @ Page(260).
+	(10) FRZCLK @ Source(1) @ Section(21.13.1) @ Page(267).
+	(11) OTGPADE, VBUS, USBSTA @ Source(1) @ Section(21.13.1) @ Page(267-268).
+	(12) "USB Reset" @ Source(1) @ Section(22.4) @ Page(271).
 */
 
 /* [Wait For USB VBUS Information Connection].
-	No need to actually wait for a connection. The control flow will continue on as
-	normal; rest of the initialization will be done within the interrupt routines.
 */
 
 /* [Endpoints].
@@ -1080,22 +1065,6 @@ ISR(USB_COM_vect)
 	a request error.
 
 	(1) "Address State" @ Source(2) @ Section(9.4.7) @ Page(257).
-*/
-
-/* TODO[Tampered Default Register Values].
-	- Does bootloader modify initial registers?
-	- Is there a way to reset all registers, even if bootloader did mess with them?
-	- Perhaps USB End Of Reset event is sufficient to reset the USB state?
-	To my great dismay, some registers used in the initialization process are already tampered with.
-	I strongly believe this is due to the fact that the Arduino Leonardo's bootloader, which uses USB,
-	is not cleaning up after itself. This can be seen in the default bits in USBCON being different after
-	the bootloader finishes running, but are the expected values after power-cycling.
-	I don't know if there's a source online that could definitively confirm this however.
-	The datasheet also shows a crude figure of a state machine going between the RESET and IDLE states,
-	but doing USBE=0 doesn't seem to actually completely reset all register states, so this is useless.
-	So for now, we are just gonna enforce that the board is power-cycled after each flash.
-	See: UHWCON, USBCON @ Source(1) @ Section(21.13.1) @ Page(267).
-	See: Crude USB State Machine @ Source(1) @ Figure (22-1) @ Page(270).
 */
 
 /* TODO[USB Regulator vs Interface]
