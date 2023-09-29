@@ -430,6 +430,16 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 			after the End-of-Reset signal since (12) specifically states that all of our endpoints
 			will end up disabled.
 
+			The ATmega32U4 specification is not very clear on what the state of the endpoints are
+			after an End-of-Reset event. (12) did state that "all the endpoints are disabled",
+			which seems to imply that the EPEN bit is cleared for each endpoint. Clearing the EPEN
+			bit, as described in (13), causes an "endpoint reset" but keeps the configuration of
+			the endpoints around. (14) describes this "endpoint reset" as where the internal state
+			machines, the buffers, and some specific registers are restored to their initial
+			values. None of this really, or at least clearly, explain the state of the endpoint's
+			buffers in memory, and that if it's okay to just reinitialize each endpoint the same
+			way as we did the first time around. Regardless, it seems to be working fine!
+
 			We also enable the Start-of-Frame interrupt which is a signal that's sent by the host
 			every frame (~1ms for full-speed USB). This is used to flush out data to be sent to the
 			host or data to be received. The alternative would've been to have an interrupt for
@@ -452,6 +462,8 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 	(10) FRZCLK @ Source(1) @ Section(21.13.1) @ Page(267).
 	(11) OTGPADE, VBUS, USBSTA @ Source(1) @ Section(21.13.1) @ Page(267-268).
 	(12) "USB Reset" @ Source(1) @ Section(22.4) @ Page(271).
+	(13) Clearing EPEN @ Source(1) @ Section(22.6) @ Page(272).
+	(14) "Endpoint Reset" @ Source(1) @ Section(22.3) @ Page(270).
 */
 
 /* [About: Endpoints].

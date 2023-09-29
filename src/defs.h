@@ -1,4 +1,3 @@
-// TODO Interrupt behavior on USB disconnection and reconnection?
 #define false            0
 #define true             1
 #define stringify_(X)    #X
