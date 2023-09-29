@@ -68,6 +68,8 @@ enum PinState
 // USB.
 //
 
+#define DEBUG_PIN_USB_SPINLOCKING 3
+
 enum USBEndpointSizeCode // See: Source(1) @ Section(22.18.2) @ Page(287).
 {
 	USBEndpointSizeCode_8   = 0b000,
@@ -484,14 +486,6 @@ static volatile b8 debug_usb_rx_diagnostic_signal = false;
 	than a byte. That said, the MCU's 16-bit opcodes and AVR-GCC's ABI are defined to use
 	little-endian. In short: no padding bytes exist and we can take advantage of LSB being first
 	before the MSB.
-
-	The USB protocol is pretty intense. Hopefully this codebase is well documented
-	enough that it is easy to follow along to understand why things are being done
-	the way they are. If they aren't, then many citations and sources are linked to
-	sites, datasheets, specifications, etc. that describes a particular part in more
-	detail. "NEFASTOR ONLINE" (nefastor.com/micrcontrollers/stm32/usb/) contains some
-	articles explaining parts of the USB protocol, and Ben Eater on YouTube goes pretty
-	in-depth on the electrical USB transmission sides of things.
 
 	* I seem to not be able to find a comprehensive document of v1.2. USB.org has a zip
 	file containing an errata version of v1.2., but even that seem to be missing quite

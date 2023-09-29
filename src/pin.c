@@ -45,7 +45,7 @@ error_pin(enum PinErrorSource source)
 			_delay_ms(50.0);
 		}
 
-		_delay_ms(1000.0);
+		_delay_ms(500.0);
 
 		for (u8 i = 0; i < source; i += 1)
 		{
@@ -55,7 +55,7 @@ error_pin(enum PinErrorSource source)
 			_delay_ms(150.0);
 		}
 
-		_delay_ms(1000.0);
+		_delay_ms(500.0);
 	}
 }
 

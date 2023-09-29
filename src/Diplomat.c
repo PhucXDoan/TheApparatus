@@ -25,27 +25,7 @@ main(void)
 
 	usb_init();
 
-	u64 counter = 0;
-	for (;;)
-	{
-		char key_buffer[8];
-		u8   key_length = debug_rx(key_buffer, countof(key_buffer));
-		for (u8 key_index = 0; key_index < key_length; key_index += 1)
-		{
-			char serialized_counter_buffer[20];
-			u8   serialized_counter_length = serialize_u64(serialized_counter_buffer, countof(serialized_counter_buffer), counter);
-
-			char serialized_key_buffer[20];
-			u8   serialized_key_length = serialize_u64(serialized_key_buffer, countof(serialized_key_buffer), key_buffer[key_index]);
-
-			debug_tx_chars(serialized_counter_buffer, serialized_counter_length);
-			debug_tx_cstr(" : '");
-			debug_tx_chars(serialized_key_buffer, serialized_key_length);
-			debug_tx_cstr("'\n");
-
-			counter += 1;
-		}
-	}
+	for(;;);
 }
 
 //

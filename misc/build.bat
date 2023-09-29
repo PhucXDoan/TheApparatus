@@ -36,7 +36,7 @@ pushd W:\build\
 	set PROGRAM_NAME=Diplomat
 	set PROGRAMMER=avr109
 	set BOOTLOADER_COM=4
-	set DIAGNOSTIC_COM=5
+	set DIAGNOSTIC_COM=6
 
 	REM
 	REM Compile C source code into ELF (describes memory layout of main program).
@@ -119,7 +119,7 @@ pushd W:\build\
 	REM
 
 	for /L %%n in (1,1,500) do (
-		mode | findstr "COM5:" > nul
+		mode | findstr "COM!DIAGNOSTIC_COM!:" > nul
 		if !ERRORLEVEL! == 0 (
 			goto BREAK_WAITING_FOR_DIAGNOSTIC_COM
 		) else (

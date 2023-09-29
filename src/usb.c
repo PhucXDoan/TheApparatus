@@ -23,7 +23,9 @@ usb_init(void)
 
 	// 6. "Wait for USB VBUS information connection".
 	#if DEBUG
+	debug_pin_set(DEBUG_PIN_USB_SPINLOCKING, true);
 	while (!debug_usb_rx_diagnostic_signal);
+	debug_pin_set(DEBUG_PIN_USB_SPINLOCKING, false);
 	#endif
 }
 
@@ -313,12 +315,14 @@ ISR(USB_COM_vect)
 static void
 debug_tx_chars(char* value, u16 value_size)
 {
+	debug_pin_set(DEBUG_PIN_USB_SPINLOCKING, true);
 	for (u16 i = 0; i < value_size; i += 1)
 	{
 		while (_usb_cdc_in_writer_masked(1) == _usb_cdc_in_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
 		_usb_cdc_in_buffer[_usb_cdc_in_writer_masked(0)] = value[i];
 		_usb_cdc_in_writer += 1;
 	}
+	debug_pin_set(DEBUG_PIN_USB_SPINLOCKING, false);
 }
 #endif
 
@@ -331,10 +335,8 @@ debug_tx_cstr(char* value)
 #endif
 
 #if DEBUG
-// It seems like pressing keyboard "ENTER" sends only a carriage return ('\r', 0x10).
-// This may differ on other platforms though, so who knows why it's like this!
 static u8 // Amount of data copied into dst.
-debug_rx(char* dst, u8 dst_max_length)
+debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13) for keyboard enter.
 {
 	u8 result = 0;
 
@@ -356,8 +358,27 @@ debug_rx(char* dst, u8 dst_max_length)
 //
 
 /* [Overview].
-	TODO
-	TODO Mention [About: Endpoints].
+	This file implements all the USB functionality for this device.
+	The USB protocol is pretty intense. Hopefully the code base is well documented
+	enough that it is easy to follow along to understand why things are being done
+	the way they are. If they aren't, then many citations and sources are linked to
+	sites, datasheets, specifications, etc. that describes a particular part in more
+	detail. (1) contains some articles explaining parts of the USB protocol, and Ben Eater on
+	YouTube goes pretty in-depth on the electrical USB transmission sides of things. See the many
+	blocks of comments below for more in-depth explainations for the code written above.
+
+	The first USB functionality that was implemented is the CDC which allows communication between
+	host and device. This is vital for development since this allows us to debug easily by sending
+	diagnostics to the host's terminal, and also for us to potentially receive inputs. It also gives
+	us the ability to be able to trigger the bootloader remotely so we don't have to manually reset
+	the MCU for reprogramming; a huge quality-of-life improvement. The endpoints used for
+	transferring the diagnostics are only enabled in DEBUG mode. This is just to keep things slim
+	and ensure that we aren't bloating the firmware with unnecessary code. Currently though, the
+	entire CDC functionality is still active in the configuration regardless of the state of DEBUG.
+	This just makes development a little bit easier, but a potential TODO is to have the CDC
+	function be entirely omitted since it's not really used to directly contribute to anything.
+
+	(1) "NEFASTOR ONLINE" @ URL(nefastor.com/micrcontrollers/stm32/usb/).
 */
 
 /* [USB Initialization Process].
@@ -1122,7 +1143,7 @@ debug_rx(char* dst, u8 dst_max_length)
 	reset? I'm not even sure. I hate writing code that I just copy-paste and leave not knowing how
 	it works at all, but this is probably better as a TODO to figured out later...
 
-	(1) Magic Bootloader Signal @ Site(github.com/PaxInstruments/ATmega32U4-bootloader/blob/bf5d4d1edff529d5cc8229f15463720250c7bcd3/avr/cores/arduino/CDC.cpp#L99C14-L99C14).
+	(1) Magic Bootloader Signal @ URL(github.com/PaxInstruments/ATmega32U4-bootloader/blob/bf5d4d1edff529d5cc8229f15463720250c7bcd3/avr/cores/arduino/CDC.cpp#L99C14-L99C14).
 */
 
 /* TODO[USB Regulator vs Interface]
