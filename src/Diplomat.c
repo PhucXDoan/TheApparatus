@@ -25,7 +25,15 @@ main(void)
 
 	usb_init();
 
-	for(;;);
+	for(;;)
+	{
+		char c;
+		if (debug_rx(&c, 1))
+		{
+			debug_tx_chars(&c, 1);
+			debug_tx_cstr(" : The work is mysterious and important.\n");
+		}
+	}
 }
 
 //

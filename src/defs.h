@@ -298,7 +298,7 @@ struct USBCDCLineCoding // See: Source(6) @ Table(50) @ AbsPage(69).
 #define USB_ENDPOINT_CDC_OUT_SIZE          64
 #define USB_ENDPOINT_CDC_OUT_SIZE_CODE     concat(USBEndpointSizeCode_, USB_ENDPOINT_CDC_OUT_SIZE)
 
-static const u8 USB_ENDPOINT_UECFGNX[][2] = // UECFG0X and UECFG1X that an endpoint will be configured with.
+static const u8 USB_ENDPOINT_UECFGNX[][2] PROGMEM = // UECFG0X and UECFG1X that an endpoint will be configured with.
 	{
 		#define MAKE(ENDPOINT_NAME) \
 			[USB_ENDPOINT_##ENDPOINT_NAME] = \
@@ -312,7 +312,7 @@ static const u8 USB_ENDPOINT_UECFGNX[][2] = // UECFG0X and UECFG1X that an endpo
 		#undef MAKE
 	};
 
-static const struct USBDescDevice USB_DEVICE_DESCRIPTOR = // TODO PROGMEMify.
+static const struct USBDescDevice USB_DEVICE_DESCRIPTOR PROGMEM =
 	{
 		.bLength            = sizeof(struct USBDescDevice),
 		.bDescriptorType    = USBDescType_device,
@@ -348,7 +348,7 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 };
 
 #define USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE 1 // Argument used for "SetConfiguration" command. Zero resets the device's configuration state, so 1 is used instead. See: Soure(2) @ Figure(11-10) @ Page(310).
-static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY =
+static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY PROGMEM =
 	{
 		.config =
 			{

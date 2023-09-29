@@ -36,14 +36,14 @@ ISR(USB_GEN_vect)
 	{
 		for (u8 i = 0; i < countof(USB_ENDPOINT_UECFGNX); i += 1)
 		{
-			if (USB_ENDPOINT_UECFGNX[i][1]) // Elements that aren't explicitly assigned in USB_ENDPOINT_UECFGNX will have the ALLOC bit cleared.
+			if (pgm_read_byte(&USB_ENDPOINT_UECFGNX[i][1])) // Elements that aren't explicitly assigned in USB_ENDPOINT_UECFGNX will have the ALLOC bit cleared.
 			{
 				UENUM   = i;           // "Select the endpoint".
 				UECONX  = (1 << EPEN); // "Activate endpoint".
 
 				// "Configure and allocate".
-				UECFG0X = USB_ENDPOINT_UECFGNX[i][0];
-				UECFG1X = USB_ENDPOINT_UECFGNX[i][1];
+				UECFG0X = pgm_read_byte(&USB_ENDPOINT_UECFGNX[i][0]);
+				UECFG1X = pgm_read_byte(&USB_ENDPOINT_UECFGNX[i][1]);
 
 				// "Test endpoint configuration".
 				#if DEBUG
@@ -110,11 +110,11 @@ ISR(USB_GEN_vect)
 }
 
 static void
-_usb_endpoint_0_in(u8* packet_data, u16 packet_length)
+_usb_endpoint_0_in_pgm(const u8* payload_data, u16 payload_length)
 { // [Endpoint 0: Data-Transfer from Device to Host].
 
-	u8* data_cursor    = packet_data;
-	u16 data_remaining = packet_length;
+	const u8* reader    = payload_data;
+	u16       remaining = payload_length;
 	while (true)
 	{
 		if (UEINTX & (1 << RXOUTI)) // Received OUT-transaction?
@@ -124,18 +124,18 @@ _usb_endpoint_0_in(u8* packet_data, u16 packet_length)
 		}
 		else if (UEINTX & (1 << TXINI)) // Endpoint 0's buffer ready to be filled?
 		{
-			u8 writes_left = data_remaining;
+			u8 writes_left = remaining;
 			if (writes_left > USB_ENDPOINT_DFLT_SIZE)
 			{
 				writes_left = USB_ENDPOINT_DFLT_SIZE;
 			}
 
-			data_remaining -= writes_left;
+			remaining -= writes_left;
 			while (writes_left)
 			{
-				UEDATX        = data_cursor[0];
-				data_cursor  += 1;
-				writes_left  -= 1;
+				UEDATX       = pgm_read_byte(reader);
+				reader      += 1;
+				writes_left -= 1;
 			}
 
 			UEINTX &= ~(1 << TXINI); // Endpoint 0's buffer is ready for the next IN-transaction.
@@ -162,14 +162,14 @@ ISR(USB_COM_vect)
 		{
 			case USBSetupRequestType_get_desc: // [Endpoint 0: SETUP-Transaction's GetDescriptor].
 			{
-				u8  payload_length = 0; // Any payload we send will not exceed 255 bytes.
-				u8* payload_data   = 0;
+				u8        payload_length = 0; // Any payload we send will not exceed 255 bytes.
+				const u8* payload_data   = 0;
 
 				switch ((enum USBDescType) request.get_desc.desc_type)
 				{
 					case USBDescType_device: // See: [Endpoint 0: SETUP-Transaction's GetDescriptor].
 					{
-						payload_data   = (u8*) &USB_DEVICE_DESCRIPTOR;
+						payload_data   = (const u8*) &USB_DEVICE_DESCRIPTOR;
 						payload_length = sizeof(USB_DEVICE_DESCRIPTOR);
 						static_assert(sizeof(USB_DEVICE_DESCRIPTOR) < (((u64) 1) << bitsof(payload_length)))
 					} break;
@@ -178,7 +178,7 @@ ISR(USB_COM_vect)
 					{
 						if (!request.get_desc.desc_index) // We only have a single configuration.
 						{
-							payload_data   = (u8*) &USB_CONFIGURATION_HIERARCHY;
+							payload_data   = (const u8*) &USB_CONFIGURATION_HIERARCHY;
 							payload_length = sizeof(USB_CONFIGURATION_HIERARCHY);
 							static_assert(sizeof(USB_CONFIGURATION_HIERARCHY) < (((u64) 1) << bitsof(payload_length)))
 						}
@@ -203,7 +203,7 @@ ISR(USB_COM_vect)
 
 				if (payload_length)
 				{
-					_usb_endpoint_0_in // TODO Inline?
+					_usb_endpoint_0_in_pgm // TODO Inline?
 					(
 						payload_data,
 						request.get_desc.requested_amount < payload_length
@@ -314,7 +314,7 @@ ISR(USB_COM_vect)
 #if DEBUG
 static void
 debug_tx_chars(char* value, u16 value_size)
-{
+{ // TODO we could use memcpy if we need to speed this up
 	debug_pin_set(DEBUG_PIN_USB_SPINLOCKING, true);
 	for (u16 i = 0; i < value_size; i += 1)
 	{
@@ -337,7 +337,7 @@ debug_tx_cstr(char* value)
 #if DEBUG
 static u8 // Amount of data copied into dst.
 debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13) for keyboard enter.
-{
+{ // TODO we could use memcpy if we need to speed this up
 	u8 result = 0;
 
 	while (result < dst_max_length && _usb_cdc_out_reader_masked(0) != _usb_cdc_out_writer_masked(0))
