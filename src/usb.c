@@ -104,6 +104,18 @@ ISR(USB_GEN_vect)
 				UEINTX &= ~(1 << FIFOCON); // We free up the endpoint's buffer so we can accept the next OUT-transaction to this endpoint.
 			}
 		}
+
+		UENUM = USB_ENDPOINT_HID;
+		if (UEINTX & (1 << TXINI))
+		{
+			UEINTX &= ~(1 << TXINI);
+			static u8 TEMP = 0;
+			if (TEMP >= 2)
+			{
+				error;
+			}
+			TEMP += 1;
+		}
 	}
 
 	UDINT = 0; // Clear interrupt flags to prevent this routine from executing again.
@@ -185,7 +197,7 @@ ISR(USB_COM_vect)
 					} break;
 
 					case USBDescType_device_qualifier: // See: Source(2) @ Section(9.6.2) @ Page(264).
-					case USBDescType_string:           // See: [USB Strings] @ defs.h.
+					case USBDescType_string:           // See: [USB Strings] @ File(defs.h).
 					{
 						// We induce STALL condition. See: [Endpoint 0: Request Error].
 					} break;
@@ -194,6 +206,9 @@ ISR(USB_COM_vect)
 					case USBDescType_endpoint:
 					case USBDescType_other_speed_config:
 					case USBDescType_interface_power:
+					case USBDescType_hid:
+					case USBDescType_hid_report:
+					case USBDescType_hid_physical:
 					case USBDescType_cdc_interface:
 					case USBDescType_cdc_endpoint:
 					{
@@ -331,6 +346,16 @@ static void
 debug_tx_cstr(char* value)
 {
 	debug_tx_chars(value, strlen(value));
+}
+#endif
+
+#if DEBUG
+static void
+debug_tx_u64(u64 value)
+{
+	char buffer[20];
+	u8   length = serialize_u64(buffer, countof(buffer), value);
+	debug_tx_chars(buffer, length);
 }
 #endif
 
