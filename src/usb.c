@@ -113,8 +113,6 @@ ISR(USB_GEN_vect)
 			static u64 TEMP = 0;
 			if (TEMP >= TEMP_MAX)
 			{
-				debug_pin_set(4, true);
-
 				UEDATX = 0;
 				UEDATX = 0;
 				UEDATX = 0;
@@ -199,9 +197,9 @@ ISR(USB_COM_vect)
 					{
 						case USBDescType_device: // See: [Endpoint 0: SETUP-Transaction's GetDescriptor].
 						{
-							payload_data   = (const u8*) &USB_DEVICE_DESCRIPTOR;
-							payload_length = sizeof(USB_DEVICE_DESCRIPTOR);
-							static_assert(sizeof(USB_DEVICE_DESCRIPTOR) < (((u64) 1) << bitsof(payload_length)))
+							payload_data   = (const u8*) &USB_DESC_DEVICE;
+							payload_length = sizeof(USB_DESC_DEVICE);
+							static_assert(sizeof(USB_DESC_DEVICE) < (((u64) 1) << bitsof(payload_length)))
 						} break;
 
 						case USBDescType_config: // [Interfaces, Configurations, and Classes].
@@ -343,6 +341,8 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
+			// The host wants to reduce the amount of data being transferred in the case where HID report payloads ends up being the same as the previous.
+			// We seem to be alright in ignoring this request though. See: Source(7) @ Section(7.2.4) @ AbsPage(62-63).
 			case USBSetupRequestType_hid_set_idle:
 			{
 				UECONX |= (1 << STALLRQ);
@@ -920,15 +920,15 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 	itself, hence "descriptor".
 
 	One of the things the host might ask is what the device itself is. This is detailed
-	within USB_DEVICE_DESCRIPTOR. Things such as the device's vendor and the amount of
+	within USB_DESC_DEVICE. Things such as the device's vendor and the amount of
 	ways the device can be configured is transmitted to the host.
 
 	Not all descriptors can be fulfilled. In this case, the device will send the host a
 	STALL-HANDSHAKE packet as a response. See: [Endpoint 0: Request Error].
 
 	The HID class can also send a GetDescriptor request where the recipent will be the HID
-	interface, as indicated by (1) and (2). It's essentially the same thing where the host's driver
-	will most likely query for the HID report format (USB_DESC_HID_REPORT).
+	interface, as indicated by (1) and (2). It's essentially the same as the standard GetDescriptor
+	request, but with slightly different interpretations on the setup packet's fields.
 
 	(1) "bmRequestType" @ Source(2) @ Table(9-2) @ Page(248).
 	(2) HID's GetDescriptor Request @ Source(7) @ Section(7.1.1) @ AbsPage(59).
@@ -936,37 +936,51 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 
 /* [Interfaces, Configurations, and Classes].
 	An "interface" of a USB device is just a group of endpoints that are used for a
-	specific functionality. A simple mouse, for instance, may only just have a single
-	interface with one endpoint that simply reports the delta-movement to the host.
-	A fancier mouse with a numberpad on the side may have two interfaces: one for the
+	specific functionality (but not really... see later). A simple mouse, for instance, may only
+	just have a single interface with one endpoint that simply reports the delta-movement to the
+	host.  A fancier mouse with a numberpad on the side may have two interfaces: one for the
 	mouse functionality and the other for the keyboard of the numberpad. A flashdrive
 	can have two endpoints: transmitting and receiving files to and from the host. The
 	two endpoints here would be grouped together into one interface.
 
-	The functionality of an interface is determined by the "class" (specifically
-	bInterfaceClass). An example would be HID (human-interface device) which include,
-	mouses, keyboards, data-gloves, etc. The USB specification does not detail much at
-	all about these classes; that is, the corresponding class specification must be
-	consulted. The entire USB device can optionally be labeled as a single class (via
-	bDeviceClass). This seems to be useful for the host in loading the necessary
-	drivers, according to (1), but it is not required for the device to be classified as
-	anything specific.
-
-	A set of interfaces is called a "configuration", and the host must choose the most
+	A set of interfaces is called a "configuration" (2), and the host must choose the most
 	appropriate configuration for the device. The ability of having multiple
 	configurations allows greater flexibility of when and where the device can be used.
 	For example, if the host is a laptop that is currently on battery-power, the host
 	may choose a device configuration that is more power-efficient. When the laptop is
 	plugged in, it may reconfigure the device to now use as much power as it wants.
 
-	We define a single configuration (consult (2) for how configuration descriptor is
-	laid out), and within it, we implement interfaces for each of the following classes:
+	The functionality of an interface is determined by the "class" (such as bInterfaceClass).
+	An example would be HID (human-interface device) which include, mouses, keyboards, data-gloves,
+	etc. The USB specification does not detail much at all about these classes; that is, the
+	corresponding class specifications must be consulted. The entire USB device can optionally be
+	labeled as a single class (via bDeviceClass). This seems to be useful for the host in loading
+	the necessary drivers, according to (1), but it is not required for the device to be classified
+	as anything specific.
+
+	There's nothing stopping from a USB device from having multi-function capabilities (say a mouse
+	with a flashdrive function, for some reason). Ideally, each function that the device provided to
+	the host would be in its own little neat box that is the interface, but the USB 2.0
+	specification apparently never explicitly stated that this had to be the case, according to
+	(3). An example of this issue is the communication functionality of our device being split
+	into two separate interfaces (CDC and CDC-Data). Once you add audio and video on top of that
+	communication functionality, I'm only going to guess that it gets even messier.
+
+	This is resolved by noting in our device's class, subclass, and protocol to be particular
+	values to indicate to the host that we have an "interface association descriptor" (IAD). This
+	IAD is visually described in (4), but it essentially just groups multiple interfaces together
+	into one proper function as it should've been.
+
+	Our device only has a single configuration, and within it, we implement interfaces for each of
+	the following classes (with IAD to group as necessary):
 		- [CDC - Communication Class Device].
 		- [HID - Human Interface Device Class].
 		- [Mass Storage Device Class].
 
 	(1) Device and Configuration Descriptors @ Source(4) @ Chapter(5).
 	(2) "USB Descriptors" @ Source(4) @ Chapter(5).
+	(3) IAD Purpose @ Source(9) @ Section(1) @ AbsPage(4).
+	(4) IAD Graphic @ Source(9) @ Section(2) @ AbsPage(5).
 */
 
 /* [CDC - Communication Class Device].
@@ -1024,8 +1038,10 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 	Thus, (from my limited understanding of how this CDC implementation is done) we can essentially
 	use CDC to mimick our device to be something like a modem and serially transmit data to the host
 	(the fact we aren't really a modem that's working with analog signals doesn't really matter).
-	We are going to define a couple interfaces for CDC later on, so we will need to declare
-	the entire device as being a communication device in USB_DEVICE_DESCRIPTOR as mentioned in (5).
+	We are going to define a couple interfaces (CDC and CDC-Data) later on, so we would need to
+	declare the entire device as being a communication device in USB_DESC_DEVICE as mentioned in
+	(5), but since we also have other device functionalities we want to bring to the host, this is
+	done in the corresponding IAD instead.
 
 	As stated earlier, there are many communication devices that the CDC specification
 	wants to be compatiable with. The one that will be the most applicable for us is the
@@ -1099,11 +1115,15 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 			determine which CDC-interfaces would go with which other interfaces that are used to
 			transfer the communication itself.
 
-	After all that, we then define the CDC-data class (20). This one seems pretty straight-forward;
+	After all that, we then define the CDC-Data class (20). This one seems pretty straight-forward;
 	we just kinda specify some endpoints that'll be used for transferring data to and from the
 	host. It can be used for sending raw data, or some sort of structured format that the
 	specification didn't define. In any case, this is where we define the endpoints that'll be
 	transmitting diagnostics and to receive input from the host.
+
+	Since we did define two interfaces to bring a single feature to the host, the CDC and CDC-Data
+	interfaces are grouped together under the previous IAD that was defined before (see:
+	USB_CONFIG_HIERARCHY).
 
 	(1) "Interface Definitions" @ Source(6) @ Section(3.3) @ AbsPage(20).
 	(2) "Communication Class Interface" @ Source(6) @ Section(3.3.1) @ AbsPage(20).
@@ -1128,7 +1148,27 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 */
 
 /* [HID - Human Interface Device Class].
-	TODO
+	The HID specifications is a lot more digestable than the CDC one. Overall, it's pretty
+	straightforward. We define an interface with the descriptor denoting that it belongs to the
+	HID class. After the interface descriptor is the HID descriptor (confusing namings around
+	honestly) that acts as a root for the host to access all the other HID-specific descriptors.
+	In fact, a nice little diagram at (1) illustrates this, something that CDC should learn from.
+
+	We give the HID class a single IN-typed interrupt endpoint that'll periodically and consistently
+	sends data to the host. The format of this data is described throughly by the HID report
+	descriptor (see: USB_DESC_HID_REPORT). I don't fully understand how this format exactly works,
+	primarily due to the fact that testing it is a nightmare to do, but it's designed to be
+	extremely flexible with any device that will ever be interacted by a human. The report consists
+	of "items" that build up properties of how the data sent to the host should be interpreted
+	(what units, whether or not it's relative or absolute, etc.). Not much has to be dived into
+	here, since the HID specification was just so kind enough to literally provide multitude of
+	example report descriptors (2)!
+
+	With this class, we can now use the device as a mouse to move a cursor and do some clicks and
+	drags.
+
+	(1) Device Descriptor Structure @ Source(7) @ Section(5.1) @ AbsPage(22).
+	(2) "Example USB Descriptors for HID Class Devices" @ Source(7) @ Appendix(E) @ absPage(76).
 */
 
 /* [Mass Storage Device Class].

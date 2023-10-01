@@ -112,7 +112,7 @@ enum USBSetupRequestType // "bmRequestType" and "bRequest" bytes are combined. S
 	USBSetupRequestType_cdc_set_line_coding        = MAKE(0b00100001, 0x20),
 	USBSetupRequestType_cdc_set_control_line_state = MAKE(0b00100001, 0x22),
 
-	// Non-exhaustive. See: HID-Specific Requests @ Source(7) @ Section(7.1) @ AbsPage(58-61).
+	// Non-exhaustive. See: HID-Specific Requests @ Source(7) @ Section(7.1) @ AbsPage(58-63).
 	USBSetupRequestType_hid_get_desc = MAKE(0b10000001, 6),
 	USBSetupRequestType_hid_set_idle = MAKE(0b00100001, 0x0A),
 
@@ -265,7 +265,7 @@ struct USBDescCDCCallManagement // See: Source(6) @ Table(27) @ AbsPage(45-46).
 	u8 bDescriptorType;    // Must be USBDescType_cdc_interface.
 	u8 bDescriptorSubtype; // Must be USBDescCDCSubtype_call_management.
 	u8 bmCapabilities;     // Describes what the CDC device is capable of in terms of call-management. Seems irrelevant for functionality.
-	u8 bDataInterface;     // Index of CDC-data interface to receive call-management comamnds. Seems irrelevant for functionality.
+	u8 bDataInterface;     // Index of CDC-Data interface to receive call-management comamnds. Seems irrelevant for functionality.
 };
 
 struct USBDescCDCACMManagement // See: Source(6) @ Table(28) @ AbsPage(46-47).
@@ -366,45 +366,6 @@ enum USBHIDUsageGenericDesktop // Non-exhaustive. See: Source(8) @ Section(4) @ 
 	USBHIDUsageGenericDesktop_y       = 0x31, // Linear translation from far-to-near, so in the context of a mouse, top-down.
 };
 
-static const u8 USB_DESC_HID_REPORT[] PROGMEM =
-	{
-		USBHIDItem_global_usage_page,     USBHIDUsagePage_generic_desktop,
-		USBHIDItem_local_usage,           USBHIDUsageGenericDesktop_mouse,
-		USBHIDItem_main_begin_collection, USBHIDItemMainCollectionType_application,
-
-			USBHIDItem_local_usage,           USBHIDUsageGenericDesktop_pointer,
-			USBHIDItem_main_begin_collection, USBHIDItemMainCollectionType_physical,
-
-				// LSb for primary mouse button being held.
-				USBHIDItem_global_usage_page,   USBHIDUsagePage_button,
-				USBHIDItem_local_usage_min,     1,
-				USBHIDItem_local_usage_max,     1,
-				USBHIDItem_global_logical_min,  0,
-				USBHIDItem_global_logical_max,  1,
-				USBHIDItem_global_report_size,  1,
-				USBHIDItem_global_report_count, 1,
-				USBHIDItem_main_input,          USBHIDItemMainInputFlag_variable,
-
-				// Padding bits.
-				USBHIDItem_global_report_size,  7,
-				USBHIDItem_global_report_count, 1,
-				USBHIDItem_main_input,          USBHIDItemMainInputFlag_padding,
-
-				// Two signed bytes for delta-x and delta-y respectively.
-				USBHIDItem_global_usage_page,   USBHIDUsagePage_generic_desktop,
-				USBHIDItem_local_usage,         USBHIDUsageGenericDesktop_x,
-				USBHIDItem_local_usage,         USBHIDUsageGenericDesktop_y,
-				USBHIDItem_global_logical_min,  -128,
-				USBHIDItem_global_logical_max,  127,
-				USBHIDItem_global_report_size,  8,
-				USBHIDItem_global_report_count, 2,
-				USBHIDItem_main_input,          USBHIDItemMainInputFlag_variable | USBHIDItemMainInputFlag_relative,
-
-			USBHIDItem_main_end_collection,
-
-		USBHIDItem_main_end_collection,
-	};
-
 // Endpoint buffer sizes must be one of the names of enum USBEndpointSizeCode.
 // The maximum capacity between endpoints also differ. See: Source(1) @ Section(22.1) @ Page(270).
 
@@ -475,7 +436,46 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 	} hid;
 };
 
-static const struct USBDescDevice USB_DEVICE_DESCRIPTOR PROGMEM =
+static const u8 USB_DESC_HID_REPORT[] PROGMEM =
+	{
+		USBHIDItem_global_usage_page,     USBHIDUsagePage_generic_desktop,
+		USBHIDItem_local_usage,           USBHIDUsageGenericDesktop_mouse,
+		USBHIDItem_main_begin_collection, USBHIDItemMainCollectionType_application,
+
+			USBHIDItem_local_usage,           USBHIDUsageGenericDesktop_pointer,
+			USBHIDItem_main_begin_collection, USBHIDItemMainCollectionType_physical,
+
+				// LSb for primary mouse button being held.
+				USBHIDItem_global_usage_page,   USBHIDUsagePage_button,
+				USBHIDItem_local_usage_min,     1,
+				USBHIDItem_local_usage_max,     1,
+				USBHIDItem_global_logical_min,  0,
+				USBHIDItem_global_logical_max,  1,
+				USBHIDItem_global_report_size,  1,
+				USBHIDItem_global_report_count, 1,
+				USBHIDItem_main_input,          USBHIDItemMainInputFlag_variable,
+
+				// Padding bits.
+				USBHIDItem_global_report_size,  7,
+				USBHIDItem_global_report_count, 1,
+				USBHIDItem_main_input,          USBHIDItemMainInputFlag_padding,
+
+				// Two signed bytes for delta-x and delta-y respectively.
+				USBHIDItem_global_usage_page,   USBHIDUsagePage_generic_desktop,
+				USBHIDItem_local_usage,         USBHIDUsageGenericDesktop_x,
+				USBHIDItem_local_usage,         USBHIDUsageGenericDesktop_y,
+				USBHIDItem_global_logical_min,  -128,
+				USBHIDItem_global_logical_max,  127,
+				USBHIDItem_global_report_size,  8,
+				USBHIDItem_global_report_count, 2,
+				USBHIDItem_main_input,          USBHIDItemMainInputFlag_variable | USBHIDItemMainInputFlag_relative,
+
+			USBHIDItem_main_end_collection,
+
+		USBHIDItem_main_end_collection,
+	};
+
+static const struct USBDescDevice USB_DESC_DEVICE PROGMEM =
 	{
 		.bLength            = sizeof(struct USBDescDevice),
 		.bDescriptorType    = USBDescType_device,
@@ -700,11 +700,14 @@ static volatile b8 debug_usb_diagnostic_signal_received = false;
 */
 
 /* [About: USBClass_null].
-	When USBClass_null is used in device descriptors (bDeviceClass), the class is
+	When USBClass_null is used in device descriptors (bDeviceClass), the class is supposedly
 	determined by the interfaces of the configurations (bInterfaceClass). (1) says that
 	USBClass_null cannot be used in interface descriptors as it is "reserved for future
 	use". However, (2) states that it is for the "null class code triple" now,
-	whatever that means!
+	whatever that means! Anyways, USBClass_null in the device descriptor level doesn't really
+	help with creating a device with multi-function capabilities, which I am supposing is due to
+	the fact that USB drivers can't seem to be able to parse the configuration descriptor properly.
+	And thus, IAD was introduced and handles it all for us.
 
 	(1) "bInterfaceClass" @ Source(2) @ Table(9-12) @ Page(268).
 	(2) "Base Class 00h (Device)" @ Source(5).
