@@ -1,3 +1,43 @@
+#if 0
+#define F_CPU 16'000'000
+#include <avr/io.h>
+#include <util/delay.h>
+#include <avr/interrupt.h>
+#include <avr/wdt.h>
+#include <avr/pgmspace.h>
+#include <stdint.h>
+#include <string.h>
+#include "defs.h"
+#include "misc.c"
+#include "pin.c"
+#undef F_CPU
+#undef false
+#undef true
+#undef idVendor
+#undef idProduct
+#include "data/k_usb.c"
+int
+main(void)
+{
+	_delay_ms(2000.0);
+	usb_init();
+	_delay_ms(4000.0);
+	send_keypress('A', 0);
+	_delay_ms(500.0);
+	send_keypress('A', 0);
+	_delay_ms(500.0);
+	send_keypress('A', 0);
+	_delay_ms(500.0);
+	send_keypress('A', 0);
+	_delay_ms(500.0);
+	send_keypress('A', 0);
+	_delay_ms(500.0);
+	send_keypress('A', 0);
+	_delay_ms(500.0);
+	send_keypress('A', 0);
+	for(;;);
+}
+#else
 #define F_CPU 16'000'000
 #include <avr/io.h>
 #include <util/delay.h>
@@ -55,3 +95,4 @@ main(void)
 	See: "Watchdog Reset" @ Source(1) @ Section(8.6) @ Page(53-54).
 	See: "Watchdog Timer" @ Source(1) @ Section(8.9) @ Page(55-56).
 */
+#endif

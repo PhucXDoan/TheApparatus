@@ -1,5 +1,4 @@
 #define error error_halt(PinErrorSource_usb)
-
 static b8 TEMP_configured = false;
 
 static void
@@ -108,15 +107,31 @@ ISR(USB_GEN_vect)
 		}
 
 		UENUM = USB_ENDPOINT_HID;
-		if (TEMP_configured && UEINTX & (1 << TXINI))
+		if (TEMP_configured && (UEINTX & (1 << RWAL)))
 		{
-			//static u8 TEMP = 0;
-			//TEMP += 1;
-			//if (TEMP >= 3)
-			//{
-			//	debug_pin_set(4, true);
-			//}
-			UEINTX &= ~(1 << TXINI);
+			static u64 TEMP = 0;
+			if (TEMP >= 2048)
+			{
+				debug_pin_set(4, true);
+				UEDATX = 0;
+				UEDATX = 0;
+				UEDATX = 0;
+				UEDATX = 0;
+				UEDATX = 0;
+				UEDATX = 0;
+			}
+			else
+			{
+				TEMP += 1;
+				UEDATX = 0;
+				UEDATX = 1;
+				UEDATX = 0;
+				UEDATX = 1;
+				UEDATX = 0;
+				UEDATX = 0;
+			}
+			UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
+			UEINTX &= ~(1 << FIFOCON); // We are done writing to the bank, either because the endpoint's buffer is full or because there's no more deta to provide.
 		}
 	}
 
@@ -329,7 +344,7 @@ ISR(USB_COM_vect)
 
 			case USBSetupRequestType_hid_get_interface:
 			{
-				if (request.hid_get_interface.desc_index == 0 && request.hid_get_interface.desc_type == USBDescType_hid_report && request.hid_get_interface.interface_number == 2)
+				if (request.hid_get_interface.desc_index == 0 && request.hid_get_interface.desc_type == USBDescType_hid_report && request.hid_get_interface.interface_number == 0)
 				{
 					_usb_endpoint_0_in_pgm // TODO Inline?
 					(
@@ -341,14 +356,18 @@ ISR(USB_COM_vect)
 				}
 				else
 				{
-						debug_halt(3);
+					debug_halt(3);
 					error;
 				}
 			} break;
 
+			case 0b00001001'00100001:
+			{
+			} break;
+
 			default:
 			{
-						debug_halt(4);
+				debug_halt(4);
 				error;
 			} break;
 		}
