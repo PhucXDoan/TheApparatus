@@ -1,5 +1,4 @@
 #define error error_halt(PinErrorSource_usb)
-static b8 TEMP_configured = false;
 
 static void
 usb_init(void)
@@ -107,12 +106,14 @@ ISR(USB_GEN_vect)
 		}
 
 		UENUM = USB_ENDPOINT_HID;
-		if (TEMP_configured && (UEINTX & (1 << RWAL)))
+		if (UEINTX & (1 << TXINI))
 		{
+			#define TEMP_MAX 256
 			static u64 TEMP = 0;
-			if (TEMP >= 2048)
+			if (TEMP >= TEMP_MAX)
 			{
 				debug_pin_set(4, true);
+
 				UEDATX = 0;
 				UEDATX = 0;
 				UEDATX = 0;
@@ -120,9 +121,10 @@ ISR(USB_GEN_vect)
 			else
 			{
 				TEMP += 1;
+				//UEDATX = TEMP % 18 < 9 ? 0 : 0b00000'001;
 				UEDATX = 0;
-				UEDATX = 1;
-				UEDATX = 1;
+				UEDATX = ((TEMP & 0b01) * 2 - 1) * 18;
+				UEDATX = ((TEMP & 0b10)     - 1) * 18;
 			}
 			UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
 			UEINTX &= ~(1 << FIFOCON); // We are done writing to the bank, either because the endpoint's buffer is full or because there's no more deta to provide.
@@ -204,9 +206,9 @@ ISR(USB_COM_vect)
 						{
 							if (!request.get_desc.desc_index) // We only have a single configuration.
 							{
-								payload_data   = (const u8*) &USB_CONFIGURATION_HIERARCHY;
-								payload_length = sizeof(USB_CONFIGURATION_HIERARCHY);
-								static_assert(sizeof(USB_CONFIGURATION_HIERARCHY) < (((u64) 1) << bitsof(payload_length)))
+								payload_data   = (const u8*) &USB_CONFIG_HIERARCHY;
+								payload_length = sizeof(USB_CONFIG_HIERARCHY);
+								static_assert(sizeof(USB_CONFIG_HIERARCHY) < (((u64) 1) << bitsof(payload_length)))
 							}
 						} break;
 
@@ -228,9 +230,9 @@ ISR(USB_COM_vect)
 					request.hid_get_desc.desc_type        == USBDescType_hid_report
 				)
 				{
-					payload_data   = (const u8*) &USB_HID_DESC_REPORT;
-					payload_length = sizeof(USB_HID_DESC_REPORT);
-					static_assert(sizeof(USB_HID_DESC_REPORT) < (((u64) 1) << bitsof(payload_length)))
+					payload_data   = (const u8*) &USB_DESC_HID_REPORT;
+					payload_length = sizeof(USB_DESC_HID_REPORT);
+					static_assert(sizeof(USB_DESC_HID_REPORT) < (((u64) 1) << bitsof(payload_length)))
 				}
 
 				if (payload_length)
@@ -275,10 +277,9 @@ ISR(USB_COM_vect)
 						error; // In the case that the host, for some reason, wants to set the device back to the "address state", we should handle this.
 					} break;
 
-					case USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE:
+					case USB_CONFIG_HIERARCHY_ID:
 					{
 						UEINTX &= ~(1 << TXINI); // Send out zero-length data-packet for the host's upcoming IN-transaction to acknowledge this request.
-						TEMP_configured = true;
 					} break;
 
 					default:
@@ -1021,7 +1022,7 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 	error-correction, etc. just like a modem might have. But a lot of this doesn't actually really
 	matter at all; we're still sending pure binary data-packets to the host via USB.
 
-	Within our USB_CONFIGURATION_HIERARCHY, we define the "Communication Class Interface".
+	Within our USB_CONFIG_HIERARCHY, we define the "Communication Class Interface".
 	This interface is responsible for "device management" and "call management", and is required
 	for all communication devices, according to (1). As for what device and call management
 	entails:
@@ -1163,10 +1164,9 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 	This is where the host obviously set the configuration of the device. The host could send a 0
 	to indicate that we should be in the "address state" (1), which is the state a USB device is in
 	after it has been just assigned an address; more likely though the host will send a
-	configuration value of USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE (which it got from
-	GetDescriptor) to set to our only configuration that is USB_CONFIGURATION_HIERARCHY. This
-	request would only really matter when we have multiple configurations that the host may choose
-	from.
+	configuration value of USB_CONFIG_HIERARCHY_ID (which it got from GetDescriptor) to set to our
+	only configuration that is USB_CONFIG_HIERARCHY. This request would only really matter when we
+	have multiple configurations that the host may choose from.
 
 	(1) "Address State" @ Source(2) @ Section(9.4.7) @ Page(257).
 */

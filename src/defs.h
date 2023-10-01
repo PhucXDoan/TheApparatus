@@ -195,7 +195,7 @@ struct USBDescDevice // See: Source(2) @ Table(9-8) @ Page(262-263).
 	u8  iManufacturer;      // See: [USB Strings].
 	u8  iProduct;           // See: [USB Strings].
 	u8  iSerialNumber;      // See: [USB Strings].
-	u8  bNumConfigurations; // Amount of configurations the device can be set to. Only a single configuration (USB_CONFIGURATION_HIERARCHY) is defined, so this is 1.
+	u8  bNumConfigurations; // Amount of configurations the device can be set to. Only a single configuration (USB_CONFIG_HIERARCHY) is defined, so this is 1.
 };
 
 enum USBConfigAttrFlag // See: "bmAttributes" @ Source(2) @ Table(9-10) @ Page(266).
@@ -319,93 +319,90 @@ struct USBCDCLineCoding // See: Source(6) @ Table(50) @ AbsPage(69).
 	u8  bDataBits;   // Describes amount of data-bits.
 };
 
-enum USBHIDShortItemPrefix // Amount of bytes for data here is hard-coded. See: Source(7) @ Section(6.2.2.2) @ AbsPage(36).
+enum USBHIDItem // Short-items with hardcoded amount of data bytes. See: Source(7) @ Section(6.2.2.2) @ AbsPage(36).
 {
 	// Non-exhaustive. See: "Main Items" @ Source(7) @ Section(6.2.2.4) @ AbsPage(38).
-	USBHIDShortItemPrefix_main_input            = 0b1000'00'01,
-	USBHIDShortItemPrefix_main_output           = 0b1001'00'01,
-	USBHIDShortItemPrefix_main_begin_collection = 0b1010'00'01,
-	USBHIDShortItemPrefix_main_end_collection   = 0b1100'00'00,
+	USBHIDItem_main_input            = 0b1000'00'01,
+	USBHIDItem_main_begin_collection = 0b1010'00'01,
+	USBHIDItem_main_end_collection   = 0b1100'00'00,
 
 	// Non-exhaustive. See: "Global Items" @ Source(7) @ Section(6.2.2.7) @ AbsPage(45).
-	USBHIDShortItemPrefix_global_usage_page   = 0b0000'01'01,
-	USBHIDShortItemPrefix_global_logical_min  = 0b0001'01'01,
-	USBHIDShortItemPrefix_global_logical_max  = 0b0010'01'01,
-	USBHIDShortItemPrefix_global_report_size  = 0b0111'01'01, // In terms of bits.
-	USBHIDShortItemPrefix_global_report_count = 0b1001'01'01,
+	USBHIDItem_global_usage_page   = 0b0000'01'01,
+	USBHIDItem_global_logical_min  = 0b0001'01'01,
+	USBHIDItem_global_logical_max  = 0b0010'01'01,
+	USBHIDItem_global_report_size  = 0b0111'01'01, // In terms of bits.
+	USBHIDItem_global_report_count = 0b1001'01'01,
 
 	// Non-exhaustive. See: "Local Items" @ Source(7) @ Section(6.2.2.8) @ AbsPage(50).
-	USBHIDShortItemPrefix_local_usage     = 0b0000'10'01,
-	USBHIDShortItemPrefix_local_usage_min = 0b0001'10'01,
-	USBHIDShortItemPrefix_local_usage_max = 0b0010'10'01,
+	USBHIDItem_local_usage     = 0b0000'10'01,
+	USBHIDItem_local_usage_min = 0b0001'10'01,
+	USBHIDItem_local_usage_max = 0b0010'10'01,
 };
 
-enum USBHIDShortItemMainNonCollectionFlag // See: Source(7) @ Section(6.2.2.4) @ AbsPage(38).
+enum USBHIDItemMainInputFlag // Non-exhaustive. See: Source(7) @ Section(6.2.2.4) @ AbsPage(38) & Source(7) @ Section(6.2.2.5) @ AbsPage(40-41).
 {
-	USBHIDShortItemMainNonCollectionFlag_constant           = ((u16) 1) << 0, // Otherwise data.
-	USBHIDShortItemMainNonCollectionFlag_variable           = ((u16) 1) << 1, // Otherwise an array.
-	USBHIDShortItemMainNonCollectionFlag_relative           = ((u16) 1) << 2,
-	USBHIDShortItemMainNonCollectionFlag_wraps              = ((u16) 1) << 3,
-	USBHIDShortItemMainNonCollectionFlag_nonlinear          = ((u16) 1) << 4,
-	USBHIDShortItemMainNonCollectionFlag_no_preferred_state = ((u16) 1) << 5,
-	USBHIDShortItemMainNonCollectionFlag_null_state         = ((u16) 1) << 6,
-	USBHIDShortItemMainNonCollectionFlag_volatile           = ((u16) 1) << 7, // Cannot be used for USBHIDShortItemPrefix_main_input.
-	USBHIDShortItemMainNonCollectionFlag_buffered_bytes     = ((u16) 1) << 8, // Otherwise a bitfield.
+	USBHIDItemMainInputFlag_padding  = ((u16) 1) << 0, // Also called "constant", but it's essentially used for padding.
+	USBHIDItemMainInputFlag_variable = ((u16) 1) << 1, // A buffer that can be filled up with data as opposed to it just being a simple bitmap or integer.
+	USBHIDItemMainInputFlag_relative = ((u16) 1) << 2, // Data is a delta.
 };
 
-enum USBHIDShortItemMainBeginCollectionType // See: Source(7) @ Section(6.2.2.4) @ AbsPage(38).
+enum USBHIDItemMainCollectionType // Non-exhaustive. See: Source(7) @ Section(6.2.2.4) @ AbsPage(38) & Source(7) @ Section(6.2.2.6) @ AbsPage(42-43).
 {
-	USBHIDShortItemMainBeginCollectionType_physical       = 0x00,
-	USBHIDShortItemMainBeginCollectionType_application    = 0x01,
-	USBHIDShortItemMainBeginCollectionType_logical        = 0x02,
-	USBHIDShortItemMainBeginCollectionType_report         = 0x03,
-	USBHIDShortItemMainBeginCollectionType_named_array    = 0x04,
-	USBHIDShortItemMainBeginCollectionType_usage_switch   = 0x05,
-	USBHIDShortItemMainBeginCollectionType_usage_modifier = 0x06,
+	USBHIDItemMainCollectionType_physical    = 0x00, // Groups report data together to represent a measurement at one "geometric point".
+	USBHIDItemMainCollectionType_application = 0x01, // Packages up all the report layouts together to represent one single-purpose device, e.g. mouse.
 };
 
 enum USBHIDUsagePage // Non-exhaustive. See: Source(8) @ Section(3) @ AbsPage(17).
 {
-	USBHIDUsagePage_generic_desktop = 0x01,
-	USBHIDUsagePage_button          = 0x09,
+	USBHIDUsagePage_generic_desktop = 0x01, // Category of common computer peripherals such as mice, keyboard, joysticks, etc. See: enum USBHIDUsageGenericDesktop.
+	USBHIDUsagePage_button          = 0x09, // Details how buttons are defined. See: Source(8) @ Section(12) @ AbsPage(110).
 };
 
 enum USBHIDUsageGenericDesktop // Non-exhaustive. See: Source(8) @ Section(4) @ AbsPage(32).
 {
-	USBHIDUsageGenericDesktop_pointer = 0x01,
-	USBHIDUsageGenericDesktop_mouse   = 0x02,
-	USBHIDUsageGenericDesktop_x       = 0x30,
-	USBHIDUsageGenericDesktop_y       = 0x31,
+	USBHIDUsageGenericDesktop_pointer = 0x01, // "A collection of axes that generates a value to direct, indicate, or point user intentions to an application."
+	USBHIDUsageGenericDesktop_mouse   = 0x02, // A peripheral that has some buttons and indicates 2D movement; self-explainatory.
+	USBHIDUsageGenericDesktop_x       = 0x30, // Linear translation from left-to-right.
+	USBHIDUsageGenericDesktop_y       = 0x31, // Linear translation from far-to-near, so in the context of a mouse, top-down.
 };
 
-static const u8 USB_HID_DESC_REPORT[] PROGMEM = // TODO Reduce.
+static const u8 USB_DESC_HID_REPORT[] PROGMEM =
 	{
-		USBHIDShortItemPrefix_global_usage_page,     USBHIDUsagePage_generic_desktop,
-		USBHIDShortItemPrefix_local_usage,           USBHIDUsageGenericDesktop_mouse,
-		USBHIDShortItemPrefix_main_begin_collection, USBHIDShortItemMainBeginCollectionType_application,
-			USBHIDShortItemPrefix_local_usage,           USBHIDUsageGenericDesktop_pointer,
-			USBHIDShortItemPrefix_main_begin_collection, USBHIDShortItemMainBeginCollectionType_physical,
-				USBHIDShortItemPrefix_global_usage_page,   USBHIDUsagePage_button,
-				USBHIDShortItemPrefix_local_usage_min,     1,
-				USBHIDShortItemPrefix_local_usage_max,     3,
-				USBHIDShortItemPrefix_global_logical_min,  0,
-				USBHIDShortItemPrefix_global_logical_max,  1,
-				USBHIDShortItemPrefix_global_report_count, 3,
-				USBHIDShortItemPrefix_global_report_size,  1,
-				USBHIDShortItemPrefix_main_input,          USBHIDShortItemMainNonCollectionFlag_variable,
-				USBHIDShortItemPrefix_global_report_count, 1,
-				USBHIDShortItemPrefix_global_report_size,  5,
-				USBHIDShortItemPrefix_main_input,          USBHIDShortItemMainNonCollectionFlag_constant,
-				USBHIDShortItemPrefix_global_usage_page,   USBHIDUsagePage_generic_desktop,
-				USBHIDShortItemPrefix_local_usage,         USBHIDUsageGenericDesktop_x,
-				USBHIDShortItemPrefix_local_usage,         USBHIDUsageGenericDesktop_y,
-				USBHIDShortItemPrefix_global_logical_min,  -127,
-				USBHIDShortItemPrefix_global_logical_max,  127,
-				USBHIDShortItemPrefix_global_report_size,  8,
-				USBHIDShortItemPrefix_global_report_count, 2,
-				USBHIDShortItemPrefix_main_input,          USBHIDShortItemMainNonCollectionFlag_variable | USBHIDShortItemMainNonCollectionFlag_relative,
-			USBHIDShortItemPrefix_main_end_collection,
-		USBHIDShortItemPrefix_main_end_collection,
+		USBHIDItem_global_usage_page,     USBHIDUsagePage_generic_desktop,
+		USBHIDItem_local_usage,           USBHIDUsageGenericDesktop_mouse,
+		USBHIDItem_main_begin_collection, USBHIDItemMainCollectionType_application,
+
+			USBHIDItem_local_usage,           USBHIDUsageGenericDesktop_pointer,
+			USBHIDItem_main_begin_collection, USBHIDItemMainCollectionType_physical,
+
+				// LSb for primary mouse button being held.
+				USBHIDItem_global_usage_page,   USBHIDUsagePage_button,
+				USBHIDItem_local_usage_min,     1,
+				USBHIDItem_local_usage_max,     1,
+				USBHIDItem_global_logical_min,  0,
+				USBHIDItem_global_logical_max,  1,
+				USBHIDItem_global_report_size,  1,
+				USBHIDItem_global_report_count, 1,
+				USBHIDItem_main_input,          USBHIDItemMainInputFlag_variable,
+
+				// Padding bits.
+				USBHIDItem_global_report_size,  7,
+				USBHIDItem_global_report_count, 1,
+				USBHIDItem_main_input,          USBHIDItemMainInputFlag_padding,
+
+				// Two signed bytes for delta-x and delta-y respectively.
+				USBHIDItem_global_usage_page,   USBHIDUsagePage_generic_desktop,
+				USBHIDItem_local_usage,         USBHIDUsageGenericDesktop_x,
+				USBHIDItem_local_usage,         USBHIDUsageGenericDesktop_y,
+				USBHIDItem_global_logical_min,  -128,
+				USBHIDItem_global_logical_max,  127,
+				USBHIDItem_global_report_size,  8,
+				USBHIDItem_global_report_count, 2,
+				USBHIDItem_main_input,          USBHIDItemMainInputFlag_variable | USBHIDItemMainInputFlag_relative,
+
+			USBHIDItem_main_end_collection,
+
+		USBHIDItem_main_end_collection,
 	};
 
 // Endpoint buffer sizes must be one of the names of enum USBEndpointSizeCode.
@@ -493,8 +490,8 @@ static const struct USBDescDevice USB_DEVICE_DESCRIPTOR PROGMEM =
 		.bNumConfigurations = 1
 	};
 
-#define USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE 1 // Must be non-zero. See: Soure(2) @ Figure(11-10) @ Page(310).
-static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY PROGMEM =
+#define USB_CONFIG_HIERARCHY_ID 1 // Must be non-zero. See: Soure(2) @ Figure(11-10) @ Page(310).
+static const struct USBConfigHierarchy USB_CONFIG_HIERARCHY PROGMEM =
 	{
 		.config =
 			{
@@ -502,7 +499,7 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY PROGMEM =
 				.bDescriptorType     = USBDescType_config,
 				.wTotalLength        = sizeof(struct USBConfigHierarchy),
 				.bNumInterfaces      = 3,
-				.bConfigurationValue = USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE,
+				.bConfigurationValue = USB_CONFIG_HIERARCHY_ID,
 				.bmAttributes        = USBConfigAttrFlag_reserved_one | USBConfigAttrFlag_self_powered, // TODO We should calculate our power consumption!
 				.bMaxPower           = 50,                                                              // TODO We should calculate our power consumption!
 			},
@@ -565,7 +562,7 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY PROGMEM =
 						.bDescriptorType    = USBDescType_interface,
 						.bInterfaceNumber   = USB_CDC_DATA_INTERFACE_INDEX,
 						.bAlternateSetting  = 0,
-						.bNumEndpoints      = countof(USB_CONFIGURATION_HIERARCHY.cdc_data.endpoints),
+						.bNumEndpoints      = countof(USB_CONFIG_HIERARCHY.cdc_data.endpoints),
 						.bInterfaceClass    = USBClass_cdc_data, // See: Source(6) @ Section(4.5) @ AbsPage(40).
 						.bInterfaceSubClass = 0,                 // Should be left alone. See: Source(6) @ Section(4.6) @ AbsPage(40).
 						.bInterfaceProtocol = 0,                 // Seems irrelevant for functionality. See: Source(6) @ Table(19) @ AbsPage(40-41).
@@ -598,7 +595,7 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY PROGMEM =
 						.bDescriptorType    = USBDescType_interface,
 						.bInterfaceNumber   = USB_HID_INTERFACE_INDEX,
 						.bAlternateSetting  = 0,
-						.bNumEndpoints      = countof(USB_CONFIGURATION_HIERARCHY.hid.endpoints),
+						.bNumEndpoints      = countof(USB_CONFIG_HIERARCHY.hid.endpoints),
 						.bInterfaceClass    = USBClass_hid,
 						.bInterfaceSubClass = 0, // Set to 1 if we support a boot interface, which we don't need to. See: Source(7) @ Section(4.2) @ AbsPage(18).
 						.bInterfaceProtocol = 0, // Since we don't support a boot interface, this is also 0. See: Source(7) @ Section(4.3) @ AbsPage(19).
@@ -608,12 +605,12 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY PROGMEM =
 						.bLength                 = sizeof(struct USBDescHID),
 						.bDescriptorType         = USBDescType_hid,
 						.bcdHID                  = 0x0111,
-						.bNumDescriptors         = countof(USB_CONFIGURATION_HIERARCHY.hid.hid.subordinate_descriptors),
+						.bNumDescriptors         = countof(USB_CONFIG_HIERARCHY.hid.hid.subordinate_descriptors),
 						.subordinate_descriptors =
 							{
 								{
 									.bDescriptorType   = USBDescType_hid_report,
-									.wDescriptorLength = sizeof(USB_HID_DESC_REPORT),
+									.wDescriptorLength = sizeof(USB_DESC_HID_REPORT),
 								},
 							}
 					},
