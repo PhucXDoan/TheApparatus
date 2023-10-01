@@ -1,3 +1,5 @@
+// TODO Make a debug_unhandled.
+
 #define pin_input(P)  concat(pin_input_ , P)()
 #define pin_output(P) concat(pin_output_, P)()
 #define pin_low(P)    concat(pin_low_   , P)()

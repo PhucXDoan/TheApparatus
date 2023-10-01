@@ -57,7 +57,7 @@ ISR(USB_GEN_vect)
 		}
 
 		// Enable the interrupt source of the event that endpoint 0 receives a SETUP-transaction.
-		UENUM  = 0;
+		UENUM  = USB_ENDPOINT_DFLT;
 		UEIENX = (1 << RXSTPE);
 	}
 
@@ -116,19 +116,13 @@ ISR(USB_GEN_vect)
 				UEDATX = 0;
 				UEDATX = 0;
 				UEDATX = 0;
-				UEDATX = 0;
-				UEDATX = 0;
-				UEDATX = 0;
 			}
 			else
 			{
 				TEMP += 1;
 				UEDATX = 0;
 				UEDATX = 1;
-				UEDATX = 0;
 				UEDATX = 1;
-				UEDATX = 0;
-				UEDATX = 0;
 			}
 			UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
 			UEINTX &= ~(1 << FIFOCON); // We are done writing to the bank, either because the endpoint's buffer is full or because there's no more deta to provide.
@@ -175,7 +169,7 @@ _usb_endpoint_0_in_pgm(const u8* payload_data, u16 payload_length)
 ISR(USB_COM_vect)
 { // See: [USB Endpoint Interrupt Routine].
 
-	UENUM = 0;
+	UENUM = USB_ENDPOINT_DFLT;
 	if (UEINTX & (1 << RXSTPI)) // [Endpoint 0: SETUP-Transactions]. // TODO Remove this if-statement if we in the end aren't adding any other interrupt source.
 	{
 		UECONX |= (1 << STALLRQC); // SETUP-transactions lift STALL conditions. See: Source(2) @ Section(8.5.3.4) @ Page(228) & [Endpoint 0: Request Error].
@@ -189,49 +183,54 @@ ISR(USB_COM_vect)
 
 		switch (request.type)
 		{
-			case USBSetupRequestType_get_desc: // [Endpoint 0: SETUP-Transaction's GetDescriptor].
+			case USBSetupRequestType_get_desc: // [Endpoint 0: SETUP-Transaction's GetDescriptor]. // TODO Update
+			case USBSetupRequestType_hid_get_desc:
 			{
 				u8        payload_length = 0; // Any payload we send will not exceed 255 bytes.
 				const u8* payload_data   = 0;
 
-				switch ((enum USBDescType) request.get_desc.desc_type)
+				if (request.type == USBSetupRequestType_get_desc)
 				{
-					case USBDescType_device: // See: [Endpoint 0: SETUP-Transaction's GetDescriptor].
+					switch ((enum USBDescType) request.get_desc.desc_type)
 					{
-						payload_data   = (const u8*) &USB_DEVICE_DESCRIPTOR;
-						payload_length = sizeof(USB_DEVICE_DESCRIPTOR);
-						static_assert(sizeof(USB_DEVICE_DESCRIPTOR) < (((u64) 1) << bitsof(payload_length)))
-					} break;
-
-					case USBDescType_config: // [Interfaces, Configurations, and Classes].
-					{
-						if (!request.get_desc.desc_index) // We only have a single configuration.
+						case USBDescType_device: // See: [Endpoint 0: SETUP-Transaction's GetDescriptor].
 						{
-							payload_data   = (const u8*) &USB_CONFIGURATION_HIERARCHY;
-							payload_length = sizeof(USB_CONFIGURATION_HIERARCHY);
-							static_assert(sizeof(USB_CONFIGURATION_HIERARCHY) < (((u64) 1) << bitsof(payload_length)))
-						}
-					} break;
+							payload_data   = (const u8*) &USB_DEVICE_DESCRIPTOR;
+							payload_length = sizeof(USB_DEVICE_DESCRIPTOR);
+							static_assert(sizeof(USB_DEVICE_DESCRIPTOR) < (((u64) 1) << bitsof(payload_length)))
+						} break;
 
-					case USBDescType_device_qualifier: // See: Source(2) @ Section(9.6.2) @ Page(264).
-					case USBDescType_string:           // See: [USB Strings] @ File(defs.h).
-					{
-						// We induce STALL condition. See: [Endpoint 0: Request Error].
-					} break;
+						case USBDescType_config: // [Interfaces, Configurations, and Classes].
+						{
+							if (!request.get_desc.desc_index) // We only have a single configuration.
+							{
+								payload_data   = (const u8*) &USB_CONFIGURATION_HIERARCHY;
+								payload_length = sizeof(USB_CONFIGURATION_HIERARCHY);
+								static_assert(sizeof(USB_CONFIGURATION_HIERARCHY) < (((u64) 1) << bitsof(payload_length)))
+							}
+						} break;
 
-					case USBDescType_interface:
-					case USBDescType_endpoint:
-					case USBDescType_other_speed_config:
-					case USBDescType_interface_power:
-					case USBDescType_hid:
-					case USBDescType_hid_report:
-					case USBDescType_hid_physical:
-					case USBDescType_cdc_interface:
-					case USBDescType_cdc_endpoint:
-					{
-						debug_halt(1);
-						error; // We can probably address some of these cases, but we won't do it if it doesn't seem to inhibit base functionality of USB.
-					} break;
+						case USBDescType_device_qualifier: // See: Source(2) @ Section(9.6.2) @ Page(264).
+						case USBDescType_string:           // See: [USB Strings] @ File(defs.h).
+						{
+							// We induce STALL condition. See: [Endpoint 0: Request Error].
+						} break;
+
+						default:
+						{
+							error; // We can probably address some of these cases, but we won't do it if it doesn't seem to inhibit base functionality of USB.
+						} break;
+					}
+				}
+				else if
+				(
+					request.hid_get_desc.interface_number == USB_HID_INTERFACE_INDEX &&
+					request.hid_get_desc.desc_type        == USBDescType_hid_report
+				)
+				{
+					payload_data   = (const u8*) &USB_HID_DESC_REPORT;
+					payload_length = sizeof(USB_HID_DESC_REPORT);
+					static_assert(sizeof(USB_HID_DESC_REPORT) < (((u64) 1) << bitsof(payload_length)))
 				}
 
 				if (payload_length)
@@ -337,37 +336,13 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
-			case 0b00001010'00100001:
+			case USBSetupRequestType_hid_set_idle:
 			{
 				UECONX |= (1 << STALLRQ);
 			} break;
 
-			case USBSetupRequestType_hid_get_interface:
-			{
-				if (request.hid_get_interface.desc_index == 0 && request.hid_get_interface.desc_type == USBDescType_hid_report && request.hid_get_interface.interface_number == 0)
-				{
-					_usb_endpoint_0_in_pgm // TODO Inline?
-					(
-						USB_HID_DESC_REPORT,
-						request.get_desc.requested_amount < sizeof(USB_HID_DESC_REPORT)
-							? request.get_desc.requested_amount
-							: sizeof(USB_HID_DESC_REPORT)
-					);
-				}
-				else
-				{
-					debug_halt(3);
-					error;
-				}
-			} break;
-
-			case 0b00001001'00100001:
-			{
-			} break;
-
 			default:
 			{
-				debug_halt(4);
 				error;
 			} break;
 		}
