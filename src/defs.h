@@ -25,11 +25,11 @@ typedef int64_t  b64;
 // "pin.c"
 //
 
-#define PIN_ERROR 2
-enum PinErrorSource
+#define PIN_HALT 2
+enum PinHaltSource
 {
-	PinErrorSource_diplomat = 0,
-	PinErrorSource_usb      = 1,
+	PinHaltSource_diplomat = 0,
+	PinHaltSource_usb      = 1,
 };
 
 enum PinState
@@ -655,7 +655,7 @@ static_assert(countof(_usb_cdc_in_buffer ) && !(countof(_usb_cdc_in_buffer ) & (
 static_assert(countof(_usb_cdc_out_buffer) && !(countof(_usb_cdc_out_buffer) & (countof(_usb_cdc_out_buffer) - 1)));
 
 #if DEBUG
-static volatile b8 debug_usb_rx_diagnostic_signal = false;
+static volatile b8 debug_usb_diagnostic_signal_received = false;
 #endif
 
 //

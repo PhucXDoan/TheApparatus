@@ -1,4 +1,5 @@
-#define error error_halt(PinErrorSource_usb)
+#undef  PIN_HALT_SOURCE
+#define PIN_HALT_SOURCE PinHaltSource_usb
 
 static void
 usb_init(void)
@@ -24,7 +25,7 @@ usb_init(void)
 	// 6. "Wait for USB VBUS information connection".
 	#if DEBUG
 	debug_pin_set(DEBUG_PIN_USB_SPINLOCKING, true);
-	while (!debug_usb_rx_diagnostic_signal);
+	while (!debug_usb_diagnostic_signal_received);
 	debug_pin_set(DEBUG_PIN_USB_SPINLOCKING, false);
 	#endif
 }
@@ -76,7 +77,7 @@ ISR(USB_GEN_vect)
 			}
 
 			UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
-			UEINTX &= ~(1 << FIFOCON); // We are done writing to the bank, either because the endpoint's buffer is full or because there's no more deta to provide.
+			UEINTX &= ~(1 << FIFOCON); // Allow the USB controller to send the data for the next IN-transaction. See: Source(1) @ Section(22.14) @ Page(276)
 		}
 
 		UENUM = USB_ENDPOINT_CDC_OUT;
@@ -101,7 +102,7 @@ ISR(USB_GEN_vect)
 			else // Endpoint's buffer has been completely copied.
 			{
 				UEINTX &= ~(1 << RXOUTI);  // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.13.1) @ Page(275).
-				UEINTX &= ~(1 << FIFOCON); // We free up the endpoint's buffer so we can accept the next OUT-transaction to this endpoint.
+				UEINTX &= ~(1 << FIFOCON); // Free up this endpoint's buffer so the USB controller can copy the data in the next OUT-transaction to it.
 			}
 		}
 
@@ -126,8 +127,9 @@ ISR(USB_GEN_vect)
 				UEDATX = ((TEMP & 0b01) * 2 - 1) * 18;
 				UEDATX = ((TEMP & 0b10)     - 1) * 18;
 			}
+
 			UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
-			UEINTX &= ~(1 << FIFOCON); // We are done writing to the bank, either because the endpoint's buffer is full or because there's no more deta to provide.
+			UEINTX &= ~(1 << FIFOCON); // Allow the USB controller to send the data for the next IN-transaction. See: Source(1) @ Section(22.14) @ Page(276)
 		}
 	}
 
@@ -185,8 +187,8 @@ ISR(USB_COM_vect)
 
 		switch (request.type)
 		{
-			case USBSetupRequestType_get_desc: // [Endpoint 0: SETUP-Transaction's GetDescriptor]. // TODO Update
-			case USBSetupRequestType_hid_get_desc:
+			case USBSetupRequestType_get_desc:     // [Endpoint 0: SETUP-Transaction's GetDescriptor].
+			case USBSetupRequestType_hid_get_desc: // [Endpoint 0: SETUP-Transaction's GetDescriptor].
 			{
 				u8        payload_length = 0; // Any payload we send will not exceed 255 bytes.
 				const u8* payload_data   = 0;
@@ -220,7 +222,7 @@ ISR(USB_COM_vect)
 
 						default:
 						{
-							error; // We can probably address some of these cases, but we won't do it if it doesn't seem to inhibit base functionality of USB.
+							debug_unhandled;
 						} break;
 					}
 				}
@@ -233,6 +235,10 @@ ISR(USB_COM_vect)
 					payload_data   = (const u8*) &USB_DESC_HID_REPORT;
 					payload_length = sizeof(USB_DESC_HID_REPORT);
 					static_assert(sizeof(USB_DESC_HID_REPORT) < (((u64) 1) << bitsof(payload_length)))
+				}
+				else
+				{
+					debug_unhandled;
 				}
 
 				if (payload_length)
@@ -284,12 +290,12 @@ ISR(USB_COM_vect)
 
 					default:
 					{
-						error;
+						UECONX |= (1 << STALLRQ);
 					} break;
 				}
 			} break;
 
-			// These requests need to be handled in order for the enumeration to be successful, but other than that, they seem pretty irrelevant for functionality.
+			// These requests need to be handled in order for the CDC enumeration to be successful, but other than that, they seem pretty irrelevant for functionality.
 			case USBSetupRequestType_cdc_get_line_coding:        // See: Source(6) @ Section(6.2.13) @ AbsPage(69).
 			case USBSetupRequestType_cdc_set_control_line_state: // See: Source(6) @ Section(6.2.14) @ AbsPage(69-70).
 			{
@@ -326,7 +332,7 @@ ISR(USB_COM_vect)
 						#if DEBUG
 						case DIAGNOSTIC_BAUD_SIGNAL:
 						{
-							debug_usb_rx_diagnostic_signal = true;
+							debug_usb_diagnostic_signal_received = true;
 						} break;
 						#endif
 					}
@@ -344,7 +350,8 @@ ISR(USB_COM_vect)
 
 			default:
 			{
-				error;
+				UECONX |= (1 << STALLRQ);
+				debug_unhandled;
 			} break;
 		}
 	}
@@ -399,8 +406,6 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 	return result;
 }
 #endif
-
-#undef error
 
 //
 // Documentation.
@@ -920,6 +925,13 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 
 	Not all descriptors can be fulfilled. In this case, the device will send the host a
 	STALL-HANDSHAKE packet as a response. See: [Endpoint 0: Request Error].
+
+	The HID class can also send a GetDescriptor request where the recipent will be the HID
+	interface, as indicated by (1) and (2). It's essentially the same thing where the host's driver
+	will most likely query for the HID report format (USB_DESC_HID_REPORT).
+
+	(1) "bmRequestType" @ Source(2) @ Table(9-2) @ Page(248).
+	(2) HID's GetDescriptor Request @ Source(7) @ Section(7.1.1) @ AbsPage(59).
 */
 
 /* [Interfaces, Configurations, and Classes].

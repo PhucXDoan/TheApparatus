@@ -1,5 +1,3 @@
-// TODO Make a debug_unhandled.
-
 #define pin_input(P)  concat(pin_input_ , P)()
 #define pin_output(P) concat(pin_output_, P)()
 #define pin_low(P)    concat(pin_low_   , P)()
@@ -30,20 +28,21 @@
 PIN_XMDT(PIN_READ)
 #undef PIN_READ
 
+// Begins with very rapid flashes, followed by quick pulses indicating the callee's file.
 __attribute__((noreturn))
 static void
-error_halt(enum PinErrorSource source)
+error(enum PinHaltSource source)
 {
 	cli();
 
-	pin_output(PIN_ERROR);
+	pin_output(PIN_HALT);
 	for (;;)
 	{
 		for (u8 i = 0; i < 8; i += 1)
 		{
-			pin_high(PIN_ERROR);
+			pin_high(PIN_HALT);
 			_delay_ms(25.0);
-			pin_low(PIN_ERROR);
+			pin_low(PIN_HALT);
 			_delay_ms(25.0);
 		}
 
@@ -51,81 +50,117 @@ error_halt(enum PinErrorSource source)
 
 		for (u8 i = 0; i < source; i += 1)
 		{
-			pin_high(PIN_ERROR);
+			pin_high(PIN_HALT);
 			_delay_ms(150.0);
-			pin_low(PIN_ERROR);
+			pin_low(PIN_HALT);
 			_delay_ms(150.0);
 		}
 
 		_delay_ms(250.0);
 	}
 }
+#define error error(PIN_HALT_SOURCE)
 
 #if DEBUG
+// Same as error, but the output is inverted where it's pulses of darkess instead.
 __attribute__((noreturn))
 static void
-debug_halt(u8 flashes)
+debug_unhandled(enum PinHaltSource source)
 {
 	cli();
 
-	pin_output(PIN_ERROR);
+	pin_output(PIN_HALT);
 	for (;;)
 	{
-		for (u8 i = 0; i < flashes; i += 1)
+		for (u8 i = 0; i < 8; i += 1)
 		{
-			pin_high(PIN_ERROR);
-			_delay_ms(100.0);
-			pin_low(PIN_ERROR);
-			_delay_ms(900.0);
+			pin_low(PIN_HALT);
+			_delay_ms(25.0);
+			pin_high(PIN_HALT);
+			_delay_ms(25.0);
 		}
 
+		_delay_ms(250.0);
+
+		for (u8 i = 0; i < source; i += 1)
+		{
+			pin_low(PIN_HALT);
+			_delay_ms(150.0);
+			pin_high(PIN_HALT);
+			_delay_ms(150.0);
+		}
+
+		_delay_ms(250.0);
+	}
+}
+#define debug_unhandled debug_unhandled(PIN_HALT_SOURCE)
+#else
+#define debug_unhandled
+#endif
+
+#if DEBUG
+// Long pulse followed by some amount of pairs of flashes.
+__attribute__((noreturn))
+static void
+debug_halt(u8 amount)
+{
+	cli();
+
+	pin_output(PIN_HALT);
+	for (;;)
+	{
+		pin_high(PIN_HALT);
+		_delay_ms(2000.0);
+		pin_low(PIN_HALT);
 		_delay_ms(1000.0);
-		pin_high(PIN_ERROR);
-		_delay_ms(1000.0);
-		pin_low(PIN_ERROR);
-		_delay_ms(1000.0);
+
+		for (u8 i = 0; i < amount; i += 1)
+		{
+			pin_high(PIN_HALT);
+			_delay_ms(25.0);
+			pin_low(PIN_HALT);
+			_delay_ms(25.0);
+			pin_high(PIN_HALT);
+			_delay_ms(25.0);
+			pin_low(PIN_HALT);
+			_delay_ms(1000.0);
+		}
 	}
 }
 #endif
 
 #if DEBUG
 static void
+// Long pulse followed by long to indicate 1 and short to indicate 0, going from MSb to LSb.
 debug_halt_u8(u8 value)
 {
 	cli();
 
-	pin_output(PIN_ERROR);
+	pin_output(PIN_HALT);
 	for (;;)
 	{
+		pin_high(PIN_HALT);
+		_delay_ms(2000.0);
+		pin_low(PIN_HALT);
+		_delay_ms(1000.0);
+
 		for (u8 i = 0; i < 8; i += 1)
 		{
 			if (value & (1 << (7 - i)))
 			{
-				pin_high(PIN_ERROR);
-				_delay_ms(1000.0);
-				pin_low(PIN_ERROR);
-				_delay_ms(1000.0);
+				pin_high(PIN_HALT);
+				_delay_ms(500.0);
+				pin_low(PIN_HALT);
+				_delay_ms(500.0);
 			}
 			else
 			{
-				pin_high(PIN_ERROR);
-				_delay_ms(100.0);
-				pin_low(PIN_ERROR);
-				_delay_ms(1750.0);
+				pin_high(PIN_HALT);
+				_delay_ms(50.0);
+				pin_low(PIN_HALT);
+				_delay_ms(950.0);
 			}
 		}
-
-		_delay_ms(1000.0);
-
-		for (u8 i = 0; i < 16; i += 1)
-		{
-			pin_high(PIN_ERROR);
-			_delay_ms(25.0);
-			pin_low(PIN_ERROR);
-			_delay_ms(25.0);
-		}
-
-		_delay_ms(1000.0);
 	}
 }
 #endif
@@ -217,7 +252,7 @@ debug_pin_read(u8 pin)
 		- Output, High : The GPIO pin will act as a source; that is, VCC of ~5 volts.
 		Reading from this pin will result in a truthy value.
 
-	The error_halt procedure is defined here since making the program blink IO pins
+	The error procedure is defined here since making the program blink IO pins
 	indefinitely is the most error-free of displaying the error condition. I'd put the
 	procedure somewhere else, but C is stuck in the land of in-order compilation, and I
 	don't like the idea of having forward declarations.
