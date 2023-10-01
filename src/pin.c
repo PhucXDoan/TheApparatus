@@ -30,7 +30,7 @@ PIN_XMDT(PIN_READ)
 
 __attribute__((noreturn))
 static void
-error_pin(enum PinErrorSource source)
+error_halt(enum PinErrorSource source)
 {
 	cli();
 
@@ -40,12 +40,12 @@ error_pin(enum PinErrorSource source)
 		for (u8 i = 0; i < 8; i += 1)
 		{
 			pin_high(PIN_ERROR);
-			_delay_ms(50.0);
+			_delay_ms(25.0);
 			pin_low(PIN_ERROR);
-			_delay_ms(50.0);
+			_delay_ms(25.0);
 		}
 
-		_delay_ms(500.0);
+		_delay_ms(250.0);
 
 		for (u8 i = 0; i < source; i += 1)
 		{
@@ -55,9 +55,78 @@ error_pin(enum PinErrorSource source)
 			_delay_ms(150.0);
 		}
 
-		_delay_ms(500.0);
+		_delay_ms(250.0);
 	}
 }
+
+#if DEBUG
+__attribute__((noreturn))
+static void
+debug_halt(u8 flashes)
+{
+	cli();
+
+	pin_output(PIN_ERROR);
+	for (;;)
+	{
+		for (u8 i = 0; i < flashes; i += 1)
+		{
+			pin_high(PIN_ERROR);
+			_delay_ms(100.0);
+			pin_low(PIN_ERROR);
+			_delay_ms(900.0);
+		}
+
+		_delay_ms(1000.0);
+		pin_high(PIN_ERROR);
+		_delay_ms(1000.0);
+		pin_low(PIN_ERROR);
+		_delay_ms(1000.0);
+	}
+}
+#endif
+
+#if DEBUG
+static void
+debug_halt_u8(u8 value)
+{
+	cli();
+
+	pin_output(PIN_ERROR);
+	for (;;)
+	{
+		for (u8 i = 0; i < 8; i += 1)
+		{
+			if (value & (1 << (7 - i)))
+			{
+				pin_high(PIN_ERROR);
+				_delay_ms(1000.0);
+				pin_low(PIN_ERROR);
+				_delay_ms(1000.0);
+			}
+			else
+			{
+				pin_high(PIN_ERROR);
+				_delay_ms(100.0);
+				pin_low(PIN_ERROR);
+				_delay_ms(1750.0);
+			}
+		}
+
+		_delay_ms(1000.0);
+
+		for (u8 i = 0; i < 16; i += 1)
+		{
+			pin_high(PIN_ERROR);
+			_delay_ms(25.0);
+			pin_low(PIN_ERROR);
+			_delay_ms(25.0);
+		}
+
+		_delay_ms(1000.0);
+	}
+}
+#endif
 
 #if DEBUG
 static void
@@ -146,7 +215,7 @@ debug_pin_read(u8 pin)
 		- Output, High : The GPIO pin will act as a source; that is, VCC of ~5 volts.
 		Reading from this pin will result in a truthy value.
 
-	The error_pin procedure is defined here since making the program blink IO pins
+	The error_halt procedure is defined here since making the program blink IO pins
 	indefinitely is the most error-free of displaying the error condition. I'd put the
 	procedure somewhere else, but C is stuck in the land of in-order compilation, and I
 	don't like the idea of having forward declarations.

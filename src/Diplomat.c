@@ -10,7 +10,7 @@
 #include "misc.c"
 #include "pin.c"
 #include "usb.c"
-#define error error_pin(PinErrorSource_diplomat)
+#define error error_halt(PinErrorSource_diplomat)
 
 int
 main(void)
@@ -24,8 +24,6 @@ main(void)
 	sei();
 
 	usb_init();
-
-	debug_tx_u64(sizeof(USB_CONFIGURATION_HIERARCHY.hid.report));
 
 	for(;;)
 	{

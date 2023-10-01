@@ -1,4 +1,6 @@
-#define error error_pin(PinErrorSource_usb)
+#define error error_halt(PinErrorSource_usb)
+
+static b8 TEMP_configured = false;
 
 static void
 usb_init(void)
@@ -106,15 +108,15 @@ ISR(USB_GEN_vect)
 		}
 
 		UENUM = USB_ENDPOINT_HID;
-		if (UEINTX & (1 << TXINI))
+		if (TEMP_configured && UEINTX & (1 << TXINI))
 		{
+			//static u8 TEMP = 0;
+			//TEMP += 1;
+			//if (TEMP >= 3)
+			//{
+			//	debug_pin_set(4, true);
+			//}
 			UEINTX &= ~(1 << TXINI);
-			static u8 TEMP = 0;
-			if (TEMP >= 2)
-			{
-				error;
-			}
-			TEMP += 1;
 		}
 	}
 
@@ -212,6 +214,7 @@ ISR(USB_COM_vect)
 					case USBDescType_cdc_interface:
 					case USBDescType_cdc_endpoint:
 					{
+						debug_halt(1);
 						error; // We can probably address some of these cases, but we won't do it if it doesn't seem to inhibit base functionality of USB.
 					} break;
 				}
@@ -261,6 +264,7 @@ ISR(USB_COM_vect)
 					case USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE:
 					{
 						UEINTX &= ~(1 << TXINI); // Send out zero-length data-packet for the host's upcoming IN-transaction to acknowledge this request.
+						TEMP_configured = true;
 					} break;
 
 					default:
@@ -318,8 +322,33 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
+			case 0b00001010'00100001:
+			{
+				UECONX |= (1 << STALLRQ);
+			} break;
+
+			case USBSetupRequestType_hid_get_interface:
+			{
+				if (request.hid_get_interface.desc_index == 0 && request.hid_get_interface.desc_type == USBDescType_hid_report && request.hid_get_interface.interface_number == 2)
+				{
+					_usb_endpoint_0_in_pgm // TODO Inline?
+					(
+						USB_HID_DESC_REPORT,
+						request.get_desc.requested_amount < sizeof(USB_HID_DESC_REPORT)
+							? request.get_desc.requested_amount
+							: sizeof(USB_HID_DESC_REPORT)
+					);
+				}
+				else
+				{
+						debug_halt(3);
+					error;
+				}
+			} break;
+
 			default:
 			{
+						debug_halt(4);
 				error;
 			} break;
 		}

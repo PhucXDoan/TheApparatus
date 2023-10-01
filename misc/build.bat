@@ -27,7 +27,7 @@ if not exist W:\build\ (
 )
 
 pushd W:\build\
-	*.o *.elf *.hex > nul 2>&1
+	del *.s *.o *.elf *.hex > nul 2>&1
 
 	set BOOTLOADER_BAUD_SIGNAL=1200
 	set DIAGNOSTIC_BAUD_SIGNAL=1201
@@ -36,7 +36,7 @@ pushd W:\build\
 	set PROGRAM_NAME=Diplomat
 	set PROGRAMMER=avr109
 	set BOOTLOADER_COM=4
-	set DIAGNOSTIC_COM=6
+	set DIAGNOSTIC_COM=10
 
 	REM
 	REM Compile C source code into ELF (describes memory layout of main program).
@@ -57,7 +57,7 @@ pushd W:\build\
 	REM Convert ELF into HEX (raw instructions for the MCU to execute).
 	REM
 
-	avr-objcopy -O ihex !PROGRAM_NAME!.elf !PROGRAM_NAME!.hex
+	avr-objcopy -O ihex -j .text -j .data !PROGRAM_NAME!.elf !PROGRAM_NAME!.hex
 	if not !ERRORLEVEL! == 0 (
 		goto ABORT
 	)

@@ -102,14 +102,17 @@ enum USBSetupRequestType // See: Source(2) @ Table(9-2) @ Page(248).
 	#define MAKE(BM_REQUEST_TYPE, B_REQUEST) ((BM_REQUEST_TYPE) | (((u16) (B_REQUEST)) << 8))
 
 	// Non-exhaustive. See: Source(2) @ Table(9-3) @ Page(250) & Source(2) @ Table(9-4) @ Page(251).
-	USBSetupRequestType_get_desc    = MAKE(0b10000000, 6),
-	USBSetupRequestType_set_address = MAKE(0b00000000, 5),
-	USBSetupRequestType_set_config  = MAKE(0b00000000, 9),
+	USBSetupRequestType_get_desc            = MAKE(0b10000000, 6),
+	USBSetupRequestType_set_address         = MAKE(0b00000000, 5),
+	USBSetupRequestType_set_config          = MAKE(0b00000000, 9),
 
 	// Non-exhaustive. See: Source(6) @ Table(44) @ AbsPage(62-63) & Source(6) @ Table(46) @ AbsPage(64-65).
 	USBSetupRequestType_cdc_get_line_coding        = MAKE(0b10100001, 0x21),
 	USBSetupRequestType_cdc_set_line_coding        = MAKE(0b00100001, 0x20),
 	USBSetupRequestType_cdc_set_control_line_state = MAKE(0b00100001, 0x22),
+
+	// See: Source(7) @ Section(7.1.1) @ AbsPage(59).
+	USBSetupRequestType_hid_get_interface = MAKE(0b10000001, 6),
 
 	#undef MAKE
 };
@@ -137,6 +140,14 @@ struct USBSetupRequest // The data-packet that is sent in the SETUP-transaction.
 			u16 value; // The configuration the host wants to set the device to. See: "bConfigurationValue" @ Source(2) @ Table(9-10) @ Page(265).
 		} set_config;
 
+		struct // See: HID's "GetDescriptor" @ Source(7) @ Section(7.1.1) @ AbsPage(59).
+		{
+			u8  desc_index;
+			u8  desc_type;
+			u16 interface_number;
+			u16 requested_amount;
+		} hid_get_interface;
+
 		struct // See: CDC's "SetLineCoding" @ Source(6) @ Setion(6.2.12) @ AbsPage(68-69).
 		{
 			u16 _zero;
@@ -148,7 +159,7 @@ struct USBSetupRequest // The data-packet that is sent in the SETUP-transaction.
 
 enum USBDescType
 {
-	// See: Source(2) @ Table(9-5) @ Page(251).
+	// See: Standard Descriptors @ Source(2) @ Table(9-5) @ Page(251).
 	USBDescType_device             = 1,
 	USBDescType_config             = 2,
 	USBDescType_string             = 3, // See: [USB Strings].
@@ -158,12 +169,12 @@ enum USBDescType
 	USBDescType_other_speed_config = 7,
 	USBDescType_interface_power    = 8, // PS: Can't find "USB Interface Power Management Specification" that supposedly defines the INTERFACE_POWER descriptor...
 
-	// See: Source(7) @ Section(7.1) @ AbsPage(59).
-	USBDescType_hid          = 0x21,
-	USBDescType_hid_report   = 0x22,
-	USBDescType_hid_physical = 0x23,
+	// See: HID-Specific Descriptors @ Source(7) @ Section(7.1) @ AbsPage(59).
+	USBDescType_hid          = 0x21, // TODO doesn't belong here.
+	USBDescType_hid_report   = 0x22, // TODO doesn't belong here.
+	USBDescType_hid_physical = 0x23, // TODO doesn't belong here.
 
-	// See: Source(6) @ Table(24) @ AbsPage(44).
+	// See: CDC-Specific Descriptors @ Source(6) @ Table(24) @ AbsPage(44).
 	USBDescType_cdc_interface = 0x24,
 	USBDescType_cdc_endpoint  = 0x25,
 };
@@ -287,6 +298,18 @@ struct USBDescHID // See: Source(7) @ Section(6.2.1) @ AbsPage(32).
 	} subordinate_descriptors[1];
 };
 
+struct USBDescIAD
+{
+	u8 bLength;
+	u8 bDescriptorType;
+	u8 bFirstInterface;
+	u8 bInterfaceCount;
+	u8 bFunctionClass;
+	u8 bFunctionSubClass;
+	u8 bFunctionProtocol;
+	u8 iFunction;
+};
+
 struct USBCDCLineCoding // See: Source(6) @ Table(50) @ AbsPage(69).
 {
 	u32 dwDTERate;   // Essentially baud-rate.
@@ -354,9 +377,41 @@ enum USBHIDUsageGenericDesktop // Non-exhaustive. See: Source(8) @ Section(4) @ 
 	USBHIDUsageGenericDesktop_y       = 0x31,
 };
 
-#define USB_HID_DESC_REPORT                                                                                                                               \
-	(u8[])                                                                                                                                                \
+static const u8 USB_HID_DESC_REPORT[] PROGMEM =
 	{                                                                                                                                                     \
+		0x05, 0x01,                      /* USAGE_PAGE (Generic Desktop)	  54 */
+		0x09, 0x02,                      /* USAGE (Mouse) */
+		0xA1, 0x01,                      /* COLLECTION (Application) */
+		0x09, 0x01,                      /*   USAGE (Pointer) */
+		0xa1, 0x00,                      /*   COLLECTION (Physical) */
+		0x05, 0x09,                      /*     USAGE_PAGE (Button) */
+		0x19, 0x01,                      /*     USAGE_MINIMUM (Button 1) */
+		0x29, 0x08,                      /*     USAGE_MAXIMUM (Button 8) */
+		0x15, 0x00,                      /*     LOGICAL_MINIMUM (0) */
+		0x25, 0x01,                      /*     LOGICAL_MAXIMUM (1) */
+		0x95, 0x08,                      /*     REPORT_COUNT (8) */
+		0x75, 0x01,                      /*     REPORT_SIZE (1) */
+		0x81, 0x02,                      /*     INPUT (Data,Var,Abs) */
+		0x05, 0x01,                      /*     USAGE_PAGE (Generic Desktop) */
+		0x09, 0x30,                      /*     USAGE (X) */
+		0x09, 0x31,                      /*     USAGE (Y) */
+		0x16, 0x00, 0x00,				 /* 	Logical Minimum (0); NOTE: Windows 7 can't handle negative value */
+		0x26, 0xFF, 0x7F,				 /* 	Logical Maximum (32767) */
+		0x75, 0x10,						 /* 	Report Size (16), */
+		0x95, 0x02,						 /* 	Report Count (2), */
+		0x81, 0x02,						 /* 	Input (Data, Variable, Absolute) */
+		0x09, 0x38,                      /*     USAGE (Wheel) */
+		0x15, 0x81,                      /*     LOGICAL_MINIMUM (-127) */
+		0x25, 0x7f,                      /*     LOGICAL_MAXIMUM (127) */
+		0x75, 0x08,                      /*     REPORT_SIZE (8) */
+		0x95, 0x01,                      /*     REPORT_COUNT (1) */
+		0x81, 0x06,                      /*     INPUT (Data,Var,Rel) */
+		0xc0,                           /* END_COLLECTION (Physical) */
+		0xc0                            /* END_COLLECTION */
+	};
+
+
+/*
 		USBHIDShortItemPrefix_global_usage_page,     USBHIDUsagePage_generic_desktop,                                                                     \
 		USBHIDShortItemPrefix_local_usage,           USBHIDUsageGenericDesktop_mouse,                                                                     \
 		USBHIDShortItemPrefix_main_begin_collection, USBHIDShortItemMainBeginCollectionType_application,                                                  \
@@ -365,7 +420,7 @@ enum USBHIDUsageGenericDesktop // Non-exhaustive. See: Source(8) @ Section(4) @ 
 				USBHIDShortItemPrefix_global_usage_page,   USBHIDUsagePage_button,                                                                        \
 				USBHIDShortItemPrefix_local_usage_min,     1,                                                                                             \
 				USBHIDShortItemPrefix_local_usage_max,     3,                                                                                             \
-				USBHIDShortItemPrefix_global_logical_min,  0, /* TODO Omit? */                                                                            \
+				USBHIDShortItemPrefix_global_logical_min,  0,                                                                            \
 				USBHIDShortItemPrefix_global_logical_max,  1,                                                                                             \
 				USBHIDShortItemPrefix_global_report_count, 3,                                                                                             \
 				USBHIDShortItemPrefix_global_report_size,  1,                                                                                             \
@@ -383,7 +438,8 @@ enum USBHIDUsageGenericDesktop // Non-exhaustive. See: Source(8) @ Section(4) @ 
 				USBHIDShortItemPrefix_main_input,          USBHIDShortItemMainNonCollectionFlag_variable | USBHIDShortItemMainNonCollectionFlag_relative, \
 			USBHIDShortItemPrefix_main_end_collection,                                                                                                    \
 		USBHIDShortItemPrefix_main_end_collection,                                                                                                        \
-	}
+*/
+
 
 // Endpoint buffer sizes must be one of the names of enum USBEndpointSizeCode.
 // The maximum capacity between endpoints also differ. See: Source(1) @ Section(22.1) @ Page(270).
@@ -406,7 +462,7 @@ enum USBHIDUsageGenericDesktop // Non-exhaustive. See: Source(8) @ Section(4) @ 
 #define USB_ENDPOINT_CDC_OUT_SIZE          64
 #define USB_ENDPOINT_CDC_OUT_SIZE_CODE     concat(USBEndpointSizeCode_, USB_ENDPOINT_CDC_OUT_SIZE)
 
-#define USB_ENDPOINT_HID               4
+#define USB_ENDPOINT_HID               1
 #define USB_ENDPOINT_HID_TRANSFER_TYPE USBEndpointTransferType_interrupt
 #define USB_ENDPOINT_HID_TRANSFER_DIR  USBEndpointAddressFlag_in
 #define USB_ENDPOINT_HID_SIZE          8
@@ -432,9 +488,9 @@ static const struct USBDescDevice USB_DEVICE_DESCRIPTOR PROGMEM =
 		.bLength            = sizeof(struct USBDescDevice),
 		.bDescriptorType    = USBDescType_device,
 		.bcdUSB             = 0x0200,
-		.bDeviceClass       = USBClass_cdc, // We use a CDC and CDC-data interfaces, so we have to assign CDC here. See: Source(6) @ Section(3.2) @ AbsPage(20).
-		.bDeviceSubClass    = 0,            // Unused. See: Source(6) @ Table(20) @ AbsPage(42).
-		.bDeviceProtocol    = 0,            // Unused. See: Source(6) @ Table(20) @ AbsPage(42).
+		.bDeviceClass       = 0xEF	, // We use a CDC and CDC-data interfaces, so we have to assign CDC here. See: Source(6) @ Section(3.2) @ AbsPage(20).
+		.bDeviceSubClass    = 0x02	,            // Unused. See: Source(6) @ Table(20) @ AbsPage(42).
+		.bDeviceProtocol    = 0x01	,            // Unused. See: Source(6) @ Table(20) @ AbsPage(42).
 		.bMaxPacketSize0    = USB_ENDPOINT_DFLT_SIZE,
 		.idVendor           = 0, // Seems irrelevant for functionality.
 		.idProduct          = 0, // Seems irrelevant for functionality.
@@ -445,6 +501,8 @@ static const struct USBDescDevice USB_DEVICE_DESCRIPTOR PROGMEM =
 struct USBConfigHierarchy // This layout is defined uniquely for our device application.
 {
 	struct USBDescConfig config;
+
+	struct USBDescIAD iad;
 
 	struct
 	{
@@ -465,7 +523,6 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 	{
 		struct USBDescInterface desc;
 		struct USBDescHID       hid;
-		u8                      report[sizeof(USB_HID_DESC_REPORT)];
 		struct USBDescEndpoint  endpoints[1];
 	} hid;
 };
@@ -478,10 +535,20 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY PROGMEM =
 				.bLength             = sizeof(struct USBDescConfig),
 				.bDescriptorType     = USBDescType_config,
 				.wTotalLength        = sizeof(struct USBConfigHierarchy),
-				.bNumInterfaces      = 2,
+				.bNumInterfaces      = 3,
 				.bConfigurationValue = USB_CONFIGURATION_HIERARCHY_CONFIGURATION_VALUE,
 				.bmAttributes        = USBConfigAttrFlag_reserved_one | USBConfigAttrFlag_self_powered, // TODO We should calculate our power consumption!
 				.bMaxPower           = 50,                                                              // TODO We should calculate our power consumption!
+			},
+		.iad =
+			{
+				.bLength           = sizeof(struct USBDescIAD),
+				.bDescriptorType   = 0x0B,
+				.bFirstInterface   = 0,
+				.bInterfaceCount   = 2,
+				.bFunctionClass    = USBClass_cdc,
+				.bFunctionSubClass = 2,
+				.bFunctionProtocol = 0,
 			},
 		.cdc =
 			{
@@ -572,7 +639,7 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY PROGMEM =
 					},
 				.hid =
 					{
-						.bLength                 = sizeof(struct USBDescHID) + sizeof(USB_HID_DESC_REPORT),
+						.bLength                 = sizeof(struct USBDescHID),
 						.bDescriptorType         = USBDescType_hid,
 						.bcdHID                  = 0x0101, // TODO Why 101?
 						.bNumDescriptors         = countof(USB_CONFIGURATION_HIERARCHY.hid.hid.subordinate_descriptors),
@@ -580,11 +647,10 @@ static const struct USBConfigHierarchy USB_CONFIGURATION_HIERARCHY PROGMEM =
 							{
 								{
 									.bDescriptorType   = USBDescType_hid_report,
-									.wDescriptorLength = sizeof(USB_CONFIGURATION_HIERARCHY.hid.report),
+									.wDescriptorLength = sizeof(USB_HID_DESC_REPORT),
 								},
 							}
 					},
-				.report = USB_HID_DESC_REPORT,
 				.endpoints =
 					{
 						{
