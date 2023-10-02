@@ -4,14 +4,11 @@
 static void
 usb_mouse_command(struct USBMouseCommand command)
 {
-//	debug_pin_set(PIN_USB_SPINLOCKING, true);
-//	for (u16 i = 0; i < value_size; i += 1)
-//	{
-//		while (debug_usb_cdc_in_writer_masked(1) == debug_usb_cdc_in_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
-//		debug_usb_cdc_in_buffer[debug_usb_cdc_in_writer_masked(0)] = value[i];
-//		debug_usb_cdc_in_writer += 1;
-//	}
-//	debug_pin_set(PIN_USB_SPINLOCKING, false);
+	pin_high(PIN_USB_SPINLOCKING);
+	while (_usb_mouse_command_writer_masked(1) == _usb_mouse_command_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
+	_usb_mouse_command_buffer[_usb_mouse_command_writer_masked(0)] = command;
+	_usb_mouse_command_writer += 1;
+	pin_low(PIN_USB_SPINLOCKING);
 }
 
 static void
@@ -95,7 +92,9 @@ ISR(USB_GEN_vect)
 			UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
 			UEINTX &= ~(1 << FIFOCON); // Allow the USB controller to send the data for the next IN-transaction. See: Source(1) @ Section(22.14) @ Page(276)
 		}
+		#endif
 
+		#if DEBUG
 		UENUM = USB_ENDPOINT_CDC_OUT;
 		if (UEINTX & (1 << RXOUTI)) // Endpoint's buffer has data from the host to be copied.
 		{
@@ -126,21 +125,20 @@ ISR(USB_GEN_vect)
 		UENUM = USB_ENDPOINT_HID;
 		if (UEINTX & (1 << TXINI))
 		{
-			#define TEMP_MAX 256
-			static u64 TEMP = 0;
-			if (TEMP >= TEMP_MAX)
+			if (_usb_mouse_command_reader_masked(0) == _usb_mouse_command_writer_masked(0)) // Interrupt's read-cursor is at the main program's write-cursor.
 			{
-				UEDATX = 0;
+				UEDATX = _usb_mouse_held;
 				UEDATX = 0;
 				UEDATX = 0;
 			}
 			else
 			{
-				TEMP += 1;
-				//UEDATX = TEMP % 18 < 9 ? 0 : 0b00000'001;
-				UEDATX = 0;
-				UEDATX = ((TEMP & 0b01) * 2 - 1) * 18;
-				UEDATX = ((TEMP & 0b10)     - 1) * 18;
+				struct USBMouseCommand command = _usb_mouse_command_buffer[_usb_mouse_command_reader_masked(0)];
+				_usb_mouse_command_reader += 1;
+
+				UEDATX = 0;               // TEMP
+				UEDATX = command.dest_x;
+				UEDATX = command.dest_y;
 			}
 
 			UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).

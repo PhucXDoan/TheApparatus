@@ -37,6 +37,36 @@ main(void)
 			debug_tx_u64(i);
 			debug_tx_cstr(" : The work is mysterious and important.\n");
 			i += 1;
+
+			usb_mouse_command
+			(
+				(struct USBMouseCommand)
+				{
+					.dest_x   = 10,
+					.dest_y   = 10,
+					.behavior = USBMouseButtonBehavior_released
+				}
+			);
+			_delay_ms(1000.0);
+			usb_mouse_command
+			(
+				(struct USBMouseCommand)
+				{
+					.dest_x   = 20,
+					.dest_y   = 20,
+					.behavior = USBMouseButtonBehavior_released
+				}
+			);
+			_delay_ms(1000.0);
+			usb_mouse_command
+			(
+				(struct USBMouseCommand)
+				{
+					.dest_x   = 30,
+					.dest_y   = 10,
+					.behavior = USBMouseButtonBehavior_released
+				}
+			);
 		}
 	}
 }

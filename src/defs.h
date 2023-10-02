@@ -675,13 +675,26 @@ struct USBMouseCommand
 	enum USBMouseButtonBehavior behavior;
 };
 
-static volatile struct USBMouseCommand _usb_mouse_command_buffer[8] = {0}; // TODO Determine the trade-off between maximum capacity and latency.
-static volatile u8                     _usb_mouse_writer            = 0;   // Main program writes.
-static volatile u8                     _usb_mouse_reader            = 0;   // Interrupt reads.
+static u8 _usb_mouse_curr_x = 0; // Only the interrupt can read and write.
+static u8 _usb_mouse_curr_y = 0; // Only the interrupt can read and write.
+static u8 _usb_mouse_held   = 0; // Only the interrupt can read and write. Strictly 0 or 1.
 
-static u8 _usb_mouse_curr_x = 0;     // Only the interrupt can read and write.
-static u8 _usb_mouse_curr_y = 0;     // Only the interrupt can read and write.
-static b8 _usb_mouse_held   = false; // Only the interrupt can read and write.
+static volatile struct USBMouseCommand _usb_mouse_command_buffer[8] = {0}; // TODO Determine the trade-off between maximum capacity and latency.
+static volatile u8                     _usb_mouse_command_writer    = 0;   // Main program writes.
+static volatile u8                     _usb_mouse_command_reader    = 0;   // Interrupt reads.
+
+#define _usb_mouse_command_writer_masked(OFFSET) ((_usb_mouse_command_writer + (OFFSET)) & (countof(_usb_mouse_command_buffer) - 1))
+#define _usb_mouse_command_reader_masked(OFFSET) ((_usb_mouse_command_reader + (OFFSET)) & (countof(_usb_mouse_command_buffer) - 1))
+
+// A read/write index with a size greater than a byte makes "atomic" read/write operations difficult to guarantee; it can be done, but probably not worthwhile.
+static_assert(sizeof(_usb_mouse_command_writer) == 1 && sizeof(_usb_mouse_command_reader) == 1);
+
+// The read/write indices must be able to address any element in the corresponding buffer.
+static_assert(countof(_usb_mouse_command_buffer) < (((u64) 1) << bitsof(_usb_mouse_command_reader)));
+static_assert(countof(_usb_mouse_command_buffer) < (((u64) 1) << bitsof(_usb_mouse_command_writer)));
+
+// Buffer sizes must be a power of two for the "_usb_mouse_X_masked" macros.
+static_assert(countof(_usb_mouse_command_buffer) && !(countof(_usb_mouse_command_buffer) & (countof(_usb_mouse_command_buffer) - 1)));
 
 //
 // Documentation.
