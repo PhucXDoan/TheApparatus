@@ -2,8 +2,23 @@
 #define PIN_HALT_SOURCE PinHaltSource_usb
 
 static void
+usb_mouse_command(struct USBMouseCommand command)
+{
+//	debug_pin_set(PIN_USB_SPINLOCKING, true);
+//	for (u16 i = 0; i < value_size; i += 1)
+//	{
+//		while (debug_usb_cdc_in_writer_masked(1) == debug_usb_cdc_in_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
+//		debug_usb_cdc_in_buffer[debug_usb_cdc_in_writer_masked(0)] = value[i];
+//		debug_usb_cdc_in_writer += 1;
+//	}
+//	debug_pin_set(PIN_USB_SPINLOCKING, false);
+}
+
+static void
 usb_init(void)
 { // [USB Initialization Process].
+
+	pin_output(PIN_USB_SPINLOCKING);
 
 	// 1. "Power on USB pads regulator".
 	UHWCON = (1 << UVREGE);
@@ -24,9 +39,9 @@ usb_init(void)
 
 	// 6. "Wait for USB VBUS information connection".
 	#if DEBUG
-	debug_pin_set(DEBUG_PIN_USB_SPINLOCKING, true);
+	pin_high(PIN_USB_SPINLOCKING);
 	while (!debug_usb_diagnostic_signal_received);
-	debug_pin_set(DEBUG_PIN_USB_SPINLOCKING, false);
+	pin_low(PIN_USB_SPINLOCKING);
 	#endif
 }
 
@@ -63,17 +78,18 @@ ISR(USB_GEN_vect)
 
 	if (UDINT & (1 << SOFI)) // Start-of-Frame.
 	{
+		#if DEBUG
 		UENUM = USB_ENDPOINT_CDC_IN;
 		if (UEINTX & (1 << TXINI)) // Endpoint's buffer is ready to be filled up with data to send to the host.
 		{
 			while
 			(
-				(UEINTX & (1 << RWAL)) &&                                    // Endpoint's buffer still has some space left.
-				_usb_cdc_in_reader_masked(0) != _usb_cdc_in_writer_masked(0) // Our ring buffer still has some data left.
+				(UEINTX & (1 << RWAL)) &&                                              // Endpoint's buffer still has some space left.
+				debug_usb_cdc_in_reader_masked(0) != debug_usb_cdc_in_writer_masked(0) // Our ring buffer still has some data left.
 			)
 			{
-				UEDATX              = _usb_cdc_in_buffer[_usb_cdc_in_reader_masked(0)];
-				_usb_cdc_in_reader += 1;
+				UEDATX                   = debug_usb_cdc_in_buffer[debug_usb_cdc_in_reader_masked(0)];
+				debug_usb_cdc_in_reader += 1;
 			}
 
 			UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
@@ -85,12 +101,12 @@ ISR(USB_GEN_vect)
 		{
 			while
 			(
-				(UEINTX & (1 << RWAL)) &&                                      // Endpoint's buffer still has some data left to be copied.
-				_usb_cdc_out_writer_masked(1) != _usb_cdc_out_reader_masked(0) // Our ring buffer still has some space left.
+				(UEINTX & (1 << RWAL)) &&                                                // Endpoint's buffer still has some data left to be copied.
+				debug_usb_cdc_out_writer_masked(1) != debug_usb_cdc_out_reader_masked(0) // Our ring buffer still has some space left.
 			)
 			{
-				_usb_cdc_out_buffer[_usb_cdc_out_writer_masked(0)] = UEDATX;
-				_usb_cdc_out_writer += 1;
+				debug_usb_cdc_out_buffer[debug_usb_cdc_out_writer_masked(0)] = UEDATX;
+				debug_usb_cdc_out_writer += 1;
 			}
 
 			if (UEINTX & (1 << RWAL)) // Endpoint's buffer still remaining data to be copied.
@@ -105,6 +121,7 @@ ISR(USB_GEN_vect)
 				UEINTX &= ~(1 << FIFOCON); // Free up this endpoint's buffer so the USB controller can copy the data in the next OUT-transaction to it.
 			}
 		}
+		#endif
 
 		UENUM = USB_ENDPOINT_HID;
 		if (UEINTX & (1 << TXINI))
@@ -361,14 +378,14 @@ ISR(USB_COM_vect)
 static void
 debug_tx_chars(char* value, u16 value_size)
 { // TODO we could use memcpy if we need to speed this up
-	debug_pin_set(DEBUG_PIN_USB_SPINLOCKING, true);
+	pin_high(PIN_USB_SPINLOCKING);
 	for (u16 i = 0; i < value_size; i += 1)
 	{
-		while (_usb_cdc_in_writer_masked(1) == _usb_cdc_in_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
-		_usb_cdc_in_buffer[_usb_cdc_in_writer_masked(0)] = value[i];
-		_usb_cdc_in_writer += 1;
+		while (debug_usb_cdc_in_writer_masked(1) == debug_usb_cdc_in_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
+		debug_usb_cdc_in_buffer[debug_usb_cdc_in_writer_masked(0)] = value[i];
+		debug_usb_cdc_in_writer += 1;
 	}
-	debug_pin_set(DEBUG_PIN_USB_SPINLOCKING, false);
+	pin_low(PIN_USB_SPINLOCKING);
 }
 #endif
 
@@ -396,11 +413,11 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 { // TODO we could use memcpy if we need to speed this up
 	u8 result = 0;
 
-	while (result < dst_max_length && _usb_cdc_out_reader_masked(0) != _usb_cdc_out_writer_masked(0))
+	while (result < dst_max_length && debug_usb_cdc_out_reader_masked(0) != debug_usb_cdc_out_writer_masked(0))
 	{
-		dst[result]          = _usb_cdc_out_buffer[_usb_cdc_out_reader_masked(0)];
-		_usb_cdc_out_reader += 1;
-		result              += 1;
+		dst[result]               = debug_usb_cdc_out_buffer[debug_usb_cdc_out_reader_masked(0)];
+		debug_usb_cdc_out_reader += 1;
+		result                   += 1;
 	}
 
 	return result;

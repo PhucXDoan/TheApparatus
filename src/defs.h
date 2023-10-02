@@ -67,7 +67,7 @@ enum PinState
 // "usb.c"
 //
 
-#define DEBUG_PIN_USB_SPINLOCKING 3
+#define PIN_USB_SPINLOCKING 3
 
 enum USBEndpointSizeCode // See: Source(1) @ Section(22.18.2) @ Page(287).
 {
@@ -628,35 +628,60 @@ static const struct USBConfigHierarchy USB_CONFIG_HIERARCHY PROGMEM =
 			},
 	};
 
-static u8 _usb_cdc_in_buffer [USB_ENDPOINT_CDC_IN_SIZE ] = {0};
-static u8 _usb_cdc_out_buffer[USB_ENDPOINT_CDC_OUT_SIZE] = {0};
+#if DEBUG
+static volatile u8 debug_usb_cdc_in_buffer [USB_ENDPOINT_CDC_IN_SIZE ] = {0};
+static volatile u8 debug_usb_cdc_out_buffer[USB_ENDPOINT_CDC_OUT_SIZE] = {0};
 
-static volatile u8 _usb_cdc_in_writer  = 0; // Main program writes.
-static volatile u8 _usb_cdc_in_reader  = 0; // Interrupt routine reads.
-static volatile u8 _usb_cdc_out_writer = 0; // Interrupt routine writes.
-static volatile u8 _usb_cdc_out_reader = 0; // Main program reads.
+static volatile u8 debug_usb_cdc_in_writer  = 0; // Main program writes.
+static volatile u8 debug_usb_cdc_in_reader  = 0; // Interrupt routine reads.
+static volatile u8 debug_usb_cdc_out_writer = 0; // Interrupt routine writes.
+static volatile u8 debug_usb_cdc_out_reader = 0; // Main program reads.
 
-#define _usb_cdc_in_writer_masked(OFFSET)  ((_usb_cdc_in_writer  + (OFFSET)) & (countof(_usb_cdc_in_buffer ) - 1))
-#define _usb_cdc_in_reader_masked(OFFSET)  ((_usb_cdc_in_reader  + (OFFSET)) & (countof(_usb_cdc_in_buffer ) - 1))
-#define _usb_cdc_out_writer_masked(OFFSET) ((_usb_cdc_out_writer + (OFFSET)) & (countof(_usb_cdc_out_buffer) - 1))
-#define _usb_cdc_out_reader_masked(OFFSET) ((_usb_cdc_out_reader + (OFFSET)) & (countof(_usb_cdc_out_buffer) - 1))
+#define debug_usb_cdc_in_writer_masked(OFFSET)  ((debug_usb_cdc_in_writer  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
+#define debug_usb_cdc_in_reader_masked(OFFSET)  ((debug_usb_cdc_in_reader  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
+#define debug_usb_cdc_out_writer_masked(OFFSET) ((debug_usb_cdc_out_writer + (OFFSET)) & (countof(debug_usb_cdc_out_buffer) - 1))
+#define debug_usb_cdc_out_reader_masked(OFFSET) ((debug_usb_cdc_out_reader + (OFFSET)) & (countof(debug_usb_cdc_out_buffer) - 1))
 
 // A read/write index with a size greater than a byte makes "atomic" read/write operations difficult to guarantee; it can be done, but probably not worthwhile.
-static_assert(sizeof(_usb_cdc_in_writer) == 1 && sizeof(_usb_cdc_in_reader) == 1 && sizeof(_usb_cdc_out_writer) == 1 && sizeof(_usb_cdc_out_reader) == 1);
+static_assert(sizeof(debug_usb_cdc_in_writer) == 1 && sizeof(debug_usb_cdc_in_reader) == 1 && sizeof(debug_usb_cdc_out_writer) == 1 && sizeof(debug_usb_cdc_out_reader) == 1);
 
 // The read/write indices must be able to address any element in the corresponding buffer.
-static_assert(countof(_usb_cdc_in_buffer ) < (((u64) 1) << bitsof(_usb_cdc_in_reader )));
-static_assert(countof(_usb_cdc_in_buffer ) < (((u64) 1) << bitsof(_usb_cdc_in_writer )));
-static_assert(countof(_usb_cdc_out_buffer) < (((u64) 1) << bitsof(_usb_cdc_out_reader)));
-static_assert(countof(_usb_cdc_out_buffer) < (((u64) 1) << bitsof(_usb_cdc_out_writer)));
+static_assert(countof(debug_usb_cdc_in_buffer ) < (((u64) 1) << bitsof(debug_usb_cdc_in_reader )));
+static_assert(countof(debug_usb_cdc_in_buffer ) < (((u64) 1) << bitsof(debug_usb_cdc_in_writer )));
+static_assert(countof(debug_usb_cdc_out_buffer) < (((u64) 1) << bitsof(debug_usb_cdc_out_reader)));
+static_assert(countof(debug_usb_cdc_out_buffer) < (((u64) 1) << bitsof(debug_usb_cdc_out_writer)));
 
-// Buffer sizes must be a power of two for the "_usb_cdc_X_Y_masked" macros.
-static_assert(countof(_usb_cdc_in_buffer ) && !(countof(_usb_cdc_in_buffer ) & (countof(_usb_cdc_in_buffer ) - 1)));
-static_assert(countof(_usb_cdc_out_buffer) && !(countof(_usb_cdc_out_buffer) & (countof(_usb_cdc_out_buffer) - 1)));
+// Buffer sizes must be a power of two for the "debug_usb_cdc_X_Y_masked" macros.
+static_assert(countof(debug_usb_cdc_in_buffer ) && !(countof(debug_usb_cdc_in_buffer ) & (countof(debug_usb_cdc_in_buffer ) - 1)));
+static_assert(countof(debug_usb_cdc_out_buffer) && !(countof(debug_usb_cdc_out_buffer) & (countof(debug_usb_cdc_out_buffer) - 1)));
 
-#if DEBUG
 static volatile b8 debug_usb_diagnostic_signal_received = false;
 #endif
+
+// LSb is the button state once the mouse reaches the destination.
+// 2nd LSb is the state during the movement.
+enum USBMouseButtonBehavior
+{
+	USBMouseButtonBehavior_released                 = 0b00,
+	USBMouseButtonBehavior_click_at_dest            = 0b01,
+	USBMouseButtonBehavior_drag_and_release_at_dest = 0b10,
+	USBMouseButtonBehavior_drag_to_dest             = 0b11,
+};
+
+struct USBMouseCommand
+{
+	u8                          dest_x;
+	u8                          dest_y;
+	enum USBMouseButtonBehavior behavior;
+};
+
+static volatile struct USBMouseCommand _usb_mouse_command_buffer[8] = {0}; // TODO Determine the trade-off between maximum capacity and latency.
+static volatile u8                     _usb_mouse_writer            = 0;   // Main program writes.
+static volatile u8                     _usb_mouse_reader            = 0;   // Interrupt reads.
+
+static u8 _usb_mouse_curr_x = 0;     // Only the interrupt can read and write.
+static u8 _usb_mouse_curr_y = 0;     // Only the interrupt can read and write.
+static b8 _usb_mouse_held   = false; // Only the interrupt can read and write.
 
 //
 // Documentation.

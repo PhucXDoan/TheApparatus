@@ -26,13 +26,17 @@ main(void)
 
 	usb_init();
 
+	u64 i = 0;
 	for(;;)
 	{
 		char c;
 		if (debug_rx(&c, 1))
 		{
 			debug_tx_chars(&c, 1);
+			debug_tx_cstr(" : ");
+			debug_tx_u64(i);
 			debug_tx_cstr(" : The work is mysterious and important.\n");
+			i += 1;
 		}
 	}
 }
