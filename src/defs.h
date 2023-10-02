@@ -67,6 +67,10 @@ enum PinState
 // "usb.c"
 //
 
+#if DEBUG
+#define DEBUG_ENABLE_DIAGNOSTIC true
+#endif
+
 #define PIN_USB_SPINLOCKING 3
 
 enum USBEndpointSizeCode // See: Source(1) @ Section(22.18.2) @ Page(287).
@@ -657,6 +661,8 @@ static_assert(countof(debug_usb_cdc_out_buffer) && !(countof(debug_usb_cdc_out_b
 
 static volatile b8 debug_usb_diagnostic_signal_received = false;
 #endif
+
+#define USB_MOUSE_DELTA 5 // TODO Explain
 
 // LSb is the button state once the mouse reaches the destination.
 // 2nd LSb is the state during the movement.

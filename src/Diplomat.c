@@ -26,6 +26,51 @@ main(void)
 
 	usb_init();
 
+#if 0
+	usb_mouse_command
+	(
+		(struct USBMouseCommand)
+		{
+			.dest_x   = 255,
+			.dest_y   = 255,
+			.behavior = USBMouseButtonBehavior_released
+		}
+	);
+
+	usb_mouse_command
+	(
+		(struct USBMouseCommand)
+		{
+			.dest_x   = 0,
+			.dest_y   = 0,
+			.behavior = USBMouseButtonBehavior_released
+		}
+	);
+
+	for (;;)
+	{
+		usb_mouse_command
+		(
+			(struct USBMouseCommand)
+			{
+				.dest_x   = 5,
+				.dest_y   = 15,
+				.behavior = USBMouseButtonBehavior_released
+			}
+		);
+		_delay_ms(1000.0);
+		usb_mouse_command
+		(
+			(struct USBMouseCommand)
+			{
+				.dest_x   = 35,
+				.dest_y   = 5,
+				.behavior = USBMouseButtonBehavior_released
+			}
+		);
+		_delay_ms(1000.0);
+	}
+#else
 	u64 i = 0;
 	for(;;)
 	{
@@ -42,33 +87,32 @@ main(void)
 			(
 				(struct USBMouseCommand)
 				{
-					.dest_x   = 10,
-					.dest_y   = 10,
+					.dest_x   = 141,
+					.dest_y   = 120,
 					.behavior = USBMouseButtonBehavior_released
 				}
 			);
-			_delay_ms(1000.0);
 			usb_mouse_command
 			(
 				(struct USBMouseCommand)
 				{
-					.dest_x   = 20,
+					.dest_x   = 90,
 					.dest_y   = 20,
 					.behavior = USBMouseButtonBehavior_released
 				}
 			);
-			_delay_ms(1000.0);
 			usb_mouse_command
 			(
 				(struct USBMouseCommand)
 				{
-					.dest_x   = 30,
-					.dest_y   = 10,
+					.dest_x   = 34,
+					.dest_y   = 20,
 					.behavior = USBMouseButtonBehavior_released
 				}
 			);
 		}
 	}
+#endif
 }
 
 //

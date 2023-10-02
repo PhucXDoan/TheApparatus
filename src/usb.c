@@ -35,7 +35,7 @@ usb_init(void)
 	UDCON = 0; // Clearing the DETACH bit allows the device to be connected to the host. See: Source(1) @ Section(22.18.1) @ Page(281).
 
 	// 6. "Wait for USB VBUS information connection".
-	#if DEBUG
+	#if DEBUG_ENABLE_DIAGNOSTIC
 	pin_high(PIN_USB_SPINLOCKING);
 	while (!debug_usb_diagnostic_signal_received);
 	pin_low(PIN_USB_SPINLOCKING);
@@ -125,20 +125,46 @@ ISR(USB_GEN_vect)
 		UENUM = USB_ENDPOINT_HID;
 		if (UEINTX & (1 << TXINI))
 		{
-			if (_usb_mouse_command_reader_masked(0) == _usb_mouse_command_writer_masked(0)) // Interrupt's read-cursor is at the main program's write-cursor.
+			if (_usb_mouse_command_reader_masked(0) == _usb_mouse_command_writer_masked(0)) // No command available to handle.
 			{
 				UEDATX = _usb_mouse_held;
 				UEDATX = 0;
 				UEDATX = 0;
 			}
-			else
+			else // There's an available command to handle.
 			{
 				struct USBMouseCommand command = _usb_mouse_command_buffer[_usb_mouse_command_reader_masked(0)];
-				_usb_mouse_command_reader += 1;
+				i8                     delta_x = 0;
+				i8                     delta_y = 0;
 
-				UEDATX = 0;               // TEMP
-				UEDATX = command.dest_x;
-				UEDATX = command.dest_y;
+				if (_usb_mouse_curr_x < command.dest_x)
+				{
+					delta_x            = USB_MOUSE_DELTA;
+					_usb_mouse_curr_x += 1;
+				}
+				else if (_usb_mouse_curr_x > command.dest_x)
+				{
+					delta_x            = -USB_MOUSE_DELTA;
+					_usb_mouse_curr_x -= 1;
+				}
+				else if (_usb_mouse_curr_y < command.dest_y)
+				{
+					delta_y            = USB_MOUSE_DELTA;
+					_usb_mouse_curr_y += 1;
+				}
+				else if (_usb_mouse_curr_y > command.dest_y)
+				{
+					delta_y            = -USB_MOUSE_DELTA;
+					_usb_mouse_curr_y -= 1;
+				}
+				else
+				{
+					_usb_mouse_command_reader += 1; // Free up the mouse command.
+				}
+
+				UEDATX = 0; // TEMP
+				UEDATX = delta_x;
+				UEDATX = delta_y;
 			}
 
 			UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
@@ -376,6 +402,7 @@ ISR(USB_COM_vect)
 static void
 debug_tx_chars(char* value, u16 value_size)
 { // TODO we could use memcpy if we need to speed this up
+	#if DEBUG_ENABLE_DIAGNOSTIC
 	pin_high(PIN_USB_SPINLOCKING);
 	for (u16 i = 0; i < value_size; i += 1)
 	{
@@ -384,6 +411,7 @@ debug_tx_chars(char* value, u16 value_size)
 		debug_usb_cdc_in_writer += 1;
 	}
 	pin_low(PIN_USB_SPINLOCKING);
+	#endif
 }
 #endif
 
@@ -391,7 +419,9 @@ debug_tx_chars(char* value, u16 value_size)
 static void
 debug_tx_cstr(char* value)
 {
+	#if DEBUG_ENABLE_DIAGNOSTIC
 	debug_tx_chars(value, strlen(value));
+	#endif
 }
 #endif
 
@@ -399,9 +429,11 @@ debug_tx_cstr(char* value)
 static void
 debug_tx_u64(u64 value)
 {
+	#if DEBUG_ENABLE_DIAGNOSTIC
 	char buffer[20];
 	u8   length = serialize_u64(buffer, countof(buffer), value);
 	debug_tx_chars(buffer, length);
+	#endif
 }
 #endif
 
@@ -411,12 +443,14 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 { // TODO we could use memcpy if we need to speed this up
 	u8 result = 0;
 
+	#if DEBUG_ENABLE_DIAGNOSTIC
 	while (result < dst_max_length && debug_usb_cdc_out_reader_masked(0) != debug_usb_cdc_out_writer_masked(0))
 	{
 		dst[result]               = debug_usb_cdc_out_buffer[debug_usb_cdc_out_reader_masked(0)];
 		debug_usb_cdc_out_reader += 1;
 		result                   += 1;
 	}
+	#endif
 
 	return result;
 }
