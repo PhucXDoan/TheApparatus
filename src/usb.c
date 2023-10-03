@@ -35,9 +35,19 @@ usb_init(void)
 	UDCON = 0; // Clearing the DETACH bit allows the device to be connected to the host. See: Source(1) @ Section(22.18.1) @ Page(281).
 
 	// 6. "Wait for USB VBUS information connection".
-	#if DEBUG_ENABLE_DIAGNOSTIC
+	#if DEBUG
 	pin_high(PIN_USB_SPINLOCKING);
-	while (!debug_usb_diagnostic_signal_received);
+	for (u8 i = 0; i != 255; i += 1)
+	{
+		if (debug_usb_diagnostic_signal_received)
+		{
+			break;
+		}
+		else
+		{
+			_delay_ms(4.0);
+		}
+	}
 	pin_low(PIN_USB_SPINLOCKING);
 	#endif
 }
@@ -409,16 +419,17 @@ ISR(USB_COM_vect)
 static void
 debug_tx_chars(char* value, u16 value_size)
 { // TODO we could use memcpy if we need to speed this up
-	#if DEBUG_ENABLE_DIAGNOSTIC
-	pin_high(PIN_USB_SPINLOCKING);
-	for (u16 i = 0; i < value_size; i += 1)
+	if (debug_usb_diagnostic_signal_received)
 	{
-		while (debug_usb_cdc_in_writer_masked(1) == debug_usb_cdc_in_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
-		debug_usb_cdc_in_buffer[debug_usb_cdc_in_writer_masked(0)] = value[i];
-		debug_usb_cdc_in_writer += 1;
+		pin_high(PIN_USB_SPINLOCKING);
+		for (u16 i = 0; i < value_size; i += 1)
+		{
+			while (debug_usb_cdc_in_writer_masked(1) == debug_usb_cdc_in_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
+			debug_usb_cdc_in_buffer[debug_usb_cdc_in_writer_masked(0)] = value[i];
+			debug_usb_cdc_in_writer += 1;
+		}
+		pin_low(PIN_USB_SPINLOCKING);
 	}
-	pin_low(PIN_USB_SPINLOCKING);
-	#endif
 }
 #endif
 
@@ -426,9 +437,10 @@ debug_tx_chars(char* value, u16 value_size)
 static void
 debug_tx_cstr(char* value)
 {
-	#if DEBUG_ENABLE_DIAGNOSTIC
-	debug_tx_chars(value, strlen(value));
-	#endif
+	if (debug_usb_diagnostic_signal_received)
+	{
+		debug_tx_chars(value, strlen(value));
+	}
 }
 #endif
 
@@ -436,11 +448,12 @@ debug_tx_cstr(char* value)
 static void
 debug_tx_u64(u64 value)
 {
-	#if DEBUG_ENABLE_DIAGNOSTIC
-	char buffer[20];
-	u8   length = serialize_u64(buffer, countof(buffer), value);
-	debug_tx_chars(buffer, length);
-	#endif
+	if (debug_usb_diagnostic_signal_received)
+	{
+		char buffer[20];
+		u8   length = serialize_u64(buffer, countof(buffer), value);
+		debug_tx_chars(buffer, length);
+	}
 }
 #endif
 
@@ -450,14 +463,15 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 { // TODO we could use memcpy if we need to speed this up
 	u8 result = 0;
 
-	#if DEBUG_ENABLE_DIAGNOSTIC
-	while (result < dst_max_length && debug_usb_cdc_out_reader_masked(0) != debug_usb_cdc_out_writer_masked(0))
+	if (debug_usb_diagnostic_signal_received)
 	{
-		dst[result]               = debug_usb_cdc_out_buffer[debug_usb_cdc_out_reader_masked(0)];
-		debug_usb_cdc_out_reader += 1;
-		result                   += 1;
+		while (result < dst_max_length && debug_usb_cdc_out_reader_masked(0) != debug_usb_cdc_out_writer_masked(0))
+		{
+			dst[result]               = debug_usb_cdc_out_buffer[debug_usb_cdc_out_reader_masked(0)];
+			debug_usb_cdc_out_reader += 1;
+			result                   += 1;
+		}
 	}
-	#endif
 
 	return result;
 }

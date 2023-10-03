@@ -67,10 +67,6 @@ enum PinState
 // "usb.c"
 //
 
-#if DEBUG
-#define DEBUG_ENABLE_DIAGNOSTIC true
-#endif
-
 #define PIN_USB_SPINLOCKING 3
 
 enum USBEndpointSizeCode // See: Source(1) @ Section(22.18.2) @ Page(287).
