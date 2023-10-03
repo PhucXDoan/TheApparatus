@@ -1,9 +1,9 @@
 #define F_CPU 16'000'000
 #include <avr/io.h>
-#include <util/delay.h>
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
 #include <avr/pgmspace.h>
+#include <util/delay.h>
 #include <stdint.h>
 #include <string.h>
 #include "defs.h"

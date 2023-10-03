@@ -4,7 +4,7 @@ setlocal EnableDelayedExpansion
 REM To list AVRDUDE's supported AVR devices: "avrdude -c avrisp".
 REM To list AVRDUDE's supported programmers: "avrdude -c asd".
 
-set AVR_GCC_PRACTICAL_DISABLED_WARNINGS=^
+set AVR_GCC_PRACTICAL_DISABLED_WARNINGS= ^
 	-Wno-unused-function -Wno-implicit-fallthrough
 
 set AVR_GCC_DEVELOPMENT_DISABLED_WARNINGS=^
@@ -14,6 +14,27 @@ set AVR_GCC_FLAGS= ^
 	-std=c2x -Os -D DEBUG=1 -fshort-enums -I W:/ ^
 	-Werror -Wall -Wextra -fmax-errors=1 !AVR_GCC_PRACTICAL_DISABLED_WARNINGS! !AVR_GCC_DEVELOPMENT_DISABLED_WARNINGS! ^
 	--param=min-pagesize=0
+
+set MSVC_PRACTICAL_DISABLED_WARNINGS= ^
+	/wd4668 /wd5045 /wd4820 /wd4711 /wd4710
+
+set MSVC_DEVELOPMENT_DISABLED_WARNINGS= ^
+	/wd4189 /wd4101 /wd4102 /wd4100
+
+set MSVC_FLAGS= ^
+	/nologo /Od /std:c17 /IW:\ /Zi /D DEBUG=1 ^
+	/Wall /WX !MSVC_PRACTICAL_DISABLED_WARNINGS! !MSVC_DEVELOPMENT_DISABLED_WARNINGS! ^
+	/link /incremental:no
+
+set BOOTLOADER_BAUD_SIGNAL=1200
+set DIAGNOSTIC_BAUD_SIGNAL=1201
+
+set PROGRAM_MCU=ATmega32U4
+set PROGRAM_NAME=Diplomat
+set PROGRAMMER=avr109
+set BOOTLOADER_COM=4
+set DIAGNOSTIC_COM=10
+
 
 REM The "--param=min-pagesize=0" flag is to make GCC shut up about a false-positive warning in the
 REM case of writing to certain registers (e.g. "UDCON &= ~(1 << DETACH);"). I believe this is make
@@ -29,17 +50,17 @@ if not exist W:\build\ (
 pushd W:\build\
 	del *.s *.o *.elf *.hex > nul 2>&1
 
-	set BOOTLOADER_BAUD_SIGNAL=1200
-	set DIAGNOSTIC_BAUD_SIGNAL=1201
+	REM
+	REM Compile MicroServient.c.
+	REM
 
-	set PROGRAM_MCU=ATmega32U4
-	set PROGRAM_NAME=Diplomat
-	set PROGRAMMER=avr109
-	set BOOTLOADER_COM=4
-	set DIAGNOSTIC_COM=10
+	cl W:\src\MicroServient\main.c /Fe:MicroServient.exe !MSVC_FLAGS!
+	if not !ERRORLEVEL! == 0 (
+		goto ABORT
+	)
 
 	REM
-	REM Compile C source code into ELF (describes memory layout of main program).
+	REM Compile firmware C source code into ELF (describes memory layout of main program).
 	REM
 
 	set AVR_GCC_ARGS= ^
@@ -47,8 +68,8 @@ pushd W:\build\
 		-D BOOTLOADER_BAUD_SIGNAL=!BOOTLOADER_BAUD_SIGNAL! ^
 		-D DIAGNOSTIC_BAUD_SIGNAL=!DIAGNOSTIC_BAUD_SIGNAL!
 
-	avr-gcc !AVR_GCC_ARGS! -S -fverbose-asm               W:\src\!PROGRAM_NAME!.c
-	avr-gcc !AVR_GCC_ARGS! -o W:\build\!PROGRAM_NAME!.elf W:\src\!PROGRAM_NAME!.c
+	avr-gcc !AVR_GCC_ARGS! -S -fverbose-asm               W:\src\!PROGRAM_NAME!\main.c
+	avr-gcc !AVR_GCC_ARGS! -o W:\build\!PROGRAM_NAME!.elf W:\src\!PROGRAM_NAME!\main.c
 	if not !ERRORLEVEL! == 0 (
 		goto ABORT
 	)
