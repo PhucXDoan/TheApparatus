@@ -27,26 +27,6 @@ main(void)
 	usb_init();
 
 #if 0
-	usb_mouse_command
-	(
-		(struct USBMouseCommand)
-		{
-			.dest_x   = 255,
-			.dest_y   = 255,
-			.behavior = USBMouseButtonBehavior_released
-		}
-	);
-
-	usb_mouse_command
-	(
-		(struct USBMouseCommand)
-		{
-			.dest_x   = 0,
-			.dest_y   = 0,
-			.behavior = USBMouseButtonBehavior_released
-		}
-	);
-
 	for (;;)
 	{
 		usb_mouse_command

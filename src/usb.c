@@ -125,7 +125,14 @@ ISR(USB_GEN_vect)
 		UENUM = USB_ENDPOINT_HID;
 		if (UEINTX & (1 << TXINI))
 		{
-			if (_usb_mouse_command_reader_masked(0) == _usb_mouse_command_writer_masked(0)) // No command available to handle.
+			if (_usb_mouse_calibrations)
+			{
+				UEDATX                   = 0;
+				UEDATX                   = -128;
+				UEDATX                   = -128;
+				_usb_mouse_calibrations -= 1;
+			}
+			else if (_usb_mouse_command_reader_masked(0) == _usb_mouse_command_writer_masked(0)) // No command available to handle.
 			{
 				UEDATX = _usb_mouse_held;
 				UEDATX = 0;
@@ -139,22 +146,22 @@ ISR(USB_GEN_vect)
 
 				if (_usb_mouse_curr_x < command.dest_x)
 				{
-					delta_x            = USB_MOUSE_DELTA;
+					delta_x            = USB_MOUSE_DELTA_X;
 					_usb_mouse_curr_x += 1;
 				}
 				else if (_usb_mouse_curr_x > command.dest_x)
 				{
-					delta_x            = -USB_MOUSE_DELTA;
+					delta_x            = -USB_MOUSE_DELTA_X;
 					_usb_mouse_curr_x -= 1;
 				}
 				else if (_usb_mouse_curr_y < command.dest_y)
 				{
-					delta_y            = USB_MOUSE_DELTA;
+					delta_y            = USB_MOUSE_DELTA_Y;
 					_usb_mouse_curr_y += 1;
 				}
 				else if (_usb_mouse_curr_y > command.dest_y)
 				{
-					delta_y            = -USB_MOUSE_DELTA;
+					delta_y            = -USB_MOUSE_DELTA_Y;
 					_usb_mouse_curr_y -= 1;
 				}
 				else
