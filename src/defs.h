@@ -659,30 +659,20 @@ static volatile b8 debug_usb_diagnostic_signal_received = false;
 #endif
 
 #define USB_MOUSE_DELTA_X 5
-#define USB_MOUSE_DELTA_Y 10
+#define USB_MOUSE_DELTA_Y 5
 
-// LSb is the button state once the mouse reaches the destination.
-// 2nd LSb is the state during the movement.
-enum USBMouseButtonBehavior
+struct USBMouseCommand // Destinations are left-right, bottom-up.
 {
-	USBMouseButtonBehavior_released                 = 0b00,
-	USBMouseButtonBehavior_click_at_dest            = 0b01,
-	USBMouseButtonBehavior_drag_and_release_at_dest = 0b10,
-	USBMouseButtonBehavior_drag_to_dest             = 0b11,
-};
-
-struct USBMouseCommand
-{
-	u8                          dest_x;
-	u8                          dest_y;
-	enum USBMouseButtonBehavior behavior;
+	u8 dest_x;
+	u8 dest_y;
+	b8 held;
 };
 
 // Only the interrupt can read and write these.
 static u8 _usb_mouse_calibrations = 255;
 static u8 _usb_mouse_curr_x       = 0;
 static u8 _usb_mouse_curr_y       = 0;
-static u8 _usb_mouse_held         = 0; // Strictly 0 or 1.
+static b8 _usb_mouse_held         = false;
 
 static volatile struct USBMouseCommand _usb_mouse_command_buffer[8] = {0}; // TODO Determine the trade-off between maximum capacity and latency.
 static volatile u8                     _usb_mouse_command_writer    = 0;   // Main program writes.

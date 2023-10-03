@@ -26,73 +26,84 @@ main(void)
 
 	usb_init();
 
-#if 0
-	for (;;)
-	{
-		usb_mouse_command
-		(
-			(struct USBMouseCommand)
-			{
-				.dest_x   = 5,
-				.dest_y   = 15,
-				.behavior = USBMouseButtonBehavior_released
-			}
-		);
-		_delay_ms(1000.0);
-		usb_mouse_command
-		(
-			(struct USBMouseCommand)
-			{
-				.dest_x   = 35,
-				.dest_y   = 5,
-				.behavior = USBMouseButtonBehavior_released
-			}
-		);
-		_delay_ms(1000.0);
-	}
-#else
+	debug_pin_set(5, PinState_input);
+
 	u64 i = 0;
 	for(;;)
 	{
-		char c;
-		if (debug_rx(&c, 1))
+		if (!debug_pin_read(5))
 		{
-			debug_tx_chars(&c, 1);
-			debug_tx_cstr(" : ");
-			debug_tx_u64(i);
-			debug_tx_cstr(" : The work is mysterious and important.\n");
-			i += 1;
+			#define CENTER_X 75
+			#define CENTER_Y 75
+			#define WIDTH    15
+			#define HEIGHT   20
 
 			usb_mouse_command
 			(
 				(struct USBMouseCommand)
 				{
-					.dest_x   = 141,
-					.dest_y   = 120,
-					.behavior = USBMouseButtonBehavior_released
+					.dest_x = CENTER_X,
+					.dest_y = CENTER_Y + HEIGHT,
+					.held   = false,
 				}
 			);
 			usb_mouse_command
 			(
 				(struct USBMouseCommand)
 				{
-					.dest_x   = 90,
-					.dest_y   = 20,
-					.behavior = USBMouseButtonBehavior_released
+					.dest_x = CENTER_X - WIDTH,
+					.dest_y = CENTER_Y - HEIGHT,
+					.held   = true,
 				}
 			);
 			usb_mouse_command
 			(
 				(struct USBMouseCommand)
 				{
-					.dest_x   = 34,
-					.dest_y   = 20,
-					.behavior = USBMouseButtonBehavior_released
+					.dest_x = CENTER_X + WIDTH,
+					.dest_y = CENTER_Y + HEIGHT / 2,
+					.held   = true,
 				}
 			);
+			usb_mouse_command
+			(
+				(struct USBMouseCommand)
+				{
+					.dest_x = CENTER_X - WIDTH,
+					.dest_y = CENTER_Y + HEIGHT / 2,
+					.held   = true,
+				}
+			);
+			usb_mouse_command
+			(
+				(struct USBMouseCommand)
+				{
+					.dest_x = CENTER_X + WIDTH,
+					.dest_y = CENTER_Y - HEIGHT,
+					.held   = true,
+				}
+			);
+			usb_mouse_command
+			(
+				(struct USBMouseCommand)
+				{
+					.dest_x = CENTER_X,
+					.dest_y = CENTER_Y + HEIGHT,
+					.held   = true,
+				}
+			);
+			usb_mouse_command
+			(
+				(struct USBMouseCommand)
+				{
+					.dest_x = 0,
+					.dest_y = 0,
+					.held   = false,
+				}
+			);
+			_delay_ms(1000.0);
 		}
 	}
-#endif
 }
 
 //

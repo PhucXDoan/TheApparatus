@@ -45,7 +45,7 @@ usb_init(void)
 		}
 		else
 		{
-			_delay_ms(4.0);
+			_delay_ms(8.0);
 		}
 	}
 	pin_low(PIN_USB_SPINLOCKING);
@@ -135,24 +135,20 @@ ISR(USB_GEN_vect)
 		UENUM = USB_ENDPOINT_HID;
 		if (UEINTX & (1 << TXINI))
 		{
+			i8 delta_x = 0;
+			i8 delta_y = 0; // Positive makes the mouse move downward.
+
 			if (_usb_mouse_calibrations)
 			{
-				UEDATX                   = 0;
-				UEDATX                   = -128;
-				UEDATX                   = -128;
+				delta_x                  = -128;
+				delta_y                  =  127;
 				_usb_mouse_calibrations -= 1;
 			}
-			else if (_usb_mouse_command_reader_masked(0) == _usb_mouse_command_writer_masked(0)) // No command available to handle.
-			{
-				UEDATX = _usb_mouse_held;
-				UEDATX = 0;
-				UEDATX = 0;
-			}
-			else // There's an available command to handle.
+			else if (_usb_mouse_command_reader_masked(0) != _usb_mouse_command_writer_masked(0)) // There's an available command to handle.
 			{
 				struct USBMouseCommand command = _usb_mouse_command_buffer[_usb_mouse_command_reader_masked(0)];
-				i8                     delta_x = 0;
-				i8                     delta_y = 0;
+
+				_usb_mouse_held = command.held;
 
 				if (_usb_mouse_curr_x < command.dest_x)
 				{
@@ -166,23 +162,24 @@ ISR(USB_GEN_vect)
 				}
 				else if (_usb_mouse_curr_y < command.dest_y)
 				{
-					delta_y            = USB_MOUSE_DELTA_Y;
+					delta_y            = -USB_MOUSE_DELTA_Y;
 					_usb_mouse_curr_y += 1;
 				}
 				else if (_usb_mouse_curr_y > command.dest_y)
 				{
-					delta_y            = -USB_MOUSE_DELTA_Y;
+					delta_y            = USB_MOUSE_DELTA_Y;
 					_usb_mouse_curr_y -= 1;
 				}
-				else
+				else // We are at the destination.
 				{
 					_usb_mouse_command_reader += 1; // Free up the mouse command.
 				}
-
-				UEDATX = 0; // TEMP
-				UEDATX = delta_x;
-				UEDATX = delta_y;
 			}
+
+			// See: USB_DESC_HID_REPORT.
+			UEDATX = _usb_mouse_held;
+			UEDATX = delta_x;
+			UEDATX = delta_y;
 
 			UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
 			UEINTX &= ~(1 << FIFOCON); // Allow the USB controller to send the data for the next IN-transaction. See: Source(1) @ Section(22.14) @ Page(276)
