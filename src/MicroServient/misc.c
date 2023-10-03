@@ -76,3 +76,20 @@ free_read_file(str* src)
 	free(src->data);
 	*src = (str) {0};
 }
+
+static b32 // dst was written completely.
+eat_stream_(void* dst, i64 dst_size, str* src)
+{
+	b32 result = false;
+
+	if (dst_size <= src->length)
+	{
+		memmove(dst, src->data, dst_size);
+		src->length -= dst_size;
+		src->data   += dst_size;
+		result       = true;
+	}
+
+	return result;
+}
+#define eat_stream(DST, SRC) eat_stream_((DST), sizeof(*(DST)), (SRC))

@@ -22,7 +22,7 @@ set MSVC_DEVELOPMENT_DISABLED_WARNINGS= ^
 	/wd4189 /wd4101 /wd4102 /wd4100
 
 set MSVC_FLAGS= ^
-	/nologo /Od /std:c17 /IW:\ /Zi /D DEBUG=1 ^
+	/nologo /Od /std:c17 /IW:\ /Zi /D DEBUG=1 /D LITTLE_ENDIAN=1 ^
 	/Wall /WX !MSVC_PRACTICAL_DISABLED_WARNINGS! !MSVC_DEVELOPMENT_DISABLED_WARNINGS! ^
 	/link /incremental:no
 
