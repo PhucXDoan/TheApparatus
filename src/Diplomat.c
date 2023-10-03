@@ -28,80 +28,32 @@ main(void)
 
 	debug_pin_set(5, PinState_input);
 
-	u64 i = 0;
 	for(;;)
 	{
 		if (!debug_pin_read(5))
 		{
-			#define CENTER_X 75
-			#define CENTER_Y 75
-			#define WIDTH    15
-			#define HEIGHT   20
+			for (u8 i = 0; i < 32; i += 1)
+			{
+				usb_mouse_command
+				(
+					(struct USBMouseCommand)
+					{
+						.dest_x = 25 + (i % 8) * 25,
+						.dest_y = 50 + (i / 4) * 15,
+						.held   = !!i,
+					}
+				);
+			}
 
 			usb_mouse_command
 			(
 				(struct USBMouseCommand)
 				{
-					.dest_x = CENTER_X,
-					.dest_y = CENTER_Y + HEIGHT,
+					.dest_x = 18,
+					.dest_y = 235,
 					.held   = false,
 				}
 			);
-			usb_mouse_command
-			(
-				(struct USBMouseCommand)
-				{
-					.dest_x = CENTER_X - WIDTH,
-					.dest_y = CENTER_Y - HEIGHT,
-					.held   = true,
-				}
-			);
-			usb_mouse_command
-			(
-				(struct USBMouseCommand)
-				{
-					.dest_x = CENTER_X + WIDTH,
-					.dest_y = CENTER_Y + HEIGHT / 2,
-					.held   = true,
-				}
-			);
-			usb_mouse_command
-			(
-				(struct USBMouseCommand)
-				{
-					.dest_x = CENTER_X - WIDTH,
-					.dest_y = CENTER_Y + HEIGHT / 2,
-					.held   = true,
-				}
-			);
-			usb_mouse_command
-			(
-				(struct USBMouseCommand)
-				{
-					.dest_x = CENTER_X + WIDTH,
-					.dest_y = CENTER_Y - HEIGHT,
-					.held   = true,
-				}
-			);
-			usb_mouse_command
-			(
-				(struct USBMouseCommand)
-				{
-					.dest_x = CENTER_X,
-					.dest_y = CENTER_Y + HEIGHT,
-					.held   = true,
-				}
-			);
-			usb_mouse_command
-			(
-				(struct USBMouseCommand)
-				{
-					.dest_x = 0,
-					.dest_y = 0,
-					.held   = false,
-				}
-			);
-			_delay_ms(1000.0);
 		}
 	}
 }

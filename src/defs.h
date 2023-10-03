@@ -658,8 +658,13 @@ static_assert(countof(debug_usb_cdc_out_buffer) && !(countof(debug_usb_cdc_out_b
 static volatile b8 debug_usb_diagnostic_signal_received = false;
 #endif
 
+#if 0
+#define USB_MOUSE_DELTA_X 5
+#define USB_MOUSE_DELTA_Y 9
+#else
 #define USB_MOUSE_DELTA_X 5
 #define USB_MOUSE_DELTA_Y 5
+#endif
 
 struct USBMouseCommand // Destinations are left-right, bottom-up.
 {

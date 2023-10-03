@@ -150,15 +150,19 @@ ISR(USB_GEN_vect)
 
 				_usb_mouse_held = command.held;
 
-				if (_usb_mouse_curr_x < command.dest_x)
+				// Toggle between moving x and y to avoid Apple's mouse acceleration shenanigans from happening.
+				if (_usb_mouse_curr_x != command.dest_x && (_usb_mouse_curr_y == command.dest_y || ((_usb_mouse_curr_x ^ _usb_mouse_curr_y) & 1)))
 				{
-					delta_x            = USB_MOUSE_DELTA_X;
-					_usb_mouse_curr_x += 1;
-				}
-				else if (_usb_mouse_curr_x > command.dest_x)
-				{
-					delta_x            = -USB_MOUSE_DELTA_X;
-					_usb_mouse_curr_x -= 1;
+					if (_usb_mouse_curr_x < command.dest_x)
+					{
+						delta_x            = USB_MOUSE_DELTA_X;
+						_usb_mouse_curr_x += 1;
+					}
+					else
+					{
+						delta_x            = -USB_MOUSE_DELTA_X;
+						_usb_mouse_curr_x -= 1;
+					}
 				}
 				else if (_usb_mouse_curr_y < command.dest_y)
 				{
@@ -170,7 +174,8 @@ ISR(USB_GEN_vect)
 					delta_y            = USB_MOUSE_DELTA_Y;
 					_usb_mouse_curr_y -= 1;
 				}
-				else // We are at the destination.
+
+				if (_usb_mouse_curr_x == command.dest_x && _usb_mouse_curr_y == command.dest_y) // We are at the destination.
 				{
 					_usb_mouse_command_reader += 1; // Free up the mouse command.
 				}
