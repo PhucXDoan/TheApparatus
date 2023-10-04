@@ -632,10 +632,10 @@ static const struct USBConfigHierarchy USB_CONFIG_HIERARCHY PROGMEM =
 static volatile u8 debug_usb_cdc_in_buffer [USB_ENDPOINT_CDC_IN_SIZE ] = {0};
 static volatile u8 debug_usb_cdc_out_buffer[USB_ENDPOINT_CDC_OUT_SIZE] = {0};
 
-static volatile u8 debug_usb_cdc_in_writer  = 0; // Main program writes.
-static volatile u8 debug_usb_cdc_in_reader  = 0; // Interrupt routine reads.
-static volatile u8 debug_usb_cdc_out_writer = 0; // Interrupt routine writes.
-static volatile u8 debug_usb_cdc_out_reader = 0; // Main program reads.
+static volatile u8 debug_usb_cdc_in_writer  = 0; // Main program writes the IN-buffer.
+static volatile u8 debug_usb_cdc_in_reader  = 0; // Interrupt routine reads the IN-buffer.
+static volatile u8 debug_usb_cdc_out_writer = 0; // Interrupt routine writes the OUT-buffer.
+static volatile u8 debug_usb_cdc_out_reader = 0; // Main program reads the OUT-buffer.
 
 #define debug_usb_cdc_in_writer_masked(OFFSET)  ((debug_usb_cdc_in_writer  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
 #define debug_usb_cdc_in_reader_masked(OFFSET)  ((debug_usb_cdc_in_reader  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
@@ -658,30 +658,17 @@ static_assert(countof(debug_usb_cdc_out_buffer) && !(countof(debug_usb_cdc_out_b
 static volatile b8 debug_usb_diagnostic_signal_received = false;
 #endif
 
-#if 0
-#define USB_MOUSE_DELTA_X 5
-#define USB_MOUSE_DELTA_Y 9
-#else
-#define USB_MOUSE_DELTA_X 5
-#define USB_MOUSE_DELTA_Y 5
-#endif
-
-struct USBMouseCommand // Destinations are left-right, bottom-up.
-{
-	u8 dest_x;
-	u8 dest_y;
-	b8 held;
-};
+#define USB_MOUSE_CALIBRATIONS_REQUIRED 128
 
 // Only the interrupt can read and write these.
-static u8 _usb_mouse_calibrations = 255;
-static u8 _usb_mouse_curr_x       = 0;
-static u8 _usb_mouse_curr_y       = 0;
+static u8 _usb_mouse_calibrations = 0;
+static u8 _usb_mouse_curr_x       = 0; // Origin is top-left.
+static u8 _usb_mouse_curr_y       = 0; // Origin is top-left.
 static b8 _usb_mouse_held         = false;
 
-static volatile struct USBMouseCommand _usb_mouse_command_buffer[8] = {0}; // TODO Determine the trade-off between maximum capacity and latency.
-static volatile u8                     _usb_mouse_command_writer    = 0;   // Main program writes.
-static volatile u8                     _usb_mouse_command_reader    = 0;   // Interrupt reads.
+static volatile u16 _usb_mouse_command_buffer[8] = {0}; // See: [USB Mouse Commands].
+static volatile u8  _usb_mouse_command_writer    = 0;   // Main program writes the buffer.
+static volatile u8  _usb_mouse_command_reader    = 0;   // Interrupt reads the buffer.
 
 #define _usb_mouse_command_writer_masked(OFFSET) ((_usb_mouse_command_writer + (OFFSET)) & (countof(_usb_mouse_command_buffer) - 1))
 #define _usb_mouse_command_reader_masked(OFFSET) ((_usb_mouse_command_reader + (OFFSET)) & (countof(_usb_mouse_command_buffer) - 1))

@@ -1,8 +1,10 @@
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE PinHaltSource_usb
 
+// HELD must evaluate to 0 or 1, DEST_X must be within [0, 127], DEST_Y must be within [0, 255]. See: [Mouse Commands].
+#define usb_mouse_command(HELD, DEST_X, DEST_Y) usb_mouse_command_(((HELD) << 15) | ((DEST_X) << 8) | (DEST_Y))
 static void
-usb_mouse_command(struct USBMouseCommand command)
+usb_mouse_command_(u16 command)
 {
 	pin_high(PIN_USB_SPINLOCKING);
 	while (_usb_mouse_command_writer_masked(1) == _usb_mouse_command_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
@@ -133,49 +135,58 @@ ISR(USB_GEN_vect)
 		#endif
 
 		UENUM = USB_ENDPOINT_HID;
-		if (UEINTX & (1 << TXINI))
+		if (UEINTX & (1 << TXINI)) // See: [Mouse Commands].
 		{
 			i8 delta_x = 0;
 			i8 delta_y = 0; // Positive makes the mouse move downward.
 
-			if (_usb_mouse_calibrations)
+			if (_usb_mouse_calibrations < USB_MOUSE_CALIBRATIONS_REQUIRED)
 			{
 				delta_x                  = -128;
-				delta_y                  =  127;
-				_usb_mouse_calibrations -= 1;
+				delta_y                  = -128;
+				_usb_mouse_calibrations += 1;
 			}
 			else if (_usb_mouse_command_reader_masked(0) != _usb_mouse_command_writer_masked(0)) // There's an available command to handle.
 			{
-				struct USBMouseCommand command = _usb_mouse_command_buffer[_usb_mouse_command_reader_masked(0)];
+				u16 command        = _usb_mouse_command_buffer[_usb_mouse_command_reader_masked(0)];
+				b8  command_held   = (command >> 15);
+				u8  command_dest_x = (command >>  8) & 0b0111'1111;
+				u8  command_dest_y =  command        & 0b1111'1111;
 
-				_usb_mouse_held = command.held;
-
-				// Toggle between moving x and y to avoid Apple's mouse acceleration shenanigans from happening.
-				if (_usb_mouse_curr_x != command.dest_x && (_usb_mouse_curr_y == command.dest_y || ((_usb_mouse_curr_x ^ _usb_mouse_curr_y) & 1)))
+				if (_usb_mouse_held != command_held)
 				{
-					if (_usb_mouse_curr_x < command.dest_x)
+					_usb_mouse_held = command_held;
+				}
+				else if (!command)
+				{
+					_usb_mouse_curr_x       = 0;
+					_usb_mouse_curr_y       = 0;
+					_usb_mouse_calibrations = 0;
+				}
+				else if (_usb_mouse_curr_x != command_dest_x && (_usb_mouse_curr_y == command_dest_y || ((_usb_mouse_curr_x ^ _usb_mouse_curr_y) & 1)))
+				{
+					if (_usb_mouse_curr_x < command_dest_x)
 					{
-						delta_x            = USB_MOUSE_DELTA_X;
-						_usb_mouse_curr_x += 1;
+						delta_x = 1;
 					}
 					else
 					{
-						delta_x            = -USB_MOUSE_DELTA_X;
-						_usb_mouse_curr_x -= 1;
+						delta_x = -1;
 					}
 				}
-				else if (_usb_mouse_curr_y < command.dest_y)
+				else if (_usb_mouse_curr_y < command_dest_y)
 				{
-					delta_y            = -USB_MOUSE_DELTA_Y;
-					_usb_mouse_curr_y += 1;
+					delta_y = 1;
 				}
-				else if (_usb_mouse_curr_y > command.dest_y)
+				else if (_usb_mouse_curr_y > command_dest_y)
 				{
-					delta_y            = USB_MOUSE_DELTA_Y;
-					_usb_mouse_curr_y -= 1;
+					delta_y = -1;
 				}
 
-				if (_usb_mouse_curr_x == command.dest_x && _usb_mouse_curr_y == command.dest_y) // We are at the destination.
+				_usb_mouse_curr_x += delta_x;
+				_usb_mouse_curr_y += delta_y;
+
+				if (_usb_mouse_curr_x == command_dest_x && _usb_mouse_curr_y == command_dest_y) // We are at the destination.
 				{
 					_usb_mouse_command_reader += 1; // Free up the mouse command.
 				}
@@ -1328,6 +1339,48 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 	it works at all, but this is probably better as a TODO to figured out later...
 
 	(1) Magic Bootloader Signal @ URL(github.com/PaxInstruments/ATmega32U4-bootloader/blob/bf5d4d1edff529d5cc8229f15463720250c7bcd3/avr/cores/arduino/CDC.cpp#L99C14-L99C14).
+*/
+
+/* [Mouse Commands].
+	Commands to move and drag/click with the mouse are done through 16-bits: HXXX'XXXX'YYYY'YYYY.
+	H is whether or not the mouse button will be held during the movement and X and Y are
+	the coordinates of where the mouse should end up. Note that the X coordinate is only given 7
+	bits while Y has 8 bits, so the maximum value is for X is 127 and for Y is 255. This is to
+	compensate for the aspect ratio of the iPhone screen.
+
+	Of course, we don't actually know the true coordinates of the mouse, we can only infer based
+	on its "known" starting position and the accumulation of all the movements we send to the host.
+
+	The actual mouse delta that is sent to the host is only 1, and strictly in either the x-axis or
+	the y-axis. This is to prevent mouse acceleration from becoming an issue (an issue that
+	wouldn't exist if Apple had happen to provide a way to disable it!). We could change this
+	delta to be something greater, but it's not a very fine setting; it's more optimal to go
+	through iOS settings and tweak the pointer sensitivity there.
+
+	Because we only use small deltas to move the mouse from one pair of coordinates to another pair
+	of coordinates, we have to send tiny deltas to the host to nudge the mouse to the desired
+	position. The nudge is done in a specific way so that it flips between the x-axis and the
+	y-axis to achieve diagonal movement. Too bad we can't actually just go diagonally, because once
+	again, mouse acceleration!
+
+	The mouse input packet that is sent to the host describes whether or not the primary button
+	is pressed or not, and what the mouse movement is. Now, if the packet reports that the button
+	is pressed, does the host interpret that as being pressed before the movement, or after the
+	movement? Well, it really shouldn't matter; after all, we are only moving in tiny increments
+	of 1 in the x-axis or the y-axis. Except... it does matter for some reason! The mouse movement
+	over time becomes slightly miscalibrated if we send a change in mouse button state and also a
+	mouse delta. But if we send the change in mouse button state (if any) in one packet, and then
+	in the next packet we send the mouse delta, the movement ends up much more reliable (although
+	still not all the time, unfortunately). My only guess is that the change in mouse button state
+	affects the internal state machine for the mouse acceleration in some particular way, perhaps
+	the time-delta or some shenanigans. I cannot for certain at all, so it's pretty annoying
+	honestly.
+
+	There's no guarantee on the reliability of the mouse movement, so we will need to recalibrate
+	the mouse once in a while by shoving it into the corner. Recalibration can be done by using
+	usb_mouse_command(false, 0, 0), which essentially buffers up a 0 command. Since the mouse
+	would be going into the corner anyways, we can take advantage of this by blasting the host
+	with huge mouse deltas.
 */
 
 /* TODO[USB Regulator vs Interface]
