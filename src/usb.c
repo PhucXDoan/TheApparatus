@@ -456,8 +456,8 @@ ISR(USB_COM_vect)
 
 		switch (request.type)
 		{
-			case USBSetupRequestType_get_desc:     // [Endpoint 0: SETUP-Transaction's GetDescriptor].
-			case USBSetupRequestType_hid_get_desc: // [Endpoint 0: SETUP-Transaction's GetDescriptor].
+			case USBSetupRequestType_get_desc:     // [Endpoint 0: GetDescriptor].
+			case USBSetupRequestType_hid_get_desc: // [Endpoint 0: GetDescriptor].
 			{
 				u8        payload_length = 0; // Any payload we send will not exceed 255 bytes.
 				const u8* payload_data   = 0;
@@ -466,7 +466,7 @@ ISR(USB_COM_vect)
 				{
 					switch ((enum USBDescType) request.get_desc.desc_type)
 					{
-						case USBDescType_device: // See: [Endpoint 0: SETUP-Transaction's GetDescriptor].
+						case USBDescType_device: // See: [Endpoint 0: GetDescriptor].
 						{
 							payload_data   = (const u8*) &USB_DESC_DEVICE;
 							payload_length = sizeof(USB_DESC_DEVICE);
@@ -526,7 +526,7 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
-			case USBSetupRequestType_set_address: // [Endpoint 0: SETUP-Transaction's SetAddress].
+			case USBSetupRequestType_set_address: // [Endpoint 0: SetAddress].
 			{
 				if (request.set_address.address < 0b0111'1111)
 				{
@@ -543,7 +543,7 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
-			case USBSetupRequestType_set_config: // [Endpoint 0: SETUP-Transaction's SetConfiguration].
+			case USBSetupRequestType_set_config: // [Endpoint 0: SetConfiguration].
 			{
 				switch (request.set_config.value)
 				{
@@ -564,14 +564,7 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
-			// These requests need to be handled in order for the CDC enumeration to be successful, but other than that, they seem pretty irrelevant for functionality.
-			case USBSetupRequestType_cdc_get_line_coding:        // See: Source(6) @ Section(6.2.13) @ AbsPage(69).
-			case USBSetupRequestType_cdc_set_control_line_state: // See: Source(6) @ Section(6.2.14) @ AbsPage(69-70).
-			{
-				UECONX |= (1 << STALLRQ);
-			} break;
-
-			case USBSetupRequestType_cdc_set_line_coding: // [Endpoint 0: CDC-Specific SETUP-Transaction's SetLineCoding].
+			case USBSetupRequestType_cdc_set_line_coding: // [Endpoint 0: CDC-Specific SetLineCoding].
 			{
 				if (request.cdc_set_line_coding.incoming_line_coding_datapacket_size == sizeof(struct USBCDCLineCoding))
 				{
@@ -612,17 +605,20 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
-			// The host wants to reduce the amount of data being transferred in the case where HID report payloads ends up being the same as the previous.
-			// We seem to be alright in ignoring this request though. See: Source(7) @ Section(7.2.4) @ AbsPage(62-63).
-			case USBSetupRequestType_hid_set_idle:
+			case USBSetupRequestType_ms_get_max_lun: // [Endpoint 0: MS-Specific GetMaxLUN].
 			{
-				UECONX |= (1 << STALLRQ);
-			} break;
+				while (!(UEINTX & ((1 << RXOUTI) | (1 << TXINI))));
 
-			case USBSetupRequestType_ms_get_max_lun:
-			{
-				static const u8 TEMP PROGMEM = 0; // TODO replace with stall?
-				_usb_endpoint_0_in_pgm(&TEMP, 1);
+				if (UEINTX & (1 << TXINI))
+				{
+					UEDATX  = 0;
+					UEINTX &= ~(1 << TXINI);
+				}
+
+				if (UEINTX & (1 << RXOUTI))
+				{
+					UEINTX &= ~(1 << RXOUTI);
+				}
 			} break;
 
 			case USBSetupRequestType_endpoint_clear_feature:
@@ -653,6 +649,13 @@ ISR(USB_COM_vect)
 				{
 					debug_unhandled;
 				}
+			} break;
+
+			case USBSetupRequestType_cdc_get_line_coding:        // [Endpoint 0: Extraneous CDC-Specific Requests].
+			case USBSetupRequestType_cdc_set_control_line_state: // [Endpoint 0: Extraneous CDC-Specific Requests].
+			case USBSetupRequestType_hid_set_idle:               // [Endpoint 0: HID-Specific SetIdle].
+			{
+				UECONX |= (1 << STALLRQ);
 			} break;
 
 			default:
@@ -1233,7 +1236,7 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 	(3) "Request Error" @ Source(2) @ Section(9.2.7) @ Page(247).
 */
 
-/* [Endpoint 0: SETUP-Transaction's GetDescriptor].
+/* [Endpoint 0: GetDescriptor].
 	The host sent a SETUP-transaction with a request, as described in the DATA-typed
 	packet laid out in USBSetupRequest, telling the device to tell the host more about
 	itself, hence "descriptor".
@@ -1500,7 +1503,7 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 	TODO
 */
 
-/* [Endpoint 0: SETUP-Transaction's SetAddress].
+/* [Endpoint 0: SetAddress].
 	The host would like to set the device's address, which at this point is zero by
 	default (as with any other USB device when it first connects). The desired address
 	is stated within the SETUP-transaction's data-packet's 16-bit wIndex field (3).
@@ -1537,7 +1540,7 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 	(4) "Set Address Processing" @ Source(2) @ Section(9.2.6.3) @ Page(246).
 */
 
-/* [Endpoint 0: SETUP-Transaction's SetConfiguration].
+/* [Endpoint 0: SetConfiguration].
 	This is where the host obviously set the configuration of the device. The host could send a 0
 	to indicate that we should be in the "address state" (1), which is the state a USB device is in
 	after it has been just assigned an address; more likely though the host will send a
@@ -1548,7 +1551,7 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 	(1) "Address State" @ Source(2) @ Section(9.4.7) @ Page(257).
 */
 
-/* [Endpoint 0: CDC-Specific SETUP-Transaction's SetLineCoding].
+/* [Endpoint 0: CDC-Specific SetLineCoding].
 	This request is supposed to be used by the host to configure aspects of the device's
 	serial communication (e.g. baud-rate). The way we are using it, however, is for the host to
 	send signals to the device without relying on something else like an IO pin or using the
@@ -1623,6 +1626,31 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 	usb_mouse_command(false, 0, 0), which essentially buffers up a 0 command. Since the mouse
 	would be going into the corner anyways, we can take advantage of this by blasting the host
 	with huge mouse deltas.
+*/
+
+/* [Endpoint 0: MS-Specific GetMaxLUN].
+	Despite (1) saying that the device MAY stall on this, Window's driver seems to be persistent
+	on doing this request. Eventually, the driver will move on and do the mass storage enumeration
+	stuff, but there'd be a solid couple seconds of delay. So we just might as well handle this
+	request.
+
+	(1) "Get Max LUN" @ Source(12) @ Section(3.2) @ Page(7).
+*/
+
+/* [Endpoint 0: HID-Specific SetIdle].
+	The host wants to reduce the amount of data being transferred in the case where HID report
+	payloads ends up being the same as the previous. We seem to be alright in ignoring the (1)
+	request though.
+
+	(1) "Set Idle" @ Source(7) @ Section(7.2.4) @ AbsPage(62-63).
+*/
+
+/* [Endpoint 0: Extraneous CDC-Specific Requests].
+	The (1) and (2) need to be handled in order for the CDC enumeration to be successful, but
+	other than that, they seem pretty irrelevant for functionality.
+
+	(1) "GetLineCoding" @ Source(6) @ Section(6.2.13) @ AbsPage(69)
+	(2) "SetLineControlLineState" @ Source(6) @ Section(6.2.14) @ AbsPage(69-70).
 */
 
 /* TODO[USB Regulator vs Interface]
