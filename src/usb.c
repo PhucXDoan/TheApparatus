@@ -200,6 +200,206 @@ ISR(USB_GEN_vect)
 			UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
 			UEINTX &= ~(1 << FIFOCON); // Allow the USB controller to send the data for the next IN-transaction. See: Source(1) @ Section(22.14) @ Page(276)
 		}
+
+		switch (_usb_ms_state)
+		{
+			case USBMSState_ready_for_command:
+			{
+				UENUM = USB_ENDPOINT_MS_OUT;
+				if (UEINTX & (1 << RXOUTI))
+				{
+					b8 stall = false;
+
+					struct USBMSCommandBlockWrapper command = {0};
+					if (UEBCX == sizeof(command))
+					{
+						for (u8 i = 0; i < sizeof(command); i += 1)
+						{
+							((u8*) &command)[i] = UEDATX;
+						}
+
+						if // Is command valid and meaningful?
+						(
+							command.dCBWSignature == USB_MS_COMMAND_BLOCK_WRAPPER_SIGNATURE &&
+							!(command.bmCBWFlags & 0b0111'1111) &&
+							!command.bCBWLUN &&
+							1 <= command.bCBWCBLength && command.bCBWCBLength <= 16
+						)
+						{
+							switch (command.CBWCB[0])
+							{
+								case USBMSSCSIOpcode_inquiry: // See: Source(13) @ Section(3.6.1) @ Page(92).
+								{
+									u16 allocation_length = (command.CBWCB[3] << 8) | command.CBWCB[4];
+
+									if
+									(
+										command.bmCBWFlags                                  &&
+										command.bCBWCBLength           == 6                 &&
+										command.dCBWDataTransferLength == allocation_length &&
+										command.CBWCB[5]               == 0                 && // "CONTROL", just in case it's not zero.
+										(
+											(
+												command.CBWCB[1] == 0 && // The host requests for the standard inquiry data.
+												command.CBWCB[2] == 0    // In this case, the page code should always be zero.
+											) ||
+											(
+												command.CBWCB[1] == 0x01 && // The host requests for "vital product data".
+												command.CBWCB[2] == 0x80    // Page code for "Unit Serial Number". See: Source(13) @ Section(5.4.19) @ Page(510).
+											)
+										)
+									)
+									{
+										// Send the standard inquiry data, even if the host asked for the unit serial number,
+										// since that data happens to also look identical to the standard inquiry data.
+
+										_usb_ms_state       = USBMSState_sending_data;
+										_usb_ms_data_reader = USB_MS_SCSI_INQUIRY_DATA;
+
+										if (allocation_length < sizeof(USB_MS_SCSI_INQUIRY_DATA))
+										{
+											_usb_ms_data_reader_remaining = allocation_length;
+										}
+										else
+										{
+											_usb_ms_data_reader_remaining = sizeof(USB_MS_SCSI_INQUIRY_DATA);
+										}
+
+										_usb_ms_status =
+											(struct USBMSCommandStatusWrapper)
+											{
+												.dCSWSignature   = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE,
+												.dCSWTag         = command.dCBWTag,
+												.dCSWDataResidue = allocation_length - _usb_ms_data_reader_remaining,
+												.bCSWStatus      = 0x00,
+											};
+									}
+									else
+									{
+										debug_unhandled;
+									}
+								} break;
+
+								case USBMSSCSIOpcode_read_format_capacities:
+								{
+									u16 allocation_length = (command.CBWCB[7] << 8) | command.CBWCB[8];
+
+									if
+									(
+										command.bmCBWFlags                                  &&
+										command.bCBWCBLength           == 10                &&
+										command.dCBWDataTransferLength == allocation_length &&
+										command.CBWCB[9]               == 0 // "CONTROL", just in case it's not zero.
+									)
+									{
+										_usb_ms_state       = USBMSState_sending_data;
+										_usb_ms_data_reader = USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA;
+
+										if (allocation_length < sizeof(USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA))
+										{
+											_usb_ms_data_reader_remaining = allocation_length;
+										}
+										else
+										{
+											_usb_ms_data_reader_remaining = sizeof(USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA);
+										}
+
+										_usb_ms_status =
+											(struct USBMSCommandStatusWrapper)
+											{
+												.dCSWSignature   = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE,
+												.dCSWTag         = command.dCBWTag,
+												.dCSWDataResidue = allocation_length - _usb_ms_data_reader_remaining,
+												.bCSWStatus      = 0x00,
+											};
+									}
+									else
+									{
+										debug_unhandled;
+									}
+								} break;
+
+								default:
+								{
+									debug_pin_u8(command.CBWCB[0]);
+									debug_unhandled;
+								} break;
+							}
+						}
+						else // The CBW isn't valid or meaningful. See: Source(12) @ Section(6.2) @ Page(17).
+						{
+							debug_unhandled;
+						}
+					}
+					else // We received a packet (that should be the CBW) that's not 31 bytes in length. See: Source(12) @ Section(6.2.1) @ Page(17).
+					{
+						debug_unhandled;
+					}
+
+					if (stall) // See: "CBW Not Valid" @ Source(12) @ Section(6.6.1) @ Page(18).
+					{
+						UECONX |= (1 << STALLRQ);
+						UENUM   = USB_ENDPOINT_MS_IN;
+						UECONX |= (1 << STALLRQ);
+					}
+					else
+					{
+						UEINTX &= ~(1 << RXOUTI);
+						UEINTX &= ~(1 << FIFOCON);
+					}
+				}
+			} break;
+
+			case USBMSState_sending_data:
+			{
+				UENUM = USB_ENDPOINT_MS_IN;
+				if (UEINTX & (1 << TXINI))
+				{
+					while ((UEINTX & (1 << RWAL)) && _usb_ms_data_reader_remaining)
+					{
+						UEDATX                         = *_usb_ms_data_reader;
+						_usb_ms_data_reader           += 1;
+						_usb_ms_data_reader_remaining -= 1;
+					}
+
+					UEINTX &= ~(1 << TXINI);
+					UEINTX &= ~(1 << FIFOCON);
+
+					if (!_usb_ms_data_reader_remaining)
+					{
+						_usb_ms_state = USBMSState_ready_for_status;
+					}
+				}
+			} break;
+
+			case USBMSState_ready_for_status:
+			{
+				if (!_usb_ms_status.dCSWSignature)
+				{
+					debug_halt(8);
+				}
+
+				UENUM = USB_ENDPOINT_MS_IN;
+				if (!(UECONX & (1 << STALLRQ)) && (UEINTX & (1 << TXINI)))
+				{
+					if (_usb_ms_status.bCSWStatus == 0x01)
+					{
+						debug_pin_set(10, true);
+					}
+
+					for (u8 i = 0; i < sizeof(_usb_ms_status); i += 1)
+					{
+						UEDATX = ((u8*) &_usb_ms_status)[i];
+					}
+
+					UEINTX &= ~(1 << TXINI);
+					UEINTX &= ~(1 << FIFOCON);
+
+					_usb_ms_state  = USBMSState_ready_for_command;
+					_usb_ms_status = (struct USBMSCommandStatusWrapper) {0}; // TODO Obviously we shouldn't waste time clearing the entire thing.
+				}
+			} break;
+		}
 	}
 
 	UDINT = 0; // Clear interrupt flags to prevent this routine from executing again.
@@ -417,6 +617,42 @@ ISR(USB_COM_vect)
 			case USBSetupRequestType_hid_set_idle:
 			{
 				UECONX |= (1 << STALLRQ);
+			} break;
+
+			case USBSetupRequestType_ms_get_max_lun:
+			{
+				static const u8 TEMP PROGMEM = 0; // TODO replace with stall?
+				_usb_endpoint_0_in_pgm(&TEMP, 1);
+			} break;
+
+			case USBSetupRequestType_endpoint_clear_feature:
+			{
+				if (request.endpoint_clear_feature.feature_selector == 0)
+				{
+					switch (request.endpoint_clear_feature.endpoint_index)
+					{
+						case USB_ENDPOINT_MS_IN | USB_ENDPOINT_MS_IN_TRANSFER_DIR:
+						{
+							UENUM   = USB_ENDPOINT_MS_OUT;
+							UECONX |= (1 << STALLRQC);
+						} break;
+
+						case USB_ENDPOINT_MS_OUT | USB_ENDPOINT_MS_OUT_TRANSFER_DIR:
+						{
+							UENUM   = USB_ENDPOINT_MS_OUT;
+							UECONX |= (1 << STALLRQC);
+						} break;
+
+						default:
+						{
+							debug_unhandled;
+						} break;
+					}
+				}
+				else
+				{
+					debug_unhandled;
+				}
 			} break;
 
 			default:
@@ -1011,7 +1247,13 @@ debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13)
 
 	The HID class can also send a GetDescriptor request where the recipent will be the HID
 	interface, as indicated by (1) and (2). It's essentially the same as the standard GetDescriptor
-	request, but with slightly different interpretations on the setup packet's fields.
+	request, but with slightly different interpretations on the setup packet's fields. Technically,
+	other non-HID USB classes can send this 16-bit request code (bmRequestType and bRequest bytes
+	as one word), but HID is the only one that actually does this, so we just assume it's from HID.
+	If another non-HID class does send this request code, we'd have to look at the recipent interface
+	to see if it's at the HID interface or not. Really, this applies to any of the other non-standard
+	USB requests I belive, but it seems like it's a pretty disjoint thing, so we don't really have to
+	worry about conflicts much.
 
 	(1) "bmRequestType" @ Source(2) @ Table(9-2) @ Page(248).
 	(2) HID's GetDescriptor Request @ Source(7) @ Section(7.1.1) @ AbsPage(59).

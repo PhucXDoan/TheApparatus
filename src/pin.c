@@ -94,8 +94,6 @@ debug_unhandled(enum PinHaltSource source)
 	}
 }
 #define debug_unhandled debug_unhandled(PIN_HALT_SOURCE)
-#else
-#define debug_unhandled
 #endif
 
 #if DEBUG
@@ -220,6 +218,17 @@ debug_pin_read(u8 pin)
 		#undef MAKE_CASE
 
 		default: return false;
+	}
+}
+#endif
+
+#if DEBUG
+static void
+debug_pin_u8(u8 value)
+{
+	for (u8 i = 0; i < 8; i += 1)
+	{
+		debug_pin_set(DEBUG_PIN_U8_START + i, (value >> i) & 1);
 	}
 }
 #endif

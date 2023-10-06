@@ -25,7 +25,11 @@ typedef int64_t  b64;
 // "pin.c"
 //
 
-#define PIN_HALT 2
+#if DEBUG
+#define DEBUG_PIN_U8_START 2
+#endif
+
+#define PIN_HALT 12
 enum PinHaltSource
 {
 	PinHaltSource_diplomat = 0,
@@ -67,7 +71,7 @@ enum PinState
 // "usb.c"
 //
 
-#define PIN_USB_SPINLOCKING 3
+#define PIN_USB_SPINLOCKING 11
 
 enum USBEndpointSizeCode // See: Source(1) @ Section(22.18.2) @ Page(287).
 {
@@ -90,12 +94,12 @@ enum USBEndpointTransferType // See: Source(2) @ Table(9-13) @ Page(270) & Sourc
 
 enum USBClass // Non-exhaustive. See: Source(5).
 {
-	USBClass_null         = 0x00, // See: [About: USBClass_null].
-	USBClass_cdc          = 0x02, // See: "Communication Class Device" @ Source(6) @ Section(1) @ AbsPage(11).
-	USBClass_hid          = 0x03, // See: "Human-Interface Device" @ Source(7) @ Section(3) @ AbsPage(19).
-	USBClass_mass_storage = 0x08, // TODO
-	USBClass_cdc_data     = 0x0A, // See: "Data Interface Class" @ Source(6) @ Section(1) @ AbsPage(11).
-	USBClass_misc         = 0XEF, // See: IAD @ Source(9) @ Table(1-1) @ AbsPage(5).
+	USBClass_null     = 0x00, // See: [About: USBClass_null].
+	USBClass_cdc      = 0x02, // See: "Communication Class Device" @ Source(6) @ Section(1) @ AbsPage(11).
+	USBClass_hid      = 0x03, // See: "Human-Interface Device" @ Source(7) @ Section(3) @ AbsPage(19).
+	USBClass_ms       = 0x08, // See: "USB Mass Storage Device" @ Source(11) @ Section(1.1) @ AbsPage(1).
+	USBClass_cdc_data = 0x0A, // See: "Data Interface Class" @ Source(6) @ Section(1) @ AbsPage(11).
+	USBClass_misc     = 0XEF, // See: IAD @ Source(9) @ Table(1-1) @ AbsPage(5).
 };
 
 enum USBSetupRequestType // "bmRequestType" and "bRequest" bytes are combined. See: Source(2) @ Table(9-2) @ Page(248).
@@ -103,9 +107,10 @@ enum USBSetupRequestType // "bmRequestType" and "bRequest" bytes are combined. S
 	#define MAKE(BM_REQUEST_TYPE, B_REQUEST) ((BM_REQUEST_TYPE) | (((u16) (B_REQUEST)) << 8))
 
 	// Non-exhaustive. See: Standard Requests @ Source(2) @ Table(9-3) @ Page(250) & Source(2) @ Table(9-4) @ Page(251).
-	USBSetupRequestType_get_desc    = MAKE(0b10000000, 6),
-	USBSetupRequestType_set_address = MAKE(0b00000000, 5),
-	USBSetupRequestType_set_config  = MAKE(0b00000000, 9),
+	USBSetupRequestType_get_desc               = MAKE(0b10000000, 6),
+	USBSetupRequestType_set_address            = MAKE(0b00000000, 5),
+	USBSetupRequestType_set_config             = MAKE(0b00000000, 9),
+	USBSetupRequestType_endpoint_clear_feature = MAKE(0b00000010, 1),
 
 	// Non-exhaustive. See: CDC-Specific Requests @ Source(6) @ Table(44) @ AbsPage(62-63) & Source(6) @ Table(46) @ AbsPage(64-65).
 	USBSetupRequestType_cdc_get_line_coding        = MAKE(0b10100001, 0x21),
@@ -115,6 +120,9 @@ enum USBSetupRequestType // "bmRequestType" and "bRequest" bytes are combined. S
 	// Non-exhaustive. See: HID-Specific Requests @ Source(7) @ Section(7.1) @ AbsPage(58-63).
 	USBSetupRequestType_hid_get_desc = MAKE(0b10000001, 6),
 	USBSetupRequestType_hid_set_idle = MAKE(0b00100001, 0x0A),
+
+	// Non-exhuastive. See: MS-Specific Requests @ Source(12) @ Section(3) @ Page(7).
+	USBSetupRequestType_ms_get_max_lun = MAKE(0b10100001, 0b11111110),
 
 	#undef MAKE
 };
@@ -141,6 +149,12 @@ struct USBSetupRequest // See: Source(2) @ Table(9-2) @ Page(248).
 		{
 			u16 value; // The configuration the host wants to set the device to. See: "bConfigurationValue" @ Source(2) @ Table(9-10) @ Page(265).
 		} set_config;
+
+		struct // See: Standard "Clear Feature" on Endpoints @ Source(2) @ Section(9.4.1) @ Page(252).
+		{
+			u16 feature_selector; // Must be zero.
+			u16 endpoint_index;
+		} endpoint_clear_feature;
 
 		struct // See: CDC-Specific "SetLineCoding" @ Source(6) @ Setion(6.2.12) @ AbsPage(68-69).
 		{
@@ -265,7 +279,7 @@ struct USBDescCDCCallManagement // See: Source(6) @ Table(27) @ AbsPage(45-46).
 	u8 bDescriptorType;    // Must be USBDescType_cdc_interface.
 	u8 bDescriptorSubtype; // Must be USBDescCDCSubtype_call_management.
 	u8 bmCapabilities;     // Describes what the CDC device is capable of in terms of call-management. Seems irrelevant for functionality.
-	u8 bDataInterface;     // Index of CDC-Data interface to receive call-management comamnds. Seems irrelevant for functionality.
+	u8 bDataInterface;     // Index of CDC-Data interface to receive call-management command. Seems irrelevant for functionality.
 };
 
 struct USBDescCDCACMManagement // See: Source(6) @ Table(28) @ AbsPage(46-47).
@@ -366,6 +380,27 @@ enum USBHIDUsageGenericDesktop // Non-exhaustive. See: Source(8) @ Section(4) @ 
 	USBHIDUsageGenericDesktop_y       = 0x31, // Linear translation from far-to-near, so in the context of a mouse, top-down.
 };
 
+#define USB_MS_COMMAND_BLOCK_WRAPPER_SIGNATURE 0x43425355
+struct USBMSCommandBlockWrapper // See: Source(12) @ Table(5.1) @ Page(13).
+{
+	u32 dCBWSignature;          // Must be USB_MS_COMMAND_BLOCK_WRAPPER_SIGNATURE.
+	u32 dCBWTag;                // Value copied for the command status wrapper.
+	u32 dCBWDataTransferLength; // Amount of bytes transferred from host to device or device to host.
+	u8  bmCBWFlags;             // If the MSb is set, data transfer is from device to host. Any other bit must be cleared.
+	u8  bCBWLUN;                // "Logical Unit Number" the command is designated for; high-nibble must be cleared.
+	u8  bCBWCBLength;           // Amount of bytes defined in CBWCB; must be within [1, 16] and high 3 bits be cleared.
+	u8  CBWCB[16];              // Bytes of SCSI command descriptor block. See: Source(13).
+};
+
+#define USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE 0x53425355
+struct USBMSCommandStatusWrapper
+{
+	u32 dCSWSignature;
+	u32 dCSWTag;
+	u32 dCSWDataResidue;
+	u8  bCSWStatus;
+};
+
 // Endpoint buffer sizes must be one of the names of enum USBEndpointSizeCode.
 // The maximum capacity between endpoints also differ. See: Source(1) @ Section(22.1) @ Page(270).
 
@@ -389,18 +424,30 @@ enum USBHIDUsageGenericDesktop // Non-exhaustive. See: Source(8) @ Section(4) @ 
 #define USB_ENDPOINT_HID_TRANSFER_DIR  USBEndpointAddressFlag_in
 #define USB_ENDPOINT_HID_SIZE          8
 
+#define USB_ENDPOINT_MS_IN               5
+#define USB_ENDPOINT_MS_IN_TRANSFER_TYPE USBEndpointTransferType_bulk
+#define USB_ENDPOINT_MS_IN_TRANSFER_DIR  USBEndpointAddressFlag_in
+#define USB_ENDPOINT_MS_IN_SIZE          64 // Must be at least 16 so the command status wrapper can be transmitted entirely in one go.
+
+#define USB_ENDPOINT_MS_OUT               6
+#define USB_ENDPOINT_MS_OUT_TRANSFER_TYPE USBEndpointTransferType_bulk
+#define USB_ENDPOINT_MS_OUT_TRANSFER_DIR  0
+#define USB_ENDPOINT_MS_OUT_SIZE          64 // Must be at least 32 so the command block wrapper can be received entirely in one go.
+
 static const u8 USB_ENDPOINT_UECFGNX[][2] PROGMEM = // UECFG0X and UECFG1X that an endpoint will be configured with.
 	{
 		#define MAKE(ENDPOINT_NAME) \
 			[USB_ENDPOINT_##ENDPOINT_NAME] = \
 				{ \
 					(USB_ENDPOINT_##ENDPOINT_NAME##_TRANSFER_TYPE << EPTYPE0) | ((!!USB_ENDPOINT_##ENDPOINT_NAME##_TRANSFER_DIR) << EPDIR), \
-					(concat(USBEndpointSizeCode_, USB_ENDPOINT_HID_SIZE) << EPSIZE0) | (1 << ALLOC), \
+					(concat(USBEndpointSizeCode_, USB_ENDPOINT_##ENDPOINT_NAME##_SIZE) << EPSIZE0) | (1 << ALLOC), \
 				},
 		MAKE(DFLT)
 		MAKE(CDC_IN )
 		MAKE(CDC_OUT)
 		MAKE(HID)
+		MAKE(MS_IN )
+		MAKE(MS_OUT)
 		#undef MAKE
 	};
 
@@ -434,6 +481,15 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 		struct USBDescHID       hid;
 		struct USBDescEndpoint  endpoints[1];
 	} hid;
+
+	#define USB_MS_INTERFACE_INDEX 3
+	struct
+	{
+		struct USBDescInterface desc;
+		struct USBDescEndpoint  endpoints[2];
+	} ms;
+
+	#define USB_INTERFACE_COUNT 4
 };
 
 static const u8 USB_DESC_HID_REPORT[] PROGMEM =
@@ -475,6 +531,92 @@ static const u8 USB_DESC_HID_REPORT[] PROGMEM =
 		USBHIDItem_main_end_collection,
 	};
 
+static const u8 USB_MS_SCSI_INQUIRY_DATA[] = // See: Source(13) @ Section(3.6.2) @ Page(94).
+	{
+		// "PERIPHERAL QUALIFIER"         : We support the following specified peripheral device type. See: Source(13) @ Table(60) @ Page(95).
+		//     | "PERIPHERAL DEVICE TYPE" : The device is a "direct access block device", e.g. SD cards, flashdrives, etc. See: Source(13) @ Table(61) @ Page(96).
+		//     |    |
+		//    vvv vvvvv
+			0b000'00000,
+
+		// "RMB" : Is the medium removable? See: Source(13) @ Section(3.6.2) @ Page(96).
+		//    | Reserved.
+		//    |    |
+		//    v vvvvvvv
+			0b1'0000000,
+
+		// TODO What??
+		// "VERSION" : Indicate which SPC standard is being used. See: Source(13) @ Table(62) @ Page(97).
+			0x02,
+
+		// Obsolete.
+		//    | "NORMACA"                   : TODO We don't support "ACA" or something... See: Source(13) @ Section(3.6.2) @ Page(97).
+		//    |  | "HISUP"                  : Is a hierarchy used to organize logical units? See: Source(13) @ Section(3.6.2) @ Page(97).
+		//    |  | | "RESPONSE DATA FORMAT" : Pretty much has to be 2. See: Source(13) @ Section(3.6.2) @ Page(97).
+		//    |  | | |
+		//    vv v v vvvv
+			0b00'0'0'0010,
+
+		// "ADDITIONAL LENGTH" : Amount of bytes remaining after this byte. The inquiry data has to be at least 36, so 36 - 5. See: Source(13) @ Section(3.6.2) @ Page(94).
+			0x1F,
+
+		// "SCCS"                  : Does the device have a "embedded storage array controller component"? See: Source(13) @ Section(3.6.2) @ Page(97).
+		//    | "ACC"              : Can the "access controls coordinator" be addressed at this logical unit? See: Source(13) @ Section(3.6.2) @ Page(98).
+		//    | | "TPGS"           : The types of "asymmetric logical unit access" that can be done. See: Source(13) @ Table(63) @ Page(98).
+		//    | | | "3PC"          : "Third-party copy commands" supported? See: Source(13) @ Section(3.6.2) @ Page(98).
+		//    | | |  | Reserved.
+		//    | | |  | | "PROTECT" : Information protection supported? See: Source(13) @ Section(3.6.2) @ Page(98).
+		//    | | |  | |  |
+		//    v v vv v vv v
+			0b0'0'00'0'00'0,
+
+		// Obsolete.
+		//    | "ENCSERV"          : Does the device have "embedded enclosure services component"? See: Source(13) @ Section(3.6.2) @ Page(98).
+		//    | | Vendor-Specific.
+		//    | | | "MULTIP"       : Does the device support multiple ports? See: Source(13) @ Section(3.6.2) @ Page(98).
+		//    | | | |  Obsolete.
+		//    | | | |  |
+		//    v v v v vvvv
+			0b0'0'0'0'0000,
+
+		// Obsolete.
+		//      | "CMDQUE" : TODO The hell is a BQUE bit? See: Source(13) @ Section(3.6.2) @ Page(99).
+		//      |    | Vendor-Specific.
+		//      |    | |
+		//    vvvvvv v v
+			0b000000'0'0,
+
+		// "T10 VENDOR IDENTIFICATION" : TODO WTF is this? See: Source(13) @ Section(3.6.2) @ Page(99).
+			'G', 'E', 'N', 'E', 'R', 'A', 'L', ' ',
+
+		// "PRODUCT IDENTIFICATION" : TODO WTF! See: Source(13) @ Section(3.6.2) @ Page(99).
+			'U', 'D', 'i', 's', 'k', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
+
+		// "PRODUCT REVISION LEVEL" : TODO WTF! See: Source(13) @ Section(3.6.2) @ Page(99).
+			'5', '.', '0', '0',
+	};
+
+static const u8 USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA[] = // See: Source(14) @ Table(702) @ AbsPage(1).
+	{
+		// "Capacity List Header". See: Source(14) @ Table(703) @ AbsPage(2).
+		//
+		// Reserved.
+		//     | "Capacity List Length" : Amount of bytes after this byte.
+		//     |     |
+		//  vvvvvvv  v
+			0, 0, 0, 8,
+
+		// "Current/Maximum Capacity Descriptor". See: Source(14) @ Table(704) @ AbsPage(2).
+		//
+		// "Number of Blocks"                       : Number of addressable blocks, which is written in big-endian.
+		//        |        Reserved.
+		//        |            | "Descriptor Type"  : The type of the media the device has. See: Source(14) @ Table(705) @ AbsPage(2).
+		//        |            |   | "Block Length" : Amount of bytes of each addressable block, which is written in big-endian.
+		//        |            |   |      |
+		//  vvvvvvvvvvvv    vvvvvv vv  vvvvvvv
+			0, 240, 0, 0, 0b000000'10, 0, 2, 0
+	};
+
 static const struct USBDescDevice USB_DESC_DEVICE PROGMEM =
 	{
 		.bLength            = sizeof(struct USBDescDevice),
@@ -498,7 +640,7 @@ static const struct USBConfigHierarchy USB_CONFIG_HIERARCHY PROGMEM =
 				.bLength             = sizeof(struct USBDescConfig),
 				.bDescriptorType     = USBDescType_config,
 				.wTotalLength        = sizeof(struct USBConfigHierarchy),
-				.bNumInterfaces      = 3,
+				.bNumInterfaces      = USB_INTERFACE_COUNT,
 				.bConfigurationValue = USB_CONFIG_HIERARCHY_ID,
 				.bmAttributes        = USBConfigAttrFlag_reserved_one | USBConfigAttrFlag_self_powered, // TODO We should calculate our power consumption!
 				.bMaxPower           = 50,                                                              // TODO We should calculate our power consumption!
@@ -626,6 +768,39 @@ static const struct USBConfigHierarchy USB_CONFIG_HIERARCHY PROGMEM =
 						}
 					},
 			},
+		.ms =
+			{
+				.desc =
+					{
+						.bLength            = sizeof(struct USBDescInterface),
+						.bDescriptorType    = USBDescType_interface,
+						.bInterfaceNumber   = USB_MS_INTERFACE_INDEX,
+						.bAlternateSetting  = 0,
+						.bNumEndpoints      = countof(USB_CONFIG_HIERARCHY.ms.endpoints),
+						.bInterfaceClass    = USBClass_ms,
+						.bInterfaceSubClass = 0x06, // See: "SCSI Transparent Command Set" @ Source(11) @ AbsPage(3).
+						.bInterfaceProtocol = 0x50, // See: "Bulk-Only Transport" @ Source(12) @ Page(11).
+					},
+				.endpoints =
+					{
+						{
+							.bLength          = sizeof(struct USBDescEndpoint),
+							.bDescriptorType  = USBDescType_endpoint,
+							.bEndpointAddress = USB_ENDPOINT_MS_IN | USB_ENDPOINT_MS_IN_TRANSFER_DIR,
+							.bmAttributes     = USB_ENDPOINT_MS_IN_TRANSFER_TYPE,
+							.wMaxPacketSize   = USB_ENDPOINT_MS_IN_SIZE,
+							.bInterval        = 0,
+						},
+						{
+							.bLength          = sizeof(struct USBDescEndpoint),
+							.bDescriptorType  = USBDescType_endpoint,
+							.bEndpointAddress = USB_ENDPOINT_MS_OUT | USB_ENDPOINT_MS_OUT_TRANSFER_DIR,
+							.bmAttributes     = USB_ENDPOINT_MS_OUT_TRANSFER_TYPE,
+							.wMaxPacketSize   = USB_ENDPOINT_MS_OUT_SIZE,
+							.bInterval        = 0,
+						}
+					},
+			},
 	};
 
 #if DEBUG
@@ -683,6 +858,24 @@ static_assert(countof(_usb_mouse_command_buffer) < (((u64) 1) << bitsof(_usb_mou
 // Buffer sizes must be a power of two for the "_usb_mouse_X_masked" macros.
 static_assert(countof(_usb_mouse_command_buffer) && !(countof(_usb_mouse_command_buffer) & (countof(_usb_mouse_command_buffer) - 1)));
 
+enum USBMSSCSIOpcode // See: Source(13) @ Section(3) @ Page(65) & Source(14).
+{
+	USBMSSCSIOpcode_inquiry                = 0x12,
+	USBMSSCSIOpcode_read_format_capacities = 0x23, // See: Source(14).
+};
+
+enum USBMSState
+{
+	USBMSState_ready_for_command,
+	USBMSState_sending_data,
+	USBMSState_ready_for_status,
+};
+
+static enum USBMSState                  _usb_ms_state                 = USBMSState_ready_for_command;
+static const u8*                        _usb_ms_data_reader           = 0;
+static u16                              _usb_ms_data_reader_remaining = 0;
+static struct USBMSCommandStatusWrapper _usb_ms_status                = {0};
+
 //
 // Documentation.
 //
@@ -698,6 +891,10 @@ static_assert(countof(_usb_mouse_command_buffer) && !(countof(_usb_mouse_command
 	Source(8)  := HID Usage Tables v1.4 (Dated: 1996-2022).
 	Source(9)  := USB Interface Association Descriptor Device Class Code and Use Model (Dated: July 23, 2003).
 	Source(10) := USB 3.0 Specification (Dated: November 12, 2008).
+	Source(11) := Universal Serial Bus Mass Storage Class Specification Overview (Dated: February 19, 2010).
+	Source(12) := Universal Serial Bus Mass Storage Class Bulk-Only Transport (Dated: September 31, 1999).
+	Source(13) := SCSI Commands Reference Manual (Dated: October 2016).
+	Source(14) := Mysterious TOSHIBA Draft TODO??
 
 	We are working within the environment of the ATmega32U4 microcontroller,
 	which is an 8-bit CPU. This consequently means that there are no padding bytes to

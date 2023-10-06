@@ -62,13 +62,15 @@ main(void)
 
 	usb_init();
 
-	debug_pin_set(5, PinState_input);
-
-	_delay_ms(1000.0);
-
 	for(;;)
 	{
-	#if 0
+	#if 1
+		char c;
+		if (debug_rx(&c, 1))
+		{
+			debug_tx_chars(&c, 1);
+		}
+	#elif 0
 		usb_mouse_command(false, 127, 0);
 		_delay_ms(1000.0);
 
