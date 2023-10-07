@@ -450,21 +450,11 @@ ISR(USB_GEN_vect)
 					}
 					else if (_usb_ms_logical_block_remaining)
 					{
-						if
-						(
-							_usb_ms_logical_block_address * USB_MS_LOGICAL_BLOCK_SIZE + (_usb_ms_logical_block_fragment_index + 1) * USB_ENDPOINT_MS_IN_SIZE
-								<= sizeof(USB_MS_BLOCK_DATA)
-						)
+						if (_usb_ms_logical_block_address <= countof(USB_MS_LOGICAL_BLOCKS))
 						{
 							for (u8 i = 0; i < USB_ENDPOINT_MS_IN_SIZE; i += 1)
 							{
-								UEDATX =
-									USB_MS_BLOCK_DATA
-									[
-										_usb_ms_logical_block_address * USB_MS_LOGICAL_BLOCK_SIZE
-											+ _usb_ms_logical_block_fragment_index * USB_ENDPOINT_MS_IN_SIZE
-											+ i
-									];
+								UEDATX = pgm_read_byte(&USB_MS_LOGICAL_BLOCKS[_usb_ms_logical_block_address][_usb_ms_logical_block_fragment_index * USB_ENDPOINT_MS_IN_SIZE + i]);
 							}
 						}
 						else
