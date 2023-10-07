@@ -114,23 +114,23 @@ pushd W:\build\
 		goto ABORT
 	)
 
-	REM
-	REM Wait for diagnostic COM to appear and open PuTTY.
-	REM
-
-	for /L %%n in (1,1,500) do (
-		mode | findstr "COM!DIAGNOSTIC_COM!:" > nul
-		if !ERRORLEVEL! == 0 (
-			goto BREAK_WAITING_FOR_DIAGNOSTIC_COM
-		) else (
-			ping 127.0.0.1 -n 1 -w 500 >nul
-		)
-	)
-	echo No diagnostic COM found.
-	goto ABORT
-	:BREAK_WAITING_FOR_DIAGNOSTIC_COM
-
-	start putty.exe -load "Default Settings" -serial COM!DIAGNOSTIC_COM! -sercfg !DIAGNOSTIC_BAUD_SIGNAL!,8,n,1,N
+REM	REM
+REM	REM Wait for diagnostic COM to appear and open PuTTY.
+REM	REM
+REM
+REM	for /L %%n in (1,1,500) do (
+REM		mode | findstr "COM!DIAGNOSTIC_COM!:" > nul
+REM		if !ERRORLEVEL! == 0 (
+REM			goto BREAK_WAITING_FOR_DIAGNOSTIC_COM
+REM		) else (
+REM			ping 127.0.0.1 -n 1 -w 500 >nul
+REM		)
+REM	)
+REM	echo No diagnostic COM found.
+REM	goto ABORT
+REM	:BREAK_WAITING_FOR_DIAGNOSTIC_COM
+REM
+REM	start putty.exe -load "Default Settings" -serial COM!DIAGNOSTIC_COM! -sercfg !DIAGNOSTIC_BAUD_SIGNAL!,8,n,1,N
 
 	del *.o > nul 2>&1
 	:ABORT

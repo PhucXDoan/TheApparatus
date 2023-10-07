@@ -110,7 +110,7 @@ enum USBSetupRequestType // "bmRequestType" and "bRequest" bytes are combined. S
 	USBSetupRequestType_get_desc               = MAKE(0b10000000, 6),
 	USBSetupRequestType_set_address            = MAKE(0b00000000, 5),
 	USBSetupRequestType_set_config             = MAKE(0b00000000, 9),
-	USBSetupRequestType_endpoint_clear_feature = MAKE(0b00000010, 1),
+//	USBSetupRequestType_endpoint_clear_feature = MAKE(0b00000010, 1),
 
 	// Non-exhaustive. See: CDC-Specific Requests @ Source(6) @ Table(44) @ AbsPage(62-63) & Source(6) @ Table(46) @ AbsPage(64-65).
 	USBSetupRequestType_cdc_get_line_coding        = MAKE(0b10100001, 0x21),
@@ -401,6 +401,15 @@ struct USBMSCommandStatusWrapper
 	u8  bCSWStatus;
 };
 
+enum USBMSSCSIOpcode // See: Source(13) @ Section(3) @ Page(65) & Source(14).
+{
+	USBMSSCSIOpcode_inquiry                = 0x12,
+	USBMSSCSIOpcode_mode_sense             = 0x1A,
+	USBMSSCSIOpcode_read_format_capacities = 0x23, // See: Source(14).
+	USBMSSCSIOpcode_read_capacity          = 0x25,
+	USBMSSCSIOpcode_read                   = 0x28,
+};
+
 // Endpoint buffer sizes must be one of the names of enum USBEndpointSizeCode.
 // The maximum capacity between endpoints also differ. See: Source(1) @ Section(22.1) @ Page(270).
 
@@ -427,12 +436,12 @@ struct USBMSCommandStatusWrapper
 #define USB_ENDPOINT_MS_IN               5
 #define USB_ENDPOINT_MS_IN_TRANSFER_TYPE USBEndpointTransferType_bulk
 #define USB_ENDPOINT_MS_IN_TRANSFER_DIR  USBEndpointAddressFlag_in
-#define USB_ENDPOINT_MS_IN_SIZE          64 // Must be at least 16 so the command status wrapper can be transmitted entirely in one go.
+#define USB_ENDPOINT_MS_IN_SIZE          64 // Must be 64 due to some constraints, but maybe bigger later? TODO
 
 #define USB_ENDPOINT_MS_OUT               6
 #define USB_ENDPOINT_MS_OUT_TRANSFER_TYPE USBEndpointTransferType_bulk
 #define USB_ENDPOINT_MS_OUT_TRANSFER_DIR  0
-#define USB_ENDPOINT_MS_OUT_SIZE          64 // Must be at least 32 so the command block wrapper can be received entirely in one go.
+#define USB_ENDPOINT_MS_OUT_SIZE          64 // Must be 64 due to some constraints, but maybe bigger later? TODO
 
 static const u8 USB_ENDPOINT_UECFGNX[][2] PROGMEM = // UECFG0X and UECFG1X that an endpoint will be configured with.
 	{
@@ -587,7 +596,7 @@ static const u8 USB_MS_SCSI_INQUIRY_DATA[] = // See: Source(13) @ Section(3.6.2)
 			0b000000'0'0,
 
 		// "T10 VENDOR IDENTIFICATION" : TODO WTF is this? See: Source(13) @ Section(3.6.2) @ Page(99).
-			'G', 'E', 'N', 'E', 'R', 'A', 'L', ' ',
+			'G', 'e', 'n', 'e', 'r', 'a', 'l', ' ',
 
 		// "PRODUCT IDENTIFICATION" : TODO WTF! See: Source(13) @ Section(3.6.2) @ Page(99).
 			'U', 'D', 'i', 's', 'k', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
@@ -595,6 +604,7 @@ static const u8 USB_MS_SCSI_INQUIRY_DATA[] = // See: Source(13) @ Section(3.6.2)
 		// "PRODUCT REVISION LEVEL" : TODO WTF! See: Source(13) @ Section(3.6.2) @ Page(99).
 			'5', '.', '0', '0',
 	};
+static_assert(sizeof(USB_MS_SCSI_INQUIRY_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
 
 static const u8 USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA[] = // See: Source(14) @ Table(702) @ AbsPage(1).
 	{
@@ -616,6 +626,20 @@ static const u8 USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA[] = // See: Source(14) @
 		//  vvvvvvvvvvvv    vvvvvv vv  vvvvvvv
 			0, 240, 0, 0, 0b000000'10, 0, 2, 0
 	};
+static_assert(sizeof(USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
+
+static const u8 USB_MS_SCSI_READ_CAPACITY_DATA[] = // See: Source(13) @ Table(120) @ Page(156).
+	{
+		// "RETURNED LOGICAL BLOCK ADDRESS" : Big-endian. TODO Is this the largest block address?
+			0, 239, 255, 255,
+
+		// "BLOCK LENGTH IN BYTES" in big-endian.
+			0, 0, 2, 0,
+	};
+static_assert(sizeof(USB_MS_SCSI_READ_CAPACITY_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
+
+static const u8 USB_MS_SCSI_MODE_SENSE[] = { 0x0B, 0x00, 0x00, 0x08, 0x00, 0x03, 0xE3, 0x11, 0x00, 0x00, 0x08, 0x00 };
+static_assert(sizeof(USB_MS_SCSI_MODE_SENSE) <= USB_ENDPOINT_MS_IN_SIZE);
 
 static const struct USBDescDevice USB_DESC_DEVICE PROGMEM =
 	{
@@ -858,12 +882,6 @@ static_assert(countof(_usb_mouse_command_buffer) < (((u64) 1) << bitsof(_usb_mou
 // Buffer sizes must be a power of two for the "_usb_mouse_X_masked" macros.
 static_assert(countof(_usb_mouse_command_buffer) && !(countof(_usb_mouse_command_buffer) & (countof(_usb_mouse_command_buffer) - 1)));
 
-enum USBMSSCSIOpcode // See: Source(13) @ Section(3) @ Page(65) & Source(14).
-{
-	USBMSSCSIOpcode_inquiry                = 0x12,
-	USBMSSCSIOpcode_read_format_capacities = 0x23, // See: Source(14).
-};
-
 enum USBMSState
 {
 	USBMSState_ready_for_command,
@@ -871,10 +889,11 @@ enum USBMSState
 	USBMSState_ready_for_status,
 };
 
-static enum USBMSState                  _usb_ms_state                 = USBMSState_ready_for_command;
-static const u8*                        _usb_ms_data_reader           = 0;
-static u16                              _usb_ms_data_reader_remaining = 0;
-static struct USBMSCommandStatusWrapper _usb_ms_status                = {0};
+static enum USBMSState                  _usb_ms_state                          = USBMSState_ready_for_command;
+static const u8*                        _usb_ms_internal_data                  = 0;
+static u8                               _usb_ms_internal_size                  = 0;
+static u16                              TEMP = 0;
+static struct USBMSCommandStatusWrapper _usb_ms_status                         = {0};
 
 //
 // Documentation.
