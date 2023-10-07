@@ -224,8 +224,28 @@ ISR(USB_GEN_vect)
 							1 <= command.bCBWCBLength && command.bCBWCBLength <= 16
 						)
 						{
+							b8 stall = false;
+
 							switch (command.CBWCB[0])
 							{
+								case USBMSSCSIOpcode_test_unit_ready:
+								{
+									if
+									(
+										!command.bmCBWFlags &&
+										command.bCBWCBLength == 6 &&
+										command.dCBWDataTransferLength == 0 &&
+										command.CBWCB[5] == 0 // "CONTROL", just in case it's not zero.
+									)
+									{
+										// Nothing here.
+									}
+									else
+									{
+										stall = true;
+									}
+								} break;
+
 								case USBMSSCSIOpcode_inquiry: // See: Source(13) @ Section(3.6.1) @ Page(92).
 								{
 									if
@@ -249,8 +269,13 @@ ISR(USB_GEN_vect)
 										// Send the standard inquiry data, even if the host asked for the unit serial number,
 										// since that data happens to also look identical to the standard inquiry data.
 
-										_usb_ms_internal_data = USB_MS_SCSI_INQUIRY_DATA;
-										_usb_ms_internal_size = sizeof(USB_MS_SCSI_INQUIRY_DATA);
+										_usb_ms_internal_info_data = USB_MS_SCSI_INQUIRY_DATA;
+										_usb_ms_internal_info_size = sizeof(USB_MS_SCSI_INQUIRY_DATA);
+										static_assert(sizeof(USB_MS_SCSI_INQUIRY_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
+									}
+									else
+									{
+										stall = true;
 									}
 								} break;
 
@@ -263,12 +288,17 @@ ISR(USB_GEN_vect)
 										command.dCBWDataTransferLength == command.CBWCB[4] &&
 										command.CBWCB[5] == 0 && // "CONTROL", just in case it's not zero.
 										command.CBWCB[1] == 0 &&
-										(command.CBWCB[2] == 0x1C || command.CBWCB[2] == 0x08) && // "PC" | "PAGE CODE"
+										(command.CBWCB[2] == 0x1C || command.CBWCB[2] == 0x08 || command.CBWCB[2] == 0x3F) && // "PC" | "PAGE CODE"
 										command.CBWCB[3] == 0       // "SUBPAGE CODE"
 									)
 									{
-										_usb_ms_internal_data = USB_MS_SCSI_MODE_SENSE;
-										_usb_ms_internal_size = sizeof(USB_MS_SCSI_MODE_SENSE);
+										_usb_ms_internal_info_data = USB_MS_SCSI_MODE_SENSE;
+										_usb_ms_internal_info_size = sizeof(USB_MS_SCSI_MODE_SENSE);
+										static_assert(sizeof(USB_MS_SCSI_MODE_SENSE) <= USB_ENDPOINT_MS_IN_SIZE);
+									}
+									else
+									{
+										stall = true;
 									}
 								} break;
 
@@ -282,8 +312,13 @@ ISR(USB_GEN_vect)
 										command.CBWCB[9] == 0 // "CONTROL", just in case it's not zero.
 									)
 									{
-										_usb_ms_internal_data = USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA;
-										_usb_ms_internal_size = sizeof(USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA);
+										_usb_ms_internal_info_data = USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA;
+										_usb_ms_internal_info_size = sizeof(USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA);
+										static_assert(sizeof(USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
+									}
+									else
+									{
+										stall = true;
 									}
 								} break;
 
@@ -297,66 +332,80 @@ ISR(USB_GEN_vect)
 										command.CBWCB[9] == 0 // "CONTROL", just in case it's not zero.
 									)
 									{
-										_usb_ms_internal_data = USB_MS_SCSI_READ_CAPACITY_DATA;
-										_usb_ms_internal_size = sizeof(USB_MS_SCSI_READ_CAPACITY_DATA);
+										_usb_ms_internal_info_data = USB_MS_SCSI_READ_CAPACITY_DATA;
+										_usb_ms_internal_info_size = sizeof(USB_MS_SCSI_READ_CAPACITY_DATA);
+										static_assert(sizeof(USB_MS_SCSI_READ_CAPACITY_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
+									}
+									else
+									{
+										stall = true;
 									}
 								} break;
 
 								case USBMSSCSIOpcode_read:
 								{
-									u32 logical_block_address =
-										(((u32) command.CBWCB[2]) << 24) |
-										(((u32) command.CBWCB[3]) << 16) |
-										(((u32) command.CBWCB[4]) <<  8) |
-										(((u32) command.CBWCB[5]) <<  0);
 									u32 logical_block_count = ((command.CBWCB[7] << 8) | command.CBWCB[8]);
 									if
 									(
 										command.bmCBWFlags &&
 										command.bCBWCBLength == 10 &&
-										command.dCBWDataTransferLength == logical_block_count * 512 &&
+										command.dCBWDataTransferLength == logical_block_count * USB_MS_LOGICAL_BLOCK_SIZE &&
 										command.CBWCB[1] == 0 && // Some random bits??
-										logical_block_address == 0 &&
 										command.CBWCB[6] == 0 && // "GROUP NUMBER"
 										command.CBWCB[9] == 0 // "CONTROL", just in case it's not zero.
 									)
 									{
-										TEMP = logical_block_count * 512 / 64;
+										_usb_ms_logical_block_address =
+											(((u32) command.CBWCB[2]) << 24) |
+											(((u32) command.CBWCB[3]) << 16) |
+											(((u32) command.CBWCB[4]) <<  8) |
+											(((u32) command.CBWCB[5]) <<  0);
+										_usb_ms_logical_block_remaining      = logical_block_count;
+										_usb_ms_logical_block_fragment_index = 0;
 									}
 									else
 									{
-										debug_pin_set(10, true);
-										debug_halt(4);
+										stall = true;
 									}
 								} break;
 
 								default:
 								{
-									debug_pin_u8(command.CBWCB[0]);
-									debug_unhandled;
+									stall = true;
 								} break;
 							}
 
-							if (_usb_ms_internal_size)
+							if (stall)
 							{
-								if (_usb_ms_internal_size > command.dCBWDataTransferLength)
-								{
-									error;
-								}
-
+								debug_unhandled;
+							}
+							else if (_usb_ms_internal_info_size)
+							{
 								_usb_ms_state  = USBMSState_sending_data;
 								_usb_ms_status =
 									(struct USBMSCommandStatusWrapper)
 									{
 										.dCSWSignature   = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE,
 										.dCSWTag         = command.dCBWTag,
-										.dCSWDataResidue = command.dCBWDataTransferLength - _usb_ms_internal_size,
+										.dCSWDataResidue = command.dCBWDataTransferLength - _usb_ms_internal_info_size,
 										.bCSWStatus      = 0x00,
 									};
 							}
-							else if (TEMP)
+							else if (_usb_ms_logical_block_remaining)
 							{
 								_usb_ms_state  = USBMSState_sending_data;
+								_usb_ms_status =
+									(struct USBMSCommandStatusWrapper)
+									{
+										.dCSWSignature   = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE,
+										.dCSWTag         = command.dCBWTag,
+										.dCSWDataResidue = 0,
+										.bCSWStatus      = 0x00,
+									};
+							}
+							else if (!command.dCBWDataTransferLength)
+							{
+								_usb_ms_state  = USBMSState_ready_for_status;
 								_usb_ms_status =
 									(struct USBMSCommandStatusWrapper)
 									{
@@ -391,22 +440,52 @@ ISR(USB_GEN_vect)
 				UENUM = USB_ENDPOINT_MS_IN;
 				if (UEINTX & (1 << TXINI))
 				{
-					for (u8 i = 0; i < _usb_ms_internal_size; i += 1)
+					if (_usb_ms_internal_info_size)
 					{
-						UEDATX = ((u8*) &_usb_ms_internal_data)[i];
-					}
-					_usb_ms_internal_size = 0;
-
-					if (TEMP)
-					{
-						for (u8 i = 0; i < USB_ENDPOINT_MS_IN_SIZE; i += 1)
+						for (u8 i = 0; i < _usb_ms_internal_info_size; i += 1)
 						{
-							UEDATX = 0;
+							UEDATX = ((u8*) &_usb_ms_internal_info_data)[i];
 						}
-						TEMP -= 1;
+						_usb_ms_internal_info_size = 0;
+					}
+					else if (_usb_ms_logical_block_remaining)
+					{
+						if
+						(
+							_usb_ms_logical_block_address * USB_MS_LOGICAL_BLOCK_SIZE + (_usb_ms_logical_block_fragment_index + 1) * USB_ENDPOINT_MS_IN_SIZE
+								<= sizeof(USB_MS_BLOCK_DATA)
+						)
+						{
+							for (u8 i = 0; i < USB_ENDPOINT_MS_IN_SIZE; i += 1)
+							{
+								UEDATX =
+									USB_MS_BLOCK_DATA
+									[
+										_usb_ms_logical_block_address * USB_MS_LOGICAL_BLOCK_SIZE
+											+ _usb_ms_logical_block_fragment_index * USB_ENDPOINT_MS_IN_SIZE
+											+ i
+									];
+							}
+						}
+						else
+						{
+							for (u8 i = 0; i < USB_ENDPOINT_MS_IN_SIZE; i += 1)
+							{
+								UEDATX = 0;
+							}
+						}
+
+						_usb_ms_logical_block_fragment_index += 1;
+
+						if (_usb_ms_logical_block_fragment_index == USB_MS_LOGICAL_BLOCK_SIZE / USB_ENDPOINT_MS_IN_SIZE)
+						{
+							_usb_ms_logical_block_address        += 1;
+							_usb_ms_logical_block_remaining      -= 1;
+							_usb_ms_logical_block_fragment_index  = 0;
+						}
 					}
 
-					if (!TEMP)
+					if (!_usb_ms_logical_block_remaining)
 					{
 						_usb_ms_state = USBMSState_ready_for_status;
 					}
