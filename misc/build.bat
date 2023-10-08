@@ -5,7 +5,7 @@ REM To list AVRDUDE's supported AVR devices: "avrdude -c avrisp".
 REM To list AVRDUDE's supported programmers: "avrdude -c asd".
 
 set AVR_GCC_PRACTICAL_DISABLED_WARNINGS=^
-	-Wno-unused-function -Wno-implicit-fallthrough
+	-Wno-unused-function -Wno-implicit-fallthrough -Wno-missing-field-initializers
 
 set AVR_GCC_DEVELOPMENT_DISABLED_WARNINGS=^
 	-Wno-unused-label -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-parameter
