@@ -421,8 +421,9 @@ ISR(USB_GEN_vect)
 
 						switch (_usb_ms_abs_sector_address)
 						{
-							#define MAKE(SECTOR_ADDRESS, SECTOR_DATA) \
+							#define MAKE(SECTOR_DATA, SECTOR_ADDRESS) \
 								case (SECTOR_ADDRESS): \
+									static_assert(sizeof(SECTOR_DATA) == 512); \
 									sector_data = (u8*) &(SECTOR_DATA); \
 									break;
 							FAT32_SECTOR_XMDT(MAKE)

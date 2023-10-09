@@ -85,7 +85,7 @@ struct FAT32PartitionEntry // See: "Partition table entries" @ Source(16).
 {
 	u8  status;               // 0x80 if this partition is active, otherwise 0x00.
 	u8  chs_address_begin[3]; // Irrelevant.
-	u8  partition_type;       // Seems to be must 0x0C for FAT32s.
+	u8  partition_type;       // Seems to be must 0x0C for FAT32s with logical block addressing. See: "Partition table entry" @ Source(17).
 	u8  chs_address_end[3];   // Irrelevant.
 	u32 abs_sector_address;   // Where the partition begins.
 	u32 sector_count;         // Amount of sectors for this partition.
@@ -213,6 +213,7 @@ union FAT32DirEntry
 
 static_assert(FAT32_SECTORS_PER_CLUSTER && !(FAT32_SECTORS_PER_CLUSTER & (FAT32_SECTORS_PER_CLUSTER - 1)));
 static_assert(((u64) FAT32_SECTORS_PER_CLUSTER) * FAT32_SECTOR_SIZE <= (((u64) 1) << 15));
+static_assert((FAT32_PARTITION_SECTOR_COUNT - FAT32_RESERVED_SECTOR_COUNT - FAT32_TABLE_SECTOR_COUNT) / FAT32_SECTORS_PER_CLUSTER >= 65'525);
 
 static const struct FAT32MasterBootRecord FAT32_MASTER_BOOT_RECORD PROGMEM =
 	{
@@ -260,125 +261,28 @@ static const struct FAT32FileStructureInfo FAT32_FILE_STRUCTURE_INFO PROGMEM =
 		.FSI_TrailSig   = 0xAA550000,
 	};
 
-static const u32 FAT32_TABLE[] PROGMEM =
+static const u32 FAT32_TABLE[128] PROGMEM = // Most significant nibbles are reserved. See: Source(15) @ Section(4) @ Page(16).
 	{
-		0x0FFFFF'00 | FAT32_MEDIA_TYPE, 0xFFFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF,
-		0x0FFFFFFF, 0x0FFFFFFF, 0x0FFFFFFF, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
-		0x00000000, 0x00000000, 0x00000000, 0x00000000,
+		[0] = 0x0FFFFF'00 | FAT32_MEDIA_TYPE, // See: Source(15) @ Section(4.2) @ Page(19).
+		[1] = 0xFFFFFFFF,                     // For format utilities. Seems to be commonly always all set. See: Source(15) @ Section(4.2) @ Page(19).
+
+		[FAT32_ROOT_CLUSTER] = 0x0'FFFFFFF,
 	};
 static_assert(sizeof(FAT32_TABLE) == 512);
 
 static const union FAT32DirEntry FAT32_ROOT_DIR_ENTRIES[16] PROGMEM =
 	{
-		{
-			.long_entry =
-				{
-					.LDIR_Ord    = 2 | FAT32_LAST_LONG_DIR_ENTRY,
-					.LDIR_Name1  = { ' ', 'I', 'n', 'f', 'o' },
-					.LDIR_Attr   = FAT32_DIR_ENTRY_ATTR_FLAGS_LONG,
-					.LDIR_Chksum = 0x72,
-					.LDIR_Name2  = { 'r', 'm', 'a', 't', 'i', 'o' },
-					.LDIR_Name3  = { 'n' },
-				}
-		},
-		{
-			.long_entry =
-			{
-				.LDIR_Ord    = 1,
-				.LDIR_Name1  = { 'S', 'y', 's', 't', 'e' },
-				.LDIR_Attr   = FAT32_DIR_ENTRY_ATTR_FLAGS_LONG,
-				.LDIR_Chksum = 0x72,
-				.LDIR_Name2  = { 'm', ' ', 'V', 'o', 'l', 'u' },
-				.LDIR_Name3  = { 'm', 'e' },
-			},
-		},
-		{
-			.short_entry =
-			{
-				.DIR_Name      = "SYSTEM~1   ",
-				.DIR_Attr      = FAT32DirEntryAttrFlag_hidden | FAT32DirEntryAttrFlag_system | FAT32DirEntryAttrFlag_directory,
-				.DIR_FstClusHI = 0x00,
-				.DIR_FstClusLO = 0x03,
-			},
-		},
 	};
 static_assert(sizeof(FAT32_ROOT_DIR_ENTRIES) == 512);
 
-static const union FAT32DirEntry FAT32_SYSTEM_VOLUME_INFO_DIR_ENTRIES[16] PROGMEM =
-	{
-		{
-			.long_entry =
-				{
-					.LDIR_Ord    = 2 | FAT32_LAST_LONG_DIR_ENTRY,
-					.LDIR_Name1  = { 'G', 'u', 'i', 'd' },
-					.LDIR_Attr   = FAT32_DIR_ENTRY_ATTR_FLAGS_LONG,
-					.LDIR_Chksum = 0xFF,
-					.LDIR_Name2  = { -1, -1, -1, -1, -1, -1 },
-					.LDIR_Name3  = { -1 },
-				}
-		},
-		{
-			.long_entry =
-			{
-				.LDIR_Ord    = 1,
-				.LDIR_Name1  = { 'I', 'n', 'd', 'e', 'x' },
-				.LDIR_Attr   = FAT32_DIR_ENTRY_ATTR_FLAGS_LONG,
-				.LDIR_Chksum = 0xFF,
-				.LDIR_Name2  = { 'e', 'r', 'V', 'o', 'l', 'u' },
-				.LDIR_Name3  = { 'm', 'e' },
-			},
-		},
-		{
-			.short_entry =
-			{
-				.DIR_Name      = "INDEXE~1   ",
-				.DIR_Attr      = FAT32DirEntryAttrFlag_archive,
-				.DIR_FstClusHI = 0x00,
-				.DIR_FstClusLO = 0x00, // TODO Set!
-				.DIR_FileSize  = 0,
-			},
-		},
-	};
-static_assert(sizeof(FAT32_SYSTEM_VOLUME_INFO_DIR_ENTRIES) == 512);
-
 #define FAT32_SECTOR_XMDT(X) \
-	X(0                                                                                                                                             , FAT32_MASTER_BOOT_RECORD            ) \
-	X(FAT32_PARTITION_SECTOR_ADDRESS                                                                                                                , FAT32_BOOT_SECTOR                   ) \
-	X(FAT32_PARTITION_SECTOR_ADDRESS + FAT32_BACKUP_BOOT_SECTOR_OFFSET                                                                              , FAT32_BOOT_SECTOR                   ) \
-	X(FAT32_PARTITION_SECTOR_ADDRESS + FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET                                                                      , FAT32_FILE_STRUCTURE_INFO           ) \
-	X(FAT32_PARTITION_SECTOR_ADDRESS + FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET + FAT32_BACKUP_BOOT_SECTOR_OFFSET                                    , FAT32_FILE_STRUCTURE_INFO           ) \
-	X(FAT32_PARTITION_SECTOR_ADDRESS + FAT32_RESERVED_SECTOR_COUNT                                                                                  , FAT32_TABLE                         ) \
-	X(FAT32_PARTITION_SECTOR_ADDRESS + FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT                                                       , FAT32_ROOT_DIR_ENTRIES              ) \
-	X(FAT32_PARTITION_SECTOR_ADDRESS + FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT + (3 - FAT32_ROOT_CLUSTER) * FAT32_SECTORS_PER_CLUSTER, FAT32_SYSTEM_VOLUME_INFO_DIR_ENTRIES) \
+	X(FAT32_MASTER_BOOT_RECORD , 0) \
+	X(FAT32_BOOT_SECTOR        , FAT32_PARTITION_SECTOR_ADDRESS) \
+	X(FAT32_BOOT_SECTOR        , FAT32_PARTITION_SECTOR_ADDRESS + FAT32_BACKUP_BOOT_SECTOR_OFFSET) \
+	X(FAT32_FILE_STRUCTURE_INFO, FAT32_PARTITION_SECTOR_ADDRESS + FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET) \
+	X(FAT32_FILE_STRUCTURE_INFO, FAT32_PARTITION_SECTOR_ADDRESS + FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET + FAT32_BACKUP_BOOT_SECTOR_OFFSET) \
+	X(FAT32_TABLE              , FAT32_PARTITION_SECTOR_ADDRESS + FAT32_RESERVED_SECTOR_COUNT) \
+	X(FAT32_ROOT_DIR_ENTRIES   , FAT32_PARTITION_SECTOR_ADDRESS + FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT) \
 
 //
 // "usb.c"
