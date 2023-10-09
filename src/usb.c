@@ -209,6 +209,8 @@ ISR(USB_GEN_vect)
 				if (UEINTX & (1 << RXOUTI))
 				{
 					struct USBMSCommandBlockWrapper command = {0};
+					static_assert(sizeof(command) <= USB_ENDPOINT_MS_OUT_SIZE);
+
 					if (UEBCX == sizeof(command))
 					{
 						for (u8 i = 0; i < sizeof(command); i += 1)
@@ -220,12 +222,10 @@ ISR(USB_GEN_vect)
 						(
 							command.dCBWSignature == USB_MS_COMMAND_BLOCK_WRAPPER_SIGNATURE &&
 							!(command.bmCBWFlags & 0b0111'1111) &&
-							!command.bCBWLUN &&
+							command.bCBWLUN == 0 &&
 							1 <= command.bCBWCBLength && command.bCBWCBLength <= 16
 						)
 						{
-							b8 stall = false;
-
 							switch (command.CBWCB[0])
 							{
 								case USBMSSCSIOpcode_test_unit_ready:
@@ -238,11 +238,7 @@ ISR(USB_GEN_vect)
 										command.CBWCB[5] == 0 // "CONTROL", just in case it's not zero.
 									)
 									{
-										// Nothing here.
-									}
-									else
-									{
-										stall = true;
+										// TODO Apparently we just don't send anything back?
 									}
 								} break;
 
@@ -269,13 +265,9 @@ ISR(USB_GEN_vect)
 										// Send the standard inquiry data, even if the host asked for the unit serial number,
 										// since that data happens to also look identical to the standard inquiry data.
 
-										_usb_ms_internal_info_data = USB_MS_SCSI_INQUIRY_DATA;
-										_usb_ms_internal_info_size = sizeof(USB_MS_SCSI_INQUIRY_DATA);
+										_usb_ms_scsi_info_data = USB_MS_SCSI_INQUIRY_DATA;
+										_usb_ms_scsi_info_size = sizeof(USB_MS_SCSI_INQUIRY_DATA);
 										static_assert(sizeof(USB_MS_SCSI_INQUIRY_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
-									}
-									else
-									{
-										stall = true;
 									}
 								} break;
 
@@ -292,13 +284,9 @@ ISR(USB_GEN_vect)
 										command.CBWCB[3] == 0       // "SUBPAGE CODE"
 									)
 									{
-										_usb_ms_internal_info_data = USB_MS_SCSI_MODE_SENSE;
-										_usb_ms_internal_info_size = sizeof(USB_MS_SCSI_MODE_SENSE);
+										_usb_ms_scsi_info_data = USB_MS_SCSI_MODE_SENSE;
+										_usb_ms_scsi_info_size = sizeof(USB_MS_SCSI_MODE_SENSE);
 										static_assert(sizeof(USB_MS_SCSI_MODE_SENSE) <= USB_ENDPOINT_MS_IN_SIZE);
-									}
-									else
-									{
-										stall = true;
 									}
 								} break;
 
@@ -312,13 +300,9 @@ ISR(USB_GEN_vect)
 										command.CBWCB[9] == 0 // "CONTROL", just in case it's not zero.
 									)
 									{
-										_usb_ms_internal_info_data = USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA;
-										_usb_ms_internal_info_size = sizeof(USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA);
+										_usb_ms_scsi_info_data = USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA;
+										_usb_ms_scsi_info_size = sizeof(USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA);
 										static_assert(sizeof(USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
-									}
-									else
-									{
-										stall = true;
 									}
 								} break;
 
@@ -332,54 +316,37 @@ ISR(USB_GEN_vect)
 										command.CBWCB[9] == 0 // "CONTROL", just in case it's not zero.
 									)
 									{
-										_usb_ms_internal_info_data = USB_MS_SCSI_READ_CAPACITY_DATA;
-										_usb_ms_internal_info_size = sizeof(USB_MS_SCSI_READ_CAPACITY_DATA);
+										_usb_ms_scsi_info_data = USB_MS_SCSI_READ_CAPACITY_DATA;
+										_usb_ms_scsi_info_size = sizeof(USB_MS_SCSI_READ_CAPACITY_DATA);
 										static_assert(sizeof(USB_MS_SCSI_READ_CAPACITY_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
-									}
-									else
-									{
-										stall = true;
 									}
 								} break;
 
 								case USBMSSCSIOpcode_read:
 								{
-									u32 logical_block_count = ((command.CBWCB[7] << 8) | command.CBWCB[8]);
+									u32 sector_count = ((command.CBWCB[7] << 8) | command.CBWCB[8]);
 									if
 									(
 										command.bmCBWFlags &&
 										command.bCBWCBLength == 10 &&
-										command.dCBWDataTransferLength == logical_block_count * FAT32_SECTOR_SIZE &&
+										command.dCBWDataTransferLength == sector_count * FAT32_SECTOR_SIZE &&
 										command.CBWCB[1] == 0 && // Some random bits??
 										command.CBWCB[6] == 0 && // "GROUP NUMBER"
 										command.CBWCB[9] == 0 // "CONTROL", just in case it's not zero.
 									)
 									{
-										_usb_ms_logical_block_address =
+										_usb_ms_abs_sector_address =
 											(((u32) command.CBWCB[2]) << 24) |
 											(((u32) command.CBWCB[3]) << 16) |
 											(((u32) command.CBWCB[4]) <<  8) |
 											(((u32) command.CBWCB[5]) <<  0);
-										_usb_ms_logical_block_remaining      = logical_block_count;
-										_usb_ms_logical_block_fragment_index = 0;
+										_usb_ms_sectors_left_to_send          = sector_count;
+										_usb_ms_sending_sector_fragment_index = 0;
 									}
-									else
-									{
-										stall = true;
-									}
-								} break;
-
-								default:
-								{
-									stall = true;
 								} break;
 							}
 
-							if (stall)
-							{
-								debug_unhandled;
-							}
-							else if (_usb_ms_internal_info_size)
+							if (_usb_ms_scsi_info_size)
 							{
 								_usb_ms_state  = USBMSState_sending_data;
 								_usb_ms_status =
@@ -387,11 +354,11 @@ ISR(USB_GEN_vect)
 									{
 										.dCSWSignature   = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE,
 										.dCSWTag         = command.dCBWTag,
-										.dCSWDataResidue = command.dCBWDataTransferLength - _usb_ms_internal_info_size,
+										.dCSWDataResidue = command.dCBWDataTransferLength - _usb_ms_scsi_info_size,
 										.bCSWStatus      = 0x00,
 									};
 							}
-							else if (_usb_ms_logical_block_remaining)
+							else if (_usb_ms_sectors_left_to_send)
 							{
 								_usb_ms_state  = USBMSState_sending_data;
 								_usb_ms_status =
@@ -425,7 +392,7 @@ ISR(USB_GEN_vect)
 							debug_unhandled;
 						}
 					}
-					else // We received a packet (that should be the CBW) that's not 31 bytes in length. See: Source(12) @ Section(6.2.1) @ Page(17).
+					else // We supposedly received a CBW packet that's not 31 bytes in length. See: Source(12) @ Section(6.2.1) @ Page(17).
 					{
 						debug_unhandled;
 					}
@@ -440,19 +407,19 @@ ISR(USB_GEN_vect)
 				UENUM = USB_ENDPOINT_MS_IN;
 				if (UEINTX & (1 << TXINI))
 				{
-					if (_usb_ms_internal_info_size)
+					if (_usb_ms_scsi_info_size)
 					{
-						for (u8 i = 0; i < _usb_ms_internal_info_size; i += 1)
+						for (u8 i = 0; i < _usb_ms_scsi_info_size; i += 1)
 						{
-							UEDATX = ((u8*) &_usb_ms_internal_info_data)[i];
+							UEDATX = ((u8*) &_usb_ms_scsi_info_data)[i];
 						}
-						_usb_ms_internal_info_size = 0;
+						_usb_ms_scsi_info_size = 0;
 					}
-					else if (_usb_ms_logical_block_remaining)
+					else if (_usb_ms_sectors_left_to_send)
 					{
 						const u8* sector_data = 0;
 
-						switch (_usb_ms_logical_block_address)
+						switch (_usb_ms_abs_sector_address)
 						{
 							#define MAKE(SECTOR_ADDRESS, SECTOR_DATA) \
 								case (SECTOR_ADDRESS): \
@@ -466,7 +433,7 @@ ISR(USB_GEN_vect)
 						{
 							for (u8 i = 0; i < USB_ENDPOINT_MS_IN_SIZE; i += 1)
 							{
-								UEDATX = pgm_read_byte(&sector_data[_usb_ms_logical_block_fragment_index * USB_ENDPOINT_MS_IN_SIZE + i]);
+								UEDATX = pgm_read_byte(&sector_data[_usb_ms_sending_sector_fragment_index * USB_ENDPOINT_MS_IN_SIZE + i]);
 							}
 						}
 						else
@@ -477,17 +444,19 @@ ISR(USB_GEN_vect)
 							}
 						}
 
-						_usb_ms_logical_block_fragment_index += 1;
-
-						if (_usb_ms_logical_block_fragment_index == FAT32_SECTOR_SIZE / USB_ENDPOINT_MS_IN_SIZE)
+						if (_usb_ms_sending_sector_fragment_index == FAT32_SECTOR_SIZE / USB_ENDPOINT_MS_IN_SIZE - 1)
 						{
-							_usb_ms_logical_block_address        += 1;
-							_usb_ms_logical_block_remaining      -= 1;
-							_usb_ms_logical_block_fragment_index  = 0;
+							_usb_ms_sending_sector_fragment_index  = 0;
+							_usb_ms_sectors_left_to_send          -= 1;
+							_usb_ms_abs_sector_address            += 1;
+						}
+						else
+						{
+							_usb_ms_sending_sector_fragment_index += 1;
 						}
 					}
 
-					if (!_usb_ms_logical_block_remaining)
+					if (!_usb_ms_sectors_left_to_send)
 					{
 						_usb_ms_state = USBMSState_ready_for_status;
 					}
@@ -502,6 +471,7 @@ ISR(USB_GEN_vect)
 				UENUM = USB_ENDPOINT_MS_IN;
 				if (UEINTX & (1 << TXINI))
 				{
+					static_assert(sizeof(_usb_ms_status) <= USB_ENDPOINT_MS_IN_SIZE);
 					for (u8 i = 0; i < sizeof(_usb_ms_status); i += 1)
 					{
 						UEDATX = ((u8*) &_usb_ms_status)[i];

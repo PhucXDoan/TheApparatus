@@ -420,10 +420,9 @@ enum USBSetupRequestType // "bmRequestType" and "bRequest" bytes are combined. S
 	#define MAKE(BM_REQUEST_TYPE, B_REQUEST) ((BM_REQUEST_TYPE) | (((u16) (B_REQUEST)) << 8))
 
 	// Non-exhaustive. See: Standard Requests @ Source(2) @ Table(9-3) @ Page(250) & Source(2) @ Table(9-4) @ Page(251).
-	USBSetupRequestType_get_desc               = MAKE(0b10000000, 6),
-	USBSetupRequestType_set_address            = MAKE(0b00000000, 5),
-	USBSetupRequestType_set_config             = MAKE(0b00000000, 9),
-//	USBSetupRequestType_endpoint_clear_feature = MAKE(0b00000010, 1),
+	USBSetupRequestType_get_desc    = MAKE(0b10000000, 6),
+	USBSetupRequestType_set_address = MAKE(0b00000000, 5),
+	USBSetupRequestType_set_config  = MAKE(0b00000000, 9),
 
 	// Non-exhaustive. See: CDC-Specific Requests @ Source(6) @ Table(44) @ AbsPage(62-63) & Source(6) @ Table(46) @ AbsPage(64-65).
 	USBSetupRequestType_cdc_get_line_coding        = MAKE(0b10100001, 0x21),
@@ -724,6 +723,13 @@ enum USBMSSCSIOpcode // See: Source(13) @ Section(3) @ Page(65) & Source(14).
 	USBMSSCSIOpcode_read                   = 0x28,
 };
 
+enum USBMSState
+{
+	USBMSState_ready_for_command,
+	USBMSState_sending_data,
+	USBMSState_ready_for_status,
+};
+
 // Endpoint buffer sizes must be one of the names of enum USBEndpointSizeCode.
 // The maximum capacity between endpoints also differ. See: Source(1) @ Section(22.1) @ Page(270).
 
@@ -750,12 +756,12 @@ enum USBMSSCSIOpcode // See: Source(13) @ Section(3) @ Page(65) & Source(14).
 #define USB_ENDPOINT_MS_IN               5
 #define USB_ENDPOINT_MS_IN_TRANSFER_TYPE USBEndpointTransferType_bulk
 #define USB_ENDPOINT_MS_IN_TRANSFER_DIR  USBEndpointAddressFlag_in
-#define USB_ENDPOINT_MS_IN_SIZE          64 // Must be 64 due to some constraints, but maybe bigger later? TODO
+#define USB_ENDPOINT_MS_IN_SIZE          64
 
 #define USB_ENDPOINT_MS_OUT               6
 #define USB_ENDPOINT_MS_OUT_TRANSFER_TYPE USBEndpointTransferType_bulk
 #define USB_ENDPOINT_MS_OUT_TRANSFER_DIR  0
-#define USB_ENDPOINT_MS_OUT_SIZE          64 // Must be 64 due to some constraints, but maybe bigger later? TODO
+#define USB_ENDPOINT_MS_OUT_SIZE          64
 
 static const u8 USB_ENDPOINT_UECFGNX[][2] PROGMEM = // UECFG0X and UECFG1X that an endpoint will be configured with.
 	{
@@ -942,7 +948,7 @@ static const u8 USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA[] = // See: Source(14) @
 
 static const u8 USB_MS_SCSI_READ_CAPACITY_DATA[] = // See: Source(13) @ Table(120) @ Page(156).
 	{
-		// "RETURNED LOGICAL BLOCK ADDRESS" : Big-endian. TODO Is this the largest block address?
+		// "RETURNED LOGICAL BLOCK ADDRESS" in big-endian. TODO Is this the largest block address?
 			0, 239, 255, 255,
 
 		// "BLOCK LENGTH IN BYTES" in big-endian.
@@ -1141,33 +1147,33 @@ static const struct USBConfigHierarchy USB_CONFIG_HIERARCHY PROGMEM =
 	};
 
 #if DEBUG
-static volatile u8 debug_usb_cdc_in_buffer [USB_ENDPOINT_CDC_IN_SIZE ] = {0};
-static volatile u8 debug_usb_cdc_out_buffer[USB_ENDPOINT_CDC_OUT_SIZE] = {0};
+	static volatile u8 debug_usb_cdc_in_buffer [USB_ENDPOINT_CDC_IN_SIZE ] = {0};
+	static volatile u8 debug_usb_cdc_out_buffer[USB_ENDPOINT_CDC_OUT_SIZE] = {0};
 
-static volatile u8 debug_usb_cdc_in_writer  = 0; // Main program writes the IN-buffer.
-static volatile u8 debug_usb_cdc_in_reader  = 0; // Interrupt routine reads the IN-buffer.
-static volatile u8 debug_usb_cdc_out_writer = 0; // Interrupt routine writes the OUT-buffer.
-static volatile u8 debug_usb_cdc_out_reader = 0; // Main program reads the OUT-buffer.
+	static volatile u8 debug_usb_cdc_in_writer  = 0; // Main program writes the IN-buffer.
+	static volatile u8 debug_usb_cdc_in_reader  = 0; // Interrupt routine reads the IN-buffer.
+	static volatile u8 debug_usb_cdc_out_writer = 0; // Interrupt routine writes the OUT-buffer.
+	static volatile u8 debug_usb_cdc_out_reader = 0; // Main program reads the OUT-buffer.
 
-#define debug_usb_cdc_in_writer_masked(OFFSET)  ((debug_usb_cdc_in_writer  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
-#define debug_usb_cdc_in_reader_masked(OFFSET)  ((debug_usb_cdc_in_reader  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
-#define debug_usb_cdc_out_writer_masked(OFFSET) ((debug_usb_cdc_out_writer + (OFFSET)) & (countof(debug_usb_cdc_out_buffer) - 1))
-#define debug_usb_cdc_out_reader_masked(OFFSET) ((debug_usb_cdc_out_reader + (OFFSET)) & (countof(debug_usb_cdc_out_buffer) - 1))
+	#define debug_usb_cdc_in_writer_masked(OFFSET)  ((debug_usb_cdc_in_writer  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
+	#define debug_usb_cdc_in_reader_masked(OFFSET)  ((debug_usb_cdc_in_reader  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
+	#define debug_usb_cdc_out_writer_masked(OFFSET) ((debug_usb_cdc_out_writer + (OFFSET)) & (countof(debug_usb_cdc_out_buffer) - 1))
+	#define debug_usb_cdc_out_reader_masked(OFFSET) ((debug_usb_cdc_out_reader + (OFFSET)) & (countof(debug_usb_cdc_out_buffer) - 1))
 
-// A read/write index with a size greater than a byte makes "atomic" read/write operations difficult to guarantee; it can be done, but probably not worthwhile.
-static_assert(sizeof(debug_usb_cdc_in_writer) == 1 && sizeof(debug_usb_cdc_in_reader) == 1 && sizeof(debug_usb_cdc_out_writer) == 1 && sizeof(debug_usb_cdc_out_reader) == 1);
+	// A read/write index with a size greater than a byte makes "atomic" read/write operations difficult to guarantee; it can be done, but probably not worthwhile.
+	static_assert(sizeof(debug_usb_cdc_in_writer) == 1 && sizeof(debug_usb_cdc_in_reader) == 1 && sizeof(debug_usb_cdc_out_writer) == 1 && sizeof(debug_usb_cdc_out_reader) == 1);
 
-// The read/write indices must be able to address any element in the corresponding buffer.
-static_assert(countof(debug_usb_cdc_in_buffer ) < (((u64) 1) << bitsof(debug_usb_cdc_in_reader )));
-static_assert(countof(debug_usb_cdc_in_buffer ) < (((u64) 1) << bitsof(debug_usb_cdc_in_writer )));
-static_assert(countof(debug_usb_cdc_out_buffer) < (((u64) 1) << bitsof(debug_usb_cdc_out_reader)));
-static_assert(countof(debug_usb_cdc_out_buffer) < (((u64) 1) << bitsof(debug_usb_cdc_out_writer)));
+	// The read/write indices must be able to address any element in the corresponding buffer.
+	static_assert(countof(debug_usb_cdc_in_buffer ) < (((u64) 1) << bitsof(debug_usb_cdc_in_reader )));
+	static_assert(countof(debug_usb_cdc_in_buffer ) < (((u64) 1) << bitsof(debug_usb_cdc_in_writer )));
+	static_assert(countof(debug_usb_cdc_out_buffer) < (((u64) 1) << bitsof(debug_usb_cdc_out_reader)));
+	static_assert(countof(debug_usb_cdc_out_buffer) < (((u64) 1) << bitsof(debug_usb_cdc_out_writer)));
 
-// Buffer sizes must be a power of two for the "debug_usb_cdc_X_Y_masked" macros.
-static_assert(countof(debug_usb_cdc_in_buffer ) && !(countof(debug_usb_cdc_in_buffer ) & (countof(debug_usb_cdc_in_buffer ) - 1)));
-static_assert(countof(debug_usb_cdc_out_buffer) && !(countof(debug_usb_cdc_out_buffer) & (countof(debug_usb_cdc_out_buffer) - 1)));
+	// Buffer sizes must be a power of two for the "debug_usb_cdc_X_Y_masked" macros.
+	static_assert(countof(debug_usb_cdc_in_buffer ) && !(countof(debug_usb_cdc_in_buffer ) & (countof(debug_usb_cdc_in_buffer ) - 1)));
+	static_assert(countof(debug_usb_cdc_out_buffer) && !(countof(debug_usb_cdc_out_buffer) & (countof(debug_usb_cdc_out_buffer) - 1)));
 
-static volatile b8 debug_usb_diagnostic_signal_received = false;
+	static volatile b8 debug_usb_diagnostic_signal_received = false;
 #endif
 
 #define USB_MOUSE_CALIBRATIONS_REQUIRED 128
@@ -1195,20 +1201,13 @@ static_assert(countof(_usb_mouse_command_buffer) < (((u64) 1) << bitsof(_usb_mou
 // Buffer sizes must be a power of two for the "_usb_mouse_X_masked" macros.
 static_assert(countof(_usb_mouse_command_buffer) && !(countof(_usb_mouse_command_buffer) & (countof(_usb_mouse_command_buffer) - 1)));
 
-enum USBMSState
-{
-	USBMSState_ready_for_command,
-	USBMSState_sending_data,
-	USBMSState_ready_for_status,
-};
-
-static enum USBMSState                  _usb_ms_state                        = USBMSState_ready_for_command;
-static const u8*                        _usb_ms_internal_info_data           = 0;
-static u8                               _usb_ms_internal_info_size           = 0;
-static u32                              _usb_ms_logical_block_address        = 0;
-static u32                              _usb_ms_logical_block_remaining      = 0;
-static u8                               _usb_ms_logical_block_fragment_index = 0;
-static struct USBMSCommandStatusWrapper _usb_ms_status                       = {0};
+static enum USBMSState                  _usb_ms_state                         = USBMSState_ready_for_command;
+static const u8*                        _usb_ms_scsi_info_data                = 0;
+static u8                               _usb_ms_scsi_info_size                = 0;
+static u32                              _usb_ms_abs_sector_address            = 0;
+static u32                              _usb_ms_sectors_left_to_send          = 0;
+static u8                               _usb_ms_sending_sector_fragment_index = 0;
+static struct USBMSCommandStatusWrapper _usb_ms_status                        = {0};
 
 //
 // Documentation.
