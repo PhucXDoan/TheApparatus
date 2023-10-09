@@ -349,7 +349,7 @@ ISR(USB_GEN_vect)
 									(
 										command.bmCBWFlags &&
 										command.bCBWCBLength == 10 &&
-										command.dCBWDataTransferLength == logical_block_count * USB_MS_LOGICAL_BLOCK_SIZE &&
+										command.dCBWDataTransferLength == logical_block_count * FAT32_SECTOR_SIZE &&
 										command.CBWCB[1] == 0 && // Some random bits??
 										command.CBWCB[6] == 0 && // "GROUP NUMBER"
 										command.CBWCB[9] == 0 // "CONTROL", just in case it's not zero.
@@ -456,49 +456,49 @@ ISR(USB_GEN_vect)
 							{
 								for (u8 i = 0; i < USB_ENDPOINT_MS_IN_SIZE; i += 1)
 								{
-									UEDATX = pgm_read_byte(&((u8*) &USB_MS_MASTER_BOOT_RECORD)[_usb_ms_logical_block_fragment_index * USB_ENDPOINT_MS_IN_SIZE + i]);
+									UEDATX = pgm_read_byte(&((u8*) &FAT32_MASTER_BOOT_RECORD)[_usb_ms_logical_block_fragment_index * USB_ENDPOINT_MS_IN_SIZE + i]);
 								}
 							} break;
 
-							case USB_MS_FAT32_ABSOLUTE_SECTOR_ADDRESS:
-							case USB_MS_FAT32_ABSOLUTE_SECTOR_ADDRESS + USB_MS_BACKUP_FAT32_BOOT_SECTOR_SECTOR_OFFSET:
+							case FAT32_PARTITION_SECTOR_ADDRESS:
+							case FAT32_PARTITION_SECTOR_ADDRESS + FAT32_BACKUP_BOOT_SECTOR_OFFSET:
 							{
 								for (u8 i = 0; i < USB_ENDPOINT_MS_IN_SIZE; i += 1)
 								{
-									UEDATX = pgm_read_byte(&((u8*) &USB_MS_FAT32_BOOT_SECTOR)[_usb_ms_logical_block_fragment_index * USB_ENDPOINT_MS_IN_SIZE + i]);
+									UEDATX = pgm_read_byte(&((u8*) &FAT32_BOOT_SECTOR)[_usb_ms_logical_block_fragment_index * USB_ENDPOINT_MS_IN_SIZE + i]);
 								}
 							} break;
 
-							case USB_MS_FAT32_ABSOLUTE_SECTOR_ADDRESS + USB_MS_FILE_STRUCTURE_SECTOR_OFFSET:
-							case USB_MS_FAT32_ABSOLUTE_SECTOR_ADDRESS + USB_MS_BACKUP_FAT32_BOOT_SECTOR_SECTOR_OFFSET + USB_MS_FILE_STRUCTURE_SECTOR_OFFSET:
+							case FAT32_PARTITION_SECTOR_ADDRESS + FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET:
+							case FAT32_PARTITION_SECTOR_ADDRESS + FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET + FAT32_BACKUP_BOOT_SECTOR_OFFSET:
 							{
 								for (u8 i = 0; i < USB_ENDPOINT_MS_IN_SIZE; i += 1)
 								{
-									UEDATX = pgm_read_byte(&((u8*) &USB_MS_FILE_STRUCTURE_INFO)[_usb_ms_logical_block_fragment_index * USB_ENDPOINT_MS_IN_SIZE + i]);
+									UEDATX = pgm_read_byte(&((u8*) &FAT32_FILE_STRUCTURE_INFO)[_usb_ms_logical_block_fragment_index * USB_ENDPOINT_MS_IN_SIZE + i]);
 								}
 							}
 
-							case USB_MS_FAT32_ABSOLUTE_SECTOR_ADDRESS + USB_MS_FAT32_RESERVED_SECTOR_COUNT:
+							case FAT32_PARTITION_SECTOR_ADDRESS + FAT32_RESERVED_SECTOR_COUNT:
 							{
 								for (u8 i = 0; i < USB_ENDPOINT_MS_IN_SIZE; i += 1)
 								{
-									UEDATX = pgm_read_byte(&((u8*) &FAT_ENTRIES)[_usb_ms_logical_block_fragment_index * USB_ENDPOINT_MS_IN_SIZE + i]);
+									UEDATX = pgm_read_byte(&((u8*) &FAT32_TABLE)[_usb_ms_logical_block_fragment_index * USB_ENDPOINT_MS_IN_SIZE + i]);
 								}
 							} break;
 
-							case USB_MS_FAT32_ABSOLUTE_SECTOR_ADDRESS + USB_MS_FAT32_RESERVED_SECTOR_COUNT + USB_MS_FAT32_TABLE_SECTOR_COUNT:
+							case FAT32_PARTITION_SECTOR_ADDRESS + FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT:
 							{
 								for (u8 i = 0; i < USB_ENDPOINT_MS_IN_SIZE; i += 1)
 								{
-									UEDATX = pgm_read_byte(&((u8*) &USB_MS_ROOT_DIRECTORY_ENTRIES)[_usb_ms_logical_block_fragment_index * USB_ENDPOINT_MS_IN_SIZE + i]);
+									UEDATX = pgm_read_byte(&((u8*) &FAT32_ROOT_DIR_ENTRIES)[_usb_ms_logical_block_fragment_index * USB_ENDPOINT_MS_IN_SIZE + i]);
 								}
 							} break;
 
-							case USB_MS_FAT32_ABSOLUTE_SECTOR_ADDRESS + USB_MS_FAT32_RESERVED_SECTOR_COUNT + USB_MS_FAT32_TABLE_SECTOR_COUNT + (3 - 2) * USB_MS_SECTORS_PER_CLUSTER:
+							case FAT32_PARTITION_SECTOR_ADDRESS + FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT + (3 - FAT32_ROOT_CLUSTER) * FAT32_SECTORS_PER_CLUSTER: // TODO Coupled data.
 							{
 								for (u8 i = 0; i < USB_ENDPOINT_MS_IN_SIZE; i += 1)
 								{
-									UEDATX = pgm_read_byte(&((u8*) &USB_MS_SYSTEM_VOLUME_INFO_DIR_ENTRIES)[_usb_ms_logical_block_fragment_index * USB_ENDPOINT_MS_IN_SIZE + i]);
+									UEDATX = pgm_read_byte(&((u8*) &FAT32_SYSTEM_VOLUME_INFO_DIR_ENTRIES)[_usb_ms_logical_block_fragment_index * USB_ENDPOINT_MS_IN_SIZE + i]);
 								}
 							} break;
 
@@ -513,7 +513,7 @@ ISR(USB_GEN_vect)
 
 						_usb_ms_logical_block_fragment_index += 1;
 
-						if (_usb_ms_logical_block_fragment_index == USB_MS_LOGICAL_BLOCK_SIZE / USB_ENDPOINT_MS_IN_SIZE)
+						if (_usb_ms_logical_block_fragment_index == FAT32_SECTOR_SIZE / USB_ENDPOINT_MS_IN_SIZE)
 						{
 							_usb_ms_logical_block_address        += 1;
 							_usb_ms_logical_block_remaining      -= 1;
@@ -619,7 +619,7 @@ ISR(USB_COM_vect)
 						{
 							payload_data   = (const u8*) &USB_DESC_DEVICE;
 							payload_length = sizeof(USB_DESC_DEVICE);
-							static_assert(sizeof(USB_DESC_DEVICE) < (((u64) 1) << bitsof(payload_length)))
+							static_assert(sizeof(USB_DESC_DEVICE) < (((u64) 1) << bitsof(payload_length)));
 						} break;
 
 						case USBDescType_config: // [Interfaces, Configurations, and Classes].
@@ -628,7 +628,7 @@ ISR(USB_COM_vect)
 							{
 								payload_data   = (const u8*) &USB_CONFIG_HIERARCHY;
 								payload_length = sizeof(USB_CONFIG_HIERARCHY);
-								static_assert(sizeof(USB_CONFIG_HIERARCHY) < (((u64) 1) << bitsof(payload_length)))
+								static_assert(sizeof(USB_CONFIG_HIERARCHY) < (((u64) 1) << bitsof(payload_length)));
 							}
 						} break;
 
@@ -652,7 +652,7 @@ ISR(USB_COM_vect)
 				{
 					payload_data   = (const u8*) &USB_DESC_HID_REPORT;
 					payload_length = sizeof(USB_DESC_HID_REPORT);
-					static_assert(sizeof(USB_DESC_HID_REPORT) < (((u64) 1) << bitsof(payload_length)))
+					static_assert(sizeof(USB_DESC_HID_REPORT) < (((u64) 1) << bitsof(payload_length)));
 				}
 				else
 				{
