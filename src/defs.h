@@ -81,6 +81,18 @@ enum PinState
 		.toUpperCase()
 */
 
+#define FAT32_PARTITION_SECTOR_ADDRESS 2
+#define FAT32_PARTITION_SECTOR_COUNT   16777216
+#define FAT32_RESERVED_SECTOR_COUNT    2
+#define FAT32_TABLE_SECTOR_COUNT       64
+#define FAT32_SECTOR_SIZE              512
+#define FAT32_SECTORS_PER_CLUSTER      64
+
+#define FAT32_MEDIA_TYPE                        0xF8
+#define FAT32_BACKUP_BOOT_SECTOR_OFFSET         6
+#define FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET 1
+#define FAT32_ROOT_CLUSTER                      2
+
 struct FAT32PartitionEntry // See: "Partition table entries" @ Source(16).
 {
 	u8  status;               // 0x80 if this partition is active, otherwise 0x00.
@@ -200,17 +212,6 @@ union FAT32DirEntry
 	} long_entry;
 };
 
-#define FAT32_PARTITION_SECTOR_ADDRESS          2048
-#define FAT32_PARTITION_SECTOR_COUNT            67108864
-#define FAT32_SECTOR_SIZE                       512
-#define FAT32_SECTORS_PER_CLUSTER               64
-#define FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET 1
-#define FAT32_BACKUP_BOOT_SECTOR_OFFSET         6
-#define FAT32_RESERVED_SECTOR_COUNT             32 // TODO Do we pick a value here to align data clusters?
-#define FAT32_TABLE_SECTOR_COUNT                256
-#define FAT32_ROOT_CLUSTER                      2
-#define FAT32_MEDIA_TYPE                        0xF8
-
 static_assert(FAT32_SECTORS_PER_CLUSTER && !(FAT32_SECTORS_PER_CLUSTER & (FAT32_SECTORS_PER_CLUSTER - 1)));
 static_assert(((u64) FAT32_SECTORS_PER_CLUSTER) * FAT32_SECTOR_SIZE <= (((u64) 1) << 15));
 static_assert((FAT32_PARTITION_SECTOR_COUNT - FAT32_RESERVED_SECTOR_COUNT - FAT32_TABLE_SECTOR_COUNT) / FAT32_SECTORS_PER_CLUSTER >= 65'525);
@@ -245,7 +246,6 @@ static const struct FAT32BootSector FAT32_BOOT_SECTOR PROGMEM =
 		.BPB_FSInfo     = FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET,
 		.BPB_BkBootSec  = FAT32_BACKUP_BOOT_SECTOR_OFFSET,
 		.BS_DrvNum      = 0x80,
-		.BS_Reserved    = 1, // TODO should this be 1?
 		.BS_BootSig     = 0x29,
 		.BS_VolLab      = "NO NAME    ",
 		.BS_FilSysType  = "FAT32   ",
