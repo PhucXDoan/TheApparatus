@@ -126,7 +126,7 @@ struct FAT32BootSector // See: Source(15) @ Section(3.1) @ Page(7-9) & Source(15
 	u16  BPB_BkBootSec;    // Sector of the duplicated boot record; best as 6.
 	u8   BPB_Reserved[12]; // Must be zero.
 	u8   BS_DrvNum;        // Seems irrelevant; best as 0x80.
-	u8   BS_Reserved1;     // Must be zero.
+	u8   BS_Reserved;      // Must be zero.
 	u8   BS_BootSig;       // Must be 0x29.
 	u32  BS_VolID;         // Irrelevant.
 	char BS_VolLab[11];    // Best as "NO NAME    ".
@@ -244,7 +244,7 @@ static const struct FAT32BootSector FAT32_BOOT_SECTOR PROGMEM =
 		.BPB_FSInfo     = FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET,
 		.BPB_BkBootSec  = FAT32_BACKUP_BOOT_SECTOR_OFFSET,
 		.BS_DrvNum      = 0x80,
-		.BS_Reserved1   = 1, // TODO should this be 1?
+		.BS_Reserved    = 1, // TODO should this be 1?
 		.BS_BootSig     = 0x29,
 		.BS_VolLab      = "NO NAME    ",
 		.BS_FilSysType  = "FAT32   ",
@@ -369,6 +369,16 @@ static const union FAT32DirEntry FAT32_SYSTEM_VOLUME_INFO_DIR_ENTRIES[16] PROGME
 		},
 	};
 static_assert(sizeof(FAT32_SYSTEM_VOLUME_INFO_DIR_ENTRIES) == 512);
+
+#define FAT32_SECTOR_XMDT(X) \
+	X(0                                                                                                                                             , FAT32_MASTER_BOOT_RECORD            ) \
+	X(FAT32_PARTITION_SECTOR_ADDRESS                                                                                                                , FAT32_BOOT_SECTOR                   ) \
+	X(FAT32_PARTITION_SECTOR_ADDRESS + FAT32_BACKUP_BOOT_SECTOR_OFFSET                                                                              , FAT32_BOOT_SECTOR                   ) \
+	X(FAT32_PARTITION_SECTOR_ADDRESS + FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET                                                                      , FAT32_FILE_STRUCTURE_INFO           ) \
+	X(FAT32_PARTITION_SECTOR_ADDRESS + FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET + FAT32_BACKUP_BOOT_SECTOR_OFFSET                                    , FAT32_FILE_STRUCTURE_INFO           ) \
+	X(FAT32_PARTITION_SECTOR_ADDRESS + FAT32_RESERVED_SECTOR_COUNT                                                                                  , FAT32_TABLE                         ) \
+	X(FAT32_PARTITION_SECTOR_ADDRESS + FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT                                                       , FAT32_ROOT_DIR_ENTRIES              ) \
+	X(FAT32_PARTITION_SECTOR_ADDRESS + FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT + (3 - FAT32_ROOT_CLUSTER) * FAT32_SECTORS_PER_CLUSTER, FAT32_SYSTEM_VOLUME_INFO_DIR_ENTRIES) \
 
 //
 // "usb.c"
