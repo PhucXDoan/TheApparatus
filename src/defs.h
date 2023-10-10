@@ -324,9 +324,10 @@ enum USBSetupRequestType // "bmRequestType" and "bRequest" bytes are combined. S
 	#define MAKE(BM_REQUEST_TYPE, B_REQUEST) ((BM_REQUEST_TYPE) | (((u16) (B_REQUEST)) << 8))
 
 	// Non-exhaustive. See: Standard Requests @ Source(2) @ Table(9-3) @ Page(250) & Source(2) @ Table(9-4) @ Page(251).
-	USBSetupRequestType_get_desc    = MAKE(0b10000000, 6),
-	USBSetupRequestType_set_address = MAKE(0b00000000, 5),
-	USBSetupRequestType_set_config  = MAKE(0b00000000, 9),
+	USBSetupRequestType_get_desc               = MAKE(0b10000000, 6),
+	USBSetupRequestType_set_address            = MAKE(0b00000000, 5),
+	USBSetupRequestType_set_config             = MAKE(0b00000000, 9),
+	USBSetupRequestType_endpoint_clear_feature = MAKE(0b00000010, 1),
 
 	// Non-exhaustive. See: CDC-Specific Requests @ Source(6) @ Table(44) @ AbsPage(62-63) & Source(6) @ Table(46) @ AbsPage(64-65).
 	USBSetupRequestType_cdc_get_line_coding        = MAKE(0b10100001, 0x21),
@@ -625,6 +626,8 @@ enum USBMSSCSIOpcode // See: Source(13) @ Section(3) @ Page(65) & Source(14).
 	USBMSSCSIOpcode_read_format_capacities = 0x23, // See: Source(14).
 	USBMSSCSIOpcode_read_capacity          = 0x25,
 	USBMSSCSIOpcode_read                   = 0x28,
+	USBMSSCSIOpcode_write                  = 0x2A,
+	USBMSSCSIOpcode_sync_cache             = 0x35,
 };
 
 enum USBMSState

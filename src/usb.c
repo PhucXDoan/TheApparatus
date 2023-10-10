@@ -240,6 +240,11 @@ ISR(USB_GEN_vect)
 									{
 										// TODO Apparently we just don't send anything back?
 									}
+									else
+									{
+										debug_pin_u8(1);
+										debug_unhandled;
+									}
 								} break;
 
 								case USBMSSCSIOpcode_inquiry: // See: Source(13) @ Section(3.6.1) @ Page(92).
@@ -268,6 +273,11 @@ ISR(USB_GEN_vect)
 										_usb_ms_scsi_info_data = USB_MS_SCSI_INQUIRY_DATA;
 										_usb_ms_scsi_info_size = sizeof(USB_MS_SCSI_INQUIRY_DATA);
 										static_assert(sizeof(USB_MS_SCSI_INQUIRY_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
+									}
+									else
+									{
+										debug_pin_u8(2);
+										debug_unhandled;
 									}
 								} break;
 
@@ -304,6 +314,11 @@ ISR(USB_GEN_vect)
 										_usb_ms_scsi_info_size = sizeof(USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA);
 										static_assert(sizeof(USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
 									}
+									else
+									{
+										debug_pin_u8(3);
+										debug_unhandled;
+									}
 								} break;
 
 								case USBMSSCSIOpcode_read_capacity: // See: Source(13) @ Section(3.22) @ Page(155).
@@ -319,6 +334,11 @@ ISR(USB_GEN_vect)
 										_usb_ms_scsi_info_data = USB_MS_SCSI_READ_CAPACITY_DATA;
 										_usb_ms_scsi_info_size = sizeof(USB_MS_SCSI_READ_CAPACITY_DATA);
 										static_assert(sizeof(USB_MS_SCSI_READ_CAPACITY_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
+									}
+									else
+									{
+										debug_pin_u8(4);
+										debug_unhandled;
 									}
 								} break;
 
@@ -343,6 +363,42 @@ ISR(USB_GEN_vect)
 										_usb_ms_sectors_left_to_send          = sector_count;
 										_usb_ms_sending_sector_fragment_index = 0;
 									}
+									else
+									{
+										debug_pin_u8(5);
+										debug_unhandled;
+									}
+								} break;
+
+								case USBMSSCSIOpcode_write: // TODO For some reason, this is sent when we open Device Monitoring Studio afterwards...?
+								{
+									debug_pin_u8(6);
+									debug_unhandled;
+								} break;
+
+								case USBMSSCSIOpcode_sync_cache:
+								{
+									if
+									(
+										!command.bmCBWFlags &&
+										command.bCBWCBLength == 10 &&
+										command.dCBWDataTransferLength == 0 &&
+										command.CBWCB[1] == 0 && !memcmp(command.CBWCB + 1, command.CBWCB + 2, countof(command.CBWCB) - 2)
+									)
+									{
+										// TODO Nothing?
+									}
+									else
+									{
+										debug_pin_u8(5);
+										debug_unhandled;
+									}
+								} break;
+
+								default:
+								{
+									debug_pin_u8(7);
+									debug_unhandled;
 								} break;
 							}
 
@@ -384,16 +440,19 @@ ISR(USB_GEN_vect)
 							}
 							else
 							{
+								debug_pin_u8(255);
 								debug_unhandled;
 							}
 						}
 						else // The CBW isn't valid or meaningful. See: Source(12) @ Section(6.2) @ Page(17).
 						{
+							debug_pin_u8(8);
 							debug_unhandled;
 						}
 					}
 					else // We supposedly received a CBW packet that's not 31 bytes in length. See: Source(12) @ Section(6.2.1) @ Page(17).
 					{
+						debug_pin_u8(9);
 						debug_unhandled;
 					}
 
@@ -577,6 +636,7 @@ ISR(USB_COM_vect)
 
 						default:
 						{
+							debug_pin_u8(10);
 							debug_unhandled;
 						} break;
 					}
@@ -593,6 +653,7 @@ ISR(USB_COM_vect)
 				}
 				else
 				{
+					debug_pin_u8(11);
 					debug_unhandled;
 				}
 
@@ -707,35 +768,35 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
-//			case USBSetupRequestType_endpoint_clear_feature:
-//			{
-//				if (request.endpoint_clear_feature.feature_selector == 0)
-//				{
-//					switch (request.endpoint_clear_feature.endpoint_index)
-//					{
-//						case USB_ENDPOINT_MS_IN | USB_ENDPOINT_MS_IN_TRANSFER_DIR:
-//						{
-//							UENUM   = USB_ENDPOINT_MS_OUT;
-//							UECONX |= (1 << STALLRQC);
-//						} break;
-//
-//						case USB_ENDPOINT_MS_OUT | USB_ENDPOINT_MS_OUT_TRANSFER_DIR:
-//						{
-//							UENUM   = USB_ENDPOINT_MS_OUT;
-//							UECONX |= (1 << STALLRQC);
-//						} break;
-//
-//						default:
-//						{
-//							debug_unhandled;
-//						} break;
-//					}
-//				}
-//				else
-//				{
-//					debug_unhandled;
-//				}
-//			} break;
+			case USBSetupRequestType_endpoint_clear_feature:
+			{
+				if (request.endpoint_clear_feature.feature_selector == 0)
+				{
+					switch (request.endpoint_clear_feature.endpoint_index)
+					{
+						case USB_ENDPOINT_MS_IN | USB_ENDPOINT_MS_IN_TRANSFER_DIR:
+						{
+							UENUM   = USB_ENDPOINT_MS_OUT;
+							UECONX |= (1 << STALLRQC);
+						} break;
+
+						case USB_ENDPOINT_MS_OUT | USB_ENDPOINT_MS_OUT_TRANSFER_DIR:
+						{
+							UENUM   = USB_ENDPOINT_MS_OUT;
+							UECONX |= (1 << STALLRQC);
+						} break;
+
+						default:
+						{
+							debug_unhandled;
+						} break;
+					}
+				}
+				else
+				{
+					debug_unhandled;
+				}
+			} break;
 
 			case USBSetupRequestType_cdc_get_line_coding:        // [Endpoint 0: Extraneous CDC-Specific Requests].
 			case USBSetupRequestType_cdc_set_control_line_state: // [Endpoint 0: Extraneous CDC-Specific Requests].

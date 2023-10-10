@@ -60,16 +60,28 @@ main(void)
 
 	sei();
 
+	debug_usb_diagnostic_signal_received = true;
+	u64 i = 0;
 	usb_init();
 
 	for(;;)
 	{
 	#if 1
-		char c;
-		if (debug_rx(&c, 1))
-		{
-			debug_tx_chars(&c, 1);
-		}
+		//char c;
+		//if (debug_rx(&c, 1))
+		//{
+		//	debug_tx_chars(&c, 1);
+		//}
+		debug_tx_u64(i);
+		debug_tx_cstr("meow\n");
+		debug_pin_set(10, true);
+		i += 1;
+		_delay_ms(500.0);
+		debug_tx_u64(i);
+		debug_tx_cstr("bark\n");
+		debug_pin_set(10, false);
+		i += 1;
+		_delay_ms(500.0);
 	#elif 0
 		usb_mouse_command(false, 127, 0);
 		_delay_ms(1000.0);
