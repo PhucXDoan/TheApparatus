@@ -69,19 +69,13 @@ main(void)
 				debug_halt(3);
 			}
 
-			if (!(packet.source < SPIPacketSource_COUNT))
-			{
-				debug_halt(4);
-			}
-
 			debug_tx_cstr("[Packet ");
 			debug_tx_u64(packet_index);
 			debug_tx_cstr(" | Line ");
 			debug_tx_u64(packet.line_number);
 			debug_tx_cstr(" | ");
 			debug_tx_u64(packet.byte_count);
-			debug_tx_cstr(" Byte(s)] ");
-			debug_tx_cstr(SPI_PACKET_SOURCE_NAMES[packet.source]);
+			debug_tx_cstr(" Byte(s)]");
 			for (u8 i = 0; i < packet.byte_count; i += 1)
 			{
 				if (i % 16)
@@ -95,7 +89,30 @@ main(void)
 
 				debug_tx_H8(packet.byte_buffer[i]);
 			}
-			debug_tx_cstr("\n\n");
+			debug_tx_cstr("\n");
+			if (packet.byte_count == 31 && *((u32*) packet.byte_buffer) == 0x43425355)
+			{
+				debug_tx_cstr("dCBWDataTransferLength : ");
+				debug_tx_u64(((u32*) packet.byte_buffer)[2]);
+				debug_tx_cstr("\n");
+
+				debug_tx_cstr("bmCBWFlags             : 0x");
+				debug_tx_H8(packet.byte_buffer[12]);
+				debug_tx_cstr("\n");
+
+				debug_tx_cstr("bCBWLUN                : ");
+				debug_tx_u64(packet.byte_buffer[13]);
+				debug_tx_cstr("\n");
+
+				debug_tx_cstr("bCBWCBLength           : ");
+				debug_tx_u64(packet.byte_buffer[14]);
+				debug_tx_cstr("\n");
+
+				debug_tx_cstr("CBWCB[0]               : 0x");
+				debug_tx_H8(packet.byte_buffer[15]);
+				debug_tx_cstr("\n");
+			}
+			debug_tx_cstr("\n");
 
 			packet_index += 1;
 		}

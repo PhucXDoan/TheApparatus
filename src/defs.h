@@ -1152,35 +1152,12 @@ enum PinState
 // General.
 //
 
-#define SPI_PACKET_SOURCE_XMDT(X) \
-	X(cdc_line_coding) \
-	X(ms_get_max_lun) \
-	X(endpoint_clear_feature) \
-	X(dflt_stall) \
-	X(dflt_unknown) \
-
-enum SPIPacketSource
-{
-	#define MAKE(NAME) SPIPacketSource_##NAME,
-	SPI_PACKET_SOURCE_XMDT(MAKE)
-	#undef MAKE
-	SPIPacketSource_COUNT
-};
-
-static char* const SPI_PACKET_SOURCE_NAMES[] =
-	{
-		#define MAKE(NAME) #NAME,
-		SPI_PACKET_SOURCE_XMDT(MAKE)
-		#undef MAKE
-	};
-
 struct SPIPacket
 {
-	u16                  line_number;
-	enum SPIPacketSource source;
-	u8                   byte_buffer[32];
-	u8                   byte_count;
-	u8                   checksum;
+	u16 line_number;
+	u8  byte_buffer[32];
+	u8  byte_count;
+	u8  checksum;
 };
 
 #if PROGRAM_DIPLOMAT

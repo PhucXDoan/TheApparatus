@@ -5,6 +5,7 @@
 static void
 uart_init(void)
 {
+#if 0
 	/*
 		The baud rate is calculated as follows for asynchronous mode without 2x-speed
 		(see table on page 203 in the datasheet):
@@ -31,6 +32,10 @@ uart_init(void)
 
 	// UCSRnC (USART-Control-Status-C register) controls the mode of the USART operation.
 	// By default, this is asynchronous USART with no parity bit and one stop bit (BN1 format).
+#endif
+
+	UBRR0  = 12;
+	UCSR0B = 1 << TXEN0;
 }
 
 #if DEBUG
