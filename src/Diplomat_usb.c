@@ -1,5 +1,37 @@
 #undef  PIN_HALT_SOURCE
-#define PIN_HALT_SOURCE PinHaltSource_usb
+#define PIN_HALT_SOURCE PinHaltSource_diplomat_usb
+
+#define debug_dump(SOURCE, BYTE_BUFFER, BYTE_COUNT) debug_dump_(__LINE__, SPIPacketSource_##SOURCE, (u8*) (BYTE_BUFFER), (BYTE_COUNT))
+static void
+debug_dump_(u16 line_number, enum SPIPacketSource source, u8* byte_buffer, u16 byte_count)
+{
+	if (spi_packet_writer_masked(1) == spi_packet_reader_masked(0))
+	{
+		debug_halt(1);
+	}
+	else
+	{
+		struct SPIPacket packet =
+			{
+				.line_number = line_number,
+				.source      = source,
+				.byte_count  = byte_count,
+			};
+
+		memcpy(packet.byte_buffer, byte_buffer, byte_count);
+
+		u8 accumulator = 0;
+		for (u8 i = 0; i < sizeof(packet); i += 1)
+		{
+			accumulator += ((u8*) &packet)[i];
+		}
+
+		packet.checksum = -accumulator;
+
+		spi_packet_buffer[spi_packet_writer_masked(0)] = packet;
+		spi_packet_writer += 1;
+	}
+}
 
 // HELD must evaluate to 0 or 1, DEST_X must be within [0, 127], DEST_Y must be within [0, 255]. See: [Mouse Commands].
 #define usb_mouse_command(HELD, DEST_X, DEST_Y) usb_mouse_command_(((HELD) << 15) | ((DEST_X) << 8) | (DEST_Y))
@@ -242,7 +274,6 @@ ISR(USB_GEN_vect)
 									}
 									else
 									{
-										debug_pin_u8(1);
 										debug_unhandled;
 									}
 								} break;
@@ -276,7 +307,6 @@ ISR(USB_GEN_vect)
 									}
 									else
 									{
-										debug_pin_u8(2);
 										debug_unhandled;
 									}
 								} break;
@@ -316,7 +346,6 @@ ISR(USB_GEN_vect)
 									}
 									else
 									{
-										debug_pin_u8(3);
 										debug_unhandled;
 									}
 								} break;
@@ -337,7 +366,6 @@ ISR(USB_GEN_vect)
 									}
 									else
 									{
-										debug_pin_u8(4);
 										debug_unhandled;
 									}
 								} break;
@@ -365,14 +393,12 @@ ISR(USB_GEN_vect)
 									}
 									else
 									{
-										debug_pin_u8(5);
 										debug_unhandled;
 									}
 								} break;
 
 								case USBMSSCSIOpcode_write: // TODO For some reason, this is sent when we open Device Monitoring Studio afterwards...?
 								{
-									debug_pin_u8(6);
 									debug_unhandled;
 								} break;
 
@@ -390,14 +416,12 @@ ISR(USB_GEN_vect)
 									}
 									else
 									{
-										debug_pin_u8(5);
 										debug_unhandled;
 									}
 								} break;
 
 								default:
 								{
-									debug_pin_u8(7);
 									debug_unhandled;
 								} break;
 							}
@@ -440,19 +464,16 @@ ISR(USB_GEN_vect)
 							}
 							else
 							{
-								debug_pin_u8(255);
 								debug_unhandled;
 							}
 						}
 						else // The CBW isn't valid or meaningful. See: Source(12) @ Section(6.2) @ Page(17).
 						{
-							debug_pin_u8(8);
 							debug_unhandled;
 						}
 					}
 					else // We supposedly received a CBW packet that's not 31 bytes in length. See: Source(12) @ Section(6.2.1) @ Page(17).
 					{
-						debug_pin_u8(9);
 						debug_unhandled;
 					}
 
@@ -586,7 +607,6 @@ _usb_endpoint_0_in_pgm(const u8* payload_data, u16 payload_length)
 
 ISR(USB_COM_vect)
 { // See: [USB Endpoint Interrupt Routine].
-
 	UENUM = USB_ENDPOINT_DFLT;
 	if (UEINTX & (1 << RXSTPI)) // [Endpoint 0: SETUP-Transactions]. // TODO Remove this if-statement if we in the end aren't adding any other interrupt source.
 	{
@@ -636,7 +656,6 @@ ISR(USB_COM_vect)
 
 						default:
 						{
-							debug_pin_u8(10);
 							debug_unhandled;
 						} break;
 					}
@@ -653,7 +672,6 @@ ISR(USB_COM_vect)
 				}
 				else
 				{
-					debug_pin_u8(11);
 					debug_unhandled;
 				}
 
@@ -724,6 +742,8 @@ ISR(USB_COM_vect)
 						((u8*) &desired_line_coding)[i] = UEDATX;
 					}
 
+					debug_dump(cdc_line_coding, &desired_line_coding, sizeof(desired_line_coding));
+
 					// These two lines can't be combined. I'm guessing because the USB hardware will get confused and think whatever's in
 					// endpoint 0's buffer from the OUT-transaction is what we want to send to the host for the IN-transaction.
 					UEINTX &= ~(1 << RXOUTI); // Let the hardware know that we finished copying the OUT-transaction's data-packet.
@@ -744,16 +764,23 @@ ISR(USB_COM_vect)
 							debug_usb_diagnostic_signal_received = true;
 						} break;
 						#endif
+
+						default:
+						{
+						} break;
 					}
 				}
 				else
 				{
 					UECONX |= (1 << STALLRQ);
+					debug_unhandled;
 				}
 			} break;
 
 			case USBSetupRequestType_ms_get_max_lun: // [Endpoint 0: MS-Specific GetMaxLUN].
 			{
+				debug_dump(ms_get_max_lun, &request, sizeof(request));
+
 				while (!(UEINTX & ((1 << RXOUTI) | (1 << TXINI))));
 
 				if (UEINTX & (1 << TXINI))
@@ -770,6 +797,8 @@ ISR(USB_COM_vect)
 
 			case USBSetupRequestType_endpoint_clear_feature:
 			{
+				debug_dump(endpoint_clear_feature, &request, sizeof(request));
+
 				if (request.endpoint_clear_feature.feature_selector == 0)
 				{
 					switch (request.endpoint_clear_feature.endpoint_index)
@@ -802,11 +831,13 @@ ISR(USB_COM_vect)
 			case USBSetupRequestType_cdc_set_control_line_state: // [Endpoint 0: Extraneous CDC-Specific Requests].
 			case USBSetupRequestType_hid_set_idle:               // [Endpoint 0: HID-Specific SetIdle].
 			{
+				debug_dump(dflt_stall, &request, sizeof(request));
 				UECONX |= (1 << STALLRQ);
 			} break;
 
 			default:
 			{
+				debug_dump(dflt_unknown, &request, sizeof(request));
 				UECONX |= (1 << STALLRQ);
 				debug_unhandled;
 			} break;
@@ -851,6 +882,19 @@ debug_tx_u64(u64 value)
 	{
 		char buffer[20];
 		u8   length = serialize_u64(buffer, countof(buffer), value);
+		debug_tx_chars(buffer, length);
+	}
+}
+#endif
+
+#if DEBUG
+static void
+debug_tx_i64(i64 value)
+{
+	if (debug_usb_diagnostic_signal_received)
+	{
+		char buffer[20];
+		u8   length = serialize_i64(buffer, countof(buffer), value);
 		debug_tx_chars(buffer, length);
 	}
 }

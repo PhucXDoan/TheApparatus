@@ -4,6 +4,7 @@
 #define pin_high(P)   concat(pin_high_  , P)()
 #define pin_read(P)   concat(pin_read_  , P)()
 
+// The X-macro data-table maps pin numbers to corresponding data-direction ports and bit-index. See: Source(3) & Source(18).
 #define COMMON(NAME, BODY) __attribute__((always_inline)) static inline void NAME(void) { BODY; }
 	#define PIN_INPUT(P, X, N)  COMMON(pin_input_##P , DDR##X  &= ~(1 << DD##X##N  ))
 	#define PIN_OUTPUT(P, X, N) COMMON(pin_output_##P, DDR##X  |=  (1 << DD##X##N  ))
@@ -222,7 +223,7 @@ debug_pin_read(u8 pin)
 }
 #endif
 
-#if DEBUG
+#if DEBUG && DEBUG_PIN_U8_START
 static void
 debug_pin_u8(u8 value)
 {

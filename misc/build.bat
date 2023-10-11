@@ -8,7 +8,7 @@ set AVR_GCC_PRACTICAL_DISABLED_WARNINGS=^
 	-Wno-unused-function -Wno-implicit-fallthrough -Wno-missing-field-initializers
 
 set AVR_GCC_DEVELOPMENT_DISABLED_WARNINGS=^
-	-Wno-unused-label -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-parameter
+	-Wno-unused-label -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-comment
 
 set AVR_GCC_FLAGS= ^
 	-std=c2x -Os -D DEBUG=1 -fshort-enums -I W:/ -fno-strict-aliasing ^
@@ -22,6 +22,27 @@ REM that's what's really happening here.
 REM
 REM (1) Bug Thread @ URL(gcc.gnu.org/bugzilla//show_bug.cgi?id=105523) (Accessed: September 26, 2023).
 
+set DIPLOMAT_BOOTLOADER_BAUD_SIGNAL=1200
+set DIPLOMAT_DIAGNOSTIC_BAUD_SIGNAL=1201
+set DIPLOMAT_BOOTLOADER_COM=4
+set DIPLOMAT_DIAGNOSTIC_COM=10
+set DIPLOMAT_PROGRAMMER=avr109
+set DIPLOMAT_MCU=ATmega32U4
+set DIPLOMAT_AVR_GCC_ARGS= ^
+	!AVR_GCC_FLAGS! -mmcu=!DIPLOMAT_MCU! ^
+	-D PROGRAM_DIPLOMAT=1 ^
+	-D BOOTLOADER_BAUD_SIGNAL=!DIPLOMAT_BOOTLOADER_BAUD_SIGNAL! ^
+	-D DIAGNOSTIC_BAUD_SIGNAL=!DIPLOMAT_DIAGNOSTIC_BAUD_SIGNAL!
+
+set NERD_DIAGNOSTIC_BAUD=9600
+set NERD_BOOTLOADER_COM=12
+set NERD_DIAGNOSTIC_COM=12
+set NERD_PROGRAMMER=wiring
+set NERD_MCU=ATmega2560
+set NERD_AVR_GCC_ARGS= ^
+	!AVR_GCC_FLAGS! -mmcu=!NERD_MCU! ^
+	-D PROGRAM_NERD=1
+
 if not exist W:\build\ (
 	mkdir W:\build\
 )
@@ -29,108 +50,74 @@ if not exist W:\build\ (
 pushd W:\build\
 	del *.s *.o *.elf *.hex > nul 2>&1
 
-	set BOOTLOADER_BAUD_SIGNAL=1200
-	set DIAGNOSTIC_BAUD_SIGNAL=1201
-
-	set PROGRAM_MCU=ATmega32U4
-	set PROGRAM_NAME=Diplomat
-	set PROGRAMMER=avr109
-	set BOOTLOADER_COM=4
-	set DIAGNOSTIC_COM=10
-
 	REM
-	REM Compile C source code into ELF (describes memory layout of main program).
+	REM Compile C source code into assembly and ELF.
 	REM
 
-	set AVR_GCC_ARGS= ^
-		!AVR_GCC_FLAGS! -mmcu=!PROGRAM_MCU! ^
-		-D BOOTLOADER_BAUD_SIGNAL=!BOOTLOADER_BAUD_SIGNAL! ^
-		-D DIAGNOSTIC_BAUD_SIGNAL=!DIAGNOSTIC_BAUD_SIGNAL!
+	avr-gcc !DIPLOMAT_AVR_GCC_ARGS! -S -fverbose-asm         W:\src\Diplomat.c
+	avr-gcc !DIPLOMAT_AVR_GCC_ARGS! -o W:\build\Diplomat.elf W:\src\Diplomat.c
+	if not !ERRORLEVEL! == 0 (
+		goto ABORT
+	)
 
-	avr-gcc !AVR_GCC_ARGS! -S -fverbose-asm               W:\src\!PROGRAM_NAME!.c
-	avr-gcc !AVR_GCC_ARGS! -o W:\build\!PROGRAM_NAME!.elf W:\src\!PROGRAM_NAME!.c
+	avr-gcc !NERD_AVR_GCC_ARGS! -S -fverbose-asm     W:\src\Nerd.c
+	avr-gcc !NERD_AVR_GCC_ARGS! -o W:\build\Nerd.elf W:\src\Nerd.c
 	if not !ERRORLEVEL! == 0 (
 		goto ABORT
 	)
 
 	REM
-	REM Convert ELF into HEX (raw instructions for the MCU to execute).
+	REM Convert ELF into HEX.
 	REM
 
-	avr-objcopy -O ihex -j .text -j .data !PROGRAM_NAME!.elf !PROGRAM_NAME!.hex
+	avr-objcopy -O ihex -j .text -j .data Diplomat.elf Diplomat.hex
+	if not !ERRORLEVEL! == 0 (
+		goto ABORT
+	)
+
+	avr-objcopy -O ihex -j .text -j .data Nerd.elf Nerd.hex
 	if not !ERRORLEVEL! == 0 (
 		goto ABORT
 	)
 
 	REM
-	REM Check if the bootloader's COM is available.
+	REM Find bootloader COM, flash, and start PuTTY.
 	REM
 
-	mode | findstr "COM!BOOTLOADER_COM!:" > nul
+	mode | findstr "COM!NERD_BOOTLOADER_COM!:" > nul
 	if !ERRORLEVEL! == 0 (
-		goto BOOTLOADER_COM_FOUND
+		set AVRDUDE_ARGS=-p !NERD_MCU! -c !NERD_PROGRAMMER! -V -P COM!NERD_BOOTLOADER_COM! -D -Uflash:w:Nerd.hex
+		set PUTTY_ARGS=-serial COM!NERD_DIAGNOSTIC_COM! -sercfg !NERD_DIAGNOSTIC_BAUD!,8,n,1,N
+		goto UPLOAD
 	)
 
-	REM
-	REM Send BOOTLOADER_BAUD_SIGNAL to diagnostic COM if available; this should open up bootloader COM.
-	REM
-
-	mode | findstr "COM!DIAGNOSTIC_COM!:" > nul
+	mode | findstr "COM!DIPLOMAT_DIAGNOSTIC_COM!:" > nul
 	if !ERRORLEVEL! == 0 (
-		mode COM!DIAGNOSTIC_COM!: BAUD=!BOOTLOADER_BAUD_SIGNAL! > nul
-	) else (
-		goto NO_BOOTLOADER_FOUND
+		mode COM!DIPLOMAT_DIAGNOSTIC_COM!: BAUD=!DIPLOMAT_BOOTLOADER_BAUD_SIGNAL! > nul
 	)
 
-	REM
-	REM Wait for booloader.
-	REM The "ping" is have a slight delay. Yes. Windows Batch programming sucks.
-	REM
-
-	for /L %%n in (1,1,100) do (
-		mode | findstr "COM!BOOTlOADER_COM!:" > nul
+	for /L %%n in (1,1,64) do (
+		mode | findstr "COM!DIPLOMAT_BOOTLOADER_COM!:" > nul
 		if !ERRORLEVEL! == 0 (
-			goto BOOTLOADER_COM_FOUND
+			set AVRDUDE_ARGS=-p !DIPLOMAT_MCU! -c !DIPLOMAT_PROGRAMMER! -V -P COM!DIPLOMAT_BOOTLOADER_COM! -D -Uflash:w:Diplomat.hex
+			REM set PUTTY_ARGS=-serial COM!DIPLOMAT_DIAGNOSTIC_COM! -sercfg !DIPLOMAT_DIAGNOSTIC_BAUD_SIGNAL!,8,n,1,N
+			goto UPLOAD
 		) else (
-			ping 127.0.0.1 -n 1 -w 500 >nul
+			ping 127.0.0.1 -n 1 -w 500 > nul
 		)
 	)
 
-	REM
-	REM Abort if there's no bootloader COM.
-	REM
-
-	:NO_BOOTLOADER_FOUND
 	echo No bootloader found.
 	goto ABORT
 
-	REM
-	REM Flash the MCU.
-	REM
-
-	:BOOTLOADER_COM_FOUND
-	avrdude -p !PROGRAM_MCU! -c !PROGRAMMER! -V -P COM!BOOTLOADER_COM! -D -Uflash:w:!PROGRAM_NAME!.hex
+	:UPLOAD
+	avrdude !AVRDUDE_ARGS!
 	if not !ERRORLEVEL! == 0 (
 		goto ABORT
 	)
-
-REM	REM
-REM	REM Wait for diagnostic COM to appear and open PuTTY.
-REM	REM
-REM
-REM	for /L %%n in (1,1,500) do (
-REM		mode | findstr "COM!DIAGNOSTIC_COM!:" > nul
-REM		if !ERRORLEVEL! == 0 (
-REM			goto BREAK_WAITING_FOR_DIAGNOSTIC_COM
-REM		) else (
-REM			ping 127.0.0.1 -n 1 -w 500 >nul
-REM		)
-REM	)
-REM	echo No diagnostic COM found.
-REM	goto ABORT
-REM	:BREAK_WAITING_FOR_DIAGNOSTIC_COM
-REM
-REM	start putty.exe -load "Default Settings" -serial COM!DIAGNOSTIC_COM! -sercfg !DIAGNOSTIC_BAUD_SIGNAL!,8,n,1,N
+	if not "!PUTTY_ARGS!" == "" (
+		start putty.exe -load "Default Settings" !PUTTY_ARGS!
+	)
 
 	del *.o > nul 2>&1
 	:ABORT
@@ -140,3 +127,4 @@ REM TODO I can't find much information online at all about what bootloader is us
 REM the Arduino Leonardo or ATmega32U4 variants. The IDE calls AVRDUDE with AVR109 as the programmer
 REM but other than that, there's no official documentation I could find for this. Perhaps it's what
 REM every ATmega32U4 has for the bootloader (if installed)?
+REM Update: What's wiring programmer??!
