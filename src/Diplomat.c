@@ -1,4 +1,8 @@
 #define F_CPU 16'000'000
+#define PROGRAM_DIPLOMAT    1
+#define PIN_USB_SPINLOCKING 11
+#define PIN_LEDS_SS         2
+#define PIN_DUMP_SS         3
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
@@ -27,28 +31,15 @@ main(void)
 	pin_output(PIN_SPI_SS);
 	pin_output(PIN_SPI_MOSI);
 	pin_output(PIN_SPI_CLK);
-	pin_output(2);
-	pin_high(2);
+	pin_output(PIN_LEDS_SS);
+	pin_output(PIN_DUMP_SS);
+	pin_low(PIN_LEDS_SS);
+	pin_high(PIN_DUMP_SS);
 	SPCR = (1 << SPE) | (1 << MSTR) | (1 << SPR1) | (1 << SPR0);
 
 	usb_init();
 
-	for (;;)
-	{
-		if (spi_packet_reader_masked(0) != spi_packet_writer_masked(0))
-		{
-			struct SPIPacket packet = spi_packet_buffer[spi_packet_reader_masked(0)];
-			spi_packet_reader += 1;
-
-			pin_low(2);
-			for (u8 i = 0; i < sizeof(struct SPIPacket); i += 1)
-			{
-				SPDR = ((u8*) &packet)[i];
-				while (!(SPSR & (1 << SPIF)));
-			}
-			pin_high(2);
-		}
-	}
+	for(;;);
 }
 
 //

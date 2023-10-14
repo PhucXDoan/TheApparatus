@@ -29,21 +29,21 @@
 PIN_XMDT(PIN_READ)
 #undef PIN_READ
 
-// Begins with very rapid flashes, followed by quick pulses indicating the callee's file.
+#if PROGRAM_DIPLOMAT
 __attribute__((noreturn))
 static void
-error(enum PinHaltSource source)
+error(enum PinHaltSource source) // TODO
 {
 	cli();
 
-	pin_output(PIN_HALT);
+	DDRD |= (1 << DDD5);
 	for (;;)
 	{
 		for (u8 i = 0; i < 8; i += 1)
 		{
-			pin_high(PIN_HALT);
+			PORTD |= (1 << PORTD5);
 			_delay_ms(25.0);
-			pin_low(PIN_HALT);
+			PORTD &= ~(1 << PORTD5);
 			_delay_ms(25.0);
 		}
 
@@ -51,53 +51,38 @@ error(enum PinHaltSource source)
 
 		for (u8 i = 0; i < source; i += 1)
 		{
-			pin_high(PIN_HALT);
+			PORTD |= (1 << PORTD5);
 			_delay_ms(150.0);
-			pin_low(PIN_HALT);
-			_delay_ms(150.0);
-		}
-
-		_delay_ms(250.0);
-	}
-}
-#define error error(PIN_HALT_SOURCE)
-
-#if DEBUG
-// Same as error, but the output is inverted where it's pulses of darkess instead.
-__attribute__((noreturn))
-static void
-debug_unhandled(enum PinHaltSource source)
-{
-	cli();
-
-	pin_output(PIN_HALT);
-	for (;;)
-	{
-		for (u8 i = 0; i < 8; i += 1)
-		{
-			pin_low(PIN_HALT);
-			_delay_ms(25.0);
-			pin_high(PIN_HALT);
-			_delay_ms(25.0);
-		}
-
-		_delay_ms(250.0);
-
-		for (u8 i = 0; i < source; i += 1)
-		{
-			pin_low(PIN_HALT);
-			_delay_ms(150.0);
-			pin_high(PIN_HALT);
+			PORTD &= ~(1 << PORTD5);
 			_delay_ms(150.0);
 		}
 
 		_delay_ms(250.0);
 	}
 }
-#define debug_unhandled debug_unhandled(PIN_HALT_SOURCE)
 #endif
 
-#if DEBUG
+#if PROGRAM_NERD
+__attribute__((noreturn))
+static void
+error(enum PinHaltSource source) // TODO
+{
+	cli();
+
+	pin_output(13);
+	for (;;)
+	{
+		pin_high(13);
+		_delay_ms(25.0);
+		pin_low(13);
+		_delay_ms(25.0);
+	}
+}
+#endif
+
+#define error error(PIN_HALT_SOURCE)
+
+#if DEBUG // TODO
 // Long pulse followed by some amount of pairs of flashes.
 __attribute__((noreturn))
 static void
@@ -105,60 +90,24 @@ debug_halt(u8 amount)
 {
 	cli();
 
-	pin_output(PIN_HALT);
+	DDRB |= (1 << DDB0);
 	for (;;)
 	{
-		pin_high(PIN_HALT);
+		PORTB |= (1 << PORTB0);
 		_delay_ms(2000.0);
-		pin_low(PIN_HALT);
+		PORTB &= ~(1 << PORTB0);
 		_delay_ms(1000.0);
 
 		for (u8 i = 0; i < amount; i += 1)
 		{
-			pin_high(PIN_HALT);
+			PORTB |= (1 << PORTB0);
 			_delay_ms(25.0);
-			pin_low(PIN_HALT);
+			PORTB &= ~(1 << PORTB0);
 			_delay_ms(25.0);
-			pin_high(PIN_HALT);
+			PORTB |= (1 << PORTB0);
 			_delay_ms(25.0);
-			pin_low(PIN_HALT);
+			PORTB &= ~(1 << PORTB0);
 			_delay_ms(1000.0);
-		}
-	}
-}
-#endif
-
-#if DEBUG
-static void
-// Long pulse followed by long to indicate 1 and short to indicate 0, going from MSb to LSb.
-debug_halt_u8(u8 value)
-{
-	cli();
-
-	pin_output(PIN_HALT);
-	for (;;)
-	{
-		pin_high(PIN_HALT);
-		_delay_ms(2000.0);
-		pin_low(PIN_HALT);
-		_delay_ms(1000.0);
-
-		for (u8 i = 0; i < 8; i += 1)
-		{
-			if (value & (1 << (7 - i)))
-			{
-				pin_high(PIN_HALT);
-				_delay_ms(500.0);
-				pin_low(PIN_HALT);
-				_delay_ms(500.0);
-			}
-			else
-			{
-				pin_high(PIN_HALT);
-				_delay_ms(50.0);
-				pin_low(PIN_HALT);
-				_delay_ms(950.0);
-			}
 		}
 	}
 }
@@ -223,15 +172,71 @@ debug_pin_read(u8 pin)
 }
 #endif
 
-#if DEBUG && DEBUG_PIN_U8_START
+#if DEBUG && PROGRAM_DIPLOMAT
 static void
-debug_pin_u8(u8 value)
+debug_u16(u16 value)
 {
-	for (u8 i = 0; i < 8; i += 1)
+	pin_high(PIN_LEDS_SS);
+	_delay_ms(1.0);
+	SPDR = (value >> 8) & 0xFF;
+	while (!(SPSR & (1 << SPIF)));
+	SPDR = (value >> 0) & 0xFF;
+	while (!(SPSR & (1 << SPIF)));
+	pin_low(PIN_LEDS_SS);
+	_delay_ms(1.0);
+}
+#endif
+
+#if DEBUG && PROGRAM_DIPLOMAT
+static void
+debug_dump(u8* data, u16 length)
+{
+	pin_low(PIN_DUMP_SS);
+	_delay_ms(1.0);
+	for (u16 i = 0; i < length; i += 1)
 	{
-		debug_pin_set(DEBUG_PIN_U8_START + i, (value >> i) & 1);
+		SPDR = data[i];
+		while (!(SPSR & (1 << SPIF)));
+		_delay_ms(1.0);
+	}
+	pin_high(PIN_DUMP_SS);
+}
+#endif
+
+#if DEBUG && PROGRAM_DIPLOMAT
+__attribute__((noreturn))
+static void
+debug_unhandled(u16 line_number, enum PinHaltSource source)
+{
+	cli();
+
+	debug_u16(line_number);
+
+	DDRB |= (1 << DDB0);
+	for (;;)
+	{
+		for (u8 i = 0; i < 8; i += 1)
+		{
+			PORTB |= (1 << PORTB0);
+			_delay_ms(25.0);
+			PORTB &= ~(1 << PORTB0);
+			_delay_ms(25.0);
+		}
+
+		_delay_ms(250.0);
+
+		for (u8 i = 0; i < source; i += 1)
+		{
+			PORTB |= (1 << PORTB0);
+			_delay_ms(150.0);
+			PORTB &= ~(1 << PORTB0);
+			_delay_ms(150.0);
+		}
+
+		_delay_ms(250.0);
 	}
 }
+#define debug_unhandled debug_unhandled(__LINE__, PIN_HALT_SOURCE)
 #endif
 
 //

@@ -84,7 +84,7 @@ static void
 debug_tx_H8(u8 value)
 {
 	char digits[2] = {0};
-	digits[0] = ((value >> 0) & 0x0F) < 10 ? '0' + ((value >> 0) & 0x0F) : 'A' + (((value >> 0) & 0x0F) - 10);
-	digits[1] = ((value >> 4) & 0x0F) < 10 ? '0' + ((value >> 4) & 0x0F) : 'A' + (((value >> 4) & 0x0F) - 10);
+	digits[0] = ((value >> 4) & 0x0F) < 10 ? '0' + ((value >> 4) & 0x0F) : 'A' + (((value >> 4) & 0x0F) - 10);
+	digits[1] = ((value >> 0) & 0x0F) < 10 ? '0' + ((value >> 0) & 0x0F) : 'A' + (((value >> 0) & 0x0F) - 10);
 	debug_tx_chars(digits, countof(digits));
 }

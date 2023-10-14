@@ -1,6 +1,8 @@
 #define F_CPU 16'000'000
+#define PROGRAM_NERD 1
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <avr/pgmspace.h>
 #include <util/delay.h>
 #include <stdint.h>
 #include <string.h>
@@ -8,31 +10,25 @@
 #include "misc.c"
 #include "pin.c"
 #include "Nerd_uart.c"
-#include "Nerd_lcd.c"
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE PinHaltSource_nerd
 
-static u8 spi_packet_byte_index = 0;
+static volatile char spi_buffer[256] = {0};
+static volatile u8   spi_writer      = 0;
+static volatile u8   spi_reader      = 0;
 
 ISR(SPI_STC_vect)
 {
-	if (spi_packet_writer_masked(1) == spi_packet_reader_masked(0))
+	if (spi_writer + 1 == spi_reader)
 	{
-		debug_halt(1);
+		error;
 	}
 	else
 	{
-		((u8*) &spi_packet_buffer[spi_packet_writer_masked(0)])[spi_packet_byte_index] = SPDR;
-
-		if (spi_packet_byte_index == sizeof(struct SPIPacket) - 1)
-		{
-			spi_packet_byte_index  = 0;
-			spi_packet_writer     += 1;
-		}
-		else
-		{
-			spi_packet_byte_index += 1;
-		}
+		pin_high(13);
+		spi_buffer[spi_writer] = SPDR;
+		spi_writer += 1;
+		pin_low(13);
 	}
 }
 
@@ -43,78 +39,35 @@ main(void)
 
 	uart_init();
 
-	pin_output(PIN_SPI_MOSI);
+	pin_output(13);
+	pin_output(PIN_SPI_MISO);
 	SPCR = (1 << SPIE) | (1 << SPE) | (1 << SPR1) | (1 << SPR0);
 
-	u64 packet_index = 0;
+	u8 column = 0;
 	for (;;)
 	{
-		if (spi_packet_reader_masked(0) != spi_packet_writer_masked(0))
+		if (spi_reader != spi_writer)
 		{
-			struct SPIPacket packet = spi_packet_buffer[spi_packet_reader_masked(0)];
-			spi_packet_reader += 1;
+			char byte = spi_buffer[spi_reader];
+			spi_reader += 1;
 
-			u8 accumulator = 0;
-			for (u8 i = 0; i < sizeof(packet); i += 1)
+			debug_tx_H8(byte);
+
+			if (column == 15)
 			{
-				accumulator += ((u8*) &packet)[i];
-			}
-			if (accumulator)
-			{
-				debug_halt(2);
-			}
-
-			if (packet.byte_count > countof(packet.byte_buffer))
-			{
-				debug_halt(3);
-			}
-
-			debug_tx_cstr("[Packet ");
-			debug_tx_u64(packet_index);
-			debug_tx_cstr(" | Line ");
-			debug_tx_u64(packet.line_number);
-			debug_tx_cstr(" | ");
-			debug_tx_u64(packet.byte_count);
-			debug_tx_cstr(" Byte(s)]");
-			for (u8 i = 0; i < packet.byte_count; i += 1)
-			{
-				if (i % 16)
-				{
-					debug_tx_cstr(" ");
-				}
-				else
-				{
-					debug_tx_cstr("\n");
-				}
-
-				debug_tx_H8(packet.byte_buffer[i]);
-			}
-			debug_tx_cstr("\n");
-			if (packet.byte_count == 31 && *((u32*) packet.byte_buffer) == 0x43425355)
-			{
-				debug_tx_cstr("dCBWDataTransferLength : ");
-				debug_tx_u64(((u32*) packet.byte_buffer)[2]);
-				debug_tx_cstr("\n");
-
-				debug_tx_cstr("bmCBWFlags             : 0x");
-				debug_tx_H8(packet.byte_buffer[12]);
-				debug_tx_cstr("\n");
-
-				debug_tx_cstr("bCBWLUN                : ");
-				debug_tx_u64(packet.byte_buffer[13]);
-				debug_tx_cstr("\n");
-
-				debug_tx_cstr("bCBWCBLength           : ");
-				debug_tx_u64(packet.byte_buffer[14]);
-				debug_tx_cstr("\n");
-
-				debug_tx_cstr("CBWCB[0]               : 0x");
-				debug_tx_H8(packet.byte_buffer[15]);
+				column = 0;
 				debug_tx_cstr("\n");
 			}
-			debug_tx_cstr("\n");
-
-			packet_index += 1;
+			else if (column == 7)
+			{
+				column += 1;
+				debug_tx_cstr("  ");
+			}
+			else
+			{
+				column += 1;
+				debug_tx_cstr(" ");
+			}
 		}
 	}
 }
