@@ -80,6 +80,7 @@ debug_tx_i64(i64 value)
 }
 #endif
 
+#if DEBUG
 static void
 debug_tx_H8(u8 value)
 {
@@ -88,3 +89,4 @@ debug_tx_H8(u8 value)
 	digits[1] = ((value >> 0) & 0x0F) < 10 ? '0' + ((value >> 0) & 0x0F) : 'A' + (((value >> 0) & 0x0F) - 10);
 	debug_tx_chars(digits, countof(digits));
 }
+#endif

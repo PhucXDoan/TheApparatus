@@ -1,8 +1,9 @@
-#define F_CPU 16'000'000
-#define PROGRAM_DIPLOMAT    1
-#define PIN_USB_SPINLOCKING 11
-#define PIN_LEDS_SS         2
-#define PIN_DUMP_SS         3
+#define F_CPU               16'000'000
+#define PROGRAM_DIPLOMAT    true
+#define BOARD_PRO_MICRO     true
+#define PIN_DUMP_SS         2
+#define PIN_SD_SS           3
+#define PIN_USB_SPINLOCKING 4
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
@@ -13,9 +14,11 @@
 #include "defs.h"
 #include "misc.c"
 #include "pin.c"
+#include "spi.c"
 #include "Diplomat_usb.c"
+#include "sd.c"
 #undef  PIN_HALT_SOURCE
-#define PIN_HALT_SOURCE PinHaltSource_diplomat
+#define PIN_HALT_SOURCE HaltSource_diplomat
 
 int
 main(void)
@@ -27,17 +30,43 @@ main(void)
 	}
 
 	sei();
-
-	pin_output(PIN_SPI_SS);
-	pin_output(PIN_SPI_MOSI);
-	pin_output(PIN_SPI_CLK);
-	pin_output(PIN_LEDS_SS);
-	pin_output(PIN_DUMP_SS);
-	pin_low(PIN_LEDS_SS);
-	pin_high(PIN_DUMP_SS);
-	SPCR = (1 << SPE) | (1 << MSTR) | (1 << SPR1) | (1 << SPR0);
-
+	spi_init();
 	usb_init();
+	sd_init();
+
+	u8 sector[512] = {0};
+	if (_sd_read_sector(sector, 0) == _sd_DATA_BLOCK_RESPONSE)
+	{
+		for (u16 i = 0; i < sizeof(sector); i += 1)
+		{
+			if (i % 16 == 0)
+			{
+				debug_tx_cstr("\n");
+			}
+			else
+			{
+				debug_tx_cstr(" ");
+			}
+			debug_tx_H8(sector[i]);
+		}
+	}
+	else
+	{
+		debug_unhandled;
+	}
+
+//	u16 counter = 0;
+//	for (;;)
+//	{
+//		char input = {0};
+//		while (!debug_rx(&input, 1));
+//		debug_tx_u64(counter);
+//		debug_tx_cstr(" : 0x");
+//		debug_tx_H8(input);
+//		debug_tx_cstr("\n");
+//		debug_u16(counter);
+//		counter += 1;
+//	}
 
 	for(;;);
 }

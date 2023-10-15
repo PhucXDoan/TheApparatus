@@ -25,51 +25,41 @@ typedef int64_t  b64;
 // "pin.c"
 //
 
-enum PinHaltSource
+enum HaltSource
 {
-	PinHaltSource_diplomat     = 0,
-	PinHaltSource_diplomat_usb = 1,
-	PinHaltSource_nerd         = 2,
+	HaltSource_diplomat     = 0,
+	HaltSource_diplomat_usb = 1,
+	HaltSource_nerd         = 2,
+	HaltSource_sd           = 3,
 };
 
-enum PinState
-{
-	PinState_false    = 0b00, // Aliasing(false). Sink to GND.
-	PinState_true     = 0b01, // Aliasing(true). Source of 5 volts.
-	PinState_floating = 0b10, // Default state; reading from this pin is unreliable.
-	PinState_input    = 0b11, // Pull-up resistor enabled for reliable reads. A truthy value will be read unless it is tied to GND strongly enough.
-};
-
-#if __AVR_ATmega32U4__ // TODO Pin numbers are too wacky. Need to clean that up.
-	#define PIN_XMDT(X) \
-		X( 0, D, 2) X( 1, D, 3) X( 2, D, 1) X( 3, D, 0) X( 4, D, 4) X( 5, C, 6) \
-		X( 6, D, 7) X( 7, E, 6) X( 8, B, 4) X( 9, B, 5) X(10, B, 6) X(11, B, 7) \
-		X(12, D, 6) X(13, C, 7) X(14, F, 7) X(15, F, 6) X(16, F, 5) X(17, F, 4) \
-		X(18, F, 1) X(19, F, 0) \
-		X(50, B, 3) X(51, B, 2) X(52, B, 1) X(53, B, 0)
-
-	#define PIN_SPI_MISO 50
-	#define PIN_SPI_MOSI 51
-	#define PIN_SPI_CLK  52
-	#define PIN_SPI_SS   53
+#if __AVR_ATmega32U4__
+	#if BOARD_PRO_MICRO
+		#define PIN_XMDT(X) \
+			X(2     , D, 1) X(3      , D, 0) X(4       , D, 4) X(5       , C, 6) \
+			X(6     , D, 7) X(7      , E, 6) X(8       , B, 4) X(9       , B, 5) \
+			X(10    , B, 6) X(14     , B, 3) X(15      , B, 1) X(16      , B, 2) \
+			X(A0    , F, 7) X(A1     , F, 6) X(A2      , F, 5) X(A3      , F, 4) \
+			X(SPI_SS, B, 0) X(SPI_CLK, B, 1) X(SPI_MOSI, B, 2) X(SPI_MISO, B, 3) \
+			X(HALT  , D, 5)
+	#endif
 #endif
 
-#if __AVR_ATmega2560__ // TODO Pin numbers are too wacky. Need to clean that up.
-	#define PIN_XMDT(X) \
-		X( 0, E, 0) X( 1, E, 1) X( 2, E, 4) X( 3, E, 5) X( 4, G, 5) X( 5, E, 3) \
-		X( 6, H, 3) X( 7, H, 4) X( 8, H, 5) X( 9, H, 6) X(10, B, 4) X(11, B, 5) \
-		X(12, B, 6) X(13, B, 7) X(14, J, 1) X(15, J, 0) X(16, H, 1) X(17, H, 0) \
-		X(18, D, 3) X(19, D, 2) X(20, D, 1) X(21, D, 0) X(22, A, 0) X(23, A, 1) \
-		X(24, A, 2) X(25, A, 3) X(26, A, 4) X(27, A, 5) X(28, A, 6) X(29, A, 7) \
-		X(30, C, 7) X(31, C, 6) X(32, C, 5) X(33, C, 4) X(34, C, 3) X(35, C, 2) \
-		X(36, C, 1) X(37, C, 0) X(38, D, 7) X(39, G, 2) X(40, G, 1) X(41, G, 0) \
-		X(42, L, 7) X(43, L, 6) X(44, L, 5) X(45, L, 4) X(46, L, 3) X(47, L, 2) \
-		X(48, L, 1) X(49, L, 0) X(50, B, 3) X(51, B, 2) X(52, B, 1) X(53, B, 0)
-
-	#define PIN_SPI_MISO 50
-	#define PIN_SPI_MOSI 51
-	#define PIN_SPI_CLK  52
-	#define PIN_SPI_SS   53
+#if __AVR_ATmega2560__
+	#if BOARD_MEGA2560
+		#define PIN_XMDT(X) \
+			X( 0, E, 0) X( 1, E, 1) X( 2, E, 4) X( 3, E, 5) X( 4, G, 5) X( 5, E, 3) \
+			X( 6, H, 3) X( 7, H, 4) X( 8, H, 5) X( 9, H, 6) X(10, B, 4) X(11, B, 5) \
+			X(12, B, 6) X(13, B, 7) X(14, J, 1) X(15, J, 0) X(16, H, 1) X(17, H, 0) \
+			X(18, D, 3) X(19, D, 2) X(20, D, 1) X(21, D, 0) X(22, A, 0) X(23, A, 1) \
+			X(24, A, 2) X(25, A, 3) X(26, A, 4) X(27, A, 5) X(28, A, 6) X(29, A, 7) \
+			X(30, C, 7) X(31, C, 6) X(32, C, 5) X(33, C, 4) X(34, C, 3) X(35, C, 2) \
+			X(36, C, 1) X(37, C, 0) X(38, D, 7) X(39, G, 2) X(40, G, 1) X(41, G, 0) \
+			X(42, L, 7) X(43, L, 6) X(44, L, 5) X(45, L, 4) X(46, L, 3) X(47, L, 2) \
+			X(48, L, 1) X(49, L, 0) X(50, B, 3) X(51, B, 2) X(52, B, 1) X(53, B, 0) \
+			X(SPI_SS, B, 0) X(SPI_CLK, B, 1) X(SPI_MOSI, B, 2) X(SPI_MISO, B, 3) \
+			X(HALT, B, 7)
+	#endif
 #endif
 
 //
@@ -665,14 +655,14 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 //		struct USBDescEndpoint  endpoints[1];
 //	} hid;
 
-	#define USB_MS_INTERFACE_INDEX 2
-	struct
-	{
-		struct USBDescInterface desc;
-		struct USBDescEndpoint  endpoints[2];
-	} ms;
+//	#define USB_MS_INTERFACE_INDEX 2
+//	struct
+//	{
+//		struct USBDescInterface desc;
+//		struct USBDescEndpoint  endpoints[2];
+//	} ms;
 
-	#define USB_INTERFACE_COUNT 3
+	#define USB_INTERFACE_COUNT 2
 };
 
 // Endpoint buffer sizes must be one of the names of enum USBEndpointSizeCode.
@@ -693,20 +683,20 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 #define USB_ENDPOINT_CDC_OUT_TRANSFER_DIR  0
 #define USB_ENDPOINT_CDC_OUT_SIZE          64
 
-#define USB_ENDPOINT_HID               4
-#define USB_ENDPOINT_HID_TRANSFER_TYPE USBEndpointTransferType_interrupt
-#define USB_ENDPOINT_HID_TRANSFER_DIR  USBEndpointAddressFlag_in
-#define USB_ENDPOINT_HID_SIZE          8
-
-#define USB_ENDPOINT_MS_IN               5
-#define USB_ENDPOINT_MS_IN_TRANSFER_TYPE USBEndpointTransferType_bulk
-#define USB_ENDPOINT_MS_IN_TRANSFER_DIR  USBEndpointAddressFlag_in
-#define USB_ENDPOINT_MS_IN_SIZE          64
-
-#define USB_ENDPOINT_MS_OUT               6
-#define USB_ENDPOINT_MS_OUT_TRANSFER_TYPE USBEndpointTransferType_bulk
-#define USB_ENDPOINT_MS_OUT_TRANSFER_DIR  0
-#define USB_ENDPOINT_MS_OUT_SIZE          64
+//	#define USB_ENDPOINT_HID               4
+//	#define USB_ENDPOINT_HID_TRANSFER_TYPE USBEndpointTransferType_interrupt
+//	#define USB_ENDPOINT_HID_TRANSFER_DIR  USBEndpointAddressFlag_in
+//	#define USB_ENDPOINT_HID_SIZE          8
+//	
+//	#define USB_ENDPOINT_MS_IN               5
+//	#define USB_ENDPOINT_MS_IN_TRANSFER_TYPE USBEndpointTransferType_bulk
+//	#define USB_ENDPOINT_MS_IN_TRANSFER_DIR  USBEndpointAddressFlag_in
+//	#define USB_ENDPOINT_MS_IN_SIZE          64
+//	
+//	#define USB_ENDPOINT_MS_OUT               6
+//	#define USB_ENDPOINT_MS_OUT_TRANSFER_TYPE USBEndpointTransferType_bulk
+//	#define USB_ENDPOINT_MS_OUT_TRANSFER_DIR  0
+//	#define USB_ENDPOINT_MS_OUT_SIZE          64
 
 #if PROGRAM_DIPLOMAT
 	static const u8 USB_ENDPOINT_UECFGNX[][2] PROGMEM = // UECFG0X and UECFG1X that an endpoint will be configured with.
@@ -720,9 +710,9 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 			MAKE(DFLT)
 			MAKE(CDC_IN )
 			MAKE(CDC_OUT)
-			MAKE(HID)
-			MAKE(MS_IN )
-			MAKE(MS_OUT)
+			//	MAKE(HID)
+			//	MAKE(MS_IN )
+			//	MAKE(MS_OUT)
 			#undef MAKE
 		};
 
@@ -1073,39 +1063,39 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 	//						}
 	//					},
 	//			},
-			.ms =
-				{
-					.desc =
-						{
-							.bLength            = sizeof(struct USBDescInterface),
-							.bDescriptorType    = USBDescType_interface,
-							.bInterfaceNumber   = USB_MS_INTERFACE_INDEX,
-							.bAlternateSetting  = 0,
-							.bNumEndpoints      = countof(USB_CONFIG_HIERARCHY.ms.endpoints),
-							.bInterfaceClass    = USBClass_ms,
-							.bInterfaceSubClass = 0x06, // See: "SCSI Transparent Command Set" @ Source(11) @ AbsPage(3).
-							.bInterfaceProtocol = 0x50, // See: "Bulk-Only Transport" @ Source(12) @ Page(11).
-						},
-					.endpoints =
-						{
-							{
-								.bLength          = sizeof(struct USBDescEndpoint),
-								.bDescriptorType  = USBDescType_endpoint,
-								.bEndpointAddress = USB_ENDPOINT_MS_IN | USB_ENDPOINT_MS_IN_TRANSFER_DIR,
-								.bmAttributes     = USB_ENDPOINT_MS_IN_TRANSFER_TYPE,
-								.wMaxPacketSize   = USB_ENDPOINT_MS_IN_SIZE,
-								.bInterval        = 0,
-							},
-							{
-								.bLength          = sizeof(struct USBDescEndpoint),
-								.bDescriptorType  = USBDescType_endpoint,
-								.bEndpointAddress = USB_ENDPOINT_MS_OUT | USB_ENDPOINT_MS_OUT_TRANSFER_DIR,
-								.bmAttributes     = USB_ENDPOINT_MS_OUT_TRANSFER_TYPE,
-								.wMaxPacketSize   = USB_ENDPOINT_MS_OUT_SIZE,
-								.bInterval        = 0,
-							}
-						},
-				},
+	//		.ms =
+	//			{
+	//				.desc =
+	//					{
+	//						.bLength            = sizeof(struct USBDescInterface),
+	//						.bDescriptorType    = USBDescType_interface,
+	//						.bInterfaceNumber   = USB_MS_INTERFACE_INDEX,
+	//						.bAlternateSetting  = 0,
+	//						.bNumEndpoints      = countof(USB_CONFIG_HIERARCHY.ms.endpoints),
+	//						.bInterfaceClass    = USBClass_ms,
+	//						.bInterfaceSubClass = 0x06, // See: "SCSI Transparent Command Set" @ Source(11) @ AbsPage(3).
+	//						.bInterfaceProtocol = 0x50, // See: "Bulk-Only Transport" @ Source(12) @ Page(11).
+	//					},
+	//				.endpoints =
+	//					{
+	//						{
+	//							.bLength          = sizeof(struct USBDescEndpoint),
+	//							.bDescriptorType  = USBDescType_endpoint,
+	//							.bEndpointAddress = USB_ENDPOINT_MS_IN | USB_ENDPOINT_MS_IN_TRANSFER_DIR,
+	//							.bmAttributes     = USB_ENDPOINT_MS_IN_TRANSFER_TYPE,
+	//							.wMaxPacketSize   = USB_ENDPOINT_MS_IN_SIZE,
+	//							.bInterval        = 0,
+	//						},
+	//						{
+	//							.bLength          = sizeof(struct USBDescEndpoint),
+	//							.bDescriptorType  = USBDescType_endpoint,
+	//							.bEndpointAddress = USB_ENDPOINT_MS_OUT | USB_ENDPOINT_MS_OUT_TRANSFER_DIR,
+	//							.bmAttributes     = USB_ENDPOINT_MS_OUT_TRANSFER_TYPE,
+	//							.wMaxPacketSize   = USB_ENDPOINT_MS_OUT_SIZE,
+	//							.bInterval        = 0,
+	//						}
+	//					},
+	//			},
 		};
 #endif
 

@@ -83,14 +83,19 @@ pushd W:\build\
 	)
 
 	REM
-	REM Find bootloader COM, flash, and start PuTTY.
+	REM Find bootloader COM and upload.
 	REM
 
 	mode | findstr "COM!NERD_BOOTLOADER_COM!:" > nul
 	if !ERRORLEVEL! == 0 (
-		set AVRDUDE_ARGS=-p !NERD_MCU! -c !NERD_PROGRAMMER! -V -P COM!NERD_BOOTLOADER_COM! -D -Uflash:w:Nerd.hex
 		set PUTTY_ARGS=-serial COM!NERD_DIAGNOSTIC_COM! -sercfg !NERD_DIAGNOSTIC_BAUD!,8,n,1,N
-		goto UPLOAD
+
+		avrdude -p !NERD_MCU! -c !NERD_PROGRAMMER! -V -P COM!NERD_BOOTLOADER_COM! -D -Uflash:w:Nerd.hex
+		if not !ERRORLEVEL! == 0 (
+			goto ABORT
+		)
+
+		goto OPEN_PUTTY
 	)
 
 	mode | findstr "COM!DIPLOMAT_DIAGNOSTIC_COM!:" > nul
@@ -101,9 +106,21 @@ pushd W:\build\
 	for /L %%n in (1,1,64) do (
 		mode | findstr "COM!DIPLOMAT_BOOTLOADER_COM!:" > nul
 		if !ERRORLEVEL! == 0 (
-			set AVRDUDE_ARGS=-p !DIPLOMAT_MCU! -c !DIPLOMAT_PROGRAMMER! -V -P COM!DIPLOMAT_BOOTLOADER_COM! -D -Uflash:w:Diplomat.hex
-			REM set PUTTY_ARGS=-serial COM!DIPLOMAT_DIAGNOSTIC_COM! -sercfg !DIPLOMAT_DIAGNOSTIC_BAUD_SIGNAL!,8,n,1,N
-			goto UPLOAD
+			set PUTTY_ARGS=-serial COM!DIPLOMAT_DIAGNOSTIC_COM! -sercfg !DIPLOMAT_DIAGNOSTIC_BAUD_SIGNAL!,8,n,1,N
+
+			avrdude -p !DIPLOMAT_MCU! -c !DIPLOMAT_PROGRAMMER! -V -P COM!DIPLOMAT_BOOTLOADER_COM! -D -Uflash:w:Diplomat.hex
+			if not !ERRORLEVEL! == 0 (
+				goto ABORT
+			)
+
+			for /L %%n in (1,1,64) do (
+				mode | findstr "COM!DIPLOMAT_DIAGNOSTIC_COM!:" > nul
+				if !ERRORLEVEL! == 0 (
+					goto OPEN_PUTTY
+				) else (
+					ping 127.0.0.1 -n 1 -w 500 > nul
+				)
+			)
 		) else (
 			ping 127.0.0.1 -n 1 -w 500 > nul
 		)
@@ -112,11 +129,7 @@ pushd W:\build\
 	echo No bootloader found.
 	goto ABORT
 
-	:UPLOAD
-	avrdude !AVRDUDE_ARGS!
-	if not !ERRORLEVEL! == 0 (
-		goto ABORT
-	)
+	:OPEN_PUTTY
 	if not "!PUTTY_ARGS!" == "" (
 		start putty.exe -load "Default Settings" !PUTTY_ARGS!
 	)
