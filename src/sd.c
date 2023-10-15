@@ -1,297 +1,356 @@
-#define SD_MAX_ATTEMPTS         512
-#define _sd_R1_IDLE_FLAG        1
-#define _sd_DATA_BLOCK_RESPONSE ((u8) ~1)
-#define _sd_READ_SECTOR(BUFFER, ADDRESS) \
-	do \
-	{ \
-		u8 READ_SECTOR_response = _sd_read_sector((BUFFER), (ADDRESS)); \
-		if (READ_SECTOR_response != _sd_DATA_BLOCK_RESPONSE) \
-		{ \
-			debug_unhandled; \
-		} \
-	} \
-	while (false)
+#define SD_CMD8_ARGUMENT                0x00000'1'AA // See: Source(19) @ Table(7-5) @ AbsPage(119).
+#define SD_CMD8_CRC7                    0x43         // See: [CRC7 Calculation].
+#define SD_MAX_RESTART_ATTEMPTS         1024
+#define SD_MAX_COMMAND_RESPONSE_LATENCY 512
+#undef  PIN_HALT_SOURCE
+#define PIN_HALT_SOURCE HaltSource_sd
 
-static u8
-_sd_command(u8 command, u32 arg)
+[[nodiscard]]
+static u8 // First byte of the response. MSb being set means the procedure timed out.
+_sd_command(enum SDCommand command, u32 argument)
 {
-	// Commands sent to the SD card are in packets of 6 bytes.
-	// See "SD Card SPI Data Transfer Protocol" (Chlazza).
+	//
+	// See: "Commands" @ Source(19) @ Section(4.7) @ AbsPage(57).
+	//
 
-	spi_trade((1 << 6) | command); // The first bit sent by SPI is 0 which is then followed by a 1 (SPI transfers most-significant bit first).
-	spi_trade((arg >> 24) & 0xFF); // Next four bytes are the argument.
-	spi_trade((arg >> 16) & 0xFF);
-	spi_trade((arg >>  8) & 0xFF);
-	spi_trade((arg >>  0) & 0xFF);
-	switch (command)                 // 7-bit CRC which is often ignored. Last bit sent (i.e. least-significant bit) is zero.
+	spi_trade
+	(
+		(0 << 7) | // "Start bit".
+		(1 << 6) | // "Transmission bit".
+		command
+	);
+
+	spi_trade((argument >> 24) & 0xFF);
+	spi_trade((argument >> 16) & 0xFF);
+	spi_trade((argument >>  8) & 0xFF);
+	spi_trade((argument >>  0) & 0xFF);
+
+	// CRC7 field followed by the end bit; CRC is ignored by default in most commands, but not all. See: Source(19) @ Section(7.2.2) @ AbsPage(107) & [CRC7 Calculation].
+	switch (command)
 	{
-		case 0  : spi_trade(0x95); break;
-		case 8  : spi_trade(0x87); break;
-		default : spi_trade(0xFF); break;
+		case SDCommand_GO_IDLE_STATE : spi_trade((0x4A         << 1) | 1); break;
+		case SDCommand_SEND_IF_COND  : spi_trade((SD_CMD8_CRC7 << 1) | 1); break;
+		default                      : spi_trade(                      1); break;
 	}
 
-	u8  response;
+	//
+	// See: "Responses" @ Source(19) @ Section(4.9) @ AbsPage(69).
+	//
+
+	u8  response = 0;
 	u16 attempts = 0;
 	do
 	{
 		response  = spi_trade(0xFF);
 		attempts += 1;
 	}
-	while ((response & (1 << 7)) && attempts < SD_MAX_ATTEMPTS); // Most-significant bit will be set to zero for a response token.
+	while ((response & (1 << 7)) && attempts < SD_MAX_COMMAND_RESPONSE_LATENCY);
 
 	return response;
 }
 
-static u8
-_sd_get_data_block(u8* dst_buffer, u16 dst_size)
+[[nodiscard]]
+static b8 // Success?
+_sd_get_data_block(u8* dst_buffer, u16 dst_size) // See: "Data Transfer" @ Source(20).
 {
-	// See "Data Transfer" (Elm-Chan) for how data-blocks are received.
-
-	u8  response;
-	u16 attempts = 0;
-	do
-	{
-		response  = spi_trade(0xFF);
-		attempts += 1;
-	}
-	while (response == 0xFF && attempts < SD_MAX_ATTEMPTS);
-
-	if (response == _sd_DATA_BLOCK_RESPONSE)
-	{
-		for (u16 i = 0; i < dst_size; i += 1)
-		{
-			dst_buffer[i] = spi_trade(0xFF);
-		}
-
-		spi_trade(0xFF); // 16-bit CRC bytes.
-		spi_trade(0xFF);
-	}
-
-	return response;
-}
-
-static u8
-_sd_read_sector(u8* dst_buffer, u32 address)
-{
-	u8 response = 0xFF;
-	for (u16 i = 0; i < SD_MAX_ATTEMPTS && response == 0xFF; i += 1)
-	{
-		pin_low(PIN_SD_SS);
-		_delay_ms(1.0);
-
-		response = _sd_command(17, address); // CMD17 ("READ_SINGLE_BLOCK").
-		if (response == 0x00)
-		{
-			response = _sd_get_data_block(dst_buffer, 512);
-			/*
-				The R1 response from CMD17 always has the most significant bit zero.
-				If there was an error getting the data-block, we can use this bit
-				to determine whether or not the error came from sending CMD17 or
-				from waiting for the data-block. Of course, this makes it not possible
-				to tell what the most significant bit response from waiting on the data
-				block was (it could've been a zero or one, but we overwrite it regardless with
-				a one), but this is a good enough compromise. `_sd_DATA_BLOCK_RESPONSE` consists
-				of only a single zero as the least significant bit, so nothing will be affected
-				in the successful case.
-			*/
-			response |= 1 << 7;
-		}
-
-		pin_high(PIN_SD_SS);
-		_delay_ms(1.0);
-
-	}
-	return response;
-}
-
-static b8
-_sd_write_sector(u8* dst_response, const u8* buffer, u32 address)
-{
-	pin_low(PIN_SD_SS);
-	_delay_ms(1.0);
-
 	b8 success = false;
 
-	*dst_response = _sd_command(24, address); // CMD24 ("WRITE_BLOCK").
-	if (*dst_response == 0x00)
+	for (u16 i = 0; i < SD_MAX_COMMAND_RESPONSE_LATENCY; i += 1)
 	{
-		spi_trade(_sd_DATA_BLOCK_RESPONSE);
-		for (u16 i = 0; i < 512; i += 1)
+		if (spi_trade(0xFF) == 0b1111'1110) // Starting token. See: Source(19) @ Section(7.3.3.2) @ AbsPage(122-123).
 		{
-			spi_trade(buffer[i]);
-		}
-
-		{
-			u16 attempts = 0;
-			do
+			for (u16 i = 0; i < dst_size; i += 1)
 			{
-				*dst_response  = spi_trade(0xFF);
-				attempts      += 1;
+				dst_buffer[i] = spi_trade(0xFF);
 			}
-			while (*dst_response == 0xFF && attempts < SD_MAX_ATTEMPTS);
-		}
 
-		/*
-			"Data Packet and Data Response" (Elm-Chan)
-			------------------------------------------
-			0x---00101 | Accepted.
-			0x---01011 | Rejected due to CRC error.
-			0x---01101 | Rejected due to write error.
-		*/
-		if ((*dst_response & ((1 << 5) - 1)) == 0x05)
-		{
-			u16 attempts = 0;
-			do
-			{
-				*dst_response  = spi_trade(0xFF); // SD card will send `0` to indicate it is busy writing the data. See "Single Block Write" (Elm-Chan).
-				attempts      += 1;
-			}
-			while (*dst_response == 0x00 && attempts < SD_MAX_ATTEMPTS);
+			// 16-bit CRC that we ignore.
+			spi_trade(0xFF);
+			spi_trade(0xFF);
 
-			if (*dst_response == 0xFF)
-			{
-				success = true;
-			}
+			success = true;
+			break;
 		}
 	}
 
-	pin_high(PIN_SD_SS);
-	_delay_ms(1.0);
 	return success;
 }
 
 static void
-sd_init(void) // Depends on the SPI being already initialized.
-{
+sd_read(u8* dst, u32 abs_sector_address) // dst must be at least FAT32_SECTOR_SIZE bytes.
+{ // See: Source(19) @ Section(7.2.3) @ AbsPage(107).
+
+	pin_low(PIN_SD_SS);
+
+	// "READ_SINGLE_BLOCK" uses the R1 format for the response.
+	// Any bit being set will indicate an error.
+	// If the MSb is set, then _sd_command timed out.
+	// See: Source(20) @ Section(7.3.2.1) @ AbsPage(120).
+	// See: Source(20) @ Table(4-19) @ AbsPage(61).
+
+	if (_sd_command(SDCommand_READ_SINGLE_BLOCK, abs_sector_address))
+	{
+		error; // Failed to command.
+	}
+	else if (!_sd_get_data_block(dst, FAT32_SECTOR_SIZE))
+	{
+		error; // Failed to receive data.
+	}
+
+	pin_high(PIN_SD_SS);
+}
+
+static void
+sd_write(u8* src, u32 abs_sector_address) // src must be at least FAT32_SECTOR_SIZE bytes.
+{ // See: Source(19) @ Section(7.2.4) @ AbsPage(108).
+
+	pin_low(PIN_SD_SS);
+
+	// "WRITE_BLOCK" responds with R1 format, similar to "READ_SINGLE_BLOCK". See: Source(19) @ Table(4-20) @ AbsPage(62).
+	if (_sd_command(SDCommand_WRITE_BLOCK, abs_sector_address))
+	{
+		error; // Failed to command.
+	}
+	else
+	{
+		//
+		// Send data block.
+		//
+
+		spi_trade(0b1111'1110); // Starting token. See: Source(19) @ Section(7.3.3.2) @ AbsPage(122-123).
+		for (u16 i = 0; i < FAT32_SECTOR_SIZE; i += 1)
+		{
+			spi_trade(src[i]);
+		}
+
+		//
+		// Wait for data response.
+		//
+
+		u16 attempts = 0;
+		while (true)
+		{
+			u8 response = spi_trade(0xFF);
+
+			if (response == 0xFF) // SD still busy with parsing command.
+			{
+				if (attempts < SD_MAX_COMMAND_RESPONSE_LATENCY)
+				{
+					attempts += 1;
+				}
+				else
+				{
+					error; // Timed out waiting for SD's response to the data that we sent.
+				}
+			}
+			else if ((response & 0b000'11111) == 0b000'0'010'1) // See: "Data accepted" @ Source(19) @ Section(7.3.3.1) @ AbsPage(122).
+			{
+				break;
+			}
+			else
+			{
+				error; // Unknown response received.
+			}
+		}
+
+		//
+		// Wait for SD to be finished with writing.
+		//
+
+		attempts = 0;
+		while (true)
+		{
+			u8 response = spi_trade(0xFF);
+
+			if (response == 0xFF) // When the SD is finished, the data line will be released from the low state.
+			{
+				break;
+			}
+			else if (response)
+			{
+				error; // Unknown response received.
+			}
+			else if (attempts < SD_MAX_COMMAND_RESPONSE_LATENCY)
+			{
+				attempts += 1;
+			}
+			else
+			{
+				error; // Timed out waiting for the SD to finish writing.
+			}
+		}
+	}
+
+	pin_high(PIN_SD_SS);
+}
+
+static u32 // Sector count.
+sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
+{ // See: Source(19) @ Section(4.2.2) @ AbsPage(24).
+
 	pin_output(PIN_SD_SS);
 	pin_high(PIN_SD_SS);
 
-	_delay_ms(1.0);
-	for (u16 i = 0; i < 512; i += 1) // Ready SPI communication with SD module.
+	//
+	// Perform software reset.
+	//
+
+	u16 attempts = 0;
+	while (true)
 	{
-		spi_trade(0xFF);
-	}
-	_delay_ms(1.0);
+		pin_low(PIN_SD_SS);
+		u8 response = _sd_command(SDCommand_GO_IDLE_STATE, 0);
+		pin_high(PIN_SD_SS);
 
-	{ // CMD0 ("GO_IDLE_STATE"): Resets the card.
-		u8  response;
-		u16 attempts = 0;
-		do
+		if (response == SDR1ResponseFlag_in_idle_state) // See: "In idle state" @ Source(19) @ Section(7.3.2.1) @ AbsPage(120).
 		{
-			pin_low(PIN_SD_SS);
-			_delay_ms(1.0);
-			response  = _sd_command(0, 0);
+			break;
+		}
+		else if (attempts < SD_MAX_RESTART_ATTEMPTS)
+		{
 			attempts += 1;
-			pin_high(PIN_SD_SS);
-			_delay_ms(1.0);
 		}
-		while (response != _sd_R1_IDLE_FLAG && attempts < 1024);
-
-		if (response != _sd_R1_IDLE_FLAG)
+		else
 		{
-			debug_unhandled;
+			error; // Timed out waiting for the SD to restart; SD card potentially not inserted.
 		}
 	}
+
+	//
+	// Mandatory command before initialization can begin. See: "CMD8" @ Source(19) @ Table(7-5) @ AbsPage(119).
+	//
+
 	pin_low(PIN_SD_SS);
-	_delay_ms(1.0);
-	{ // CMD8 ("SEND_IF_COND"): Checks the integrity of the SD card. This command exists only in newer specficiations (>= 2.00). See page 13 of datasheet.
-		/*
-			The CMD8 command must be executed before calling the following ACMD41 command.
-			CMD8 takes an 8-bit check pattern in the least-significant byte of the argument.
-			Following that is a nibble describing the voltage supply that the SD card is designed for (see table on page 40 of datasheet).
-		*/
-		u16 argument = 0x1AA;
-		u8  response = _sd_command(8, argument);
-		if (response != _sd_R1_IDLE_FLAG)
+	{
+		// The command uses the 5-byte R7 response format where the first byte identical to R1. See: Source(19) @ Section(7.3.2.6) @ AbsPage(122).
+		if (_sd_command(SDCommand_SEND_IF_COND, SD_CMD8_ARGUMENT) != SDR1ResponseFlag_in_idle_state)
 		{
-			debug_unhandled;
+			error; // SD went out of idle mode, or the command timed-out.
 		}
 
-		// CM8 returns an R7 response. See page 111 of datasheet.
+		spi_trade(0xFF); // Irrelevant command version in high-nibble, rest are reserved.
+		spi_trade(0xFF); // Reserved bits.
 
-		spi_trade(0xFF); // Command version mixed
-		spi_trade(0xFF); // with some reserved bits.
+		u16 echo_back = 0;
+		echo_back   = spi_trade(0xFF) << 8;  // See: "voltage accepted" @ Source(19) @ Table(4-34) @ AbsPage(71).
+		echo_back  |= spi_trade(0xFF);       // Echo-back pattern provided by SD_CMD8_ARGUMENT.
+		echo_back  &= 0b0000'1111'1111'1111;
 
-		u16 echoed = 0;
-		echoed |= (u16) (spi_trade(0xFF) & 0xF) << 8;
-		echoed |= spi_trade(0xFF);
-
-		if (echoed != argument)
+		if (echo_back != SD_CMD8_ARGUMENT)
 		{
-			debug_unhandled;
+			error; // Echoed values do not match.
 		}
 	}
 	pin_high(PIN_SD_SS);
-	_delay_ms(1.0);
 
-	{ // ACMD41 ("SD_SEND_OP_COND"): Activates initialization process.
-		u8  response;
-		u16 attempts = 0;
-		do
+	//
+	// Initialize SD.
+	//
+
+	attempts = 0;
+	while (true)
+	{
+		pin_low(PIN_SD_SS);
+
+		// The application-specific command "SD_SEND_OP_COND" must be sent with a prefixing command.
+		if (_sd_command(SDCommand_APP_CMD, 0) & ~SDR1ResponseFlag_in_idle_state)
 		{
-			pin_low(PIN_SD_SS);
-			_delay_ms(1.0);
-			{ // CMD55 ("APP_CMD") to prepend before any application specific commands.
-				response = _sd_command(55, 0);
-				if (response & ~_sd_R1_IDLE_FLAG)
-				{
-					debug_unhandled;
-				}
-			}
-			{ // ACMD41 itself. See page 107 of datasheet.
-				response = _sd_command(41, ((u32) 1) << 30); // HCS-bit set to allow support for high-capacity cards.
-				if (response & ~_sd_R1_IDLE_FLAG)
-				{
-					debug_unhandled;
-				}
-			}
-			pin_high(PIN_SD_SS);
-			_delay_ms(1.0);
+			error; // Error signaled in R1 response, or the command timed-out.
+		}
 
+		// Attempt to initialize SD and let it know we support high-capacity cards (HCS bit). Responds with R1.
+		u8 response = _sd_command(SDCommand_SD_SEND_OP_COND, ((u32) 1) << 30);
+
+		pin_high(PIN_SD_SS);
+
+		if (!response) // Finished initialization.
+		{
+			break;
+		}
+		else if (response & ~SDR1ResponseFlag_in_idle_state)
+		{
+			error; // Error signaled in R1 response, or the command timed out.
+		}
+		else if (attempts < SD_MAX_RESTART_ATTEMPTS)
+		{
 			attempts += 1;
 		}
-		while (response == _sd_R1_IDLE_FLAG && attempts < SD_MAX_ATTEMPTS);
-
-		if (response == _sd_R1_IDLE_FLAG)
+		else
 		{
-			debug_unhandled;
+			error; // Timed out waiting for the SD to initialize.
 		}
 	}
 
-	{ // CMD9 ("SEND_CSD"): Request for card specific data. See page 103 of datasheet.
-		pin_low(PIN_SD_SS);
-		_delay_ms(1.0);
-		{
-			u8 response = _sd_command(9, 0);
-			if (response)
-			{
-				debug_unhandled;
-			}
-		}
-		pin_high(PIN_SD_SS);
-		_delay_ms(1.0);
+	//
+	// Query SD for "card-specific data" (CSD).
+	//
 
-		pin_low(PIN_SD_SS);
-		_delay_ms(1.0);
-		{ // Under "Reading CSD and CID" (Elm-Chan), the CSD is sent as a 16-byte data-block.
-			u8 csd[16]; // See page 86 of datasheet for the layout of the CSD register 2.0.
-			u8 response = _sd_get_data_block(csd, countof(csd));
-			if (response != _sd_DATA_BLOCK_RESPONSE)
-			{
-				debug_unhandled;
-			}
-
-			if
-			(
-				(csd[0] >> 6) != 1 ||
-				(1ULL << (csd[5] & 0xF))                                       != 512 || // Data blocks from reads should be 2^9 = 512 bytes.
-				(1ULL << (((csd[12] & ((1 << 2) - 1)) << 2) | (csd[13] >> 6))) != 512    // Data blocks for writes should be 2^9 = 512 bytes.
-			)
-			{
-				debug_unhandled;
-			}
-		}
-		pin_high(PIN_SD_SS);
-		_delay_ms(1.0);
+	pin_low(PIN_SD_SS);
+	if (_sd_command(SDCommand_SEND_CSD, 0))
+	{
+		error; // Error signaled in R1 response, or the command timed out.
 	}
+	pin_high(PIN_SD_SS);
+
+	//
+	// Receive the card-specific data. See: Source(19) @ Table(5-16) @ AbsPage(97).
+	//
+
+	pin_low(PIN_SD_SS);
+	u8 csd[16];
+	if (!_sd_get_data_block(csd, countof(csd)))
+	{
+		error; // Failed to get CSD data-block.
+	}
+	pin_high(PIN_SD_SS);
+
+	u8  csd_READ_BL_LEN  = csd[5] & 0xF;
+	u8  csd_WRITE_BL_LEN = ((csd[12] & 0b11) << 2) | (csd[13] >> 6);
+	u32 csd_C_SIZE       = (((u32) (csd[7] & 0b00'111111)) << 16) | (((u32) csd[8]) << 8) | csd[9];
+
+	if
+	(
+		!(
+			(((u64) 1) << csd_READ_BL_LEN ) == FAT32_SECTOR_SIZE &&
+			(((u64) 1) << csd_WRITE_BL_LEN) == FAT32_SECTOR_SIZE
+		)
+	)
+	{
+		error; // Card has unexpected/unsupported parameters.
+	}
+
+	static_assert(FAT32_SECTOR_SIZE == 512);
+	return (csd_C_SIZE + 1) * 1024; // See: "C_SIZE" @ Source(19) @ Section(5.3.3) @ AbsPage(98).
 }
+
+//
+// Documentation.
+//
+
+/* [Overview].
+	This file just defines a thin interface to be able to read and write sectors. It does not
+	handle file systems itself, nor handle all SD cards in existence. Your milage may vary!
+*/
+
+/* [CRC7 Calculation].
+	// The following JS carries out CRC7, which is used for error detection on some commands.
+	// The input stream begins at the start bit and terminates right before the end bit.
+	// Example : iterate(bits_of("Start(0) Transmission(1) Command(000000) Argument(00000000000000000000000000000000) CRC(1001010)"))
+	// Expect  : [0, 0, 0, 0, 0, 0, 0]
+	// See: Source(19) @ Section(4.5) @ AbsPage(54).
+
+	let bits_of = str =>
+		str
+			.split("")
+			.filter(x => x == "0" || x == "1")
+			.map(x => parseInt(x))
+
+	let crc = bits_of(((1 << 7) | (1 << 3) | (1 << 0)).toString(2))
+
+	let iterate = curr_stream =>
+		crc.length > curr_stream.length
+			? curr_stream
+			: curr_stream[0]
+				? iterate(crc.map((x, i) => x ^ curr_stream[i]).concat(curr_stream.slice(crc.length)), crc)
+				: iterate(curr_stream.slice(1), crc)
+*/

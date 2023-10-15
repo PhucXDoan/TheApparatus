@@ -63,6 +63,49 @@ enum HaltSource
 #endif
 
 //
+// "spi.c"
+//
+
+enum SPIPrescaler // Only one way of having prescaler of 64 is listed. See: Source(1) @ Table(17-5) @ Page(186).
+{
+	SPIPrescaler_4   = 0b000,
+	SPIPrescaler_16  = 0b001,
+	SPIPrescaler_64  = 0b010,
+	SPIPrescaler_128 = 0b011,
+	SPIPrescaler_2   = 0b100,
+	SPIPrescaler_8   = 0b101,
+	SPIPrescaler_32  = 0b110,
+};
+
+#define SPI_PRESCALER SPIPrescaler_128
+
+//
+// "sd.c"
+//
+
+enum SDCommand // Non-exhaustive. See: Source(19) @ Section(7.3.1.3) @ AbsPage(113).
+{
+	SDCommand_GO_IDLE_STATE     = 0,
+	SDCommand_SEND_IF_COND      = 8,
+	SDCommand_SEND_CSD          = 9,
+	SDCommand_READ_SINGLE_BLOCK = 17,
+	SDCommand_WRITE_BLOCK       = 24,
+	SDCommand_APP_CMD           = 55,
+	SDCommand_SD_SEND_OP_COND   = 41,
+};
+
+enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
+{
+	SDR1ResponseFlag_in_idle_state        = 1 << 0,
+	SDR1ResponseFlag_erase_reset          = 1 << 1,
+	SDR1ResponseFlag_illegal_command      = 1 << 2,
+	SDR1ResponseFlag_com_crc_error        = 1 << 3,
+	SDR1ResponseFlag_erase_sequence_error = 1 << 4,
+	SDR1ResponseFlag_address_error        = 1 << 5,
+	SDR1ResponseFlag_parameter_error      = 1 << 6,
+};
+
+//
 // FAT32.
 //
 
@@ -1191,6 +1234,8 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 	Source(16) := "Master boot record" on Wikipedia (Accessed: October 7, 2023).
 	Source(17) := FAT Filesystem by Elm-Chan (Updated on: October 31, 2020).
 	Source(18) := Arduino Mega 2560 Rev3 Pinout Diagram (STORE.ARDUINO.CC/MEGA-2560-REV3) (Updated on: 16/12/2020).
+	Source(19) := SD Specifications Part 1 Physical Layer Simplified Specification Version 2.00 (Dated: September 25, 2006).
+	Source(20) := "How to Use MMC/SDC" by Elm-Chan (Updated on: December 26, 2019).
 
 	We are working within the environment of the ATmega32U4 and ATmega2560 microcontrollers,
 	which are 8-bit CPUs. This consequently means that there are no padding bytes to

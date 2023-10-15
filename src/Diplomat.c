@@ -32,43 +32,25 @@ main(void)
 	sei();
 	spi_init();
 	usb_init();
-	sd_init();
+	u32 sector_count = sd_init();
 
-	u8 sector[512] = {0};
-	if (_sd_read_sector(sector, 0) == _sd_DATA_BLOCK_RESPONSE)
+	u8 zero_sector[FAT32_SECTOR_SIZE] = {0};
+
+	for (u32 sector_address = sector_count - 1; sector_address; sector_address -= 1)
 	{
-		for (u16 i = 0; i < sizeof(sector); i += 1)
-		{
-			if (i % 16 == 0)
-			{
-				debug_tx_cstr("\n");
-			}
-			else
-			{
-				debug_tx_cstr(" ");
-			}
-			debug_tx_H8(sector[i]);
-		}
-	}
-	else
-	{
-		debug_unhandled;
+		debug_tx_u64(sector_address);
+		debug_tx_cstr("\n");
+		sd_write(zero_sector, sector_address);
 	}
 
-//	u16 counter = 0;
-//	for (;;)
-//	{
-//		char input = {0};
-//		while (!debug_rx(&input, 1));
-//		debug_tx_u64(counter);
-//		debug_tx_cstr(" : 0x");
-//		debug_tx_H8(input);
-//		debug_tx_cstr("\n");
-//		debug_u16(counter);
-//		counter += 1;
-//	}
-
-	for(;;);
+	pin_output(HALT);
+	for (;;)
+	{
+		pin_high(HALT);
+		_delay_ms(1000.0);
+		pin_low(HALT);
+		_delay_ms(1000.0);
+	}
 }
 
 //
