@@ -43,6 +43,16 @@ enum HaltSource
 			X(SPI_SS, B, 0) X(SPI_CLK, B, 1) X(SPI_MOSI, B, 2) X(SPI_MISO, B, 3) \
 			X(HALT  , D, 5)
 	#endif
+
+	#if BOARD_LEONARDO
+		#define PIN_XMDT(X) \
+			X(0 , D, 2) X(1 , D, 3) X(2 , D, 1) X(3 , D, 0) X(4 , D, 4) \
+			X(5 , C, 6) X(6 , D, 7) X(7 , E, 6) X(8 , B, 4) X(9 , B, 5) \
+			X(10, B, 6) X(11, B, 7) X(12, D, 6) X(13, C, 7)             \
+			X(A0, F, 7) X(A1, F, 6) X(A2, F, 5) X(A3, F, 4) X(A4, F, 1) X(A5, F, 0) \
+			X(SPI_SS, B, 0) X(SPI_CLK, B, 1) X(SPI_MOSI, B, 2) X(SPI_MISO, B, 3) \
+			X(HALT, D, 5)
+	#endif
 #endif
 
 #if __AVR_ATmega2560__
@@ -109,208 +119,208 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 // FAT32.
 //
 
-#define FAT32_PARTITION_SECTOR_ADDRESS 2
-#define FAT32_PARTITION_SECTOR_COUNT   16777216
-#define FAT32_RESERVED_SECTOR_COUNT    2
-#define FAT32_TABLE_SECTOR_COUNT       64
+//	#define FAT32_PARTITION_SECTOR_ADDRESS 2
+//	#define FAT32_PARTITION_SECTOR_COUNT   16777216
+//	#define FAT32_RESERVED_SECTOR_COUNT    2
+//	#define FAT32_TABLE_SECTOR_COUNT       64
 #define FAT32_SECTOR_SIZE              512
-#define FAT32_SECTORS_PER_CLUSTER      64
+//	#define FAT32_SECTORS_PER_CLUSTER      64
 
-#define FAT32_MEDIA_TYPE                        0xF8
-#define FAT32_BACKUP_BOOT_SECTOR_OFFSET         6
-#define FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET 1
-#define FAT32_ROOT_CLUSTER                      2
+//	#define FAT32_MEDIA_TYPE                        0xF8
+//	#define FAT32_BACKUP_BOOT_SECTOR_OFFSET         6
+//	#define FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET 1
+//	#define FAT32_ROOT_CLUSTER                      2
 
-struct FAT32PartitionEntry // See: "Partition table entries" @ Source(16).
-{
-	u8  status;               // 0x80 if this partition is active, otherwise 0x00.
-	u8  chs_address_begin[3]; // Irrelevant.
-	u8  partition_type;       // Seems to be must 0x0C for FAT32s with logical block addressing. See: "Partition table entry" @ Source(17).
-	u8  chs_address_end[3];   // Irrelevant.
-	u32 abs_sector_address;   // Where the partition begins.
-	u32 sector_count;         // Amount of sectors for this partition.
-};
+//	struct FAT32PartitionEntry // See: "Partition table entries" @ Source(16).
+//	{
+//		u8  status;               // 0x80 if this partition is active, otherwise 0x00.
+//		u8  chs_address_begin[3]; // Irrelevant.
+//		u8  partition_type;       // Seems to be must 0x0C for FAT32s with logical block addressing. See: "Partition table entry" @ Source(17).
+//		u8  chs_address_end[3];   // Irrelevant.
+//		u32 abs_sector_address;   // Where the partition begins.
+//		u32 sector_count;         // Amount of sectors for this partition.
+//	};
+//	
+//	struct FAT32MasterBootRecord // See: "Structure of a modern standard MBR" @ Source(16).
+//	{
+//		u8                         bootstrap_code_area_fst[218]; // Irrelevant.
+//		u8                         disk_timestamp[6];            // Irrelevant.
+//		u8                         bootstrap_code_area_snd[216]; // Irrelevant.
+//		u32                        disk_signature;               // Some unique identifier for the host to work with.
+//		u16                        zero;                         // Must be zero.
+//		struct FAT32PartitionEntry partitions[4];
+//		u16                        signature;                    // Must be 0xAA55.
+//	};
+//	
+//	struct FAT32BootSector // See: Source(15) @ Section(3.1) @ Page(7-9) & Source(15) @ Section(3.3) @ Page(11-12).
+//	{
+//		u8   BS_jmpBoot[3];    // Best as { 0xEB, 0x00, 0x90 }.
+//		char BS_OEMName[8];    // Best as "MSWIN 4.1". See: "Boot Sector and BPB" @ Source(17).
+//		u16  BPB_BytsPerSec;   // Must be 512, 1024, 2048, or 4096 bytes per sector.
+//		u8   BPB_SecPerClus;   // Must be power of two and BPB_BytsPerSec * BPB_SecPerClus <= 32'768.
+//		u16  BPB_RsvdSecCnt;   // Must be non-zero.
+//		u8   BPB_NumFATs;      // Fine as 1.
+//		u16  BPB_RootEntCnt;   // Must be zero.
+//		u16  BPB_TotSec16;     // Must be zero.
+//		u8   BPB_Media;        // Best as 0xF8 for "fixed (non-removable) media"; must be also in lower 8-bits of the first FAT entry.
+//		u16  BPB_FATSz16;      // Must be zero.
+//		u16  BPB_SecPerTrk;    // Irrelevant.
+//		u16  BPB_NumHeads;     // Irrelevant.
+//		u32  BPB_HiddSec;      // Seems irrelevant; best as 0.
+//		u32  BPB_TotSec32;     // Must be non-zero.
+//		u32  BPB_FATSz32;      // Sectors per FAT.
+//		u16  BPB_ExtFlags;     // Seems irrelevant; best as 0.
+//		u16  BPB_FSVer;        // Must be zero.
+//		u32  BPB_RootClus;     // Cluster number of the first cluster of the root directory; best as 2.
+//		u16  BPB_FSInfo;       // Sector of the "FSINFO"; usually 1.
+//		u16  BPB_BkBootSec;    // Sector of the duplicated boot record; best as 6.
+//		u8   BPB_Reserved[12]; // Must be zero.
+//		u8   BS_DrvNum;        // Seems irrelevant; best as 0x80.
+//		u8   BS_Reserved;      // Must be zero.
+//		u8   BS_BootSig;       // Must be 0x29.
+//		u32  BS_VolID;         // Irrelevant.
+//		char BS_VolLab[11];    // Best as "NO NAME    ".
+//		char BS_FilSysType[8]; // Must be "FAT32   ".
+//		u8   BS_BootCode[420]; // Irrelevant.
+//		u16  BS_BootSign;      // Must be 0xAA55.
+//	};
+//	
+//	struct FAT32FileStructureInfo // See: Source(15) @ Page(21-22).
+//	{
+//		u32 FSI_LeadSig;        // Must be 0x41615252.
+//		u8  FSI_Reserved1[480];
+//		u32 FSI_StrucSig;       // Must be 0x61417272.
+//		u32 FSI_Free_Count;     // Last known free cluster; best as 0xFFFFFFFF to signify unknown.
+//		u32 FSI_Nxt_Free;       // Hints the FAT driver of where to look for the next free cluster; best as 0xFFFFFFFF to signify no hint.
+//		u8  FSI_Reserved2[12];
+//		u32 FSI_TrailSig;       // Must be 0xAA550000.
+//	};
+//	
+//	enum FAT32DirEntryAttrFlag // See: Source(15) @ Section(6) @ Page(23).
+//	{
+//		FAT32DirEntryAttrFlag_read_only = 0x01,
+//		FAT32DirEntryAttrFlag_hidden    = 0x02,
+//		FAT32DirEntryAttrFlag_system    = 0x04,
+//		FAT32DirEntryAttrFlag_volume_id = 0x08,
+//		FAT32DirEntryAttrFlag_directory = 0x10,
+//		FAT32DirEntryAttrFlag_archive   = 0x20,
+//	};
+//	
+//	#define FAT32_DIR_ENTRY_ATTR_FLAGS_LONG /* */ \
+//		( \
+//			FAT32DirEntryAttrFlag_read_only | \
+//			FAT32DirEntryAttrFlag_hidden | \
+//			FAT32DirEntryAttrFlag_system | \
+//			FAT32DirEntryAttrFlag_volume_id \
+//		)
+//	#define FAT32_LAST_LONG_DIR_ENTRY 0x40 // See: Source(15) @ Section(7) @ Page(30).
+//	
+//	union FAT32DirEntry
+//	{
+//		struct FAT32DirEntryShort // See: Source(15) @ Section(6) @ Page(23).
+//		{
+//			char DIR_Name[11];     // 8 characters for the main name followed by 3 for the extension where both are right-padded with spaces if necessary.
+//			u8   DIR_Attr;         // Aliasing(enum FAT32DirEntryAttrFlag). Must not be FAT32_DIR_ENTRY_ATTR_FLAGS_LONG.
+//			u8   DIR_NTRes;        // Must be zero.
+//			u8   DIR_CrtTimeTenth; // Irrelevant.
+//			u16  DIR_CrtTime;      // Irrelevant.
+//			u16  DIR_CrtDate;      // Irrelevant.
+//			u16  DIR_LstAccDate;   // irrelevant.
+//			u16  DIR_FstClusHI;    // "High word of first data cluster number for file/directory described by this entry".
+//			u16  DIR_WrtTime;      // Irrelevant.
+//			u16  DIR_WrtDate;      // Irrelevant.
+//			u16  DIR_FstClusLO;    // "Low word of first data cluster number for file/directory described by this entry".
+//			u32  DIR_FileSize;     // Size of file in bytes; must be zero for directories. See: Source(15) @ Section(6.2) @ Page(26).
+//		} short_entry;
+//	
+//		// Note that: TODO Explain better.
+//		//     - Order of directory entries containing the long name are reversed.
+//		//     - If there's leftover space, entries are null-terminated and then padded with 0xFFFFs.
+//		//     - Characters are in UTF-16.
+//		struct FAT32DirEntryLong // See: Source(15) @ Section(7) @ Page(30).
+//		{
+//			u8  LDIR_Ord;       // The Nth long-entry. If the entry is the "last" (as in it provides the last part of the long name), then it is additionally OR'd with FAT32_LAST_LONG_DIR_ENTRY.
+//			u16 LDIR_Name1[5];  // First five UTF-16 characters that this long-entry provides for the long name.
+//			u8  LDIR_Attr;      // Must be FAT32_DIR_ENTRY_ATTR_FLAGS_LONG.
+//			u8  LDIR_Type;      // Must be zero.
+//			u8  LDIR_Chksum;    // "Checksum of name in the associated short name directory entry at the end of the long name directory entry set". TODO Not so simple...
+//			u16 LDIR_Name2[6];  // The next six UTF-16 characters that this long-entry provides for the long name.
+//			u16 LDIR_FstClusLO; // Must be zero.
+//			u16 LDIR_Name3[2];  // The last two UTF-16 characters that this long-entry provides for the long name.
+//		} long_entry;
+//	};
+//	
+//	static_assert(FAT32_SECTORS_PER_CLUSTER && !(FAT32_SECTORS_PER_CLUSTER & (FAT32_SECTORS_PER_CLUSTER - 1)));
+//	static_assert(((u64) FAT32_SECTORS_PER_CLUSTER) * FAT32_SECTOR_SIZE <= (((u64) 1) << 15));
+//	static_assert((FAT32_PARTITION_SECTOR_COUNT - FAT32_RESERVED_SECTOR_COUNT - FAT32_TABLE_SECTOR_COUNT) / FAT32_SECTORS_PER_CLUSTER >= 65'525);
 
-struct FAT32MasterBootRecord // See: "Structure of a modern standard MBR" @ Source(16).
-{
-	u8                         bootstrap_code_area_fst[218]; // Irrelevant.
-	u8                         disk_timestamp[6];            // Irrelevant.
-	u8                         bootstrap_code_area_snd[216]; // Irrelevant.
-	u32                        disk_signature;               // Some unique identifier for the host to work with.
-	u16                        zero;                         // Must be zero.
-	struct FAT32PartitionEntry partitions[4];
-	u16                        signature;                    // Must be 0xAA55.
-};
-
-struct FAT32BootSector // See: Source(15) @ Section(3.1) @ Page(7-9) & Source(15) @ Section(3.3) @ Page(11-12).
-{
-	u8   BS_jmpBoot[3];    // Best as { 0xEB, 0x00, 0x90 }.
-	char BS_OEMName[8];    // Best as "MSWIN 4.1". See: "Boot Sector and BPB" @ Source(17).
-	u16  BPB_BytsPerSec;   // Must be 512, 1024, 2048, or 4096 bytes per sector.
-	u8   BPB_SecPerClus;   // Must be power of two and BPB_BytsPerSec * BPB_SecPerClus <= 32'768.
-	u16  BPB_RsvdSecCnt;   // Must be non-zero.
-	u8   BPB_NumFATs;      // Fine as 1.
-	u16  BPB_RootEntCnt;   // Must be zero.
-	u16  BPB_TotSec16;     // Must be zero.
-	u8   BPB_Media;        // Best as 0xF8 for "fixed (non-removable) media"; must be also in lower 8-bits of the first FAT entry.
-	u16  BPB_FATSz16;      // Must be zero.
-	u16  BPB_SecPerTrk;    // Irrelevant.
-	u16  BPB_NumHeads;     // Irrelevant.
-	u32  BPB_HiddSec;      // Seems irrelevant; best as 0.
-	u32  BPB_TotSec32;     // Must be non-zero.
-	u32  BPB_FATSz32;      // Sectors per FAT.
-	u16  BPB_ExtFlags;     // Seems irrelevant; best as 0.
-	u16  BPB_FSVer;        // Must be zero.
-	u32  BPB_RootClus;     // Cluster number of the first cluster of the root directory; best as 2.
-	u16  BPB_FSInfo;       // Sector of the "FSINFO"; usually 1.
-	u16  BPB_BkBootSec;    // Sector of the duplicated boot record; best as 6.
-	u8   BPB_Reserved[12]; // Must be zero.
-	u8   BS_DrvNum;        // Seems irrelevant; best as 0x80.
-	u8   BS_Reserved;      // Must be zero.
-	u8   BS_BootSig;       // Must be 0x29.
-	u32  BS_VolID;         // Irrelevant.
-	char BS_VolLab[11];    // Best as "NO NAME    ".
-	char BS_FilSysType[8]; // Must be "FAT32   ".
-	u8   BS_BootCode[420]; // Irrelevant.
-	u16  BS_BootSign;      // Must be 0xAA55.
-};
-
-struct FAT32FileStructureInfo // See: Source(15) @ Page(21-22).
-{
-	u32 FSI_LeadSig;        // Must be 0x41615252.
-	u8  FSI_Reserved1[480];
-	u32 FSI_StrucSig;       // Must be 0x61417272.
-	u32 FSI_Free_Count;     // Last known free cluster; best as 0xFFFFFFFF to signify unknown.
-	u32 FSI_Nxt_Free;       // Hints the FAT driver of where to look for the next free cluster; best as 0xFFFFFFFF to signify no hint.
-	u8  FSI_Reserved2[12];
-	u32 FSI_TrailSig;       // Must be 0xAA550000.
-};
-
-enum FAT32DirEntryAttrFlag // See: Source(15) @ Section(6) @ Page(23).
-{
-	FAT32DirEntryAttrFlag_read_only = 0x01,
-	FAT32DirEntryAttrFlag_hidden    = 0x02,
-	FAT32DirEntryAttrFlag_system    = 0x04,
-	FAT32DirEntryAttrFlag_volume_id = 0x08,
-	FAT32DirEntryAttrFlag_directory = 0x10,
-	FAT32DirEntryAttrFlag_archive   = 0x20,
-};
-
-#define FAT32_DIR_ENTRY_ATTR_FLAGS_LONG /* */ \
-	( \
-		FAT32DirEntryAttrFlag_read_only | \
-		FAT32DirEntryAttrFlag_hidden | \
-		FAT32DirEntryAttrFlag_system | \
-		FAT32DirEntryAttrFlag_volume_id \
-	)
-#define FAT32_LAST_LONG_DIR_ENTRY 0x40 // See: Source(15) @ Section(7) @ Page(30).
-
-union FAT32DirEntry
-{
-	struct FAT32DirEntryShort // See: Source(15) @ Section(6) @ Page(23).
-	{
-		char DIR_Name[11];     // 8 characters for the main name followed by 3 for the extension where both are right-padded with spaces if necessary.
-		u8   DIR_Attr;         // Aliasing(enum FAT32DirEntryAttrFlag). Must not be FAT32_DIR_ENTRY_ATTR_FLAGS_LONG.
-		u8   DIR_NTRes;        // Must be zero.
-		u8   DIR_CrtTimeTenth; // Irrelevant.
-		u16  DIR_CrtTime;      // Irrelevant.
-		u16  DIR_CrtDate;      // Irrelevant.
-		u16  DIR_LstAccDate;   // irrelevant.
-		u16  DIR_FstClusHI;    // "High word of first data cluster number for file/directory described by this entry".
-		u16  DIR_WrtTime;      // Irrelevant.
-		u16  DIR_WrtDate;      // Irrelevant.
-		u16  DIR_FstClusLO;    // "Low word of first data cluster number for file/directory described by this entry".
-		u32  DIR_FileSize;     // Size of file in bytes; must be zero for directories. See: Source(15) @ Section(6.2) @ Page(26).
-	} short_entry;
-
-	// Note that: TODO Explain better.
-	//     - Order of directory entries containing the long name are reversed.
-	//     - If there's leftover space, entries are null-terminated and then padded with 0xFFFFs.
-	//     - Characters are in UTF-16.
-	struct FAT32DirEntryLong // See: Source(15) @ Section(7) @ Page(30).
-	{
-		u8  LDIR_Ord;       // The Nth long-entry. If the entry is the "last" (as in it provides the last part of the long name), then it is additionally OR'd with FAT32_LAST_LONG_DIR_ENTRY.
-		u16 LDIR_Name1[5];  // First five UTF-16 characters that this long-entry provides for the long name.
-		u8  LDIR_Attr;      // Must be FAT32_DIR_ENTRY_ATTR_FLAGS_LONG.
-		u8  LDIR_Type;      // Must be zero.
-		u8  LDIR_Chksum;    // "Checksum of name in the associated short name directory entry at the end of the long name directory entry set". TODO Not so simple...
-		u16 LDIR_Name2[6];  // The next six UTF-16 characters that this long-entry provides for the long name.
-		u16 LDIR_FstClusLO; // Must be zero.
-		u16 LDIR_Name3[2];  // The last two UTF-16 characters that this long-entry provides for the long name.
-	} long_entry;
-};
-
-static_assert(FAT32_SECTORS_PER_CLUSTER && !(FAT32_SECTORS_PER_CLUSTER & (FAT32_SECTORS_PER_CLUSTER - 1)));
-static_assert(((u64) FAT32_SECTORS_PER_CLUSTER) * FAT32_SECTOR_SIZE <= (((u64) 1) << 15));
-static_assert((FAT32_PARTITION_SECTOR_COUNT - FAT32_RESERVED_SECTOR_COUNT - FAT32_TABLE_SECTOR_COUNT) / FAT32_SECTORS_PER_CLUSTER >= 65'525);
-
-static const struct FAT32MasterBootRecord FAT32_MASTER_BOOT_RECORD PROGMEM =
-	{
-		.disk_signature = 0x424F4F42,
-		.partitions =
-			{
-				{
-					.status             = 0x80,
-					.partition_type     = 0x0C,
-					.abs_sector_address = FAT32_PARTITION_SECTOR_ADDRESS,
-					.sector_count       = FAT32_PARTITION_SECTOR_COUNT,
-				},
-			},
-		.signature = 0xAA55,
-	};
-
-static const struct FAT32BootSector FAT32_BOOT_SECTOR PROGMEM =
-	{
-		.BS_jmpBoot     = { 0xEB, 0x00, 0x90 },
-		.BS_OEMName     = "MSWIN4.1",
-		.BPB_BytsPerSec = FAT32_SECTOR_SIZE,
-		.BPB_SecPerClus = FAT32_SECTORS_PER_CLUSTER,
-		.BPB_RsvdSecCnt = FAT32_RESERVED_SECTOR_COUNT,
-		.BPB_NumFATs    = 1,
-		.BPB_Media      = FAT32_MEDIA_TYPE,
-		.BPB_TotSec32   = FAT32_PARTITION_SECTOR_COUNT,
-		.BPB_FATSz32    = FAT32_TABLE_SECTOR_COUNT,
-		.BPB_RootClus   = FAT32_ROOT_CLUSTER,
-		.BPB_FSInfo     = FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET,
-		.BPB_BkBootSec  = FAT32_BACKUP_BOOT_SECTOR_OFFSET,
-		.BS_DrvNum      = 0x80,
-		.BS_BootSig     = 0x29,
-		.BS_VolLab      = "NO NAME    ",
-		.BS_FilSysType  = "FAT32   ",
-		.BS_BootSign    = 0xAA55,
-	};
-
-static const struct FAT32FileStructureInfo FAT32_FILE_STRUCTURE_INFO PROGMEM =
-	{
-		.FSI_LeadSig    = 0x41615252,
-		.FSI_StrucSig   = 0x61417272,
-		.FSI_Free_Count = 0xFFFFFFFF,
-		.FSI_Nxt_Free   = 0xFFFFFFFF,
-		.FSI_TrailSig   = 0xAA550000,
-	};
-
-static const u32 FAT32_TABLE[128] PROGMEM = // Most significant nibbles are reserved. See: Source(15) @ Section(4) @ Page(16).
-	{
-		[0] = 0x0FFFFF'00 | FAT32_MEDIA_TYPE, // See: Source(15) @ Section(4.2) @ Page(19).
-		[1] = 0xFFFFFFFF,                     // For format utilities. Seems to be commonly always all set. See: Source(15) @ Section(4.2) @ Page(19).
-
-		[FAT32_ROOT_CLUSTER] = 0x0'FFFFFFF,
-	};
-static_assert(sizeof(FAT32_TABLE) == 512);
-
-static const union FAT32DirEntry FAT32_ROOT_DIR_ENTRIES[16] PROGMEM =
-	{
-	};
-static_assert(sizeof(FAT32_ROOT_DIR_ENTRIES) == 512);
-
-#define FAT32_SECTOR_XMDT(X) \
-	X(FAT32_MASTER_BOOT_RECORD , 0) \
-	X(FAT32_BOOT_SECTOR        , FAT32_PARTITION_SECTOR_ADDRESS) \
-	X(FAT32_BOOT_SECTOR        , FAT32_PARTITION_SECTOR_ADDRESS + FAT32_BACKUP_BOOT_SECTOR_OFFSET) \
-	X(FAT32_FILE_STRUCTURE_INFO, FAT32_PARTITION_SECTOR_ADDRESS + FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET) \
-	X(FAT32_FILE_STRUCTURE_INFO, FAT32_PARTITION_SECTOR_ADDRESS + FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET + FAT32_BACKUP_BOOT_SECTOR_OFFSET) \
-	X(FAT32_TABLE              , FAT32_PARTITION_SECTOR_ADDRESS + FAT32_RESERVED_SECTOR_COUNT) \
-	X(FAT32_ROOT_DIR_ENTRIES   , FAT32_PARTITION_SECTOR_ADDRESS + FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT) \
+//	static const struct FAT32MasterBootRecord FAT32_MASTER_BOOT_RECORD PROGMEM =
+//		{
+//			.disk_signature = 0x424F4F42,
+//			.partitions =
+//				{
+//					{
+//						.status             = 0x80,
+//						.partition_type     = 0x0C,
+//						.abs_sector_address = FAT32_PARTITION_SECTOR_ADDRESS,
+//						.sector_count       = FAT32_PARTITION_SECTOR_COUNT,
+//					},
+//				},
+//			.signature = 0xAA55,
+//		};
+//	
+//	static const struct FAT32BootSector FAT32_BOOT_SECTOR PROGMEM =
+//		{
+//			.BS_jmpBoot     = { 0xEB, 0x00, 0x90 },
+//			.BS_OEMName     = "MSWIN4.1",
+//			.BPB_BytsPerSec = FAT32_SECTOR_SIZE,
+//			.BPB_SecPerClus = FAT32_SECTORS_PER_CLUSTER,
+//			.BPB_RsvdSecCnt = FAT32_RESERVED_SECTOR_COUNT,
+//			.BPB_NumFATs    = 1,
+//			.BPB_Media      = FAT32_MEDIA_TYPE,
+//			.BPB_TotSec32   = FAT32_PARTITION_SECTOR_COUNT,
+//			.BPB_FATSz32    = FAT32_TABLE_SECTOR_COUNT,
+//			.BPB_RootClus   = FAT32_ROOT_CLUSTER,
+//			.BPB_FSInfo     = FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET,
+//			.BPB_BkBootSec  = FAT32_BACKUP_BOOT_SECTOR_OFFSET,
+//			.BS_DrvNum      = 0x80,
+//			.BS_BootSig     = 0x29,
+//			.BS_VolLab      = "NO NAME    ",
+//			.BS_FilSysType  = "FAT32   ",
+//			.BS_BootSign    = 0xAA55,
+//		};
+//	
+//	static const struct FAT32FileStructureInfo FAT32_FILE_STRUCTURE_INFO PROGMEM =
+//		{
+//			.FSI_LeadSig    = 0x41615252,
+//			.FSI_StrucSig   = 0x61417272,
+//			.FSI_Free_Count = 0xFFFFFFFF,
+//			.FSI_Nxt_Free   = 0xFFFFFFFF,
+//			.FSI_TrailSig   = 0xAA550000,
+//		};
+//	
+//	static const u32 FAT32_TABLE[128] PROGMEM = // Most significant nibbles are reserved. See: Source(15) @ Section(4) @ Page(16).
+//		{
+//			[0] = 0x0FFFFF'00 | FAT32_MEDIA_TYPE, // See: Source(15) @ Section(4.2) @ Page(19).
+//			[1] = 0xFFFFFFFF,                     // For format utilities. Seems to be commonly always all set. See: Source(15) @ Section(4.2) @ Page(19).
+//	
+//			[FAT32_ROOT_CLUSTER] = 0x0'FFFFFFF,
+//		};
+//	static_assert(sizeof(FAT32_TABLE) == 512);
+//	
+//	static const union FAT32DirEntry FAT32_ROOT_DIR_ENTRIES[16] PROGMEM =
+//		{
+//		};
+//	static_assert(sizeof(FAT32_ROOT_DIR_ENTRIES) == 512);
+//	
+//	#define FAT32_SECTOR_XMDT(X) \
+//		X(FAT32_MASTER_BOOT_RECORD , 0) \
+//		X(FAT32_BOOT_SECTOR        , FAT32_PARTITION_SECTOR_ADDRESS) \
+//		X(FAT32_BOOT_SECTOR        , FAT32_PARTITION_SECTOR_ADDRESS + FAT32_BACKUP_BOOT_SECTOR_OFFSET) \
+//		X(FAT32_FILE_STRUCTURE_INFO, FAT32_PARTITION_SECTOR_ADDRESS + FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET) \
+//		X(FAT32_FILE_STRUCTURE_INFO, FAT32_PARTITION_SECTOR_ADDRESS + FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET + FAT32_BACKUP_BOOT_SECTOR_OFFSET) \
+//		X(FAT32_TABLE              , FAT32_PARTITION_SECTOR_ADDRESS + FAT32_RESERVED_SECTOR_COUNT) \
+//		X(FAT32_ROOT_DIR_ENTRIES   , FAT32_PARTITION_SECTOR_ADDRESS + FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT) \
 
 //
 // "Diplomat_usb.c"
@@ -698,14 +708,14 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 //		struct USBDescEndpoint  endpoints[1];
 //	} hid;
 
-//	#define USB_MS_INTERFACE_INDEX 2
-//	struct
-//	{
-//		struct USBDescInterface desc;
-//		struct USBDescEndpoint  endpoints[2];
-//	} ms;
+	#define USB_MS_INTERFACE_INDEX 2
+	struct
+	{
+		struct USBDescInterface desc;
+		struct USBDescEndpoint  endpoints[2];
+	} ms;
 
-	#define USB_INTERFACE_COUNT 2
+	#define USB_INTERFACE_COUNT 3
 };
 
 // Endpoint buffer sizes must be one of the names of enum USBEndpointSizeCode.
@@ -730,16 +740,16 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 //	#define USB_ENDPOINT_HID_TRANSFER_TYPE USBEndpointTransferType_interrupt
 //	#define USB_ENDPOINT_HID_TRANSFER_DIR  USBEndpointAddressFlag_in
 //	#define USB_ENDPOINT_HID_SIZE          8
-//	
-//	#define USB_ENDPOINT_MS_IN               5
-//	#define USB_ENDPOINT_MS_IN_TRANSFER_TYPE USBEndpointTransferType_bulk
-//	#define USB_ENDPOINT_MS_IN_TRANSFER_DIR  USBEndpointAddressFlag_in
-//	#define USB_ENDPOINT_MS_IN_SIZE          64
-//	
-//	#define USB_ENDPOINT_MS_OUT               6
-//	#define USB_ENDPOINT_MS_OUT_TRANSFER_TYPE USBEndpointTransferType_bulk
-//	#define USB_ENDPOINT_MS_OUT_TRANSFER_DIR  0
-//	#define USB_ENDPOINT_MS_OUT_SIZE          64
+
+#define USB_ENDPOINT_MS_IN               5
+#define USB_ENDPOINT_MS_IN_TRANSFER_TYPE USBEndpointTransferType_bulk
+#define USB_ENDPOINT_MS_IN_TRANSFER_DIR  USBEndpointAddressFlag_in
+#define USB_ENDPOINT_MS_IN_SIZE          64
+
+#define USB_ENDPOINT_MS_OUT               6
+#define USB_ENDPOINT_MS_OUT_TRANSFER_TYPE USBEndpointTransferType_bulk
+#define USB_ENDPOINT_MS_OUT_TRANSFER_DIR  0
+#define USB_ENDPOINT_MS_OUT_SIZE          64
 
 #if PROGRAM_DIPLOMAT
 	static const u8 USB_ENDPOINT_UECFGNX[][2] PROGMEM = // UECFG0X and UECFG1X that an endpoint will be configured with.
@@ -754,8 +764,8 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 			MAKE(CDC_IN )
 			MAKE(CDC_OUT)
 			//	MAKE(HID)
-			//	MAKE(MS_IN )
-			//	MAKE(MS_OUT)
+			MAKE(MS_IN )
+			MAKE(MS_OUT)
 			#undef MAKE
 		};
 
@@ -899,22 +909,19 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 
 			// "Current/Maximum Capacity Descriptor". See: Source(14) @ Table(704) @ AbsPage(2).
 			//
-			// "Number of Blocks"                       : Number of addressable blocks, which is written in big-endian.
-			//        |        Reserved.
-			//        |            | "Descriptor Type"  : The type of the media the device has. See: Source(14) @ Table(705) @ AbsPage(2).
-			//        |            |   | "Block Length" : Amount of bytes of each addressable block, which is written in big-endian.
-			//        |            |   |      |
-			//  vvvvvvvvvvvv    vvvvvv vv  vvvvvvv
-				0, 240, 0, 0, 0b000000'10, 0, 2, 0 // TODO Update with FAT32
+			// "Number of Blocks"                        : Number of addressable blocks, which is written in big-endian.
+			//        |         Reserved.
+			//        |             | "Descriptor Type"  : The type of the media the device has. See: Source(14) @ Table(705) @ AbsPage(2).
+			//        |             |   | "Block Length" : Amount of bytes of each addressable block, which is written in big-endian.
+			//        |             |   |      |
+			//  vvvvvvvvvvvvv    vvvvvv vv  vvvvvvv
+				0, 177, 80, 0, 0b000000'10, 0, 2, 0 // TODO Update with FAT32
 		};
 
 	static const u8 USB_MS_SCSI_READ_CAPACITY_DATA[] PROGMEM = // See: Source(13) @ Table(120) @ Page(156).
 		{
-			// "RETURNED LOGICAL BLOCK ADDRESS" in big-endian. TODO Is this the largest block address?
-				((((u32) FAT32_PARTITION_SECTOR_ADDRESS) + FAT32_PARTITION_SECTOR_COUNT - 1) >> 24) & 0xFF,
-				((((u32) FAT32_PARTITION_SECTOR_ADDRESS) + FAT32_PARTITION_SECTOR_COUNT - 1) >> 16) & 0xFF,
-				((((u32) FAT32_PARTITION_SECTOR_ADDRESS) + FAT32_PARTITION_SECTOR_COUNT - 1) >>  8) & 0xFF,
-				((((u32) FAT32_PARTITION_SECTOR_ADDRESS) + FAT32_PARTITION_SECTOR_COUNT - 1) >>  0) & 0xFF,
+			// "RETURNED LOGICAL BLOCK ADDRESS" in big-endian.
+				0, 177, 79, 255,
 
 			// "BLOCK LENGTH IN BYTES" in big-endian.
 				(((u32) FAT32_SECTOR_SIZE) >> 24) & 0xFF,
@@ -1106,39 +1113,39 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 	//						}
 	//					},
 	//			},
-	//		.ms =
-	//			{
-	//				.desc =
-	//					{
-	//						.bLength            = sizeof(struct USBDescInterface),
-	//						.bDescriptorType    = USBDescType_interface,
-	//						.bInterfaceNumber   = USB_MS_INTERFACE_INDEX,
-	//						.bAlternateSetting  = 0,
-	//						.bNumEndpoints      = countof(USB_CONFIG_HIERARCHY.ms.endpoints),
-	//						.bInterfaceClass    = USBClass_ms,
-	//						.bInterfaceSubClass = 0x06, // See: "SCSI Transparent Command Set" @ Source(11) @ AbsPage(3).
-	//						.bInterfaceProtocol = 0x50, // See: "Bulk-Only Transport" @ Source(12) @ Page(11).
-	//					},
-	//				.endpoints =
-	//					{
-	//						{
-	//							.bLength          = sizeof(struct USBDescEndpoint),
-	//							.bDescriptorType  = USBDescType_endpoint,
-	//							.bEndpointAddress = USB_ENDPOINT_MS_IN | USB_ENDPOINT_MS_IN_TRANSFER_DIR,
-	//							.bmAttributes     = USB_ENDPOINT_MS_IN_TRANSFER_TYPE,
-	//							.wMaxPacketSize   = USB_ENDPOINT_MS_IN_SIZE,
-	//							.bInterval        = 0,
-	//						},
-	//						{
-	//							.bLength          = sizeof(struct USBDescEndpoint),
-	//							.bDescriptorType  = USBDescType_endpoint,
-	//							.bEndpointAddress = USB_ENDPOINT_MS_OUT | USB_ENDPOINT_MS_OUT_TRANSFER_DIR,
-	//							.bmAttributes     = USB_ENDPOINT_MS_OUT_TRANSFER_TYPE,
-	//							.wMaxPacketSize   = USB_ENDPOINT_MS_OUT_SIZE,
-	//							.bInterval        = 0,
-	//						}
-	//					},
-	//			},
+			.ms =
+				{
+					.desc =
+						{
+							.bLength            = sizeof(struct USBDescInterface),
+							.bDescriptorType    = USBDescType_interface,
+							.bInterfaceNumber   = USB_MS_INTERFACE_INDEX,
+							.bAlternateSetting  = 0,
+							.bNumEndpoints      = countof(USB_CONFIG_HIERARCHY.ms.endpoints),
+							.bInterfaceClass    = USBClass_ms,
+							.bInterfaceSubClass = 0x06, // See: "SCSI Transparent Command Set" @ Source(11) @ AbsPage(3).
+							.bInterfaceProtocol = 0x50, // See: "Bulk-Only Transport" @ Source(12) @ Page(11).
+						},
+					.endpoints =
+						{
+							{
+								.bLength          = sizeof(struct USBDescEndpoint),
+								.bDescriptorType  = USBDescType_endpoint,
+								.bEndpointAddress = USB_ENDPOINT_MS_IN | USB_ENDPOINT_MS_IN_TRANSFER_DIR,
+								.bmAttributes     = USB_ENDPOINT_MS_IN_TRANSFER_TYPE,
+								.wMaxPacketSize   = USB_ENDPOINT_MS_IN_SIZE,
+								.bInterval        = 0,
+							},
+							{
+								.bLength          = sizeof(struct USBDescEndpoint),
+								.bDescriptorType  = USBDescType_endpoint,
+								.bEndpointAddress = USB_ENDPOINT_MS_OUT | USB_ENDPOINT_MS_OUT_TRANSFER_DIR,
+								.bmAttributes     = USB_ENDPOINT_MS_OUT_TRANSFER_TYPE,
+								.wMaxPacketSize   = USB_ENDPOINT_MS_OUT_SIZE,
+								.bInterval        = 0,
+							}
+						},
+				},
 		};
 #endif
 
@@ -1204,11 +1211,14 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 	static const u8*                        _usb_ms_scsi_info_data                = 0;
 	static u8                               _usb_ms_scsi_info_size                = 0;
 	static b8                               _usb_ms_send_sense                    = false;
-	static b8                               _usb_ms_sector_write                  = false;
-	static u32                              _usb_ms_abs_sector_address            = 0;
 	static u32                              _usb_ms_sectors_left                  = 0;
 	static u8                               _usb_ms_sending_sector_fragment_index = 0;
 	static struct USBMSCommandStatusWrapper _usb_ms_status                        = {0};
+
+	static volatile b8  sector_write                     = false;
+	static volatile u32 abs_sector_address               = 0;
+	static          u8  loaded_sector[FAT32_SECTOR_SIZE] = {0};
+	static volatile b8  sector_request                   = false;
 #endif
 
 //

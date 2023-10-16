@@ -1,9 +1,11 @@
 #define F_CPU               16'000'000
 #define PROGRAM_DIPLOMAT    true
-#define BOARD_PRO_MICRO     true
-#define PIN_DUMP_SS         2
-#define PIN_SD_SS           3
-#define PIN_USB_SPINLOCKING 4
+#define BOARD_LEONARDO      true
+#define PIN_DUMP_SS         0
+#define PIN_USB_SPINLOCKING 0
+#define PIN_U16_CLK         4
+#define PIN_U16_DATA        5
+#define PIN_SD_SS           7
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
@@ -31,25 +33,26 @@ main(void)
 
 	sei();
 	spi_init();
+	sd_init();
 	usb_init();
-	u32 sector_count = sd_init();
 
-	u8 zero_sector[FAT32_SECTOR_SIZE] = {0};
+	debug_u16(0);
 
-	for (u32 sector_address = sector_count - 1; sector_address; sector_address -= 1)
+	while (true)
 	{
-		debug_tx_u64(sector_address);
-		debug_tx_cstr("\n");
-		sd_write(zero_sector, sector_address);
-	}
+		if (sector_request)
+		{
+			if (sector_write)
+			{
+				sd_write(loaded_sector, abs_sector_address);
+			}
+			else
+			{
+				sd_read(loaded_sector, abs_sector_address);
+			}
 
-	pin_output(HALT);
-	for (;;)
-	{
-		pin_high(HALT);
-		_delay_ms(1000.0);
-		pin_low(HALT);
-		_delay_ms(1000.0);
+			sector_request = false;
+		}
 	}
 }
 

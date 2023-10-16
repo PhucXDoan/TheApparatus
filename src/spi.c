@@ -10,12 +10,6 @@
 	}
 
 	#if DEBUG
-		static void
-		debug_u16(u16 value)
-		{
-			spi_trade(value);
-		}
-
 		__attribute__((noreturn))
 		static void
 		debug_unhandled(u16 line_number, enum HaltSource source)
@@ -57,9 +51,5 @@
 			(0 << DORD);                           // MSb sent first.
 
 		SPSR = (((SPI_PRESCALER >> 2) & 1) << SPI2X);
-
-		#if DEBUG
-		debug_u16(0);
-		#endif
 	}
 #endif

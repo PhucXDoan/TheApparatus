@@ -39,7 +39,7 @@ error(enum HaltSource source)
 	pin_output(HALT);
 	for (;;)
 	{
-		#if BOARD_PRO_MICRO // This board has the LED active low.
+		#if BOARD_PRO_MICRO || BOARD_LEONARDO // These boards has the LEDs active low.
 			#define ON()  pin_low(HALT)
 			#define OFF() pin_high(HALT)
 		#endif
@@ -104,6 +104,34 @@ debug_halt(u8 amount)
 		}
 	}
 }
+#endif
+
+#if DEBUG
+	#if PROGRAM_DIPLOMAT
+		static void
+		debug_u16(u16 value)
+		{
+			pin_output(PIN_U16_CLK);
+			pin_output(PIN_U16_DATA);
+			pin_low(PIN_U16_CLK);
+			pin_low(PIN_U16_DATA);
+
+			for (u8 i = 0; i < sizeof(value) * 8; i += 1)
+			{
+				if ((value >> (sizeof(value) * 8 - 1 - i)) & 1)
+				{
+					pin_high(PIN_U16_DATA);
+				}
+				else
+				{
+					pin_low(PIN_U16_DATA);
+				}
+
+				pin_high(PIN_U16_CLK);
+				pin_low(PIN_U16_CLK);
+			}
+		}
+	#endif
 #endif
 
 //

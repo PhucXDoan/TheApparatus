@@ -1,7 +1,7 @@
 #define SD_CMD8_ARGUMENT                0x00000'1'AA // See: Source(19) @ Table(7-5) @ AbsPage(119).
 #define SD_CMD8_CRC7                    0x43         // See: [CRC7 Calculation].
-#define SD_MAX_RESTART_ATTEMPTS         1024
-#define SD_MAX_COMMAND_RESPONSE_LATENCY 512
+#define SD_MAX_RESTART_ATTEMPTS         2048
+#define SD_MAX_COMMAND_RESPONSE_LATENCY 1024
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE HaltSource_sd
 
@@ -190,6 +190,11 @@ sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
 
 	pin_output(PIN_SD_SS);
 	pin_high(PIN_SD_SS);
+
+	for (u8 i = 0; i < 255; i += 1) // Doing this improves reliability after powering up.
+	{
+		spi_trade(0xFF);
+	}
 
 	//
 	// Perform software reset.
