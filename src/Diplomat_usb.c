@@ -81,14 +81,14 @@ ISR(USB_GEN_vect)
 		}
 
 		// Enable the interrupt source of the event that endpoint 0 receives a SETUP-transaction.
-		UENUM  = USB_ENDPOINT_DFLT;
+		UENUM  = USB_ENDPOINT_DFLT_INDEX;
 		UEIENX = (1 << RXSTPE);
 	}
 
 	if (UDINT & (1 << SOFI)) // Start-of-Frame.
 	{
 		#if DEBUG
-		UENUM = USB_ENDPOINT_CDC_IN;
+		UENUM = USB_ENDPOINT_CDC_IN_INDEX;
 		if (UEINTX & (1 << TXINI)) // Endpoint's buffer is ready to be filled up with data to send to the host.
 		{
 			while
@@ -107,7 +107,7 @@ ISR(USB_GEN_vect)
 		#endif
 
 		#if DEBUG
-		UENUM = USB_ENDPOINT_CDC_OUT;
+		UENUM = USB_ENDPOINT_CDC_OUT_INDEX;
 		if (UEINTX & (1 << RXOUTI)) // Endpoint's buffer has data from the host to be copied.
 		{
 			while
@@ -134,7 +134,7 @@ ISR(USB_GEN_vect)
 		}
 		#endif
 
-		UENUM = USB_ENDPOINT_HID;
+		UENUM = USB_ENDPOINT_HID_INDEX;
 		if (UEINTX & (1 << TXINI)) // See: [Mouse Commands].
 		{
 			i8 delta_x = 0;
@@ -206,7 +206,7 @@ ISR(USB_GEN_vect)
 		{
 			case USBMSState_ready_for_command:
 			{
-				UENUM = USB_ENDPOINT_MS_OUT;
+				UENUM = USB_ENDPOINT_MS_OUT_INDEX;
 				if (UEINTX & (1 << RXOUTI))
 				{
 					struct USBMSCommandBlockWrapper command = {0};
@@ -255,7 +255,7 @@ ISR(USB_GEN_vect)
 									}
 								} break;
 
-								case USBMSSCSIOpcode_inquiry: // See: Source(13) @ Section(3.6.1) @ Page(92).
+								case USBMSSCSIOpcode_inquiry: // See: Source(*) @ Section(3.6.1) @ Page(92).
 								{
 									b8 enable_vital_product_data = (command.CBWCB[1] >> 0) & 1;
 									b8 command_support_data      = (command.CBWCB[1] >> 1) & 1;
@@ -305,7 +305,7 @@ ISR(USB_GEN_vect)
 									}
 								} break;
 
-								case USBMSSCSIOpcode_request_sense: // See: Source(13) @ Section(3.37) @ Page(195).
+								case USBMSSCSIOpcode_request_sense: // See: Source(*) @ Section(3.37) @ Page(195).
 								{
 									u8 allocation_length = command.CBWCB[4];
 									u8 control           = command.CBWCB[5];
@@ -370,7 +370,7 @@ ISR(USB_GEN_vect)
 									}
 								} break;
 
-								case USBMSSCSIOpcode_read_capacity: // See: Source(13) @ Section(3.22) @ Page(155).
+								case USBMSSCSIOpcode_read_capacity: // See: Source(*) @ Section(3.22) @ Page(155).
 								{
 									u32 abs_sector_address =
 										(((u32) command.CBWCB[2]) << 24) |
@@ -527,11 +527,6 @@ ISR(USB_GEN_vect)
 									}
 								} break;
 
-								case USBMSSCSIOpcode_read_format_capacities:
-								{
-									unsupported_command = true;
-								} break;
-
 								case USBMSSCSIOpcode_prevent_allow_medium_removal:
 								{
 									u8 prevent = command.CBWCB[4] & 0b11;
@@ -599,8 +594,7 @@ ISR(USB_GEN_vect)
 
 								default:
 								{
-									debug_u16(command.CBWCB[0]);
-									debug_halt(1);
+									unsupported_command = true;
 								} break;
 							}
 
@@ -612,7 +606,7 @@ ISR(USB_GEN_vect)
 								}
 								else if (command.bmCBWFlags) // Device to host.
 								{
-									UENUM = USB_ENDPOINT_MS_IN;
+									UENUM = USB_ENDPOINT_MS_IN_INDEX;
 									UECONX |= (1 << STALLRQ);
 								}
 								else // Host to device.
@@ -627,7 +621,7 @@ ISR(USB_GEN_vect)
 										.dCSWSignature   = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE,
 										.dCSWTag         = command.dCBWTag,
 										.dCSWDataResidue = command.dCBWDataTransferLength,
-										.bCSWStatus      = 0x01,
+										.bCSWStatus      = USBMSCommandStatusWrapperStatus_failed,
 									};
 								_usb_ms_sense =
 									(struct SCSISense)
@@ -696,7 +690,7 @@ ISR(USB_GEN_vect)
 										.dCSWSignature   = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE,
 										.dCSWTag         = command.dCBWTag,
 										.dCSWDataResidue = dCSWDataResidue,
-										.bCSWStatus      = 0x00,
+										.bCSWStatus      = USBMSCommandStatusWrapperStatus_success,
 									};
 							}
 							else if (_usb_ms_sectors_left)
@@ -716,7 +710,7 @@ ISR(USB_GEN_vect)
 										.dCSWSignature   = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE,
 										.dCSWTag         = command.dCBWTag,
 										.dCSWDataResidue = 0,
-										.bCSWStatus      = 0x00,
+										.bCSWStatus      = USBMSCommandStatusWrapperStatus_success,
 									};
 							}
 							else if (_usb_ms_send_sense)
@@ -733,7 +727,7 @@ ISR(USB_GEN_vect)
 										.dCSWSignature   = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE,
 										.dCSWTag         = command.dCBWTag,
 										.dCSWDataResidue = command.dCBWDataTransferLength - sizeof(_usb_ms_sense),
-										.bCSWStatus      = 0x00,
+										.bCSWStatus      = USBMSCommandStatusWrapperStatus_success,
 									};
 							}
 							else if (!command.dCBWDataTransferLength)
@@ -745,7 +739,7 @@ ISR(USB_GEN_vect)
 										.dCSWSignature   = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE,
 										.dCSWTag         = command.dCBWTag,
 										.dCSWDataResidue = 0,
-										.bCSWStatus      = 0x00,
+										.bCSWStatus      = USBMSCommandStatusWrapperStatus_success,
 									};
 							}
 							else
@@ -774,7 +768,7 @@ ISR(USB_GEN_vect)
 
 			case USBMSState_sending_data:
 			{
-				UENUM = USB_ENDPOINT_MS_IN;
+				UENUM = USB_ENDPOINT_MS_IN_INDEX;
 				if (UEINTX & (1 << TXINI))
 				{
 					debug_u16(TEMP);
@@ -840,7 +834,7 @@ ISR(USB_GEN_vect)
 
 			case USBMSState_receiving_data:
 			{
-				UENUM = USB_ENDPOINT_MS_OUT;
+				UENUM = USB_ENDPOINT_MS_OUT_INDEX;
 				if ((UEINTX & (1 << RXOUTI)) && !sector_request)
 				{
 					if (!_usb_ms_sectors_left)
@@ -890,7 +884,7 @@ ISR(USB_GEN_vect)
 
 			case USBMSState_ready_for_status:
 			{
-				UENUM = USB_ENDPOINT_MS_IN;
+				UENUM = USB_ENDPOINT_MS_IN_INDEX;
 				if (UEINTX & (1 << TXINI))
 				{
 					static_assert(sizeof(_usb_ms_status) <= USB_ENDPOINT_MS_IN_SIZE);
@@ -948,7 +942,7 @@ _usb_endpoint_0_in_pgm(const u8* payload_data, u16 payload_length)
 
 ISR(USB_COM_vect)
 { // See: [USB Endpoint Interrupt Routine].
-	UENUM = USB_ENDPOINT_DFLT;
+	UENUM = USB_ENDPOINT_DFLT_INDEX;
 	if (UEINTX & (1 << RXSTPI)) // [Endpoint 0: SETUP-Transactions]. // TODO Remove this if-statement if we in the end aren't adding any other interrupt source.
 	{
 		UECONX |= (1 << STALLRQC); // SETUP-transactions lift STALL conditions. See: Source(2) @ Section(8.5.3.4) @ Page(228) & [Endpoint 0: Request Error].
@@ -960,15 +954,15 @@ ISR(USB_COM_vect)
 		}
 		UEINTX = ~((1<<RXSTPI) | (1<<RXOUTI) | (1<<TXINI)); // TODO Why??
 
-		switch (request.type)
+		switch (request.kind)
 		{
-			case USBSetupRequestType_get_desc:     // [Endpoint 0: GetDescriptor].
-			case USBSetupRequestType_hid_get_desc: // [Endpoint 0: GetDescriptor].
+			case USBSetupRequestKind_get_desc:     // [Endpoint 0: GetDescriptor].
+			case USBSetupRequestKind_hid_get_desc: // [Endpoint 0: GetDescriptor].
 			{
 				u8        payload_length = 0; // Any payload we send will not exceed 255 bytes.
 				const u8* payload_data   = 0;
 
-				if (request.type == USBSetupRequestType_get_desc)
+				if (request.kind == USBSetupRequestKind_get_desc)
 				{
 					switch ((enum USBDescType) request.get_desc.desc_type)
 					{
@@ -983,9 +977,9 @@ ISR(USB_COM_vect)
 						{
 							if (!request.get_desc.desc_index) // We only have a single configuration.
 							{
-								payload_data   = (const u8*) &USB_CONFIG_HIERARCHY;
-								payload_length = sizeof(USB_CONFIG_HIERARCHY);
-								static_assert(sizeof(USB_CONFIG_HIERARCHY) < (((u64) 1) << bitsof(payload_length)));
+								payload_data   = (const u8*) &USB_CONFIG;
+								payload_length = sizeof(USB_CONFIG);
+								static_assert(sizeof(USB_CONFIG) < (((u64) 1) << bitsof(payload_length)));
 							}
 						} break;
 
@@ -1003,8 +997,8 @@ ISR(USB_COM_vect)
 				}
 				else if
 				(
-					request.hid_get_desc.interface_number == USB_HID_INTERFACE_INDEX &&
-					request.hid_get_desc.desc_type        == USBDescType_hid_report
+					request.hid_get_desc.designated_interface_index == USB_HID_INTERFACE_INDEX &&
+					request.hid_get_desc.desc_type                  == USBDescType_hid_report
 				)
 				{
 					payload_data   = (const u8*) &USB_DESC_HID_REPORT;
@@ -1032,7 +1026,7 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
-			case USBSetupRequestType_set_address: // [Endpoint 0: SetAddress].
+			case USBSetupRequestKind_set_address: // [Endpoint 0: SetAddress].
 			{
 				if (request.set_address.address < 0b0111'1111)
 				{
@@ -1049,16 +1043,16 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
-			case USBSetupRequestType_set_config: // [Endpoint 0: SetConfiguration].
+			case USBSetupRequestKind_set_config: // [Endpoint 0: SetConfiguration].
 			{
-				switch (request.set_config.value)
+				switch (request.set_config.id)
 				{
 					case 0:
 					{
 						error; // In the case that the host, for some reason, wants to set the device back to the "address state", we should handle this.
 					} break;
 
-					case USB_CONFIG_HIERARCHY_ID:
+					case USB_CONFIG_ID:
 					{
 						UEINTX &= ~(1 << TXINI); // Send out zero-length data-packet for the host's upcoming IN-transaction to acknowledge this request.
 					} break;
@@ -1070,7 +1064,7 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
-			case USBSetupRequestType_cdc_set_line_coding: // [Endpoint 0: CDC-Specific SetLineCoding].
+			case USBSetupRequestKind_cdc_set_line_coding: // [Endpoint 0: CDC-Specific SetLineCoding].
 			{
 				if (request.cdc_set_line_coding.incoming_line_coding_datapacket_size == sizeof(struct USBCDCLineCoding))
 				{
@@ -1116,7 +1110,46 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
-			case USBSetupRequestType_ms_get_max_lun: // [Endpoint 0: MS-Specific GetMaxLUN].
+			case USBSetupRequestKind_endpoint_clear_feature:
+			{
+				if (request.endpoint_clear_feature.feature_selector == 0)
+				{
+					UEINTX &= ~(1 << TXINI);
+
+					switch (request.endpoint_clear_feature.endpoint_index)
+					{
+						case USB_ENDPOINT_DFLT_INDEX | USB_ENDPOINT_DFLT_TRANSFER_DIR:
+						{
+						} break;
+
+						#define MAKE(NAME) \
+							case USB_ENDPOINT_##NAME##_INDEX | USB_ENDPOINT_##NAME##_TRANSFER_DIR: \
+							{ \
+								UENUM  = USB_ENDPOINT_##NAME##_INDEX; \
+								UECONX = (1 << STALLRQC) | (1 << RSTDT) | (1 << EPEN); \
+								UERST  = (1 << USB_ENDPOINT_##NAME##_INDEX);\
+								UERST  = 0; \
+							} break;
+						MAKE(CDC_IN )
+						MAKE(CDC_OUT)
+						MAKE(HID    )
+						MAKE(MS_IN  )
+						MAKE(MS_OUT )
+						#undef MAKE
+
+						default:
+						{
+							UECONX |= (1 << STALLRQ);
+						} break;
+					}
+				}
+				else
+				{
+					UECONX |= (1 << STALLRQ);
+				}
+			} break;
+
+			case USBSetupRequestKind_ms_get_max_lun: // [Endpoint 0: MS-Specific GetMaxLUN]. // TODO Update: apple wants this for some reason.
 			{
 				while (!(UEINTX & ((1 << RXOUTI) | (1 << TXINI))));
 
@@ -1132,40 +1165,9 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
-			case USBSetupRequestType_endpoint_clear_feature:
-			{
-				if (request.endpoint_clear_feature.feature_selector == 0)
-				{
-					UEINTX &= ~(1 << TXINI);
-
-					switch (request.endpoint_clear_feature.endpoint_index)
-					{
-						#define MAKE(NAME) \
-							case USB_ENDPOINT_##NAME | USB_ENDPOINT_##NAME##_TRANSFER_DIR: \
-							{ \
-								UENUM  = USB_ENDPOINT_##NAME; \
-								UECONX = (1 << STALLRQC) | (1 << RSTDT) | (1 << EPEN); \
-								UERST  = (1 << USB_ENDPOINT_##NAME);\
-								UERST  = 0; \
-							} break;
-						USB_ENDPOINT_XMDT(MAKE)
-						#undef MAKE
-
-						default:
-						{
-							UECONX |= (1 << STALLRQ);
-						} break;
-					}
-				}
-				else
-				{
-					UECONX |= (1 << STALLRQ);
-				}
-			} break;
-
-			case USBSetupRequestType_cdc_get_line_coding:        // [Endpoint 0: Extraneous CDC-Specific Requests].
-			case USBSetupRequestType_cdc_set_control_line_state: // [Endpoint 0: Extraneous CDC-Specific Requests].
-			case USBSetupRequestType_hid_set_idle:               // [Endpoint 0: HID-Specific SetIdle].
+			case USBSetupRequestKind_cdc_get_line_coding:        // [Endpoint 0: Extraneous CDC-Specific Requests].
+			case USBSetupRequestKind_cdc_set_control_line_state: // [Endpoint 0: Extraneous CDC-Specific Requests].
+			case USBSetupRequestKind_hid_set_idle:               // [Endpoint 0: HID-Specific SetIdle].
 			{
 				UECONX |= (1 << STALLRQ);
 			} break;
@@ -1173,7 +1175,7 @@ ISR(USB_COM_vect)
 			default:
 			{
 				UECONX |= (1 << STALLRQ);
-				debug_u16(request.type);
+				debug_u16(request.kind);
 				debug_halt(2);
 			} break;
 		}
@@ -1704,7 +1706,7 @@ ISR(USB_COM_vect)
 	bitmap detailing the characteristics of the host's request. The byte after that is
 	the specific request that the host is asking for. In the majority of cases, we can
 	just simply represent these two bytes as a single integer word, and this ends up
-	being the ".type" field of USBSetupRequest. See: USBSetupRequestType.
+	being the ".kind" field of USBSetupRequest. See: USBSetupRequestKind.
 
 	(1) PIDs @ Source(2) @ Table(8-1) @ Page(196).
 	(2) "CONTROL Endpoint Management" @ Source(1) @ Section(22.12) @ Page(274).
@@ -1905,7 +1907,7 @@ ISR(USB_COM_vect)
 	error-correction, etc. just like a modem might have. But a lot of this doesn't actually really
 	matter at all; we're still sending pure binary data-packets to the host via USB.
 
-	Within our USB_CONFIG_HIERARCHY, we define the "Communication Class Interface".
+	Within our USB_CONFIG, we define the "Communication Class Interface".
 	This interface is responsible for "device management" and "call management", and is required
 	for all communication devices, according to (1). As for what device and call management
 	entails:
@@ -1978,7 +1980,7 @@ ISR(USB_COM_vect)
 
 	Since we did define two interfaces to bring a single feature to the host, the CDC and CDC-Data
 	interfaces are grouped together under the previous IAD that was defined before (see:
-	USB_CONFIG_HIERARCHY).
+	USB_CONFIG).
 
 	(1) "Interface Definitions" @ Source(6) @ Section(3.3) @ AbsPage(20).
 	(2) "Communication Class Interface" @ Source(6) @ Section(3.3.1) @ AbsPage(20).
@@ -2071,8 +2073,8 @@ ISR(USB_COM_vect)
 	This is where the host obviously set the configuration of the device. The host could send a 0
 	to indicate that we should be in the "address state" (1), which is the state a USB device is in
 	after it has been just assigned an address; more likely though the host will send a
-	configuration value of USB_CONFIG_HIERARCHY_ID (which it got from GetDescriptor) to set to our
-	only configuration that is USB_CONFIG_HIERARCHY. This request would only really matter when we
+	configuration value of USB_CONFIG_ID (which it got from GetDescriptor) to set to our
+	only configuration that is USB_CONFIG. This request would only really matter when we
 	have multiple configurations that the host may choose from.
 
 	(1) "Address State" @ Source(2) @ Section(9.4.7) @ Page(257).

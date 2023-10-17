@@ -4,7 +4,7 @@
 #define stringify(X)     stringify_(X)
 #define concat_(X, Y)    X##Y
 #define concat(X, Y)     concat_(X, Y)
-#define countof(...)     (sizeof(__VA_ARGS__)/sizeof((__VA_ARGS__)[0]))
+#define countof(...)     (sizeof(__VA_ARGS__) / sizeof((__VA_ARGS__)[0]))
 #define bitsof(...)      (sizeof(__VA_ARGS__) * 8)
 #define static_assert(X) _Static_assert((X), #X)
 
@@ -21,6 +21,19 @@ typedef int16_t  b16;
 typedef int32_t  b32;
 typedef int64_t  b64;
 
+#define u8(...)  ((u8)  (__VA_ARGS__))
+#define u16(...) ((u16) (__VA_ARGS__))
+#define u32(...) ((u32) (__VA_ARGS__))
+#define u64(...) ((u64) (__VA_ARGS__))
+#define i8(...)  ((i8)  (__VA_ARGS__))
+#define i16(...) ((i16) (__VA_ARGS__))
+#define i32(...) ((i32) (__VA_ARGS__))
+#define i64(...) ((i64) (__VA_ARGS__))
+#define b8(...)  ((b8)  (__VA_ARGS__))
+#define b16(...) ((b16) (__VA_ARGS__))
+#define b32(...) ((b32) (__VA_ARGS__))
+#define b64(...) ((b64) (__VA_ARGS__))
+
 //
 // "pin.c"
 //
@@ -34,8 +47,17 @@ enum HaltSource
 };
 
 #if __AVR_ATmega32U4__
+	#if BOARD_LEONARDO
+		#define PIN_XMDT(X) /* See: Source(3). */ \
+			X(0 , D, 2) X(1 , D, 3) X(2 , D, 1) X(3 , D, 0) X(4 , D, 4) X(5 , C, 6) X(6 , D, 7) \
+			X(7 , E, 6) X(8 , B, 4) X(9 , B, 5) X(10, B, 6) X(11, B, 7) X(12, D, 6) X(13, C, 7) \
+			X(A0, F, 7) X(A1, F, 6) X(A2, F, 5) X(A3, F, 4) X(A4, F, 1) X(A5, F, 0) \
+			X(SPI_SS, B, 0) X(SPI_CLK, B, 1) X(SPI_MOSI, B, 2) X(SPI_MISO, B, 3) \
+			X(HALT, D, 5)
+	#endif
+
 	#if BOARD_PRO_MICRO
-		#define PIN_XMDT(X) \
+		#define PIN_XMDT(X) /* Pin assignments are pretty similar to the Arduino Leonardo. */ \
 			X(2     , D, 1) X(3      , D, 0) X(4       , D, 4) X(5       , C, 6) \
 			X(6     , D, 7) X(7      , E, 6) X(8       , B, 4) X(9       , B, 5) \
 			X(10    , B, 6) X(14     , B, 3) X(15      , B, 1) X(16      , B, 2) \
@@ -43,23 +65,13 @@ enum HaltSource
 			X(SPI_SS, B, 0) X(SPI_CLK, B, 1) X(SPI_MOSI, B, 2) X(SPI_MISO, B, 3) \
 			X(HALT  , D, 5)
 	#endif
-
-	#if BOARD_LEONARDO
-		#define PIN_XMDT(X) \
-			X(0 , D, 2) X(1 , D, 3) X(2 , D, 1) X(3 , D, 0) X(4 , D, 4) \
-			X(5 , C, 6) X(6 , D, 7) X(7 , E, 6) X(8 , B, 4) X(9 , B, 5) \
-			X(10, B, 6) X(11, B, 7) X(12, D, 6) X(13, C, 7)             \
-			X(A0, F, 7) X(A1, F, 6) X(A2, F, 5) X(A3, F, 4) X(A4, F, 1) X(A5, F, 0) \
-			X(SPI_SS, B, 0) X(SPI_CLK, B, 1) X(SPI_MOSI, B, 2) X(SPI_MISO, B, 3) \
-			X(HALT, D, 5)
-	#endif
 #endif
 
 #if __AVR_ATmega2560__
 	#if BOARD_MEGA2560
-		#define PIN_XMDT(X) \
-			X( 0, E, 0) X( 1, E, 1) X( 2, E, 4) X( 3, E, 5) X( 4, G, 5) X( 5, E, 3) \
-			X( 6, H, 3) X( 7, H, 4) X( 8, H, 5) X( 9, H, 6) X(10, B, 4) X(11, B, 5) \
+		#define PIN_XMDT(X) /* See: Source(18). */ \
+			X(0 , E, 0) X(1 , E, 1) X(2 , E, 4) X(3 , E, 5) X( 4, G, 5) X(5 , E, 3) \
+			X(6 , H, 3) X(7 , H, 4) X(8 , H, 5) X(9 , H, 6) X(10, B, 4) X(11, B, 5) \
 			X(12, B, 6) X(13, B, 7) X(14, J, 1) X(15, J, 0) X(16, H, 1) X(17, H, 0) \
 			X(18, D, 3) X(19, D, 2) X(20, D, 1) X(21, D, 0) X(22, A, 0) X(23, A, 1) \
 			X(24, A, 2) X(25, A, 3) X(26, A, 4) X(27, A, 5) X(28, A, 6) X(29, A, 7) \
@@ -76,15 +88,21 @@ enum HaltSource
 // "spi.c"
 //
 
-enum SPIPrescaler // Only one way of having prescaler of 64 is listed. See: Source(1) @ Table(17-5) @ Page(186).
+enum SPIPrescaler // See: Source(1) @ Table(17-5) @ Page(186).
 {
-	SPIPrescaler_4   = 0b000,
-	SPIPrescaler_16  = 0b001,
-	SPIPrescaler_64  = 0b010,
-	SPIPrescaler_128 = 0b011,
-	SPIPrescaler_2   = 0b100,
-	SPIPrescaler_8   = 0b101,
-	SPIPrescaler_32  = 0b110,
+	//                   "SPI2X" bit in "SPSR".
+	//                   | "SPR1" bit in "SPCR".
+	//                   | | "SPR0" bit in "SPCR".
+	//                   | | |
+	//                   v v v
+	SPIPrescaler_4   = 0b0'0'0,
+	SPIPrescaler_16  = 0b0'0'1,
+	SPIPrescaler_64  = 0b0'1'0,
+	SPIPrescaler_128 = 0b0'1'1,
+	SPIPrescaler_2   = 0b1'0'0,
+	SPIPrescaler_8   = 0b1'0'1,
+	SPIPrescaler_32  = 0b1'1'0,
+	SPIPrescaler_64_ = 0b1'1'1, // Equivalent to SPIPrescaler_64 (0b0'1'0).
 };
 
 #define SPI_PRESCALER SPIPrescaler_128
@@ -93,7 +111,9 @@ enum SPIPrescaler // Only one way of having prescaler of 64 is listed. See: Sour
 // "sd.c"
 //
 
-enum SDCommand // Non-exhaustive. See: Source(19) @ Section(7.3.1.3) @ AbsPage(113).
+#define FAT32_SECTOR_SIZE 512
+
+enum SDCommand // Non-exhaustive. See: Source(19) @ Section(7.3.1.3) @ AbsPage(113-117).
 {
 	SDCommand_GO_IDLE_STATE     = 0,
 	SDCommand_SEND_IF_COND      = 8,
@@ -101,7 +121,7 @@ enum SDCommand // Non-exhaustive. See: Source(19) @ Section(7.3.1.3) @ AbsPage(1
 	SDCommand_READ_SINGLE_BLOCK = 17,
 	SDCommand_WRITE_BLOCK       = 24,
 	SDCommand_APP_CMD           = 55,
-	SDCommand_SD_SEND_OP_COND   = 41,
+	SDCommand_SD_SEND_OP_COND   = 41, // Application-specific.
 };
 
 enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
@@ -114,213 +134,6 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 	SDR1ResponseFlag_address_error        = 1 << 5,
 	SDR1ResponseFlag_parameter_error      = 1 << 6,
 };
-
-//
-// FAT32.
-//
-
-//	#define FAT32_PARTITION_SECTOR_ADDRESS 2
-//	#define FAT32_PARTITION_SECTOR_COUNT   16777216
-//	#define FAT32_RESERVED_SECTOR_COUNT    2
-//	#define FAT32_TABLE_SECTOR_COUNT       64
-#define FAT32_SECTOR_SIZE              512
-//	#define FAT32_SECTORS_PER_CLUSTER      64
-
-//	#define FAT32_MEDIA_TYPE                        0xF8
-//	#define FAT32_BACKUP_BOOT_SECTOR_OFFSET         6
-//	#define FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET 1
-//	#define FAT32_ROOT_CLUSTER                      2
-
-//	struct FAT32PartitionEntry // See: "Partition table entries" @ Source(16).
-//	{
-//		u8  status;               // 0x80 if this partition is active, otherwise 0x00.
-//		u8  chs_address_begin[3]; // Irrelevant.
-//		u8  partition_type;       // Seems to be must 0x0C for FAT32s with logical block addressing. See: "Partition table entry" @ Source(17).
-//		u8  chs_address_end[3];   // Irrelevant.
-//		u32 abs_sector_address;   // Where the partition begins.
-//		u32 sector_count;         // Amount of sectors for this partition.
-//	};
-//	
-//	struct FAT32MasterBootRecord // See: "Structure of a modern standard MBR" @ Source(16).
-//	{
-//		u8                         bootstrap_code_area_fst[218]; // Irrelevant.
-//		u8                         disk_timestamp[6];            // Irrelevant.
-//		u8                         bootstrap_code_area_snd[216]; // Irrelevant.
-//		u32                        disk_signature;               // Some unique identifier for the host to work with.
-//		u16                        zero;                         // Must be zero.
-//		struct FAT32PartitionEntry partitions[4];
-//		u16                        signature;                    // Must be 0xAA55.
-//	};
-//	
-//	struct FAT32BootSector // See: Source(15) @ Section(3.1) @ Page(7-9) & Source(15) @ Section(3.3) @ Page(11-12).
-//	{
-//		u8   BS_jmpBoot[3];    // Best as { 0xEB, 0x00, 0x90 }.
-//		char BS_OEMName[8];    // Best as "MSWIN 4.1". See: "Boot Sector and BPB" @ Source(17).
-//		u16  BPB_BytsPerSec;   // Must be 512, 1024, 2048, or 4096 bytes per sector.
-//		u8   BPB_SecPerClus;   // Must be power of two and BPB_BytsPerSec * BPB_SecPerClus <= 32'768.
-//		u16  BPB_RsvdSecCnt;   // Must be non-zero.
-//		u8   BPB_NumFATs;      // Fine as 1.
-//		u16  BPB_RootEntCnt;   // Must be zero.
-//		u16  BPB_TotSec16;     // Must be zero.
-//		u8   BPB_Media;        // Best as 0xF8 for "fixed (non-removable) media"; must be also in lower 8-bits of the first FAT entry.
-//		u16  BPB_FATSz16;      // Must be zero.
-//		u16  BPB_SecPerTrk;    // Irrelevant.
-//		u16  BPB_NumHeads;     // Irrelevant.
-//		u32  BPB_HiddSec;      // Seems irrelevant; best as 0.
-//		u32  BPB_TotSec32;     // Must be non-zero.
-//		u32  BPB_FATSz32;      // Sectors per FAT.
-//		u16  BPB_ExtFlags;     // Seems irrelevant; best as 0.
-//		u16  BPB_FSVer;        // Must be zero.
-//		u32  BPB_RootClus;     // Cluster number of the first cluster of the root directory; best as 2.
-//		u16  BPB_FSInfo;       // Sector of the "FSINFO"; usually 1.
-//		u16  BPB_BkBootSec;    // Sector of the duplicated boot record; best as 6.
-//		u8   BPB_Reserved[12]; // Must be zero.
-//		u8   BS_DrvNum;        // Seems irrelevant; best as 0x80.
-//		u8   BS_Reserved;      // Must be zero.
-//		u8   BS_BootSig;       // Must be 0x29.
-//		u32  BS_VolID;         // Irrelevant.
-//		char BS_VolLab[11];    // Best as "NO NAME    ".
-//		char BS_FilSysType[8]; // Must be "FAT32   ".
-//		u8   BS_BootCode[420]; // Irrelevant.
-//		u16  BS_BootSign;      // Must be 0xAA55.
-//	};
-//	
-//	struct FAT32FileStructureInfo // See: Source(15) @ Page(21-22).
-//	{
-//		u32 FSI_LeadSig;        // Must be 0x41615252.
-//		u8  FSI_Reserved1[480];
-//		u32 FSI_StrucSig;       // Must be 0x61417272.
-//		u32 FSI_Free_Count;     // Last known free cluster; best as 0xFFFFFFFF to signify unknown.
-//		u32 FSI_Nxt_Free;       // Hints the FAT driver of where to look for the next free cluster; best as 0xFFFFFFFF to signify no hint.
-//		u8  FSI_Reserved2[12];
-//		u32 FSI_TrailSig;       // Must be 0xAA550000.
-//	};
-//	
-//	enum FAT32DirEntryAttrFlag // See: Source(15) @ Section(6) @ Page(23).
-//	{
-//		FAT32DirEntryAttrFlag_read_only = 0x01,
-//		FAT32DirEntryAttrFlag_hidden    = 0x02,
-//		FAT32DirEntryAttrFlag_system    = 0x04,
-//		FAT32DirEntryAttrFlag_volume_id = 0x08,
-//		FAT32DirEntryAttrFlag_directory = 0x10,
-//		FAT32DirEntryAttrFlag_archive   = 0x20,
-//	};
-//	
-//	#define FAT32_DIR_ENTRY_ATTR_FLAGS_LONG /* */ \
-//		( \
-//			FAT32DirEntryAttrFlag_read_only | \
-//			FAT32DirEntryAttrFlag_hidden | \
-//			FAT32DirEntryAttrFlag_system | \
-//			FAT32DirEntryAttrFlag_volume_id \
-//		)
-//	#define FAT32_LAST_LONG_DIR_ENTRY 0x40 // See: Source(15) @ Section(7) @ Page(30).
-//	
-//	union FAT32DirEntry
-//	{
-//		struct FAT32DirEntryShort // See: Source(15) @ Section(6) @ Page(23).
-//		{
-//			char DIR_Name[11];     // 8 characters for the main name followed by 3 for the extension where both are right-padded with spaces if necessary.
-//			u8   DIR_Attr;         // Aliasing(enum FAT32DirEntryAttrFlag). Must not be FAT32_DIR_ENTRY_ATTR_FLAGS_LONG.
-//			u8   DIR_NTRes;        // Must be zero.
-//			u8   DIR_CrtTimeTenth; // Irrelevant.
-//			u16  DIR_CrtTime;      // Irrelevant.
-//			u16  DIR_CrtDate;      // Irrelevant.
-//			u16  DIR_LstAccDate;   // irrelevant.
-//			u16  DIR_FstClusHI;    // "High word of first data cluster number for file/directory described by this entry".
-//			u16  DIR_WrtTime;      // Irrelevant.
-//			u16  DIR_WrtDate;      // Irrelevant.
-//			u16  DIR_FstClusLO;    // "Low word of first data cluster number for file/directory described by this entry".
-//			u32  DIR_FileSize;     // Size of file in bytes; must be zero for directories. See: Source(15) @ Section(6.2) @ Page(26).
-//		} short_entry;
-//	
-//		// Note that: TODO Explain better.
-//		//     - Order of directory entries containing the long name are reversed.
-//		//     - If there's leftover space, entries are null-terminated and then padded with 0xFFFFs.
-//		//     - Characters are in UTF-16.
-//		struct FAT32DirEntryLong // See: Source(15) @ Section(7) @ Page(30).
-//		{
-//			u8  LDIR_Ord;       // The Nth long-entry. If the entry is the "last" (as in it provides the last part of the long name), then it is additionally OR'd with FAT32_LAST_LONG_DIR_ENTRY.
-//			u16 LDIR_Name1[5];  // First five UTF-16 characters that this long-entry provides for the long name.
-//			u8  LDIR_Attr;      // Must be FAT32_DIR_ENTRY_ATTR_FLAGS_LONG.
-//			u8  LDIR_Type;      // Must be zero.
-//			u8  LDIR_Chksum;    // "Checksum of name in the associated short name directory entry at the end of the long name directory entry set". TODO Not so simple...
-//			u16 LDIR_Name2[6];  // The next six UTF-16 characters that this long-entry provides for the long name.
-//			u16 LDIR_FstClusLO; // Must be zero.
-//			u16 LDIR_Name3[2];  // The last two UTF-16 characters that this long-entry provides for the long name.
-//		} long_entry;
-//	};
-//	
-//	static_assert(FAT32_SECTORS_PER_CLUSTER && !(FAT32_SECTORS_PER_CLUSTER & (FAT32_SECTORS_PER_CLUSTER - 1)));
-//	static_assert(((u64) FAT32_SECTORS_PER_CLUSTER) * FAT32_SECTOR_SIZE <= (((u64) 1) << 15));
-//	static_assert((FAT32_PARTITION_SECTOR_COUNT - FAT32_RESERVED_SECTOR_COUNT - FAT32_TABLE_SECTOR_COUNT) / FAT32_SECTORS_PER_CLUSTER >= 65'525);
-
-//	static const struct FAT32MasterBootRecord FAT32_MASTER_BOOT_RECORD PROGMEM =
-//		{
-//			.disk_signature = 0x424F4F42,
-//			.partitions =
-//				{
-//					{
-//						.status             = 0x80,
-//						.partition_type     = 0x0C,
-//						.abs_sector_address = FAT32_PARTITION_SECTOR_ADDRESS,
-//						.sector_count       = FAT32_PARTITION_SECTOR_COUNT,
-//					},
-//				},
-//			.signature = 0xAA55,
-//		};
-//	
-//	static const struct FAT32BootSector FAT32_BOOT_SECTOR PROGMEM =
-//		{
-//			.BS_jmpBoot     = { 0xEB, 0x00, 0x90 },
-//			.BS_OEMName     = "MSWIN4.1",
-//			.BPB_BytsPerSec = FAT32_SECTOR_SIZE,
-//			.BPB_SecPerClus = FAT32_SECTORS_PER_CLUSTER,
-//			.BPB_RsvdSecCnt = FAT32_RESERVED_SECTOR_COUNT,
-//			.BPB_NumFATs    = 1,
-//			.BPB_Media      = FAT32_MEDIA_TYPE,
-//			.BPB_TotSec32   = FAT32_PARTITION_SECTOR_COUNT,
-//			.BPB_FATSz32    = FAT32_TABLE_SECTOR_COUNT,
-//			.BPB_RootClus   = FAT32_ROOT_CLUSTER,
-//			.BPB_FSInfo     = FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET,
-//			.BPB_BkBootSec  = FAT32_BACKUP_BOOT_SECTOR_OFFSET,
-//			.BS_DrvNum      = 0x80,
-//			.BS_BootSig     = 0x29,
-//			.BS_VolLab      = "NO NAME    ",
-//			.BS_FilSysType  = "FAT32   ",
-//			.BS_BootSign    = 0xAA55,
-//		};
-//	
-//	static const struct FAT32FileStructureInfo FAT32_FILE_STRUCTURE_INFO PROGMEM =
-//		{
-//			.FSI_LeadSig    = 0x41615252,
-//			.FSI_StrucSig   = 0x61417272,
-//			.FSI_Free_Count = 0xFFFFFFFF,
-//			.FSI_Nxt_Free   = 0xFFFFFFFF,
-//			.FSI_TrailSig   = 0xAA550000,
-//		};
-//	
-//	static const u32 FAT32_TABLE[128] PROGMEM = // Most significant nibbles are reserved. See: Source(15) @ Section(4) @ Page(16).
-//		{
-//			[0] = 0x0FFFFF'00 | FAT32_MEDIA_TYPE, // See: Source(15) @ Section(4.2) @ Page(19).
-//			[1] = 0xFFFFFFFF,                     // For format utilities. Seems to be commonly always all set. See: Source(15) @ Section(4.2) @ Page(19).
-//	
-//			[FAT32_ROOT_CLUSTER] = 0x0'FFFFFFF,
-//		};
-//	static_assert(sizeof(FAT32_TABLE) == 512);
-//	
-//	static const union FAT32DirEntry FAT32_ROOT_DIR_ENTRIES[16] PROGMEM =
-//		{
-//		};
-//	static_assert(sizeof(FAT32_ROOT_DIR_ENTRIES) == 512);
-//	
-//	#define FAT32_SECTOR_XMDT(X) \
-//		X(FAT32_MASTER_BOOT_RECORD , 0) \
-//		X(FAT32_BOOT_SECTOR        , FAT32_PARTITION_SECTOR_ADDRESS) \
-//		X(FAT32_BOOT_SECTOR        , FAT32_PARTITION_SECTOR_ADDRESS + FAT32_BACKUP_BOOT_SECTOR_OFFSET) \
-//		X(FAT32_FILE_STRUCTURE_INFO, FAT32_PARTITION_SECTOR_ADDRESS + FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET) \
-//		X(FAT32_FILE_STRUCTURE_INFO, FAT32_PARTITION_SECTOR_ADDRESS + FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET + FAT32_BACKUP_BOOT_SECTOR_OFFSET) \
-//		X(FAT32_TABLE              , FAT32_PARTITION_SECTOR_ADDRESS + FAT32_RESERVED_SECTOR_COUNT) \
-//		X(FAT32_ROOT_DIR_ENTRIES   , FAT32_PARTITION_SECTOR_ADDRESS + FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT) \
 
 //
 // "Diplomat_usb.c"
@@ -337,7 +150,10 @@ enum USBEndpointSizeCode // See: Source(1) @ Section(22.18.2) @ Page(287).
 	USBEndpointSizeCode_512 = 0b110,
 };
 
-enum USBEndpointTransferType // See: Source(2) @ Table(9-13) @ Page(270) & Source(1) @ Section(22.18.2) @ Page(286) & Source(2) @ Section(4.7) @ Page(20-21).
+// See: ATmega32U4's Bitcodes @ Source(1) @ Section(22.18.2) @ Page(286).
+// See: USB 2.0's Bitcodes @ Source(2) @ Table(9-13) @ Page(270).
+// See: Differences Between Endpoint Transfer Types @ Source(2) @ Section(4.7) @ Page(20-21).
+enum USBEndpointTransferType
 {
 	USBEndpointTransferType_control     = 0b00, // Guaranteed data delivery. Used by the USB standard to configure devices, but is open to other implementors.
 	USBEndpointTransferType_isochronous = 0b01, // Bounded latency, one-way, guaranteed data bandwidth (but no guarantee of successful delivery). Ex: audio/video.
@@ -352,55 +168,59 @@ enum USBClass // Non-exhaustive. See: Source(5).
 	USBClass_hid      = 0x03, // See: "Human-Interface Device" @ Source(7) @ Section(3) @ AbsPage(19).
 	USBClass_ms       = 0x08, // See: "USB Mass Storage Device" @ Source(11) @ Section(1.1) @ AbsPage(1).
 	USBClass_cdc_data = 0x0A, // See: "Data Interface Class" @ Source(6) @ Section(1) @ AbsPage(11).
-	USBClass_misc     = 0XEF, // See: IAD @ Source(9) @ Table(1-1) @ AbsPage(5).
+	USBClass_misc     = 0XEF, // For IADs. See: Source(9) @ Table(1-1) @ AbsPage(5).
 };
 
-enum USBSetupRequestType // "bmRequestType" and "bRequest" bytes are combined. See: Source(2) @ Table(9-2) @ Page(248).
+enum USBSetupRequestKind // "bmRequestType" and "bRequest" bytes are combined. See: Source(2) @ Table(9-2) @ Page(248).
 {
-	#define MAKE(BM_REQUEST_TYPE, B_REQUEST) ((BM_REQUEST_TYPE) | (((u16) (B_REQUEST)) << 8))
+	#define MAKE(BM_REQUEST_TYPE, B_REQUEST) ((u16(B_REQUEST) << 8) | (BM_REQUEST_TYPE))
 
-	// Non-exhaustive. See: Standard Requests @ Source(2) @ Table(9-3) @ Page(250) & Source(2) @ Table(9-4) @ Page(251).
-	USBSetupRequestType_get_desc               = MAKE(0b10000000, 6),
-	USBSetupRequestType_set_address            = MAKE(0b00000000, 5),
-	USBSetupRequestType_set_config             = MAKE(0b00000000, 9),
-	USBSetupRequestType_endpoint_clear_feature = MAKE(0b00000010, 1),
+	// Non-exhaustive.
+	// See: "Standard Device Requests" @ Source(2) @ Table(9-3) @ Page(250)
+	// See: "Standard Request Codes" @ Source(2) @ Table(9-4) @ Page(251).
+	USBSetupRequestKind_endpoint_clear_feature = MAKE(0b0'00'00010, 1),
+	USBSetupRequestKind_set_address            = MAKE(0b0'00'00000, 5),
+	USBSetupRequestKind_get_desc               = MAKE(0b1'00'00000, 6),
+	USBSetupRequestKind_set_config             = MAKE(0b0'00'00000, 9),
 
-	// Non-exhaustive. See: CDC-Specific Requests @ Source(6) @ Table(44) @ AbsPage(62-63) & Source(6) @ Table(46) @ AbsPage(64-65).
-	USBSetupRequestType_cdc_set_line_coding        = MAKE(0b00100001, 0x20),
-	USBSetupRequestType_cdc_get_line_coding        = MAKE(0b10100001, 0x21),
-	USBSetupRequestType_cdc_set_control_line_state = MAKE(0b00100001, 0x22),
+	// Non-exhaustive.
+	// See: CDC-Specific Requests @ Source(6) @ Table(44) @ AbsPage(62-63).
+	// See: CDC-Specific Request Codes @ Source(6) @ Table(46) @ AbsPage(64-65).
+	USBSetupRequestKind_cdc_set_line_coding        = MAKE(0b0'01'00001, 0x20),
+	USBSetupRequestKind_cdc_get_line_coding        = MAKE(0b1'01'00001, 0x21),
+	USBSetupRequestKind_cdc_set_control_line_state = MAKE(0b0'01'00001, 0x22),
 
 	// Non-exhaustive. See: HID-Specific Requests @ Source(7) @ Section(7.1) @ AbsPage(58-63).
-	USBSetupRequestType_hid_get_desc = MAKE(0b10000001, 6),
-	USBSetupRequestType_hid_set_idle = MAKE(0b00100001, 0x0A),
+	USBSetupRequestKind_hid_get_desc = MAKE(0b1'00'00001, 6   ), // Request code is from the standard device codes.
+	USBSetupRequestKind_hid_set_idle = MAKE(0b0'01'00001, 0x0A),
 
 	// Non-exhuastive. See: MS-Specific Requests @ Source(12) @ Section(3) @ Page(7).
-	USBSetupRequestType_ms_get_max_lun = MAKE(0b10100001, 0b11111110),
+	USBSetupRequestKind_ms_get_max_lun = MAKE(0b1'01'00001, 0b11111110),
 
 	#undef MAKE
 };
 
 struct USBSetupRequest // See: Source(2) @ Table(9-2) @ Page(248).
 {
-	u16 type; // Aliasing(enum USBSetupRequestType). The "bmRequestType" and "bRequest" bytes are combined.
+	u16 kind; // Aliasing enum USBSetupRequestKind. The "bmRequestType" and "bRequest" bytes are combined.
 	union
 	{
 		struct // See: Standard "GetDescriptor" @ Source(2) @ Section(9.4.3) @ Page(253).
 		{
-			u8  desc_index;       // Only for USBDescType_string or USBDescType_config. See: Source(2) @ Section(9.4.3) @ Page(253) & [USB Strings].
-			u8  desc_type;        // Aliasing(enum USBDescType).
-			u16 language_id;      // Only for USBDescType_string. See: Source(2) @ Section(9.4.3) @ Page(253) & [USB Strings].
-			u16 requested_amount; // Amount of data the host expects back from the device.
+			u8  desc_index;       // Irrelevant; only for USBDescType_string and USBDescType_config.
+			u8  desc_type;        // Aliasing enum USBDescType.
+			u16 language_id;      // Irrelevant; only for USBDescType_string. See: [USB Strings].
+			u16 requested_amount; // Maximum amount of data the host expects back from the device.
 		} get_desc;
 
-		struct // See: Standard "SetAddress" @ // See: Source(2) @ Section(9.4.6) @ Page(256).
+		struct // See: Standard "SetAddress" @ Source(2) @ Section(9.4.6) @ Page(256).
 		{
 			u16 address; // Must be within 7-bits.
 		} set_address;
 
-		struct // See: Standard "SetConfiguration" @ See: Source(2) @ Section(9.4.7) @ Page(257).
+		struct // See: Standard "SetConfiguration" @ Source(2) @ Section(9.4.7) @ Page(257).
 		{
-			u16 value; // The configuration the host wants to set the device to. See: "bConfigurationValue" @ Source(2) @ Table(9-10) @ Page(265).
+			u16 id; // See: "bConfigurationValue" @ Source(2) @ Table(9-10) @ Page(265).
 		} set_config;
 
 		struct // See: Standard "Clear Feature" on Endpoints @ Source(2) @ Section(9.4.1) @ Page(252).
@@ -412,23 +232,23 @@ struct USBSetupRequest // See: Source(2) @ Table(9-2) @ Page(248).
 		struct // See: CDC-Specific "SetLineCoding" @ Source(6) @ Setion(6.2.12) @ AbsPage(68-69).
 		{
 			u16 _zero;
-			u16 designated_interface_index;           // Index of the interface that the host wants to set the line-coding for. Should be to our only CDC-interface.
+			u16 designated_interface_index;           // Index of the interface that the host wants to set the line-coding for. Should be to our only CDC interface (USB_CDC_INTERFACE_INDEX).
 			u16 incoming_line_coding_datapacket_size; // Amount of bytes the host will be sending. Should be sizeof(struct USBCDCLineCoding).
 		} cdc_set_line_coding;
 
 		struct // See: HID-Specific "GetDescriptor" @ Source(7) @ Section(7.1.1) @ AbsPage(59).
 		{
-			u8  desc_index;
-			u8  desc_type;
-			u16 interface_number;
-			u16 requested_amount;
+			u8  desc_index;                 // Irrelevant; only for HID-specific physical descriptors.
+			u8  desc_type;                  // Aliasing enum USBDescType.
+			u16 designated_interface_index; // Index of the interface that the request is for. Should be to our only HID interface (USB_HID_INTERFACE_INDEX).
+			u16 requested_amount;           // Maximum amount of data the host expects back from the device.
 		} hid_get_desc;
 	};
 };
 
 enum USBDescType
 {
-	// Non-exhaustive. See: Standard Descriptors @ Source(10) @ Table(9-5) @ Page(315).
+	// Non-exhaustive. See: Standard Descriptor Types @ Source(10) @ Table(9-5) @ Page(315).
 	USBDescType_device                = 1,
 	USBDescType_config                = 2,
 	USBDescType_string                = 3, // See: [USB Strings].
@@ -452,17 +272,17 @@ struct USBDescDevice // See: Source(2) @ Table(9-8) @ Page(262-263).
 	u8  bLength;            // Must be sizeof(struct USBDescDevice).
 	u8  bDescriptorType;    // Must be USBDescType_device.
 	u16 bcdUSB;             // USB specification version that's being complied with.
-	u8  bDeviceClass;       // Aliasing(enum USBClass).
+	u8  bDeviceClass;       // Aliasing enum USBClass.
 	u8  bDeviceSubClass;    // Optionally used to further subdivide the device class. See: Source(2) @ Section(9.2.3) @ Page(245).
 	u8  bDeviceProtocol;    // Optionally used to indicate to the host on how to communicate with the device. See: Source(2) @ Section(9.2.3) @ Page(245).
 	u8  bMaxPacketSize0;    // Most amount of bytes endpoint 0 can send, i.e. USB_ENDPOINT_DFLT_SIZE.
-	u16 idVendor;           // UID assigned by USB-IF for a company. With idProduct, this helps the host find drivers for the device. See: Source(4) @ Chapter(5).
-	u16 idProduct;          // UID arbitrated by the vendor for a specific device made by them.
-	u16 bcdDevice;          // Version number of the device.
-	u8  iManufacturer;      // See: [USB Strings].
-	u8  iProduct;           // See: [USB Strings].
-	u8  iSerialNumber;      // See: [USB Strings].
-	u8  bNumConfigurations; // Amount of configurations the device can be set to. Only a single configuration (USB_CONFIG_HIERARCHY) is defined, so this is 1.
+	u16 idVendor;           // Irrelevant; This with idProduct helps the host find drivers for the device. See: Source(4) @ Chapter(5).
+	u16 idProduct;          // Irrelevant; UID arbitrated by the vendor for a specific device made by them.
+	u16 bcdDevice;          // Irrelevant; version number of the device.
+	u8  iManufacturer;      // Irrelevant. See: [USB Strings].
+	u8  iProduct;           // Irrelevant. See: [USB Strings].
+	u8  iSerialNumber;      // Irrelevant. See: [USB Strings].
+	u8  bNumConfigurations; // Must be 1; only a single configuration (USB_CONFIG) is defined.
 };
 
 enum USBConfigAttrFlag // See: "bmAttributes" @ Source(2) @ Table(9-10) @ Page(266).
@@ -471,41 +291,41 @@ enum USBConfigAttrFlag // See: "bmAttributes" @ Source(2) @ Table(9-10) @ Page(2
 	USBConfigAttrFlag_self_powered  = 1 << 6,
 	USBConfigAttrFlag_reserved_one  = 1 << 7, // Must always be set.
 };
-struct USBDescConfig // See: Source(2) @ Table(9-10) @ Page(265) & About Configurations @ Source(4) @ Chapter(5).
+struct USBDescConfig // See: Source(2) @ Table(9-10) @ Page(265).
 {
 	u8  bLength;             // Must be sizeof(struct USBDescConfig).
 	u8  bDescriptorType;     // Must be USBDescType_config.
 	u16 wTotalLength;        // Amount of bytes to describe the entire contiguous configuration hierarchy. See: Configuration Hierarchy Diagram @ Source(4) @ Chapter(5).
 	u8  bNumInterfaces;      // Amount of interfaces that this configuration has.
 	u8  bConfigurationValue; // Argument passed by SetConfiguration to select this configuration. See: Source(2) @ Table(9-10) @ Page(265).
-	u8  iConfiguration;      // See: [USB Strings].
-	u8  bmAttributes;        // Aliasing(enum USBConfigAttrFlag).
+	u8  iConfiguration;      // Irrelevant. See: [USB Strings].
+	u8  bmAttributes;        // Aliasing enum USBConfigAttrFlag.
 	u8  bMaxPower;           // Expressed in units of 2mA (e.g. bMaxPower = 50 -> 100mA usage).
 };
 
-struct USBDescInterface // See: Source(2) @ Table(9-12) @ Page(268-269) & About Interfaces @ Source(4) @ Chapter(5).
+struct USBDescInterface // See: Source(2) @ Table(9-12) @ Page(268-269).
 {
 	u8 bLength;            // Must be sizeof(struct USBDescInterface).
 	u8 bDescriptorType;    // Must be USBDescType_interface.
 	u8 bInterfaceNumber;   // Index of the interface within the configuration.
-	u8 bAlternateSetting;  // The nth alternative interface of the one at index bInterfaceNumber; 0 is the default interface that'll be used by the device.
-	u8 bNumEndpoints;      // Number of endpoints (that aren't endpoint 0) used by this interface.
-	u8 bInterfaceClass;    // Aliasing(enum USBClass). Value of USBClass_null is reserved.
+	u8 bAlternateSetting;  // Irrelevant; this is allow the host have more options to configure the device.
+	u8 bNumEndpoints;      // Number of endpoints (not including endpoint 0) used by this interface.
+	u8 bInterfaceClass;    // Aliasing enum USBClass.
 	u8 bInterfaceSubClass; // Optionally used to further subdivide the interface class.
 	u8 bInterfaceProtocol; // Optionally used to indicate to the host on how to communicate with the device.
-	u8 iInterface;         // See: [USB Strings].
+	u8 iInterface;         // Irrelevant. See: [USB Strings].
 };
 
 enum USBEndpointAddressFlag // See: "bEndpointAddress" @ Source(2) @ Table(9-13) @ Page(269).
 {
 	USBEndpointAddressFlag_in = 1 << 7,
 };
-struct USBDescEndpoint // See: Source(2) @ Table(9-13) @ Page(269-271) & Configuration Hierarchy Diagram @ Source(4) @ Chapter(5).
+struct USBDescEndpoint // See: Source(2) @ Table(9-13) @ Page(269-271).
 {
 	u8  bLength;          // Must be sizeof(struct USBDescEndpoint).
 	u8  bDescriptorType;  // Must be USBDescType_endpoint.
 	u8  bEndpointAddress; // The "N" in "Endpoint N". Addresses must be specified in low-nibble. Can be applied with enum USBEndpointAddressFlag.
-	u8  bmAttributes;     // Aliasing(enum USBEndpointTransferType). Other bits have meanings too, but only for isochronous endpoints, which we don't use.
+	u8  bmAttributes;     // Aliasing enum USBEndpointTransferType. Other bits have meanings too, but only for isochronous endpoints, which we don't use.
 	u16 wMaxPacketSize;   // Bits 10-0 specifies the maximum data-packet size that can be sent/received to/from this endpoint. Bits 12-11 are reserved for high-speed.
 	u8  bInterval;        // Frames (1ms for full-speed USB) between each polling of this endpoint. Valid values differ depending on this endpoint's transfer-type.
 };
@@ -540,7 +360,7 @@ struct USBDescCDCACMManagement // See: Source(6) @ Table(28) @ AbsPage(46-47).
 	u8 bLength;            // Must be sizeof(struct USBDescCDCACMManagement).
 	u8 bDescriptorType;    // Must be USBDescType_cdc_interface.
 	u8 bDescriptorSubtype; // Must be USBDescCDCSubtype_acm.
-	u8 bmCapabilities;     // Describes what commands the host can use for the CDC-interface. Seems irrelevant for functionality (despite handling SetControlLineState).
+	u8 bmCapabilities;     // Describes what commands the host can use for the CDC interface. Seems irrelevant for functionality, although we do handle SetControlLineState.
 };
 
 struct USBDescCDCUnion // See: Source(6) @ Table(33) @ AbsPage(51).
@@ -549,7 +369,7 @@ struct USBDescCDCUnion // See: Source(6) @ Table(33) @ AbsPage(51).
 	u8 bDescriptorType;    // Must be USBDescType_cdc_interface.
 	u8 bDescriptorSubtype; // Must be USBDescCDCSubtype_union.
 	u8 bMasterInterface;   // Index to the master-interface.
-	u8 bSlaveInterface[1]; // Indices to slave-interfaces that belong to bMasterInterface. USB allows varying amounts is allowed here, but 1 is all we need.
+	u8 bSlaveInterface[1]; // Indices to slave-interfaces that belong to bMasterInterface. CDC allows varying amounts is allowed here, but 1 is all we need.
 };
 
 struct USBDescHID // See: Source(7) @ Section(6.2.1) @ AbsPage(32).
@@ -575,15 +395,15 @@ struct USBDescIAD // See: Source(10) @ Table(9-16) @ Page(336).
 	u8 bFunctionClass;
 	u8 bFunctionSubClass;
 	u8 bFunctionProtocol;
-	u8 iFunction;         // See: [USB Strings].
+	u8 iFunction;         // Irrelevant. See: [USB Strings].
 };
 
 struct USBCDCLineCoding // See: Source(6) @ Table(50) @ AbsPage(69).
 {
 	u32 dwDTERate;   // Baud-rate.
 	u8  bCharFormat; // Describes amount of stop-bits.
-	u8  bParityType; // Describes mode of parity-bits.
-	u8  bDataBits;   // Describes amount of data-bits.
+	u8  bParityType;
+	u8  bDataBits;
 };
 
 enum USBHIDItem // Short-items with hardcoded amount of data bytes. See: Source(7) @ Section(6.2.2.2) @ AbsPage(36).
@@ -608,9 +428,9 @@ enum USBHIDItem // Short-items with hardcoded amount of data bytes. See: Source(
 
 enum USBHIDItemMainInputFlag // Non-exhaustive. See: Source(7) @ Section(6.2.2.4) @ AbsPage(38) & Source(7) @ Section(6.2.2.5) @ AbsPage(40-41).
 {
-	USBHIDItemMainInputFlag_padding  = ((u16) 1) << 0, // Also called "constant", but it's essentially used for padding.
-	USBHIDItemMainInputFlag_variable = ((u16) 1) << 1, // A buffer that can be filled up with data as opposed to it just being a simple bitmap or integer.
-	USBHIDItemMainInputFlag_relative = ((u16) 1) << 2, // Data is a delta.
+	USBHIDItemMainInputFlag_padding  = u16(1) << 0, // Also called "constant", but it's essentially used for padding.
+	USBHIDItemMainInputFlag_variable = u16(1) << 1, // Data is just a simple bitmap/integer; otherwise, the data is a fixed-sized buffer that can be filled up.
+	USBHIDItemMainInputFlag_relative = u16(1) << 2, // Data is a delta.
 };
 
 enum USBHIDItemMainCollectionType // Non-exhaustive. See: Source(7) @ Section(6.2.2.4) @ AbsPage(38) & Source(7) @ Section(6.2.2.6) @ AbsPage(42-43).
@@ -628,48 +448,56 @@ enum USBHIDUsagePage // Non-exhaustive. See: Source(8) @ Section(3) @ AbsPage(17
 enum USBHIDUsageGenericDesktop // Non-exhaustive. See: Source(8) @ Section(4) @ AbsPage(32).
 {
 	USBHIDUsageGenericDesktop_pointer = 0x01, // "A collection of axes that generates a value to direct, indicate, or point user intentions to an application."
-	USBHIDUsageGenericDesktop_mouse   = 0x02, // A peripheral that has some buttons and indicates 2D movement; self-explainatory.
+	USBHIDUsageGenericDesktop_mouse   = 0x02, // "A[n] ... input device that when rolled along a flat surface, directs an indicator to move correspondingly about a computer screen."
 	USBHIDUsageGenericDesktop_x       = 0x30, // Linear translation from left-to-right.
 	USBHIDUsageGenericDesktop_y       = 0x31, // Linear translation from far-to-near, so in the context of a mouse, top-down.
 };
 
-#define USB_MS_COMMAND_BLOCK_WRAPPER_SIGNATURE 0x43425355
-struct USBMSCommandBlockWrapper // See: Source(12) @ Table(5.1) @ Page(13).
+struct USBMSCommandBlockWrapper // See: Source(12) @ Section(5.1) @ Page(13-14).
 {
+	#define USB_MS_COMMAND_BLOCK_WRAPPER_SIGNATURE 0x43425355
 	u32 dCBWSignature;          // Must be USB_MS_COMMAND_BLOCK_WRAPPER_SIGNATURE.
-	u32 dCBWTag;                // Value copied for the command status wrapper.
-	u32 dCBWDataTransferLength; // Amount of bytes transferred from host to device or device to host.
-	u8  bmCBWFlags;             // Undefined if dCBWDataTransferLength is zero. If the MSb is set, data transfer is from device to host. Any other bit must be cleared.
-	u8  bCBWLUN;                // "Logical Unit Number" the command is designated for; high-nibble must be cleared.
+	u32 dCBWTag;                // Value to be copied for the command status wrapper.
+	u32 dCBWDataTransferLength; // Amount of bytes to be transferred from host to device or device to host.
+	u8  bmCBWFlags;             // Must not be used if dCBWDataTransferLength is zero. If the MSb is set, data transfer is from device to host. Any other bit must be cleared.
+	u8  bCBWLUN;                // Irrelevant; "logical unit number" the command is designated for. Must be 0.
 	u8  bCBWCBLength;           // Amount of bytes defined in CBWCB; must be within [1, 16] and high 3 bits be cleared.
-	u8  CBWCB[16];              // Bytes of SCSI command descriptor block. See: Source(13).
+	u8  CBWCB[16];              // Bytes of command.
 };
 
-#define USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE 0x53425355
-struct USBMSCommandStatusWrapper
+enum USBMSCommandStatusWrapperStatus // See: Source(12) @ Table(5.3) @ Page(15).
 {
-	u32 dCSWSignature;
-	u32 dCSWTag;
-	u32 dCSWDataResidue;
-	u8  bCSWStatus;
+	USBMSCommandStatusWrapperStatus_success     = 0x00,
+	USBMSCommandStatusWrapperStatus_failed      = 0x01,
+	USBMSCommandStatusWrapperStatus_phase_error = 0x02,
 };
 
-enum USBMSSCSIOpcode // See: Source(13) @ Section(3) @ Page(65) & Source(14).
+struct USBMSCommandStatusWrapper // See: Source(12) @ Section(5.2) @ Page(14-15).
 {
+	#define USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE 0x53425355
+	u32 dCSWSignature;   // Must be USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE,
+	u32 dCSWTag;         // Must be the value the host assigned in "dCBWTag" of the command block wrapper. See: struct USBMSCommandBlockWrapper.
+	u32 dCSWDataResidue; // Amount of "left-over" data that wasn't sent to the host or was ignored by the device.
+	u8  bCSWStatus;      // Aliasing enum USBMSCommandStatusWrapperStatus.
+};
+
+enum USBMSSCSIOpcode
+{
+	// Non-exhaustive. See: Source(13) @ Table(13) @ Page(41-42).
 	USBMSSCSIOpcode_test_unit_ready              = 0x00,
 	USBMSSCSIOpcode_request_sense                = 0x03,
 	USBMSSCSIOpcode_inquiry                      = 0x12,
-	USBMSSCSIOpcode_mode_sense                   = 0x1A,
-	USBMSSCSIOpcode_read_format_capacities       = 0x23, // See: Source(14).
-	USBMSSCSIOpcode_read_capacity                = 0x25,
-	USBMSSCSIOpcode_read                         = 0x28,
-	USBMSSCSIOpcode_write                        = 0x2A,
-	USBMSSCSIOpcode_sync_cache                   = 0x35,
+	USBMSSCSIOpcode_mode_sense                   = 0x1A, // 6-byte version.
 	USBMSSCSIOpcode_prevent_allow_medium_removal = 0x1E,
+
+	// Non-exhaustive. See: Source(14) @ Table(10) @ Page(31-33).
 	USBMSSCSIOpcode_start_stop_unit              = 0x1B,
+	USBMSSCSIOpcode_read_capacity                = 0x25, // 10-byte version.
+	USBMSSCSIOpcode_read                         = 0x28, // 10-byte version.
+	USBMSSCSIOpcode_write                        = 0x2A, // 10-byte version.
 };
 
-enum USBMSState
+enum USBMSState // TODO Flesh out the state machine.
 {
 	USBMSState_ready_for_command,
 	USBMSState_sending_data,
@@ -677,11 +505,11 @@ enum USBMSState
 	USBMSState_ready_for_status,
 };
 
-struct USBConfigHierarchy // This layout is defined uniquely for our device application.
+struct USBConfig // This layout is defined uniquely for our device application.
 {
-	struct USBDescConfig config;
+	struct USBDescConfig desc;
 
-	struct USBDescIAD iad; // Must be placed here to group the CDC and CDC-Data interfaces together. See: Source(9) @ Figure(2-1) @ AbsPage(6).
+	struct USBDescIAD iad_cdc; // Must be placed here to group the CDC and CDC-Data interfaces together. See: Source(9) @ Figure(2-1) @ AbsPage(6).
 
 	#define USB_CDC_INTERFACE_INDEX 0
 	struct
@@ -721,54 +549,51 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 // Endpoint buffer sizes must be one of the names of enum USBEndpointSizeCode.
 // The maximum capacity between endpoints also differ. See: Source(1) @ Section(22.1) @ Page(270).
 
-#define USB_ENDPOINT_DFLT                  0                               // "Default Endpoint" is synonymous with endpoint 0.
+#define USB_ENDPOINT_DFLT_INDEX            0                               // "Default Endpoint" is synonymous with endpoint 0.
 #define USB_ENDPOINT_DFLT_TRANSFER_TYPE    USBEndpointTransferType_control // The default endpoint is always a control-typed endpoint.
 #define USB_ENDPOINT_DFLT_TRANSFER_DIR     0                               // See: [ATmega32U4's Configuration of Endpoint 0].
 #define USB_ENDPOINT_DFLT_SIZE             8
 
-#define USB_ENDPOINT_CDC_IN                2
+#define USB_ENDPOINT_CDC_IN_INDEX          2
 #define USB_ENDPOINT_CDC_IN_TRANSFER_TYPE  USBEndpointTransferType_bulk
 #define USB_ENDPOINT_CDC_IN_TRANSFER_DIR   USBEndpointAddressFlag_in
 #define USB_ENDPOINT_CDC_IN_SIZE           64
 
-#define USB_ENDPOINT_CDC_OUT               3
+#define USB_ENDPOINT_CDC_OUT_INDEX         3
 #define USB_ENDPOINT_CDC_OUT_TRANSFER_TYPE USBEndpointTransferType_bulk
 #define USB_ENDPOINT_CDC_OUT_TRANSFER_DIR  0
 #define USB_ENDPOINT_CDC_OUT_SIZE          64
 
-#define USB_ENDPOINT_HID               4
+#define USB_ENDPOINT_HID_INDEX         4
 #define USB_ENDPOINT_HID_TRANSFER_TYPE USBEndpointTransferType_interrupt
 #define USB_ENDPOINT_HID_TRANSFER_DIR  USBEndpointAddressFlag_in
 #define USB_ENDPOINT_HID_SIZE          8
 
-#define USB_ENDPOINT_MS_IN               5
+#define USB_ENDPOINT_MS_IN_INDEX         5
 #define USB_ENDPOINT_MS_IN_TRANSFER_TYPE USBEndpointTransferType_bulk
 #define USB_ENDPOINT_MS_IN_TRANSFER_DIR  USBEndpointAddressFlag_in
 #define USB_ENDPOINT_MS_IN_SIZE          64
 
-#define USB_ENDPOINT_MS_OUT               6
+#define USB_ENDPOINT_MS_OUT_INDEX         6
 #define USB_ENDPOINT_MS_OUT_TRANSFER_TYPE USBEndpointTransferType_bulk
 #define USB_ENDPOINT_MS_OUT_TRANSFER_DIR  0
 #define USB_ENDPOINT_MS_OUT_SIZE          64
-
-#define USB_ENDPOINT_XMDT(X) \
-	X(DFLT   ) \
-	X(CDC_IN ) \
-	X(CDC_OUT) \
-	X(HID    ) \
-	X(MS_IN  ) \
-	X(MS_OUT ) \
 
 #if PROGRAM_DIPLOMAT
 	static const u8 USB_ENDPOINT_UECFGNX[][2] PROGMEM = // UECFG0X and UECFG1X that an endpoint will be configured with.
 		{
 			#define MAKE(NAME) \
-				[USB_ENDPOINT_##NAME] = \
+				[USB_ENDPOINT_##NAME##_INDEX] = \
 					{ \
 						(USB_ENDPOINT_##NAME##_TRANSFER_TYPE << EPTYPE0) | ((!!USB_ENDPOINT_##NAME##_TRANSFER_DIR) << EPDIR), \
 						(concat(USBEndpointSizeCode_, USB_ENDPOINT_##NAME##_SIZE) << EPSIZE0) | (1 << ALLOC), \
 					},
-			USB_ENDPOINT_XMDT(MAKE)
+			MAKE(DFLT)
+			MAKE(CDC_IN)
+			MAKE(CDC_OUT)
+			MAKE(HID)
+			MAKE(MS_IN)
+			MAKE(MS_OUT)
 			#undef MAKE
 		};
 
@@ -811,78 +636,78 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 			USBHIDItem_main_end_collection,
 		};
 
-	static const u8 USB_MS_SCSI_INQUIRY_DATA[] PROGMEM = // See: Source(13) @ Section(3.6.2) @ Page(94).
+	static const u8 USB_MS_SCSI_INQUIRY_DATA[] PROGMEM = // See: Source(13) @ Section(7.3.2) @ Page(82-86).
 		{
-			// "PERIPHERAL QUALIFIER"         : We support the following specified peripheral device type. See: Source(13) @ Table(60) @ Page(95).
-			//     | "PERIPHERAL DEVICE TYPE" : The device is a "direct access block device", e.g. SD cards, flashdrives, etc. See: Source(13) @ Table(61) @ Page(96).
+			// "PERIPHERAL QUALIFIER"         : We support the following specified peripheral device type. See: Source(13) @ Table(47) @ Page(83).
+			//     | "PERIPHERAL DEVICE TYPE" : We are a "direct access block device", e.g. SD cards, flashdrives, etc. See: Source(13) @ Table(48) @ Page(83).
 			//     |    |
 			//    vvv vvvvv
 				0b000'00000,
 
-			// "RMB" : Is the medium removable? See: Source(13) @ Section(3.6.2) @ Page(96).
+			// "RMB" : We are a removable storage device. See: Source(13) @ Section(7.3.2) @ Page(84).
 			//    | Reserved.
 			//    |    |
 			//    v vvvvvvv
-				0b1'0000000, // TODO What does "removable" mean?
+				0b1'0000000,
 
-			// "VERSION" : Indicate which SPC standard is being used. See: Source(13) @ Table(62) @ Page(97).
+			// "VERSION" : We are using the cited standard "ISO/IEC 14776-312 : 200x / ANSI NCITS.351:200x". See: Source(13) @ Section(7.3.2) @ Page(84).
 				0x04,
 
-			// "AERC".
+			// "AERC"                            : We don't have the "asynchronous event reporting capability". See: Source(13) @ Section(7.3.2) @ Page(84).
 			//    | Obsolete.
-			//    | | "NORMACA"                  : TODO We don't support "ACA" or something... See: Source(13) @ Section(3.6.2) @ Page(97).
-			//    | | | "HISUP"                  : Is a hierarchy used to organize logical units? See: Source(13) @ Section(3.6.2) @ Page(97).
-			//    | | | | "RESPONSE DATA FORMAT" : Pretty much has to be 2. See: Source(13) @ Section(3.6.2) @ Page(97).
+			//    | | "NORMACA"                  : The "ACA" bit in the control byte of commands is not supported. See: Source(13) @ Section(7.3.2) @ Page(85).
+			//    | | | "HISUP"                  : We do not have "hierarchical support" for accessing logical units. See: Source(13) @ Section(7.3.2) @ Page(85).
+			//    | | | | "RESPONSE DATA FORMAT" : Two is the only value defined for this field. See: Source(13) @ Section(7.3.2) @ Page(85).
 			//    | | | | |
 			//    v v v v vvvv
 				0b0'0'0'0'0010,
 
-			// "ADDITIONAL LENGTH" : Amount of bytes remaining after this byte. The inquiry data has to be at least 36, so 36 - 5. See: Source(13) @ Section(3.6.2) @ Page(94).
-				0x1F,
+			// "ADDITIONAL LENGTH" : Amount of bytes remaining in the inquiry data after this byte. See: Source(13) @ Section(7.3.2) @ Page(85).
+				31,
 
-			// "SCCS" : Does the device have a "embedded storage array controller component"? See: Source(13) @ Section(3.6.2) @ Page(97).
+			// "SCCS" : We don't have "embedded storage array controller component support". See: Source(13) @ Section(7.3.2) @ Page(85).
 			//    | Reserved.
 			//    |   |
 			//    v vvvvvvv
 				0b0'0000000,
 
-			// "BQUE".
-			//    | "ENCSERV"          : Does the device have "embedded enclosure services component"? See: Source(13) @ Section(3.6.2) @ Page(98).
+			// "BQUE"                  : With CMDQUE being zero, we do not support "tagged tasks (command queuing)". See: Source(13) @ Section(7.3.2) @ Page(85).
+			//    | "ENCSERV"          : We do not have a "embedded enclosure services component". See: Source(13) @ Section(7.3.2) @ Page(85).
 			//    | | Vendor-Specific.
-			//    | | | "MULTIP"       : Does the device support multiple ports? See: Source(13) @ Section(3.6.2) @ Page(98).
-			//    | | | | "MCHNGER".
+			//    | | | "MULTIP"       : We do not implement "multi-port requirements". See: Source(13) @ Section(7.3.2) @ Page(85).
+			//    | | | | "MCHNGER"    : We are not "embedded within or attached to a medium transport element". See: Source(13) @ Section(7.3.2) @ Page(85).
 			//    | | | | | Obsolete.
-			//    | | | | | | "ADDR16"
+			//    | | | | | | "ADDR16" : Irrelevant; only for the SCSI Parallel Interface.
 			//    | | | | | |  |
 			//    v v v v v vv v
 				0b0'0'0'0'0'00'0,
 
-			// "RELADR"
+			// "RELADR"                 : We don't support "relative addressing". See: Source(13) @ Section(7.3.2) @ Page(85).
 			//    | Obsolete.
-			//    | | "WBUS16"
-			//    | | | "SYNC"
-			//    | | | | "LINKED"
+			//    | | "WBUS16"          : Irrelevant; only for the SCSI Parallel Interface.
+			//    | | | "SYNC"          : Irrelevant; only for the SCSI Parallel Interface.
+			//    | | | | "LINKED"      : We don't support "linked commands". See: Source(13) @ Section(7.3.2) @ Page(85).
 			//    | | | | | Obsolete.
-			//    | | | | | | "CMDQUE"
+			//    | | | | | | "CMDQUE"  : With BQUE being zero, we do not support any kind of command queuing. See: Source(13) @ Table(50) @ Page(86).
 			//    | | | | | | | Vendor Specific.
 			//    | | | | | | | |
 			//    v v v v v v v v
 				0b0'0'0'0'0'0'0'0,
 
-			// "T10 VENDOR IDENTIFICATION" : TODO WTF is this? See: Source(13) @ Section(3.6.2) @ Page(99).
-				'G', 'e', 'n', 'e', 'r', 'a', 'l', ' ',
+			// "VENDOR IDENTIFICATION" : Irrelevant; 8 character text representing the vendor name. See: Source(13) @ Section(7.3.2) @ Page(86).
+				' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
 
-			// "PRODUCT IDENTIFICATION" : TODO WTF! See: Source(13) @ Section(3.6.2) @ Page(99).
-				'U', 'D', 'i', 's', 'k', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
+			// "PRODUCT IDENTIFICATION" : Irrelevant; 16 character text representing the product name. See: Source(13) @ Section(7.3.2) @ Page(86).
+				' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
 
-			// "PRODUCT REVISION LEVEL" : TODO WTF! See: Source(13) @ Section(3.6.2) @ Page(99).
-				'5', '.', '0', '0',
+			// "PRODUCT REVISION LEVEL" : Irrelevant; 4 character text representing the product version. See: Source(13) @ Section(7.3.2) @ Page(86).
+				' ', ' ', ' ', ' ',
 		};
 
 	static const u8 USB_MS_SCSI_UNIT_SERIAL_NUMBER[] PROGMEM =
 		{
-			// "PERIPHERAL QUALIFIER"         : We support the following specified peripheral device type. See: Source(13) @ Table(60) @ Page(95).
-			//     | "PERIPHERAL DEVICE TYPE" : The device is a "direct access block device", e.g. SD cards, flashdrives, etc. See: Source(13) @ Table(61) @ Page(96).
+			// "PERIPHERAL QUALIFIER"         : We support the following specified peripheral device type. See: Source(*) @ Table(60) @ Page(95).
+			//     | "PERIPHERAL DEVICE TYPE" : The device is a "direct access block device", e.g. SD cards, flashdrives, etc. See: Source(*) @ Table(61) @ Page(96).
 			//     |    |
 			//    vvv vvvvv
 				0b000'00000,
@@ -900,7 +725,7 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 				' ',
 		};
 
-	static const u8 USB_MS_SCSI_READ_CAPACITY_DATA[] PROGMEM = // See: Source(13) @ Table(120) @ Page(156).
+	static const u8 USB_MS_SCSI_READ_CAPACITY_DATA[] PROGMEM = // See: Source(*) @ Table(120) @ Page(156).
 		{
 			// "RETURNED LOGICAL BLOCK ADDRESS" in big-endian.
 				0, 177, 79, 255,
@@ -953,26 +778,23 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 			.bDeviceSubClass    = 0x02,          // See: "bDeviceSubClass" @ Source(9) @ Table(1-1) @ AbsPage(5).
 			.bDeviceProtocol    = 0x01,          // See: "bDeviceProtocol" @ Source(9) @ Table(1-1) @ AbsPage(5).
 			.bMaxPacketSize0    = USB_ENDPOINT_DFLT_SIZE,
-			.idVendor           = 0, // Seems irrelevant for functionality.
-			.idProduct          = 0, // Seems irrelevant for functionality.
-			.bcdDevice          = 0, // Seems irrelevant for functionality.
 			.bNumConfigurations = 1
 		};
 
-	#define USB_CONFIG_HIERARCHY_ID 1 // Must be non-zero. See: Soure(2) @ Figure(11-10) @ Page(310).
-	static const struct USBConfigHierarchy USB_CONFIG_HIERARCHY PROGMEM =
+	#define USB_CONFIG_ID 1 // Must be non-zero. See: Soure(2) @ Figure(11-10) @ Page(310).
+	static const struct USBConfig USB_CONFIG PROGMEM =
 		{
-			.config =
+			.desc =
 				{
 					.bLength             = sizeof(struct USBDescConfig),
 					.bDescriptorType     = USBDescType_config,
-					.wTotalLength        = sizeof(struct USBConfigHierarchy),
+					.wTotalLength        = sizeof(struct USBConfig),
 					.bNumInterfaces      = USB_INTERFACE_COUNT,
-					.bConfigurationValue = USB_CONFIG_HIERARCHY_ID,
+					.bConfigurationValue = USB_CONFIG_ID,
 					.bmAttributes        = USBConfigAttrFlag_reserved_one | USBConfigAttrFlag_self_powered, // TODO We should calculate our power consumption!
 					.bMaxPower           = 50,                                                              // TODO We should calculate our power consumption!
 				},
-			.iad =
+			.iad_cdc =
 				{
 					.bLength           = sizeof(struct USBDescIAD),
 					.bDescriptorType   = USBDescType_interface_association,
@@ -989,7 +811,6 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 							.bLength            = sizeof(struct USBDescInterface),
 							.bDescriptorType    = USBDescType_interface,
 							.bInterfaceNumber   = USB_CDC_INTERFACE_INDEX,
-							.bAlternateSetting  = 0,
 							.bNumEndpoints      = 0,
 							.bInterfaceClass    = USBClass_cdc, // See: Source(6) @ Section(4.2) @ AbsPage(39).
 							.bInterfaceSubClass = 0x2,          // See: "Abstract Control Model" @ Source(6) @ Table(16) @ AbsPage(39).
@@ -1030,8 +851,7 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 							.bLength            = sizeof(struct USBDescInterface),
 							.bDescriptorType    = USBDescType_interface,
 							.bInterfaceNumber   = USB_CDC_DATA_INTERFACE_INDEX,
-							.bAlternateSetting  = 0,
-							.bNumEndpoints      = countof(USB_CONFIG_HIERARCHY.cdc_data.endpoints),
+							.bNumEndpoints      = countof(USB_CONFIG.cdc_data.endpoints),
 							.bInterfaceClass    = USBClass_cdc_data, // See: Source(6) @ Section(4.5) @ AbsPage(40).
 							.bInterfaceSubClass = 0,                 // Should be left alone. See: Source(6) @ Section(4.6) @ AbsPage(40).
 							.bInterfaceProtocol = 0,                 // Seems irrelevant for functionality. See: Source(6) @ Table(19) @ AbsPage(40-41).
@@ -1041,7 +861,7 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 							{
 								.bLength          = sizeof(struct USBDescEndpoint),
 								.bDescriptorType  = USBDescType_endpoint,
-								.bEndpointAddress = USB_ENDPOINT_CDC_IN | USB_ENDPOINT_CDC_IN_TRANSFER_DIR,
+								.bEndpointAddress = USB_ENDPOINT_CDC_IN_INDEX | USB_ENDPOINT_CDC_IN_TRANSFER_DIR,
 								.bmAttributes     = USB_ENDPOINT_CDC_IN_TRANSFER_TYPE,
 								.wMaxPacketSize   = USB_ENDPOINT_CDC_IN_SIZE,
 								.bInterval        = 0,
@@ -1049,7 +869,7 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 							{
 								.bLength          = sizeof(struct USBDescEndpoint),
 								.bDescriptorType  = USBDescType_endpoint,
-								.bEndpointAddress = USB_ENDPOINT_CDC_OUT | USB_ENDPOINT_CDC_OUT_TRANSFER_DIR,
+								.bEndpointAddress = USB_ENDPOINT_CDC_OUT_INDEX | USB_ENDPOINT_CDC_OUT_TRANSFER_DIR,
 								.bmAttributes     = USB_ENDPOINT_CDC_OUT_TRANSFER_TYPE,
 								.wMaxPacketSize   = USB_ENDPOINT_CDC_OUT_SIZE,
 								.bInterval        = 0,
@@ -1063,8 +883,7 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 							.bLength            = sizeof(struct USBDescInterface),
 							.bDescriptorType    = USBDescType_interface,
 							.bInterfaceNumber   = USB_HID_INTERFACE_INDEX,
-							.bAlternateSetting  = 0,
-							.bNumEndpoints      = countof(USB_CONFIG_HIERARCHY.hid.endpoints),
+							.bNumEndpoints      = countof(USB_CONFIG.hid.endpoints),
 							.bInterfaceClass    = USBClass_hid,
 							.bInterfaceSubClass = 0, // Set to 1 if we support a boot interface, which we don't need to. See: Source(7) @ Section(4.2) @ AbsPage(18).
 							.bInterfaceProtocol = 0, // Since we don't support a boot interface, this is also 0. See: Source(7) @ Section(4.3) @ AbsPage(19).
@@ -1074,7 +893,7 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 							.bLength                 = sizeof(struct USBDescHID),
 							.bDescriptorType         = USBDescType_hid,
 							.bcdHID                  = 0x0111,
-							.bNumDescriptors         = countof(USB_CONFIG_HIERARCHY.hid.hid.subordinate_descriptors),
+							.bNumDescriptors         = countof(USB_CONFIG.hid.hid.subordinate_descriptors),
 							.subordinate_descriptors =
 								{
 									{
@@ -1088,7 +907,7 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 							{
 								.bLength          = sizeof(struct USBDescEndpoint),
 								.bDescriptorType  = USBDescType_endpoint,
-								.bEndpointAddress = USB_ENDPOINT_HID | USB_ENDPOINT_HID_TRANSFER_DIR,
+								.bEndpointAddress = USB_ENDPOINT_HID_INDEX | USB_ENDPOINT_HID_TRANSFER_DIR,
 								.bmAttributes     = USB_ENDPOINT_HID_TRANSFER_TYPE,
 								.wMaxPacketSize   = USB_ENDPOINT_HID_SIZE,
 								.bInterval        = 1,
@@ -1102,8 +921,7 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 							.bLength            = sizeof(struct USBDescInterface),
 							.bDescriptorType    = USBDescType_interface,
 							.bInterfaceNumber   = USB_MS_INTERFACE_INDEX,
-							.bAlternateSetting  = 0,
-							.bNumEndpoints      = countof(USB_CONFIG_HIERARCHY.ms.endpoints),
+							.bNumEndpoints      = countof(USB_CONFIG.ms.endpoints),
 							.bInterfaceClass    = USBClass_ms,
 							.bInterfaceSubClass = 0x06, // See: "SCSI Transparent Command Set" @ Source(11) @ AbsPage(3).
 							.bInterfaceProtocol = 0x50, // See: "Bulk-Only Transport" @ Source(12) @ Page(11).
@@ -1113,7 +931,7 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 							{
 								.bLength          = sizeof(struct USBDescEndpoint),
 								.bDescriptorType  = USBDescType_endpoint,
-								.bEndpointAddress = USB_ENDPOINT_MS_IN | USB_ENDPOINT_MS_IN_TRANSFER_DIR,
+								.bEndpointAddress = USB_ENDPOINT_MS_IN_INDEX | USB_ENDPOINT_MS_IN_TRANSFER_DIR,
 								.bmAttributes     = USB_ENDPOINT_MS_IN_TRANSFER_TYPE,
 								.wMaxPacketSize   = USB_ENDPOINT_MS_IN_SIZE,
 								.bInterval        = 0,
@@ -1121,7 +939,7 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 							{
 								.bLength          = sizeof(struct USBDescEndpoint),
 								.bDescriptorType  = USBDescType_endpoint,
-								.bEndpointAddress = USB_ENDPOINT_MS_OUT | USB_ENDPOINT_MS_OUT_TRANSFER_DIR,
+								.bEndpointAddress = USB_ENDPOINT_MS_OUT_INDEX | USB_ENDPOINT_MS_OUT_TRANSFER_DIR,
 								.bmAttributes     = USB_ENDPOINT_MS_OUT_TRANSFER_TYPE,
 								.wMaxPacketSize   = USB_ENDPOINT_MS_OUT_SIZE,
 								.bInterval        = 0,
@@ -1187,7 +1005,7 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 	// Buffer sizes must be a power of two for the "_usb_mouse_X_masked" macros.
 	static_assert(countof(_usb_mouse_command_buffer) && !(countof(_usb_mouse_command_buffer) & (countof(_usb_mouse_command_buffer) - 1)));
 
-	static struct SCSISense { u8 bytes[18]; } _usb_ms_sense = {0}; // See: Source(13) @ Section(2.4.1.2) @ Page(56).
+	static struct SCSISense { u8 bytes[18]; } _usb_ms_sense = {0}; // See: Source(*) @ Section(2.4.1.2) @ Page(56).
 
 	static enum USBMSState                  _usb_ms_state                         = USBMSState_ready_for_command;
 	static const u8*                        _usb_ms_scsi_info_data                = 0;
@@ -1220,8 +1038,8 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 	Source(10) := USB 3.0 Specification (Dated: November 12, 2008).
 	Source(11) := Universal Serial Bus Mass Storage Class Specification Overview (Dated: February 19, 2010).
 	Source(12) := Universal Serial Bus Mass Storage Class Bulk-Only Transport (Dated: September 31, 1999).
-	Source(13) := SCSI Commands Reference Manual (Dated: October 2016).
-	Source(14) := Mysterious TOSHIBA Draft TODO??
+	Source(13) := dpANS Project T10/1236-D (SCSI Primary Commands - 2) (SPC-2) (Dated: 18 July 2001).
+	Source(14) := Working Draft Project American National T10/1417-D Standard (SCSI Block Commands - 2) (SBC-2) (Dated: 13 November 2004).
 	Source(15) := Microsoft FAT Specification (Dated: August 30 2005).
 	Source(16) := "Master boot record" on Wikipedia (Accessed: October 7, 2023).
 	Source(17) := FAT Filesystem by Elm-Chan (Updated on: October 31, 2020).
