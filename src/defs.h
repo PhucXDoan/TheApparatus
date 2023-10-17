@@ -700,22 +700,22 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 		struct USBDescEndpoint  endpoints[2];
 	} cdc_data;
 
-//	#define USB_HID_INTERFACE_INDEX 2
-//	struct
-//	{
-//		struct USBDescInterface desc;
-//		struct USBDescHID       hid;
-//		struct USBDescEndpoint  endpoints[1];
-//	} hid;
+	#define USB_HID_INTERFACE_INDEX 2
+	struct
+	{
+		struct USBDescInterface desc;
+		struct USBDescHID       hid;
+		struct USBDescEndpoint  endpoints[1];
+	} hid;
 
-	#define USB_MS_INTERFACE_INDEX 2
+	#define USB_MS_INTERFACE_INDEX 3
 	struct
 	{
 		struct USBDescInterface desc;
 		struct USBDescEndpoint  endpoints[2];
 	} ms;
 
-	#define USB_INTERFACE_COUNT 3
+	#define USB_INTERFACE_COUNT 4
 };
 
 // Endpoint buffer sizes must be one of the names of enum USBEndpointSizeCode.
@@ -736,10 +736,10 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 #define USB_ENDPOINT_CDC_OUT_TRANSFER_DIR  0
 #define USB_ENDPOINT_CDC_OUT_SIZE          64
 
-//	#define USB_ENDPOINT_HID               4
-//	#define USB_ENDPOINT_HID_TRANSFER_TYPE USBEndpointTransferType_interrupt
-//	#define USB_ENDPOINT_HID_TRANSFER_DIR  USBEndpointAddressFlag_in
-//	#define USB_ENDPOINT_HID_SIZE          8
+#define USB_ENDPOINT_HID               4
+#define USB_ENDPOINT_HID_TRANSFER_TYPE USBEndpointTransferType_interrupt
+#define USB_ENDPOINT_HID_TRANSFER_DIR  USBEndpointAddressFlag_in
+#define USB_ENDPOINT_HID_SIZE          8
 
 #define USB_ENDPOINT_MS_IN               5
 #define USB_ENDPOINT_MS_IN_TRANSFER_TYPE USBEndpointTransferType_bulk
@@ -751,21 +751,24 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 #define USB_ENDPOINT_MS_OUT_TRANSFER_DIR  0
 #define USB_ENDPOINT_MS_OUT_SIZE          64
 
+#define USB_ENDPOINT_XMDT(X) \
+	X(DFLT   ) \
+	X(CDC_IN ) \
+	X(CDC_OUT) \
+	X(HID    ) \
+	X(MS_IN  ) \
+	X(MS_OUT ) \
+
 #if PROGRAM_DIPLOMAT
 	static const u8 USB_ENDPOINT_UECFGNX[][2] PROGMEM = // UECFG0X and UECFG1X that an endpoint will be configured with.
 		{
-			#define MAKE(ENDPOINT_NAME) \
-				[USB_ENDPOINT_##ENDPOINT_NAME] = \
+			#define MAKE(NAME) \
+				[USB_ENDPOINT_##NAME] = \
 					{ \
-						(USB_ENDPOINT_##ENDPOINT_NAME##_TRANSFER_TYPE << EPTYPE0) | ((!!USB_ENDPOINT_##ENDPOINT_NAME##_TRANSFER_DIR) << EPDIR), \
-						(concat(USBEndpointSizeCode_, USB_ENDPOINT_##ENDPOINT_NAME##_SIZE) << EPSIZE0) | (1 << ALLOC), \
+						(USB_ENDPOINT_##NAME##_TRANSFER_TYPE << EPTYPE0) | ((!!USB_ENDPOINT_##NAME##_TRANSFER_DIR) << EPDIR), \
+						(concat(USBEndpointSizeCode_, USB_ENDPOINT_##NAME##_SIZE) << EPSIZE0) | (1 << ALLOC), \
 					},
-			MAKE(DFLT)
-			MAKE(CDC_IN )
-			MAKE(CDC_OUT)
-			//	MAKE(HID)
-			MAKE(MS_IN )
-			MAKE(MS_OUT)
+			USB_ENDPOINT_XMDT(MAKE)
 			#undef MAKE
 		};
 
@@ -895,27 +898,6 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 
 			// "PRODUCT SERIAL NUMBER"
 				' ',
-		};
-
-	static const u8 USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA[] PROGMEM = // See: Source(14) @ Table(702) @ AbsPage(1).
-		{
-			// "Capacity List Header". See: Source(14) @ Table(703) @ AbsPage(2).
-			//
-			// Reserved.
-			//     | "Capacity List Length" : Amount of bytes after this byte.
-			//     |     |
-			//  vvvvvvv  v
-				0, 0, 0, 8,
-
-			// "Current/Maximum Capacity Descriptor". See: Source(14) @ Table(704) @ AbsPage(2).
-			//
-			// "Number of Blocks"                        : Number of addressable blocks, which is written in big-endian.
-			//        |         Reserved.
-			//        |             | "Descriptor Type"  : The type of the media the device has. See: Source(14) @ Table(705) @ AbsPage(2).
-			//        |             |   | "Block Length" : Amount of bytes of each addressable block, which is written in big-endian.
-			//        |             |   |      |
-			//  vvvvvvvvvvvvv    vvvvvv vv  vvvvvvv
-				0, 177, 80, 0, 0b000000'10, 0, 2, 0 // TODO Update with FAT32
 		};
 
 	static const u8 USB_MS_SCSI_READ_CAPACITY_DATA[] PROGMEM = // See: Source(13) @ Table(120) @ Page(156).
@@ -1074,45 +1056,45 @@ struct USBConfigHierarchy // This layout is defined uniquely for our device appl
 							},
 						}
 				},
-	//		.hid =
-	//			{
-	//				.desc =
-	//					{
-	//						.bLength            = sizeof(struct USBDescInterface),
-	//						.bDescriptorType    = USBDescType_interface,
-	//						.bInterfaceNumber   = USB_HID_INTERFACE_INDEX,
-	//						.bAlternateSetting  = 0,
-	//						.bNumEndpoints      = countof(USB_CONFIG_HIERARCHY.hid.endpoints),
-	//						.bInterfaceClass    = USBClass_hid,
-	//						.bInterfaceSubClass = 0, // Set to 1 if we support a boot interface, which we don't need to. See: Source(7) @ Section(4.2) @ AbsPage(18).
-	//						.bInterfaceProtocol = 0, // Since we don't support a boot interface, this is also 0. See: Source(7) @ Section(4.3) @ AbsPage(19).
-	//					},
-	//				.hid =
-	//					{
-	//						.bLength                 = sizeof(struct USBDescHID),
-	//						.bDescriptorType         = USBDescType_hid,
-	//						.bcdHID                  = 0x0111,
-	//						.bNumDescriptors         = countof(USB_CONFIG_HIERARCHY.hid.hid.subordinate_descriptors),
-	//						.subordinate_descriptors =
-	//							{
-	//								{
-	//									.bDescriptorType   = USBDescType_hid_report,
-	//									.wDescriptorLength = sizeof(USB_DESC_HID_REPORT),
-	//								},
-	//							}
-	//					},
-	//				.endpoints =
-	//					{
-	//						{
-	//							.bLength          = sizeof(struct USBDescEndpoint),
-	//							.bDescriptorType  = USBDescType_endpoint,
-	//							.bEndpointAddress = USB_ENDPOINT_HID | USB_ENDPOINT_HID_TRANSFER_DIR,
-	//							.bmAttributes     = USB_ENDPOINT_HID_TRANSFER_TYPE,
-	//							.wMaxPacketSize   = USB_ENDPOINT_HID_SIZE,
-	//							.bInterval        = 1,
-	//						}
-	//					},
-	//			},
+			.hid =
+				{
+					.desc =
+						{
+							.bLength            = sizeof(struct USBDescInterface),
+							.bDescriptorType    = USBDescType_interface,
+							.bInterfaceNumber   = USB_HID_INTERFACE_INDEX,
+							.bAlternateSetting  = 0,
+							.bNumEndpoints      = countof(USB_CONFIG_HIERARCHY.hid.endpoints),
+							.bInterfaceClass    = USBClass_hid,
+							.bInterfaceSubClass = 0, // Set to 1 if we support a boot interface, which we don't need to. See: Source(7) @ Section(4.2) @ AbsPage(18).
+							.bInterfaceProtocol = 0, // Since we don't support a boot interface, this is also 0. See: Source(7) @ Section(4.3) @ AbsPage(19).
+						},
+					.hid =
+						{
+							.bLength                 = sizeof(struct USBDescHID),
+							.bDescriptorType         = USBDescType_hid,
+							.bcdHID                  = 0x0111,
+							.bNumDescriptors         = countof(USB_CONFIG_HIERARCHY.hid.hid.subordinate_descriptors),
+							.subordinate_descriptors =
+								{
+									{
+										.bDescriptorType   = USBDescType_hid_report,
+										.wDescriptorLength = sizeof(USB_DESC_HID_REPORT),
+									},
+								}
+						},
+					.endpoints =
+						{
+							{
+								.bLength          = sizeof(struct USBDescEndpoint),
+								.bDescriptorType  = USBDescType_endpoint,
+								.bEndpointAddress = USB_ENDPOINT_HID | USB_ENDPOINT_HID_TRANSFER_DIR,
+								.bmAttributes     = USB_ENDPOINT_HID_TRANSFER_TYPE,
+								.wMaxPacketSize   = USB_ENDPOINT_HID_SIZE,
+								.bInterval        = 1,
+							}
+						},
+				},
 			.ms =
 				{
 					.desc =

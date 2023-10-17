@@ -10,17 +10,6 @@
 	}
 
 	#if DEBUG
-		__attribute__((noreturn))
-		static void
-		debug_unhandled(u16 line_number, enum HaltSource source)
-		{
-			cli();
-			spi_trade((line_number >> 8) & 0xFF);
-			spi_trade((line_number >> 0) & 0xFF);
-			debug_halt(source);
-		}
-		#define debug_unhandled debug_unhandled(__LINE__, PIN_HALT_SOURCE)
-
 		static void
 		debug_dump(u8* data, u16 length)
 		{

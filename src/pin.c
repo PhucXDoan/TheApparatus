@@ -131,6 +131,16 @@ debug_halt(u8 amount)
 				pin_low(PIN_U16_CLK);
 			}
 		}
+
+		__attribute__((noreturn))
+		static void
+		debug_unhandled(u16 line_number, enum HaltSource source)
+		{
+			cli();
+			debug_u16(line_number);
+			debug_halt(source);
+		}
+		#define debug_unhandled debug_unhandled(__LINE__, PIN_HALT_SOURCE)
 	#endif
 #endif
 

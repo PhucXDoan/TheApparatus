@@ -134,72 +134,72 @@ ISR(USB_GEN_vect)
 		}
 		#endif
 
-//		UENUM = USB_ENDPOINT_HID;
-//		if (UEINTX & (1 << TXINI)) // See: [Mouse Commands].
-//		{
-//			i8 delta_x = 0;
-//			i8 delta_y = 0; // Positive makes the mouse move downward.
-//
-//			if (_usb_mouse_calibrations < USB_MOUSE_CALIBRATIONS_REQUIRED)
-//			{
-//				delta_x                  = -128;
-//				delta_y                  = -128;
-//				_usb_mouse_calibrations += 1;
-//			}
-//			else if (_usb_mouse_command_reader_masked(0) != _usb_mouse_command_writer_masked(0)) // There's an available command to handle.
-//			{
-//				u16 command        = _usb_mouse_command_buffer[_usb_mouse_command_reader_masked(0)];
-//				b8  command_held   = (command >> 15);
-//				u8  command_dest_x = (command >>  8) & 0b0111'1111;
-//				u8  command_dest_y =  command        & 0b1111'1111;
-//
-//				if (_usb_mouse_held != command_held)
-//				{
-//					_usb_mouse_held = command_held;
-//				}
-//				else if (!command)
-//				{
-//					_usb_mouse_curr_x       = 0;
-//					_usb_mouse_curr_y       = 0;
-//					_usb_mouse_calibrations = 0;
-//				}
-//				else if (_usb_mouse_curr_x != command_dest_x && (_usb_mouse_curr_y == command_dest_y || ((_usb_mouse_curr_x ^ _usb_mouse_curr_y) & 1)))
-//				{
-//					if (_usb_mouse_curr_x < command_dest_x)
-//					{
-//						delta_x = 1;
-//					}
-//					else
-//					{
-//						delta_x = -1;
-//					}
-//				}
-//				else if (_usb_mouse_curr_y < command_dest_y)
-//				{
-//					delta_y = 1;
-//				}
-//				else if (_usb_mouse_curr_y > command_dest_y)
-//				{
-//					delta_y = -1;
-//				}
-//
-//				_usb_mouse_curr_x += delta_x;
-//				_usb_mouse_curr_y += delta_y;
-//
-//				if (_usb_mouse_curr_x == command_dest_x && _usb_mouse_curr_y == command_dest_y) // We are at the destination.
-//				{
-//					_usb_mouse_command_reader += 1; // Free up the mouse command.
-//				}
-//			}
-//
-//			// See: USB_DESC_HID_REPORT.
-//			UEDATX = _usb_mouse_held;
-//			UEDATX = delta_x;
-//			UEDATX = delta_y;
-//
-//			UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
-//			UEINTX &= ~(1 << FIFOCON); // Allow the USB controller to send the data for the next IN-transaction. See: Source(1) @ Section(22.14) @ Page(276)
-//		}
+		UENUM = USB_ENDPOINT_HID;
+		if (UEINTX & (1 << TXINI)) // See: [Mouse Commands].
+		{
+			i8 delta_x = 0;
+			i8 delta_y = 0; // Positive makes the mouse move downward.
+
+			if (_usb_mouse_calibrations < USB_MOUSE_CALIBRATIONS_REQUIRED)
+			{
+				delta_x                  = -128;
+				delta_y                  = -128;
+				_usb_mouse_calibrations += 1;
+			}
+			else if (_usb_mouse_command_reader_masked(0) != _usb_mouse_command_writer_masked(0)) // There's an available command to handle.
+			{
+				u16 command        = _usb_mouse_command_buffer[_usb_mouse_command_reader_masked(0)];
+				b8  command_held   = (command >> 15);
+				u8  command_dest_x = (command >>  8) & 0b0111'1111;
+				u8  command_dest_y =  command        & 0b1111'1111;
+
+				if (_usb_mouse_held != command_held)
+				{
+					_usb_mouse_held = command_held;
+				}
+				else if (!command)
+				{
+					_usb_mouse_curr_x       = 0;
+					_usb_mouse_curr_y       = 0;
+					_usb_mouse_calibrations = 0;
+				}
+				else if (_usb_mouse_curr_x != command_dest_x && (_usb_mouse_curr_y == command_dest_y || ((_usb_mouse_curr_x ^ _usb_mouse_curr_y) & 1)))
+				{
+					if (_usb_mouse_curr_x < command_dest_x)
+					{
+						delta_x = 1;
+					}
+					else
+					{
+						delta_x = -1;
+					}
+				}
+				else if (_usb_mouse_curr_y < command_dest_y)
+				{
+					delta_y = 1;
+				}
+				else if (_usb_mouse_curr_y > command_dest_y)
+				{
+					delta_y = -1;
+				}
+
+				_usb_mouse_curr_x += delta_x;
+				_usb_mouse_curr_y += delta_y;
+
+				if (_usb_mouse_curr_x == command_dest_x && _usb_mouse_curr_y == command_dest_y) // We are at the destination.
+				{
+					_usb_mouse_command_reader += 1; // Free up the mouse command.
+				}
+			}
+
+			// See: USB_DESC_HID_REPORT.
+			UEDATX = _usb_mouse_held;
+			UEDATX = delta_x;
+			UEDATX = delta_y;
+
+			UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
+			UEINTX &= ~(1 << FIFOCON); // Allow the USB controller to send the data for the next IN-transaction. See: Source(1) @ Section(22.14) @ Page(276)
+		}
 
 		static u16 TEMP = 0;
 		switch (_usb_ms_state)
@@ -370,26 +370,6 @@ ISR(USB_GEN_vect)
 									}
 								} break;
 
-								// case USBMSSCSIOpcode_read_format_capacities: // See: Source(14) @ Table(701) @ AbsPage(1).
-								// {
-								// 	if
-								// 	(
-								// 		command.bmCBWFlags &&
-								// 		command.bCBWCBLength == 10 &&
-								// 		command.dCBWDataTransferLength == (u16) ((command.CBWCB[7] << 8) | command.CBWCB[8]) &&
-								// 		command.CBWCB[9] == 0 // "CONTROL", just in case it's not zero.
-								// 	)
-								// 	{
-								// 		_usb_ms_scsi_info_data = USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA;
-								// 		_usb_ms_scsi_info_size = sizeof(USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA);
-								// 		static_assert(sizeof(USB_MS_SCSI_READ_FORMAT_CAPACITIES_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
-								// 	}
-								// 	else
-								// 	{
-								// 		debug_unhandled;
-								// 	}
-								// } break;
-
 								case USBMSSCSIOpcode_read_capacity: // See: Source(13) @ Section(3.22) @ Page(155).
 								{
 									u32 abs_sector_address =
@@ -546,24 +526,6 @@ ISR(USB_GEN_vect)
 										debug_unhandled;
 									}
 								} break;
-
-								//case USBMSSCSIOpcode_sync_cache:
-								//{
-								//	if
-								//	(
-								//		!command.bmCBWFlags &&
-								//		command.bCBWCBLength == 10 &&
-								//		command.dCBWDataTransferLength == 0 &&
-								//		command.CBWCB[1] == 0 && !memcmp(command.CBWCB + 1, command.CBWCB + 2, countof(command.CBWCB) - 2)
-								//	)
-								//	{
-								//		// TODO Nothing?
-								//	}
-								//	else
-								//	{
-								//		debug_unhandled;
-								//	}
-								//} break;
 
 								case USBMSSCSIOpcode_read_format_capacities:
 								{
@@ -1039,16 +1001,16 @@ ISR(USB_COM_vect)
 						} break;
 					}
 				}
-				//else if
-				//(
-				//	request.hid_get_desc.interface_number == USB_HID_INTERFACE_INDEX &&
-				//	request.hid_get_desc.desc_type        == USBDescType_hid_report
-				//)
-				//{
-				//	payload_data   = (const u8*) &USB_DESC_HID_REPORT;
-				//	payload_length = sizeof(USB_DESC_HID_REPORT);
-				//	static_assert(sizeof(USB_DESC_HID_REPORT) < (((u64) 1) << bitsof(payload_length)));
-				//}
+				else if
+				(
+					request.hid_get_desc.interface_number == USB_HID_INTERFACE_INDEX &&
+					request.hid_get_desc.desc_type        == USBDescType_hid_report
+				)
+				{
+					payload_data   = (const u8*) &USB_DESC_HID_REPORT;
+					payload_length = sizeof(USB_DESC_HID_REPORT);
+					static_assert(sizeof(USB_DESC_HID_REPORT) < (((u64) 1) << bitsof(payload_length)));
+				}
 				else
 				{
 					debug_unhandled;
@@ -1170,39 +1132,34 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
-			case USBSetupRequestType_endpoint_clear_feature: // TODO XMDT
+			case USBSetupRequestType_endpoint_clear_feature:
 			{
 				if (request.endpoint_clear_feature.feature_selector == 0)
 				{
+					UEINTX &= ~(1 << TXINI);
+
 					switch (request.endpoint_clear_feature.endpoint_index)
 					{
-						case USB_ENDPOINT_MS_IN | USB_ENDPOINT_MS_IN_TRANSFER_DIR:
-						{
-							UENUM   = USB_ENDPOINT_MS_IN;
-							UECONX |= (1 << STALLRQC);
-							UERST   = (1 << USB_ENDPOINT_MS_IN);
-							UERST   = 0;
-							UECONX |= (1 << RSTDT);
-						} break;
-
-						case USB_ENDPOINT_MS_OUT | USB_ENDPOINT_MS_OUT_TRANSFER_DIR:
-						{
-							UENUM   = USB_ENDPOINT_MS_OUT;
-							UECONX |= (1 << STALLRQC);
-							UERST   = (1 << USB_ENDPOINT_MS_OUT);
-							UERST   = 0;
-							UECONX |= (1 << RSTDT);
-						} break;
+						#define MAKE(NAME) \
+							case USB_ENDPOINT_##NAME | USB_ENDPOINT_##NAME##_TRANSFER_DIR: \
+							{ \
+								UENUM  = USB_ENDPOINT_##NAME; \
+								UECONX = (1 << STALLRQC) | (1 << RSTDT) | (1 << EPEN); \
+								UERST  = (1 << USB_ENDPOINT_##NAME);\
+								UERST  = 0; \
+							} break;
+						USB_ENDPOINT_XMDT(MAKE)
+						#undef MAKE
 
 						default:
 						{
-							debug_unhandled;
+							UECONX |= (1 << STALLRQ);
 						} break;
 					}
 				}
 				else
 				{
-					debug_unhandled;
+					UECONX |= (1 << STALLRQ);
 				}
 			} break;
 
