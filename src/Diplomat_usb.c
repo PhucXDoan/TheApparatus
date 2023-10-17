@@ -996,7 +996,7 @@ ISR(USB_COM_vect)
 		{
 			((u8*) &request)[i] = UEDATX;
 		}
-		UEINTX &= ~(1 << RXSTPI); // Let the hardware know that we finished copying the SETUP-transaction's data-packet. See: Source(1) @ Section(22.12) @ Page(274).
+		UEINTX = ~((1<<RXSTPI) | (1<<RXOUTI) | (1<<TXINI)); // TODO Why??
 
 		switch (request.type)
 		{
@@ -1115,7 +1115,7 @@ ISR(USB_COM_vect)
 					while (!(UEINTX & (1 << RXOUTI))); // Wait for the completion of an OUT-transaction.
 
 					// Copy data-packet of OUT-transaction.
-					struct USBCDCLineCoding desired_line_coding;
+					struct USBCDCLineCoding desired_line_coding = {0};
 					for (u8 i = 0; i < sizeof(struct USBCDCLineCoding); i += 1)
 					{
 						((u8*) &desired_line_coding)[i] = UEDATX;

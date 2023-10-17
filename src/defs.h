@@ -366,8 +366,8 @@ enum USBSetupRequestType // "bmRequestType" and "bRequest" bytes are combined. S
 	USBSetupRequestType_endpoint_clear_feature = MAKE(0b00000010, 1),
 
 	// Non-exhaustive. See: CDC-Specific Requests @ Source(6) @ Table(44) @ AbsPage(62-63) & Source(6) @ Table(46) @ AbsPage(64-65).
-	USBSetupRequestType_cdc_get_line_coding        = MAKE(0b10100001, 0x21),
 	USBSetupRequestType_cdc_set_line_coding        = MAKE(0b00100001, 0x20),
+	USBSetupRequestType_cdc_get_line_coding        = MAKE(0b10100001, 0x21),
 	USBSetupRequestType_cdc_set_control_line_state = MAKE(0b00100001, 0x22),
 
 	// Non-exhaustive. See: HID-Specific Requests @ Source(7) @ Section(7.1) @ AbsPage(58-63).

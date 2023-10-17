@@ -118,7 +118,7 @@ debug_halt(u8 amount)
 
 			for (u8 i = 0; i < sizeof(value) * 8; i += 1)
 			{
-				if ((value >> (sizeof(value) * 8 - 1 - i)) & 1)
+				if ((value >> i) & 1)
 				{
 					pin_high(PIN_U16_DATA);
 				}
