@@ -85,6 +85,31 @@ enum HaltSource
 #endif
 
 //
+// "timer.c"
+//
+
+enum TimerPrescaler // Prescalers for Timer0's TCCR0B register. See: Source(1) @ Table(13-8) @ Page(108).
+{
+	//                          "CS02".
+	//                          | "CS01".
+	//                          | | "CS00".
+	//                          | | |
+	//                          v v v
+	TimerPrescaler_no_clk   = 0b0'0'0,
+	TimerPrescaler_1        = 0b0'0'1,
+	TimerPrescaler_8        = 0b0'1'0,
+	TimerPrescaler_64       = 0b0'1'1,
+	TimerPrescaler_256      = 0b1'0'0,
+	TimerPrescaler_1024     = 0b1'0'1,
+	TimerPrescaler_ext_fall = 0b1'1'0,
+	TimerPrescaler_ext_rise = 0b1'1'1,
+};
+
+#define TIMER_INITIAL_COUNTER 6 // See: [Overview] @ "timer.c".
+
+static volatile u32 _timer_ms = 0;
+
+//
 // "spi.c"
 //
 
@@ -141,13 +166,13 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 //
 
 #if DEBUG // Used to disable some USB functionalities for development purposes, but does not necessairly remove all data and control flow.
-	#define USB_CDC_ENABLE          true
-	#define USB_HID_ENABLE          false
-	#define USB_MASS_STORAGE_ENABLE false
+	#define USB_CDC_ENABLE true
+	#define USB_HID_ENABLE false
+	#define USB_MS_ENABLE  false
 #else
-	#define USB_CDC_ENABLE          false
-	#define USB_HID_ENABLE          true
-	#define USB_MASS_STORAGE_ENABLE true
+	#define USB_CDC_ENABLE false
+	#define USB_HID_ENABLE true
+	#define USB_MS_ENABLE  true
 #endif
 
 enum USBEndpointSizeCode // See: Source(1) @ Section(22.18.2) @ Page(287).
@@ -532,7 +557,7 @@ enum USBConfigInterface // These interfaces are defined uniquely for our device 
 	#if USB_HID_ENABLE
 		USBConfigInterface_hid,
 	#endif
-	#if USB_MASS_STORAGE_ENABLE
+	#if USB_MS_ENABLE
 		USBConfigInterface_ms,
 	#endif
 	USBConfigInterface_COUNT,
@@ -570,7 +595,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 		} hid;
 	#endif
 
-	#if USB_MASS_STORAGE_ENABLE
+	#if USB_MS_ENABLE
 		struct
 		{
 			struct USBDescInterface desc;
@@ -606,7 +631,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	#define USB_ENDPOINT_HID_SIZE          8
 #endif
 
-#if USB_MASS_STORAGE_ENABLE
+#if USB_MS_ENABLE
 	#define USB_ENDPOINT_MS_IN_INDEX         5
 	#define USB_ENDPOINT_MS_IN_TRANSFER_TYPE USBEndpointTransferType_bulk
 	#define USB_ENDPOINT_MS_IN_TRANSFER_DIR  USBEndpointAddressFlag_in
@@ -635,7 +660,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 			#if USB_HID_ENABLE
 				MAKE(HID)
 			#endif
-			#if USB_MASS_STORAGE_ENABLE
+			#if USB_MS_ENABLE
 				MAKE(MS_IN)
 				MAKE(MS_OUT)
 			#endif
@@ -940,7 +965,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 						},
 				},
 		#endif
-		#if USB_MASS_STORAGE_ENABLE
+		#if USB_MS_ENABLE
 			.ms =
 				{
 					.desc =
@@ -1010,10 +1035,12 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	static u8                               _usb_ms_sending_sector_fragment_index = 0;
 	static struct USBMSCommandStatusWrapper _usb_ms_status                        = {0};
 
-	static volatile b8  sector_write                     = false;
-	static volatile u32 abs_sector_address               = 0;
-	static          u8  loaded_sector[FAT32_SECTOR_SIZE] = {0};
-	static volatile b8  sector_request                   = false;
+	#if USB_MS_ENABLE
+		static volatile b8  sector_write                     = false;
+		static volatile u32 abs_sector_address_              = 0;
+		static          u8  loaded_sector[FAT32_SECTOR_SIZE] = {0};
+		static volatile b8  sector_request                   = false;
+	#endif
 
 	#if DEBUG
 		#if USB_CDC_ENABLE

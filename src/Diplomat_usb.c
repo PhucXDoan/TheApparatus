@@ -208,7 +208,7 @@ ISR(USB_GEN_vect)
 		}
 		#endif
 
-		#if USB_MASS_STORAGE_ENABLE
+		#if USB_MS_ENABLE
 		static u16 TEMP = 0;
 		switch (_usb_ms_state) // [Mass Storage Bulk-Only Transfer Communication].
 		{
@@ -455,7 +455,7 @@ ISR(USB_GEN_vect)
 
 											_usb_ms_sectors_left = sector_count;
 											sector_write         = false;
-											abs_sector_address   = addr;
+											abs_sector_address_  = addr;
 											if (sector_request)
 											{
 												debug_unhandled;
@@ -514,7 +514,7 @@ ISR(USB_GEN_vect)
 
 											_usb_ms_sectors_left = sector_count;
 											sector_write         = true;
-											abs_sector_address   = addr;
+											abs_sector_address_  = addr;
 											if (sector_request)
 											{
 												debug_unhandled;
@@ -735,7 +735,7 @@ ISR(USB_GEN_vect)
 						{
 							_usb_ms_sending_sector_fragment_index  = 0;
 							_usb_ms_sectors_left                  -= 1;
-							abs_sector_address                    += 1;
+							abs_sector_address_                   += 1;
 							if (_usb_ms_sectors_left)
 							{
 								sector_request = true;
@@ -778,7 +778,7 @@ ISR(USB_GEN_vect)
 					{
 						_usb_ms_sending_sector_fragment_index  = 0;
 						_usb_ms_sectors_left                  -= 1;
-						abs_sector_address                    += 1;
+						abs_sector_address_                   += 1;
 						UEINTX &= ~(1 << RXOUTI);
 						UEINTX &= ~(1 << FIFOCON);
 

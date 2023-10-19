@@ -20,6 +20,7 @@
 #undef COMMON
 
 #define MAKE(P, X, N) \
+	[[nodiscard]] \
 	__attribute__((always_inline)) \
 	static inline b8 \
 	pin_read_##P(void) \

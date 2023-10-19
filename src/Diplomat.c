@@ -19,6 +19,7 @@
 #include "spi.c"
 #include "Diplomat_usb.c"
 #include "sd.c"
+#include "timer.c"
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE HaltSource_diplomat
 
@@ -37,18 +38,67 @@ main(void)
 	spi_init();
 	sd_init();
 	usb_init();
+	timer_init();
 
-	while (true)
+	#define PROFILER_MAX_SECTORS 8
+
+	u32 iterations = 0;
+	u32 mismatches = 0;
+	for (;;)
 	{
-		debug_tx_cstr("meow\n");
-		_delay_ms(500.0);
-		debug_tx_cstr("bark\n");
-		_delay_ms(500.0);
-		debug_tx_cstr("augh\n");
-		_delay_ms(500.0);
-		debug_tx_cstr("woof\n");
-		_delay_ms(500.0);
+		debug_tx_cstr("Iteration (");
+		debug_tx_u64(iterations);
+		debug_tx_cstr(") | Mismatches (");
+		debug_tx_u64(mismatches);
+		debug_tx_cstr(")\n");
+		u32 beginning_ms = timer_ms();
+
+		u8 sector_data[FAT32_SECTOR_SIZE] = {0};
+		for (u32 abs_sector_address = 0; abs_sector_address < PROFILER_MAX_SECTORS; abs_sector_address += 1)
+		{
+			sd_write(sector_data, abs_sector_address);
+		}
+
+		u64 checksum = 0;
+		u64 temp     = 134;
+		for (u32 abs_sector_address = 0; abs_sector_address < PROFILER_MAX_SECTORS; abs_sector_address += 1)
+		{
+			sd_read(sector_data, abs_sector_address);
+			for (u16 i = 0; i < countof(sector_data); i += 1)
+			{
+				temp           *= sector_data[(i - 1) & (countof(sector_data) - 1)];
+				temp           += abs_sector_address + i;
+				sector_data[i]  = temp;
+				temp            = (temp << 8) | ((temp >> 8) & 0xFF);
+			}
+			sd_write(sector_data, abs_sector_address);
+		}
+
+		for (u32 abs_sector_address = 0; abs_sector_address < PROFILER_MAX_SECTORS; abs_sector_address += 1)
+		{
+			sd_read(sector_data, abs_sector_address);
+			for (u16 i = 0; i < countof(sector_data); i += 1)
+			{
+				checksum += u64(sector_data[i]) << (i % 64);
+			}
+		}
+
+		u64 ending_ms = timer_ms();
+		debug_tx_cstr("\t0x");
+		debug_tx_64H(checksum);
+		debug_tx_cstr("\n\t");
+		debug_tx_u64(ending_ms - beginning_ms);
+		debug_tx_cstr("ms\n");
+
+		if (checksum != 0xA7FE'F9FF'1630'19BE)
+		{
+			mismatches += 1;
+			debug_tx_cstr("CHECKSUM MISMATCH.\n");
+		}
+		iterations += 1;
 	}
+
+	for(;;);
 }
 
 //
