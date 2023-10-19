@@ -140,6 +140,16 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 // "Diplomat_usb.c"
 //
 
+#if DEBUG // Used to disable some USB functionalities for development purposes, but does not necessairly remove all data and control flow.
+	#define USB_CDC_ENABLE          true
+	#define USB_HID_ENABLE          false
+	#define USB_MASS_STORAGE_ENABLE false
+#else
+	#define USB_CDC_ENABLE          false
+	#define USB_HID_ENABLE          true
+	#define USB_MASS_STORAGE_ENABLE true
+#endif
+
 enum USBEndpointSizeCode // See: Source(1) @ Section(22.18.2) @ Page(287).
 {
 	USBEndpointSizeCode_8   = 0b000,
@@ -240,7 +250,7 @@ struct USBSetupRequest // See: Source(2) @ Table(9-2) @ Page(248).
 		struct // See: CDC-Specific "SetLineCoding" @ Source(6) @ Setion(6.2.12) @ AbsPage(68-69).
 		{
 			u16 _zero;
-			u16 designated_interface_index;           // Index of the interface that the host wants to set the line-coding for. Should be to our only CDC interface (USB_CDC_INTERFACE_INDEX).
+			u16 designated_interface_index;           // Index of the interface that the host wants to set the line-coding for. Should be to our only CDC interface (USBConfigInterface_cdc).
 			u16 incoming_line_coding_datapacket_size; // Amount of bytes the host will be sending. Should be sizeof(struct USBCDCLineCoding).
 		} cdc_set_line_coding;
 
@@ -248,7 +258,7 @@ struct USBSetupRequest // See: Source(2) @ Table(9-2) @ Page(248).
 		{
 			u8  desc_index;                 // Irrelevant; only for HID-specific physical descriptors.
 			u8  desc_type;                  // Aliasing enum USBDescType.
-			u16 designated_interface_index; // Index of the interface that the request is for. Should be to our only HID interface (USB_HID_INTERFACE_INDEX).
+			u16 designated_interface_index; // Index of the interface that the request is for. Should be to our only HID interface (USBConfigInterface_hid).
 			u16 requested_amount;           // Maximum amount of data the host expects back from the device.
 		} hid_get_desc;
 	};
@@ -513,45 +523,60 @@ enum USBMSState // TODO Flesh out the state machine.
 	USBMSState_ready_for_status,
 };
 
+enum USBConfigInterface // These interfaces are defined uniquely for our device application.
+{
+	#if USB_CDC_ENABLE
+		USBConfigInterface_cdc,
+		USBConfigInterface_cdc_data,
+	#endif
+	#if USB_HID_ENABLE
+		USBConfigInterface_hid,
+	#endif
+	#if USB_MASS_STORAGE_ENABLE
+		USBConfigInterface_ms,
+	#endif
+	USBConfigInterface_COUNT,
+};
+
 struct USBConfig // This layout is defined uniquely for our device application.
 {
 	struct USBDescConfig desc;
 
-	struct USBDescIAD iad_cdc; // Must be placed here to group the CDC and CDC-Data interfaces together. See: Source(9) @ Figure(2-1) @ AbsPage(6).
+	#if USB_CDC_ENABLE
+		struct USBDescIAD iad_cdc; // Must be placed here to group the CDC and CDC-Data interfaces together. See: Source(9) @ Figure(2-1) @ AbsPage(6).
 
-	#define USB_CDC_INTERFACE_INDEX 0
-	struct
-	{
-		struct USBDescInterface         desc;
-		struct USBDescCDCHeader         cdc_header;
-		struct USBDescCDCCallManagement cdc_call_management;
-		struct USBDescCDCACMManagement  cdc_acm_management;
-		struct USBDescCDCUnion          cdc_union;
-	} cdc;
+		struct
+		{
+			struct USBDescInterface         desc;
+			struct USBDescCDCHeader         cdc_header;
+			struct USBDescCDCCallManagement cdc_call_management;
+			struct USBDescCDCACMManagement  cdc_acm_management;
+			struct USBDescCDCUnion          cdc_union;
+		} cdc;
 
-	#define USB_CDC_DATA_INTERFACE_INDEX 1
-	struct
-	{
-		struct USBDescInterface desc;
-		struct USBDescEndpoint  endpoints[2];
-	} cdc_data;
+		struct
+		{
+			struct USBDescInterface desc;
+			struct USBDescEndpoint  endpoints[2];
+		} cdc_data;
+	#endif
 
-	#define USB_HID_INTERFACE_INDEX 2
-	struct
-	{
-		struct USBDescInterface desc;
-		struct USBDescHID       hid;
-		struct USBDescEndpoint  endpoints[1];
-	} hid;
+	#if USB_HID_ENABLE
+		struct
+		{
+			struct USBDescInterface desc;
+			struct USBDescHID       hid;
+			struct USBDescEndpoint  endpoints[1];
+		} hid;
+	#endif
 
-	#define USB_MS_INTERFACE_INDEX 3
-	struct
-	{
-		struct USBDescInterface desc;
-		struct USBDescEndpoint  endpoints[2];
-	} ms;
-
-	#define USB_INTERFACE_COUNT 4
+	#if USB_MASS_STORAGE_ENABLE
+		struct
+		{
+			struct USBDescInterface desc;
+			struct USBDescEndpoint  endpoints[2];
+		} ms;
+	#endif
 };
 
 // Endpoint buffer sizes must be one of the names of enum USBEndpointSizeCode.
@@ -562,30 +587,36 @@ struct USBConfig // This layout is defined uniquely for our device application.
 #define USB_ENDPOINT_DFLT_TRANSFER_DIR     0                               // See: [ATmega32U4's Configuration of Endpoint 0].
 #define USB_ENDPOINT_DFLT_SIZE             8
 
-#define USB_ENDPOINT_CDC_IN_INDEX          2
-#define USB_ENDPOINT_CDC_IN_TRANSFER_TYPE  USBEndpointTransferType_bulk
-#define USB_ENDPOINT_CDC_IN_TRANSFER_DIR   USBEndpointAddressFlag_in
-#define USB_ENDPOINT_CDC_IN_SIZE           64
+#if USB_CDC_ENABLE
+	#define USB_ENDPOINT_CDC_IN_INDEX          2
+	#define USB_ENDPOINT_CDC_IN_TRANSFER_TYPE  USBEndpointTransferType_bulk
+	#define USB_ENDPOINT_CDC_IN_TRANSFER_DIR   USBEndpointAddressFlag_in
+	#define USB_ENDPOINT_CDC_IN_SIZE           64
 
-#define USB_ENDPOINT_CDC_OUT_INDEX         3
-#define USB_ENDPOINT_CDC_OUT_TRANSFER_TYPE USBEndpointTransferType_bulk
-#define USB_ENDPOINT_CDC_OUT_TRANSFER_DIR  0
-#define USB_ENDPOINT_CDC_OUT_SIZE          64
+	#define USB_ENDPOINT_CDC_OUT_INDEX         3
+	#define USB_ENDPOINT_CDC_OUT_TRANSFER_TYPE USBEndpointTransferType_bulk
+	#define USB_ENDPOINT_CDC_OUT_TRANSFER_DIR  0
+	#define USB_ENDPOINT_CDC_OUT_SIZE          64
+#endif
 
-#define USB_ENDPOINT_HID_INDEX         4
-#define USB_ENDPOINT_HID_TRANSFER_TYPE USBEndpointTransferType_interrupt
-#define USB_ENDPOINT_HID_TRANSFER_DIR  USBEndpointAddressFlag_in
-#define USB_ENDPOINT_HID_SIZE          8
+#if USB_HID_ENABLE
+	#define USB_ENDPOINT_HID_INDEX         4
+	#define USB_ENDPOINT_HID_TRANSFER_TYPE USBEndpointTransferType_interrupt
+	#define USB_ENDPOINT_HID_TRANSFER_DIR  USBEndpointAddressFlag_in
+	#define USB_ENDPOINT_HID_SIZE          8
+#endif
 
-#define USB_ENDPOINT_MS_IN_INDEX         5
-#define USB_ENDPOINT_MS_IN_TRANSFER_TYPE USBEndpointTransferType_bulk
-#define USB_ENDPOINT_MS_IN_TRANSFER_DIR  USBEndpointAddressFlag_in
-#define USB_ENDPOINT_MS_IN_SIZE          64
+#if USB_MASS_STORAGE_ENABLE
+	#define USB_ENDPOINT_MS_IN_INDEX         5
+	#define USB_ENDPOINT_MS_IN_TRANSFER_TYPE USBEndpointTransferType_bulk
+	#define USB_ENDPOINT_MS_IN_TRANSFER_DIR  USBEndpointAddressFlag_in
+	#define USB_ENDPOINT_MS_IN_SIZE          64
 
-#define USB_ENDPOINT_MS_OUT_INDEX         6
-#define USB_ENDPOINT_MS_OUT_TRANSFER_TYPE USBEndpointTransferType_bulk
-#define USB_ENDPOINT_MS_OUT_TRANSFER_DIR  0
-#define USB_ENDPOINT_MS_OUT_SIZE          64
+	#define USB_ENDPOINT_MS_OUT_INDEX         6
+	#define USB_ENDPOINT_MS_OUT_TRANSFER_TYPE USBEndpointTransferType_bulk
+	#define USB_ENDPOINT_MS_OUT_TRANSFER_DIR  0
+	#define USB_ENDPOINT_MS_OUT_SIZE          64
+#endif
 
 #if PROGRAM_DIPLOMAT
 	static const u8 USB_ENDPOINT_UECFGNX[][2] PROGMEM = // UECFG0X and UECFG1X that an endpoint will be configured with.
@@ -597,11 +628,17 @@ struct USBConfig // This layout is defined uniquely for our device application.
 						(concat(USBEndpointSizeCode_, USB_ENDPOINT_##NAME##_SIZE) << EPSIZE0) | (1 << ALLOC), \
 					},
 			MAKE(DFLT)
-			MAKE(CDC_IN)
-			MAKE(CDC_OUT)
-			MAKE(HID)
-			MAKE(MS_IN)
-			MAKE(MS_OUT)
+			#if USB_CDC_ENABLE
+				MAKE(CDC_IN)
+				MAKE(CDC_OUT)
+			#endif
+			#if USB_HID_ENABLE
+				MAKE(HID)
+			#endif
+			#if USB_MASS_STORAGE_ENABLE
+				MAKE(MS_IN)
+				MAKE(MS_OUT)
+			#endif
 			#undef MAKE
 		};
 
@@ -774,16 +811,17 @@ struct USBConfig // This layout is defined uniquely for our device application.
 					.bLength             = sizeof(struct USBDescConfig),
 					.bDescriptorType     = USBDescType_config,
 					.wTotalLength        = sizeof(struct USBConfig),
-					.bNumInterfaces      = USB_INTERFACE_COUNT,
+					.bNumInterfaces      = USBConfigInterface_COUNT,
 					.bConfigurationValue = USB_CONFIG_ID,
 					.bmAttributes        = USBConfigAttrFlag_reserved_one | USBConfigAttrFlag_self_powered, // TODO We should calculate our power consumption!
 					.bMaxPower           = 50,                                                              // TODO We should calculate our power consumption!
 				},
+		#if USB_CDC_ENABLE
 			.iad_cdc =
 				{
 					.bLength           = sizeof(struct USBDescIAD),
 					.bDescriptorType   = USBDescType_interface_association,
-					.bFirstInterface   = USB_CDC_INTERFACE_INDEX,
+					.bFirstInterface   = USBConfigInterface_cdc,
 					.bInterfaceCount   = 2,
 					.bFunctionClass    = USBClass_cdc,
 					.bFunctionSubClass = 0x2, // This field will act like "bDeviceSubClass". See: "Abstract Control Model" @ Source(6) @ Table(16) @ AbsPage(39).
@@ -795,7 +833,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 						{
 							.bLength            = sizeof(struct USBDescInterface),
 							.bDescriptorType    = USBDescType_interface,
-							.bInterfaceNumber   = USB_CDC_INTERFACE_INDEX,
+							.bInterfaceNumber   = USBConfigInterface_cdc,
 							.bNumEndpoints      = 0,
 							.bInterfaceClass    = USBClass_cdc, // See: Source(6) @ Section(4.2) @ AbsPage(39).
 							.bInterfaceSubClass = 0x2,          // See: "Abstract Control Model" @ Source(6) @ Table(16) @ AbsPage(39).
@@ -825,8 +863,8 @@ struct USBConfig // This layout is defined uniquely for our device application.
 							.bLength            = sizeof(struct USBDescCDCUnion),
 							.bDescriptorType    = USBDescType_cdc_interface,
 							.bDescriptorSubtype = USBDescCDCSubtype_union,
-							.bMasterInterface   = USB_CDC_INTERFACE_INDEX,
-							.bSlaveInterface    = { USB_CDC_DATA_INTERFACE_INDEX }
+							.bMasterInterface   = USBConfigInterface_cdc,
+							.bSlaveInterface    = { USBConfigInterface_cdc_data }
 						},
 				},
 			.cdc_data =
@@ -835,7 +873,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 						{
 							.bLength            = sizeof(struct USBDescInterface),
 							.bDescriptorType    = USBDescType_interface,
-							.bInterfaceNumber   = USB_CDC_DATA_INTERFACE_INDEX,
+							.bInterfaceNumber   = USBConfigInterface_cdc_data,
 							.bNumEndpoints      = countof(USB_CONFIG.cdc_data.endpoints),
 							.bInterfaceClass    = USBClass_cdc_data, // See: Source(6) @ Section(4.5) @ AbsPage(40).
 							.bInterfaceSubClass = 0,                 // Should be left alone. See: Source(6) @ Section(4.6) @ AbsPage(40).
@@ -861,13 +899,15 @@ struct USBConfig // This layout is defined uniquely for our device application.
 							},
 						}
 				},
+		#endif
+		#if USB_HID_ENABLE
 			.hid =
 				{
 					.desc =
 						{
 							.bLength            = sizeof(struct USBDescInterface),
 							.bDescriptorType    = USBDescType_interface,
-							.bInterfaceNumber   = USB_HID_INTERFACE_INDEX,
+							.bInterfaceNumber   = USBConfigInterface_hid,
 							.bNumEndpoints      = countof(USB_CONFIG.hid.endpoints),
 							.bInterfaceClass    = USBClass_hid,
 							.bInterfaceSubClass = 0, // Set to 1 if we support a boot interface, which we don't need to. See: Source(7) @ Section(4.2) @ AbsPage(18).
@@ -899,13 +939,15 @@ struct USBConfig // This layout is defined uniquely for our device application.
 							}
 						},
 				},
+		#endif
+		#if USB_MASS_STORAGE_ENABLE
 			.ms =
 				{
 					.desc =
 						{
 							.bLength            = sizeof(struct USBDescInterface),
 							.bDescriptorType    = USBDescType_interface,
-							.bInterfaceNumber   = USB_MS_INTERFACE_INDEX,
+							.bInterfaceNumber   = USBConfigInterface_ms,
 							.bNumEndpoints      = countof(USB_CONFIG.ms.endpoints),
 							.bInterfaceClass    = USBClass_ms,
 							.bInterfaceSubClass = 0x06, // See: "SCSI Transparent Command Set" @ Source(11) @ AbsPage(3).
@@ -931,77 +973,78 @@ struct USBConfig // This layout is defined uniquely for our device application.
 							}
 						},
 				},
+		#endif
 		};
 #endif
 
 #define USB_MOUSE_CALIBRATIONS_REQUIRED 128
 
 #if PROGRAM_DIPLOMAT
-	#if PROGRAM_DIPLOMAT
-		// Only the interrupt can read and write these.
-		static u8 _usb_mouse_calibrations = 0;
-		static u8 _usb_mouse_curr_x       = 0; // Origin is top-left.
-		static u8 _usb_mouse_curr_y       = 0; // Origin is top-left.
-		static b8 _usb_mouse_held         = false;
+	// Only the interrupt can read and write these.
+	static u8 _usb_mouse_calibrations = 0;
+	static u8 _usb_mouse_curr_x       = 0; // Origin is top-left.
+	static u8 _usb_mouse_curr_y       = 0; // Origin is top-left.
+	static b8 _usb_mouse_held         = false;
 
-		static volatile u16 _usb_mouse_command_buffer[8] = {0}; // See: [Mouse Commands] @ "Diplomat_usb.c".
-		static volatile u8  _usb_mouse_command_writer    = 0;   // Main program writes.
-		static volatile u8  _usb_mouse_command_reader    = 0;   // Interrupt reads.
+	static volatile u16 _usb_mouse_command_buffer[8] = {0}; // See: [Mouse Commands] @ "Diplomat_usb.c".
+	static volatile u8  _usb_mouse_command_writer    = 0;   // Main program writes.
+	static volatile u8  _usb_mouse_command_reader    = 0;   // Interrupt reads.
 
-		#define _usb_mouse_command_writer_masked(OFFSET) ((_usb_mouse_command_writer + (OFFSET)) & (countof(_usb_mouse_command_buffer) - 1))
-		#define _usb_mouse_command_reader_masked(OFFSET) ((_usb_mouse_command_reader + (OFFSET)) & (countof(_usb_mouse_command_buffer) - 1))
+	#define _usb_mouse_command_writer_masked(OFFSET) ((_usb_mouse_command_writer + (OFFSET)) & (countof(_usb_mouse_command_buffer) - 1))
+	#define _usb_mouse_command_reader_masked(OFFSET) ((_usb_mouse_command_reader + (OFFSET)) & (countof(_usb_mouse_command_buffer) - 1))
 
-		// A read/write index with a size greater than a byte makes "atomic" read/write operations difficult to guarantee; it can be done, but probably not worthwhile.
-		static_assert(sizeof(_usb_mouse_command_writer) == 1 && sizeof(_usb_mouse_command_reader) == 1);
+	// A read/write index with a size greater than a byte makes "atomic" read/write operations difficult to guarantee; it can be done, but probably not worthwhile.
+	static_assert(sizeof(_usb_mouse_command_writer) == 1 && sizeof(_usb_mouse_command_reader) == 1);
 
-		// The read/write indices must be able to address any element in the corresponding buffer.
-		static_assert(countof(_usb_mouse_command_buffer) < (((u64) 1) << bitsof(_usb_mouse_command_reader)));
-		static_assert(countof(_usb_mouse_command_buffer) < (((u64) 1) << bitsof(_usb_mouse_command_writer)));
+	// The read/write indices must be able to address any element in the corresponding buffer.
+	static_assert(countof(_usb_mouse_command_buffer) < (((u64) 1) << bitsof(_usb_mouse_command_reader)));
+	static_assert(countof(_usb_mouse_command_buffer) < (((u64) 1) << bitsof(_usb_mouse_command_writer)));
 
-		// Buffer sizes must be a power of two for the "_usb_mouse_X_masked" macros.
-		static_assert(countof(_usb_mouse_command_buffer) && !(countof(_usb_mouse_command_buffer) & (countof(_usb_mouse_command_buffer) - 1)));
+	// Buffer sizes must be a power of two for the "_usb_mouse_X_masked" macros.
+	static_assert(countof(_usb_mouse_command_buffer) && !(countof(_usb_mouse_command_buffer) & (countof(_usb_mouse_command_buffer) - 1)));
 
-		static enum USBMSState                  _usb_ms_state                         = USBMSState_ready_for_command;
-		static const u8*                        _usb_ms_scsi_info_data                = 0;
-		static u8                               _usb_ms_scsi_info_size                = 0;
-		static u32                              _usb_ms_sectors_left                  = 0;
-		static u8                               _usb_ms_sending_sector_fragment_index = 0;
-		static struct USBMSCommandStatusWrapper _usb_ms_status                        = {0};
+	static enum USBMSState                  _usb_ms_state                         = USBMSState_ready_for_command;
+	static const u8*                        _usb_ms_scsi_info_data                = 0;
+	static u8                               _usb_ms_scsi_info_size                = 0;
+	static u32                              _usb_ms_sectors_left                  = 0;
+	static u8                               _usb_ms_sending_sector_fragment_index = 0;
+	static struct USBMSCommandStatusWrapper _usb_ms_status                        = {0};
 
-		static volatile b8  sector_write                     = false;
-		static volatile u32 abs_sector_address               = 0;
-		static          u8  loaded_sector[FAT32_SECTOR_SIZE] = {0};
-		static volatile b8  sector_request                   = false;
-	#endif
+	static volatile b8  sector_write                     = false;
+	static volatile u32 abs_sector_address               = 0;
+	static          u8  loaded_sector[FAT32_SECTOR_SIZE] = {0};
+	static volatile b8  sector_request                   = false;
 
 	#if DEBUG
-		static volatile u8 debug_usb_cdc_in_buffer [USB_ENDPOINT_CDC_IN_SIZE ] = {0};
-		static volatile u8 debug_usb_cdc_out_buffer[USB_ENDPOINT_CDC_OUT_SIZE] = {0};
+		#if USB_CDC_ENABLE
+			static volatile u8 debug_usb_cdc_in_buffer [USB_ENDPOINT_CDC_IN_SIZE ] = {0};
+			static volatile u8 debug_usb_cdc_out_buffer[USB_ENDPOINT_CDC_OUT_SIZE] = {0};
 
-		static volatile u8 debug_usb_cdc_in_writer  = 0; // Main program writes.
-		static volatile u8 debug_usb_cdc_in_reader  = 0; // Interrupt routine reads.
-		static volatile u8 debug_usb_cdc_out_writer = 0; // Interrupt routine writes.
-		static volatile u8 debug_usb_cdc_out_reader = 0; // Main program reads.
+			static volatile u8 debug_usb_cdc_in_writer  = 0; // Main program writes.
+			static volatile u8 debug_usb_cdc_in_reader  = 0; // Interrupt routine reads.
+			static volatile u8 debug_usb_cdc_out_writer = 0; // Interrupt routine writes.
+			static volatile u8 debug_usb_cdc_out_reader = 0; // Main program reads.
 
-		#define debug_usb_cdc_in_writer_masked(OFFSET)  ((debug_usb_cdc_in_writer  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
-		#define debug_usb_cdc_in_reader_masked(OFFSET)  ((debug_usb_cdc_in_reader  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
-		#define debug_usb_cdc_out_writer_masked(OFFSET) ((debug_usb_cdc_out_writer + (OFFSET)) & (countof(debug_usb_cdc_out_buffer) - 1))
-		#define debug_usb_cdc_out_reader_masked(OFFSET) ((debug_usb_cdc_out_reader + (OFFSET)) & (countof(debug_usb_cdc_out_buffer) - 1))
+			#define debug_usb_cdc_in_writer_masked(OFFSET)  ((debug_usb_cdc_in_writer  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
+			#define debug_usb_cdc_in_reader_masked(OFFSET)  ((debug_usb_cdc_in_reader  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
+			#define debug_usb_cdc_out_writer_masked(OFFSET) ((debug_usb_cdc_out_writer + (OFFSET)) & (countof(debug_usb_cdc_out_buffer) - 1))
+			#define debug_usb_cdc_out_reader_masked(OFFSET) ((debug_usb_cdc_out_reader + (OFFSET)) & (countof(debug_usb_cdc_out_buffer) - 1))
 
-		// A read/write index with a size greater than a byte makes "atomic" read/write operations difficult to guarantee; it can be done, but probably not worthwhile.
-		static_assert(sizeof(debug_usb_cdc_in_writer) == 1 && sizeof(debug_usb_cdc_in_reader) == 1 && sizeof(debug_usb_cdc_out_writer) == 1 && sizeof(debug_usb_cdc_out_reader) == 1);
+			// A read/write index with a size greater than a byte makes "atomic" read/write operations difficult to guarantee; it can be done, but probably not worthwhile.
+			static_assert(sizeof(debug_usb_cdc_in_writer) == 1 && sizeof(debug_usb_cdc_in_reader) == 1 && sizeof(debug_usb_cdc_out_writer) == 1 && sizeof(debug_usb_cdc_out_reader) == 1);
 
-		// The read/write indices must be able to address any element in the corresponding buffer.
-		static_assert(countof(debug_usb_cdc_in_buffer ) < (u64(1) << bitsof(debug_usb_cdc_in_reader )));
-		static_assert(countof(debug_usb_cdc_in_buffer ) < (u64(1) << bitsof(debug_usb_cdc_in_writer )));
-		static_assert(countof(debug_usb_cdc_out_buffer) < (u64(1) << bitsof(debug_usb_cdc_out_reader)));
-		static_assert(countof(debug_usb_cdc_out_buffer) < (u64(1) << bitsof(debug_usb_cdc_out_writer)));
+			// The read/write indices must be able to address any element in the corresponding buffer.
+			static_assert(countof(debug_usb_cdc_in_buffer ) < (u64(1) << bitsof(debug_usb_cdc_in_reader )));
+			static_assert(countof(debug_usb_cdc_in_buffer ) < (u64(1) << bitsof(debug_usb_cdc_in_writer )));
+			static_assert(countof(debug_usb_cdc_out_buffer) < (u64(1) << bitsof(debug_usb_cdc_out_reader)));
+			static_assert(countof(debug_usb_cdc_out_buffer) < (u64(1) << bitsof(debug_usb_cdc_out_writer)));
 
-		// Buffer sizes must be a power of two for the "debug_usb_cdc_X_Y_masked" macros.
-		static_assert(countof(debug_usb_cdc_in_buffer ) && !(countof(debug_usb_cdc_in_buffer ) & (countof(debug_usb_cdc_in_buffer ) - 1)));
-		static_assert(countof(debug_usb_cdc_out_buffer) && !(countof(debug_usb_cdc_out_buffer) & (countof(debug_usb_cdc_out_buffer) - 1)));
+			// Buffer sizes must be a power of two for the "debug_usb_cdc_X_Y_masked" macros.
+			static_assert(countof(debug_usb_cdc_in_buffer ) && !(countof(debug_usb_cdc_in_buffer ) & (countof(debug_usb_cdc_in_buffer ) - 1)));
+			static_assert(countof(debug_usb_cdc_out_buffer) && !(countof(debug_usb_cdc_out_buffer) & (countof(debug_usb_cdc_out_buffer) - 1)));
 
-		static volatile b8 debug_usb_diagnostic_signal_received = false;
+			static volatile b8 debug_usb_diagnostic_signal_received = false;
+		#endif
 	#endif
 #endif
 

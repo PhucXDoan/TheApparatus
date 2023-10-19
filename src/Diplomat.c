@@ -31,6 +31,8 @@ main(void)
 		for(;;);
 	}
 
+	debug_u16(0);
+
 	sei();
 	spi_init();
 	sd_init();
@@ -38,19 +40,14 @@ main(void)
 
 	while (true)
 	{
-		if (sector_request)
-		{
-			if (sector_write)
-			{
-				sd_write(loaded_sector, abs_sector_address);
-			}
-			else
-			{
-				sd_read(loaded_sector, abs_sector_address);
-			}
-
-			sector_request = false;
-		}
+		debug_tx_cstr("meow\n");
+		_delay_ms(500.0);
+		debug_tx_cstr("bark\n");
+		_delay_ms(500.0);
+		debug_tx_cstr("augh\n");
+		_delay_ms(500.0);
+		debug_tx_cstr("woof\n");
+		_delay_ms(500.0);
 	}
 }
 

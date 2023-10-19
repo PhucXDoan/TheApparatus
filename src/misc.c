@@ -44,7 +44,7 @@ serialize_i64(char* dst, u16 dst_size, i64 value) // "dst_size" of at least 20 w
 	return result;
 }
 
-#if DEBUG
+#if DEBUG && (!PROGRAM_DIPLOMAT || USB_CDC_ENABLE)
 	static void
 	debug_tx_chars(char* value, u16 value_size);
 
@@ -126,23 +126,17 @@ serialize_i64(char* dst, u16 dst_size, i64 value) // "dst_size" of at least 20 w
 	static void
 	debug_tx_u64(u64 value)
 	{
-		if (debug_usb_diagnostic_signal_received)
-		{
-			char buffer[20];
-			u8   length = serialize_u64(buffer, countof(buffer), value);
-			debug_tx_chars(buffer, length);
-		}
+		char buffer[20];
+		u8   length = serialize_u64(buffer, countof(buffer), value);
+		debug_tx_chars(buffer, length);
 	}
 
 	static void
 	debug_tx_i64(i64 value)
 	{
-		if (debug_usb_diagnostic_signal_received)
-		{
-			char buffer[20];
-			u8   length = serialize_i64(buffer, countof(buffer), value);
-			debug_tx_chars(buffer, length);
-		}
+		char buffer[20];
+		u8   length = serialize_i64(buffer, countof(buffer), value);
+		debug_tx_chars(buffer, length);
 	}
 
 	static void

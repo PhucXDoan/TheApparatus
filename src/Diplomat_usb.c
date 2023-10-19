@@ -42,7 +42,7 @@ usb_init(void)
 	// 6. "Wait for USB VBUS information connection".
 	// i.e. wait momentairly for the diagnostic signal.
 
-	#if DEBUG
+	#if DEBUG && USB_CDC_ENABLE
 	pin_high(PIN_USB_SPINLOCKING);
 	for (u8 i = 0; i < 255; i += 1)
 	{
@@ -92,7 +92,7 @@ ISR(USB_GEN_vect)
 
 	if (UDINT & (1 << SOFI)) // Start-of-Frame.
 	{
-		#if DEBUG
+		#if DEBUG && USB_CDC_ENABLE
 		UENUM = USB_ENDPOINT_CDC_IN_INDEX;
 		if (UEINTX & (1 << TXINI)) // Endpoint's buffer is ready to be filled up with data to send to the host.
 		{
@@ -111,7 +111,7 @@ ISR(USB_GEN_vect)
 		}
 		#endif
 
-		#if DEBUG
+		#if DEBUG && USB_CDC_ENABLE
 		UENUM = USB_ENDPOINT_CDC_OUT_INDEX;
 		if (UEINTX & (1 << RXOUTI)) // Endpoint's buffer has data from the host to be copied.
 		{
@@ -139,6 +139,7 @@ ISR(USB_GEN_vect)
 		}
 		#endif
 
+		#if USB_HID_ENABLE
 		UENUM = USB_ENDPOINT_HID_INDEX;
 		if (UEINTX & (1 << TXINI)) // See: [Mouse Commands].
 		{
@@ -205,7 +206,9 @@ ISR(USB_GEN_vect)
 			UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
 			UEINTX &= ~(1 << FIFOCON); // Allow the USB controller to send the data for the next IN-transaction. See: Source(1) @ Section(22.14) @ Page(276)
 		}
+		#endif
 
+		#if USB_MASS_STORAGE_ENABLE
 		static u16 TEMP = 0;
 		switch (_usb_ms_state) // [Mass Storage Bulk-Only Transfer Communication].
 		{
@@ -830,6 +833,7 @@ ISR(USB_GEN_vect)
 				}
 			} break;
 		}
+		#endif
 	}
 
 	UDINT = 0; // Clear interrupt flags to prevent this routine from executing again.
@@ -893,16 +897,18 @@ ISR(USB_COM_vect)
 						} break;
 					}
 				}
+				#if USB_HID_ENABLE
 				else if
 				(
 					request.hid_get_desc.desc_type                  == USBDescType_hid_report &&
-					request.hid_get_desc.designated_interface_index == USB_HID_INTERFACE_INDEX
+					request.hid_get_desc.designated_interface_index == USBConfigInterface_hid
 				)
 				{
 					payload_data   = (const u8*) &USB_DESC_HID_REPORT;
 					payload_length = sizeof(USB_DESC_HID_REPORT);
 					static_assert(sizeof(USB_DESC_HID_REPORT) < (u64(1) << bitsof(payload_length)));
 				}
+				#endif
 				else
 				{
 					// We currently don't handle any other requests, but if needed we could.
@@ -994,6 +1000,7 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
+			#if USB_CDC_ENABLE
 			case USBSetupRequestKind_cdc_set_line_coding: // [Endpoint 0: CDC-Specific SetLineCoding].
 			{
 				if (request.cdc_set_line_coding.incoming_line_coding_datapacket_size == sizeof(struct USBCDCLineCoding))
@@ -1039,6 +1046,7 @@ ISR(USB_COM_vect)
 					UECONX |= (1 << STALLRQ);
 				}
 			} break;
+			#endif
 
 			case USBSetupRequestKind_endpoint_clear_feature: // See: "Clear Feature" @ Source(2) @ Section(9.4.1) @ Page(252).
 			{
@@ -1120,7 +1128,7 @@ ISR(USB_COM_vect)
 	}
 }
 
-#if DEBUG
+#if DEBUG && USB_CDC_ENABLE
 	static void
 	debug_tx_chars(char* value, u16 value_size)
 	{ // TODO we could use memcpy if we need to speed this up
@@ -1174,12 +1182,9 @@ ISR(USB_COM_vect)
 	host and device. This is vital for development since this allows us to debug easily by sending
 	diagnostics to the host's terminal, and also for us to potentially receive inputs. It also gives
 	us the ability to be able to trigger the bootloader remotely so we don't have to manually reset
-	the MCU for reprogramming; a huge quality-of-life improvement. The endpoints used for
-	transferring the diagnostics are only enabled in DEBUG mode. This is just to keep things slim
-	and ensure that we aren't bloating the firmware with unnecessary code. Currently though, the
-	entire CDC functionality is still active in the configuration regardless of the state of DEBUG.
-	This just makes development a little bit easier, but a potential TODO is to have the CDC
-	function be entirely omitted since it's not really used to directly contribute to anything.
+	the MCU for reprogramming; a huge quality-of-life improvement. This class is really only for
+	development, and doesn't actually contribute to the final firmware of the project. Thus, it
+	should be disabled outside of DEBUG mode.
 
 	(1) "NEFASTOR ONLINE" @ URL(nefastor.com/micrcontrollers/stm32/usb/).
 */
