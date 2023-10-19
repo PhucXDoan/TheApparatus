@@ -1,7 +1,10 @@
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE HaltSource_diplomat_usb
 
-// HELD must evaluate to 0 or 1, DEST_X must be within [0, 127], DEST_Y must be within [0, 255]. See: [Mouse Commands].
+// "HELD"   : Must evaluate to 0 or 1.
+// "DEST_X" : Must be within [0, 127].
+// "DEST_Y" : Must be within [0, 255].
+// See: [Mouse Commands].
 #define usb_mouse_command(HELD, DEST_X, DEST_Y) usb_mouse_command_(((HELD) << 15) | ((DEST_X) << 8) | (DEST_Y))
 static void
 usb_mouse_command_(u16 command)
@@ -37,6 +40,8 @@ usb_init(void)
 	UDCON = 0; // Clearing the DETACH bit allows the device to be connected to the host. See: Source(1) @ Section(22.18.1) @ Page(281).
 
 	// 6. "Wait for USB VBUS information connection".
+	// i.e. wait momentairly for the diagnostic signal.
+
 	#if DEBUG
 	pin_high(PIN_USB_SPINLOCKING);
 	for (u8 i = 0; i < 255; i += 1)
@@ -59,28 +64,28 @@ ISR(USB_GEN_vect)
 
 	if (UDINT & (1 << EORSTI)) // End-of-Reset.
 	{
-		for (u8 i = 0; i < countof(USB_ENDPOINT_UECFGNX); i += 1)
+		for (u8 endpoint_index = 0; endpoint_index < countof(USB_ENDPOINT_UECFGNX); endpoint_index += 1)
 		{
-			if (pgm_read_byte(&USB_ENDPOINT_UECFGNX[i][1])) // Elements that aren't explicitly assigned in USB_ENDPOINT_UECFGNX will have the ALLOC bit cleared.
+			if (pgm_read_byte(&USB_ENDPOINT_UECFGNX[endpoint_index][1])) // Elements that aren't explicitly assigned in USB_ENDPOINT_UECFGNX will have the ALLOC bit cleared.
 			{
-				UENUM   = i;           // "Select the endpoint".
-				UECONX  = (1 << EPEN); // "Activate endpoint".
+				UENUM  = endpoint_index; // "Select the endpoint".
+				UECONX = (1 << EPEN);    // "Activate endpoint".
 
 				// "Configure and allocate".
-				UECFG0X = pgm_read_byte(&USB_ENDPOINT_UECFGNX[i][0]);
-				UECFG1X = pgm_read_byte(&USB_ENDPOINT_UECFGNX[i][1]);
+				UECFG0X = pgm_read_byte(&USB_ENDPOINT_UECFGNX[endpoint_index][0]);
+				UECFG1X = pgm_read_byte(&USB_ENDPOINT_UECFGNX[endpoint_index][1]);
 
 				// "Test endpoint configuration".
 				#if DEBUG
 				if (!(UESTA0X & (1 << CFGOK)))
 				{
-					error; // Hardware determine that this endpoint's configuration is invalid.
+					debug_unhandled; // Invald configuration.
 				}
 				#endif
 			}
 		}
 
-		// Enable the interrupt source of the event that endpoint 0 receives a SETUP-transaction.
+		// Enable the interrupt source in the event that endpoint 0 receives a SETUP-transaction.
 		UENUM  = USB_ENDPOINT_DFLT_INDEX;
 		UEIENX = (1 << RXSTPE);
 	}
@@ -202,7 +207,7 @@ ISR(USB_GEN_vect)
 		}
 
 		static u16 TEMP = 0;
-		switch (_usb_ms_state)
+		switch (_usb_ms_state) // [Mass Storage Bulk-Only Transfer Communication].
 		{
 			case USBMSState_ready_for_command:
 			{
@@ -290,9 +295,7 @@ ISR(USB_GEN_vect)
 											control == 0
 										)
 										{
-											_usb_ms_scsi_info_data = USB_MS_SCSI_UNIT_SERIAL_NUMBER;
-											_usb_ms_scsi_info_size = sizeof(USB_MS_SCSI_UNIT_SERIAL_NUMBER);
-											static_assert(sizeof(USB_MS_SCSI_UNIT_SERIAL_NUMBER) <= USB_ENDPOINT_MS_IN_SIZE);
+											unsupported_command = true;
 										}
 										else
 										{
@@ -323,7 +326,9 @@ ISR(USB_GEN_vect)
 										}
 										else
 										{
-											_usb_ms_send_sense = true;
+											_usb_ms_scsi_info_data = USB_MS_SCSI_UNSUPPORTED_COMMAND_SENSE;
+											_usb_ms_scsi_info_size = sizeof(USB_MS_SCSI_UNSUPPORTED_COMMAND_SENSE);
+											static_assert(sizeof(USB_MS_SCSI_UNSUPPORTED_COMMAND_SENSE) <= USB_ENDPOINT_MS_IN_SIZE);
 										}
 									}
 									else
@@ -602,7 +607,7 @@ ISR(USB_GEN_vect)
 							{
 								if (!command.dCBWDataTransferLength)
 								{
-									debug_unhandled;
+									// No stalling necessary.
 								}
 								else if (command.bmCBWFlags) // Device to host.
 								{
@@ -622,57 +627,6 @@ ISR(USB_GEN_vect)
 										.dCSWTag         = command.dCBWTag,
 										.dCSWDataResidue = command.dCBWDataTransferLength,
 										.bCSWStatus      = USBMSCommandStatusWrapperStatus_failed,
-									};
-								_usb_ms_sense =
-									(struct SCSISense)
-									{
-										.bytes =
-											{
-												// "VALID"
-												//    | "RESPONSE CODE"
-												//    v vvvvvvv
-													0b1'1110000,
-
-												// Obsolete.
-													0,
-
-												// "FILEMARK"
-												//    | "EOM"
-												//    | | "ILI"
-												//    | | | Reserved.
-												//    | | | | "SENSE KEY"
-												//    | | | |  |
-												//    v v v v vvvv
-													0b0'0'0'0'0101,
-
-												// "INFORMATION" : Big endian.
-													0, 0, 0, 0,
-
-												// "ADDITIONAL SENSE LENGTH"
-													10,
-
-												// "COMMAND SPECIFIC INFORMATION" : Big endian
-													0, 0, 0, 0,
-
-												// "ADDITIONAL SENSE CODE"
-													0x20,
-
-												// "ADDITIONAL SENSE CODE QUALIFIER"
-													0x00,
-
-												// "FIELD REPLACEMENT UNIT CODE"
-													0,
-
-												// "SKSV"
-												//    | "C/D"
-												//    | | Reserved.
-												//    | | | "BPV".
-												//    | | |  | "BIT POINTER".
-												//    | | |  |  | "FIELD POINTER"
-												//    | | |  |  |              |
-												//    v v vv v vvv  vvvvvvvvvvvvvvvvvvvvvv
-													0b1'1'00'0'000, 0b00000000, 0b00000000,
-											}
 									};
 							}
 							else if (_usb_ms_scsi_info_size)
@@ -710,23 +664,6 @@ ISR(USB_GEN_vect)
 										.dCSWSignature   = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE,
 										.dCSWTag         = command.dCBWTag,
 										.dCSWDataResidue = 0,
-										.bCSWStatus      = USBMSCommandStatusWrapperStatus_success,
-									};
-							}
-							else if (_usb_ms_send_sense)
-							{
-								if (command.dCBWDataTransferLength < sizeof(_usb_ms_sense))
-								{
-									debug_unhandled;
-								}
-
-								_usb_ms_state  = USBMSState_sending_data;
-								_usb_ms_status =
-									(struct USBMSCommandStatusWrapper)
-									{
-										.dCSWSignature   = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE,
-										.dCSWTag         = command.dCBWTag,
-										.dCSWDataResidue = command.dCBWDataTransferLength - sizeof(_usb_ms_sense),
 										.bCSWStatus      = USBMSCommandStatusWrapperStatus_success,
 									};
 							}
@@ -783,14 +720,6 @@ ISR(USB_GEN_vect)
 							UEDATX = pgm_read_byte(&_usb_ms_scsi_info_data[i]);
 						}
 						_usb_ms_scsi_info_size = 0;
-					}
-					else if (_usb_ms_send_sense)
-					{
-						for (u8 i = 0; i < sizeof(_usb_ms_sense); i += 1)
-						{
-							UEDATX = pgm_read_byte(&_usb_ms_sense.bytes[i]);
-						}
-						_usb_ms_send_sense = false;
 					}
 					else if (_usb_ms_sectors_left && !sector_request)
 					{
@@ -906,40 +835,6 @@ ISR(USB_GEN_vect)
 	UDINT = 0; // Clear interrupt flags to prevent this routine from executing again.
 }
 
-static void
-_usb_endpoint_0_in_pgm(const u8* payload_data, u16 payload_length)
-{ // [Endpoint 0: Data-Transfer from Device to Host].
-
-	const u8* reader    = payload_data;
-	u16       remaining = payload_length;
-	while (true)
-	{
-		if (UEINTX & (1 << RXOUTI)) // Received OUT-transaction?
-		{
-			UEINTX &= ~(1 << RXOUTI); // Clear interrupt flag for this OUT-transaction. See: Pseudocode @ Source(2) @ Section(22.12.2) @ Page(275).
-			break;
-		}
-		else if (UEINTX & (1 << TXINI)) // Endpoint 0's buffer ready to be filled?
-		{
-			u8 writes_left = remaining;
-			if (writes_left > USB_ENDPOINT_DFLT_SIZE)
-			{
-				writes_left = USB_ENDPOINT_DFLT_SIZE;
-			}
-
-			remaining -= writes_left;
-			while (writes_left)
-			{
-				UEDATX       = pgm_read_byte(reader);
-				reader      += 1;
-				writes_left -= 1;
-			}
-
-			UEINTX &= ~(1 << TXINI); // Endpoint 0's buffer is ready for the next IN-transaction.
-		}
-	}
-}
-
 ISR(USB_COM_vect)
 { // See: [USB Endpoint Interrupt Routine].
 	UENUM = USB_ENDPOINT_DFLT_INDEX;
@@ -952,7 +847,7 @@ ISR(USB_COM_vect)
 		{
 			((u8*) &request)[i] = UEDATX;
 		}
-		UEINTX = ~((1<<RXSTPI) | (1<<RXOUTI) | (1<<TXINI)); // TODO Why??
+		UEINTX = ~(1 << RXSTPI);
 
 		switch (request.kind)
 		{
@@ -970,7 +865,7 @@ ISR(USB_COM_vect)
 						{
 							payload_data   = (const u8*) &USB_DESC_DEVICE;
 							payload_length = sizeof(USB_DESC_DEVICE);
-							static_assert(sizeof(USB_DESC_DEVICE) < (((u64) 1) << bitsof(payload_length)));
+							static_assert(sizeof(USB_DESC_DEVICE) < (u64(1) << bitsof(payload_length)));
 						} break;
 
 						case USBDescType_config: // [Interfaces, Configurations, and Classes].
@@ -979,7 +874,7 @@ ISR(USB_COM_vect)
 							{
 								payload_data   = (const u8*) &USB_CONFIG;
 								payload_length = sizeof(USB_CONFIG);
-								static_assert(sizeof(USB_CONFIG) < (((u64) 1) << bitsof(payload_length)));
+								static_assert(sizeof(USB_CONFIG) < (u64(1) << bitsof(payload_length)));
 							}
 						} break;
 
@@ -991,34 +886,67 @@ ISR(USB_COM_vect)
 
 						default:
 						{
+							// We currently don't handle any other standard requests, but if needed we could.
+							#if DEBUG
 							debug_unhandled;
+							#endif
 						} break;
 					}
 				}
 				else if
 				(
-					request.hid_get_desc.designated_interface_index == USB_HID_INTERFACE_INDEX &&
-					request.hid_get_desc.desc_type                  == USBDescType_hid_report
+					request.hid_get_desc.desc_type                  == USBDescType_hid_report &&
+					request.hid_get_desc.designated_interface_index == USB_HID_INTERFACE_INDEX
 				)
 				{
 					payload_data   = (const u8*) &USB_DESC_HID_REPORT;
 					payload_length = sizeof(USB_DESC_HID_REPORT);
-					static_assert(sizeof(USB_DESC_HID_REPORT) < (((u64) 1) << bitsof(payload_length)));
+					static_assert(sizeof(USB_DESC_HID_REPORT) < (u64(1) << bitsof(payload_length)));
 				}
 				else
 				{
+					// We currently don't handle any other requests, but if needed we could.
+					#if DEBUG
 					debug_unhandled;
+					#endif
 				}
 
-				if (payload_length)
+				if (payload_length) // [Endpoint 0: Data-Transfer from Device to Host].
 				{
-					_usb_endpoint_0_in_pgm // TODO Inline?
-					(
-						payload_data,
-						request.get_desc.requested_amount < payload_length
-							? request.get_desc.requested_amount
-							: payload_length
-					);
+					const u8* payload_reader    = payload_data;
+					u8        payload_remaining = payload_length;
+
+					if (payload_length > request.get_desc.requested_amount)
+					{
+						payload_remaining = request.get_desc.requested_amount;
+					}
+
+					while (true)
+					{
+						if (UEINTX & (1 << RXOUTI)) // Received OUT-transaction?
+						{
+							UEINTX &= ~(1 << RXOUTI); // The OUT-transaction should be zero-lengthed, so discard immediately.
+							break;
+						}
+						else if (UEINTX & (1 << TXINI)) // Endpoint 0's buffer ready to be filled?
+						{
+							u8 packet_size = payload_remaining;
+
+							if (packet_size > USB_ENDPOINT_DFLT_SIZE)
+							{
+								packet_size = USB_ENDPOINT_DFLT_SIZE;
+							}
+
+							for (u8 i = 0; i < packet_size; i += 1)
+							{
+								UEDATX             = pgm_read_byte(payload_reader);
+								payload_remaining -= 1;
+								payload_reader    += 1;
+							}
+
+							UEINTX &= ~(1 << TXINI); // Transmit endpoint 0's buffer.
+						}
+					}
 				}
 				else
 				{
@@ -1039,7 +967,7 @@ ISR(USB_COM_vect)
 				}
 				else
 				{
-					error; // The host somehow sent us an address that's not within 7-bits. See: Source(2) @ Section(8.3.2.1) @ Page(197).
+					UECONX |= (1 << STALLRQ); // The host somehow sent us an address that's not within 7-bits. See: Source(2) @ Section(8.3.2.1) @ Page(197).
 				}
 			} break;
 
@@ -1047,10 +975,12 @@ ISR(USB_COM_vect)
 			{
 				switch (request.set_config.id)
 				{
+					#if DEBUG
 					case 0:
 					{
-						error; // In the case that the host, for some reason, wants to set the device back to the "address state", we should handle this.
+						debug_unhandled; // In the case that the host, for some reason, wants to set the device back to the "address state", we should handle this.
 					} break;
+					#endif
 
 					case USB_CONFIG_ID:
 					{
@@ -1100,68 +1030,74 @@ ISR(USB_COM_vect)
 
 						default:
 						{
+							// Nothing particularly interesting about this baud rate.
 						} break;
 					}
 				}
 				else
 				{
 					UECONX |= (1 << STALLRQ);
-					debug_unhandled;
 				}
 			} break;
 
-			case USBSetupRequestKind_endpoint_clear_feature:
+			case USBSetupRequestKind_endpoint_clear_feature: // See: "Clear Feature" @ Source(2) @ Section(9.4.1) @ Page(252).
 			{
-				if (request.endpoint_clear_feature.feature_selector == 0)
+				if (request.endpoint_clear_feature.feature_selector == USBFeatureSelector_endpoint_halt)
 				{
 					UEINTX &= ~(1 << TXINI);
+					while (!(UEINTX & (1 << TXINI)));
 
-					switch (request.endpoint_clear_feature.endpoint_index)
+					if (request.endpoint_clear_feature.endpoint) // Endpoint 0 does not need any special handling.
 					{
-						case USB_ENDPOINT_DFLT_INDEX | USB_ENDPOINT_DFLT_TRANSFER_DIR:
+						u8 endpoint_index = request.endpoint_clear_feature.endpoint & ~USBEndpointAddressFlag_in;
+						if
+						(
+							endpoint_index < countof(USB_ENDPOINT_UECFGNX) &&                          // Endpoint index within bounds?
+							pgm_read_byte(&USB_ENDPOINT_UECFGNX[endpoint_index][1]) &&                 // Endpoint exists?
+							!!(pgm_read_byte(&USB_ENDPOINT_UECFGNX[endpoint_index][0]) & (1 << EPDIR)) // Endpoint has the right transfer direction?
+								== !!(request.endpoint_clear_feature.endpoint & USBEndpointAddressFlag_in)
+						)
 						{
-						} break;
-
-						#define MAKE(NAME) \
-							case USB_ENDPOINT_##NAME##_INDEX | USB_ENDPOINT_##NAME##_TRANSFER_DIR: \
-							{ \
-								UENUM  = USB_ENDPOINT_##NAME##_INDEX; \
-								UECONX = (1 << STALLRQC) | (1 << RSTDT) | (1 << EPEN); \
-								UERST  = (1 << USB_ENDPOINT_##NAME##_INDEX);\
-								UERST  = 0; \
-							} break;
-						MAKE(CDC_IN )
-						MAKE(CDC_OUT)
-						MAKE(HID    )
-						MAKE(MS_IN  )
-						MAKE(MS_OUT )
-						#undef MAKE
-
-						default:
+							UENUM  = endpoint_index;
+							UECONX = (1 << STALLRQC) | (1 << RSTDT) | (1 << EPEN); // Clear stall condition, reset data-toggle to DATA0. See: Source(2) @ Section(9.4.5) @ Page(256).
+							UERST  = (1 << endpoint_index);                        // Set to begin resetting FIFO state machine on the endpoint.
+							UERST  = 0;                                            // Clear to finish resetting FIFO.
+						}
+						else
 						{
-							UECONX |= (1 << STALLRQ);
-						} break;
+							UECONX |= (1 << STALLRQ); // An invalid endpoint was requested.
+						}
 					}
 				}
 				else
 				{
-					UECONX |= (1 << STALLRQ);
+					UECONX |= (1 << STALLRQ); // The standard USB only defines one feature for endpoints.
 				}
 			} break;
 
-			case USBSetupRequestKind_ms_get_max_lun: // [Endpoint 0: MS-Specific GetMaxLUN]. // TODO Update: apple wants this for some reason.
+			case USBSetupRequestKind_ms_get_max_lun: // See: Source(12) @ Section(3.2) @ Page(7).
 			{
-				while (!(UEINTX & ((1 << RXOUTI) | (1 << TXINI))));
+				// Despite the fact that the mass storage specification specifically states that we may stall if we
+				// don't support multiple logical units, Apple does not seem to like it, so we're going to implement it anyways.
 
-				if (UEINTX & (1 << TXINI))
+				b8 sent = false;
+				while (true) // See: [Endpoint 0: Data-Transfer from Device to Host].
 				{
-					UEDATX  = 0;
-					UEINTX &= ~(1 << TXINI);
-				}
+					if (UEINTX & (1 << RXOUTI))
+					{
+						UEINTX &= ~(1 << RXOUTI);
+						break;
+					}
+					else if (UEINTX & (1 << TXINI))
+					{
+						if (!sent)
+						{
+							UEDATX = 0;
+							sent   = true;
+						}
 
-				if (UEINTX & (1 << RXOUTI))
-				{
-					UEINTX &= ~(1 << RXOUTI);
+						UEINTX &= ~(1 << TXINI);
+					}
 				}
 			} break;
 
@@ -1175,8 +1111,10 @@ ISR(USB_COM_vect)
 			default:
 			{
 				UECONX |= (1 << STALLRQ);
-				debug_u16(request.kind);
-				debug_halt(2);
+
+				#if DEBUG
+				debug_unhandled;
+				#endif
 			} break;
 		}
 	}
@@ -1199,37 +1137,6 @@ ISR(USB_COM_vect)
 		}
 	}
 
-	static void
-	debug_tx_cstr(char* value)
-	{
-		if (debug_usb_diagnostic_signal_received)
-		{
-			debug_tx_chars(value, strlen(value));
-		}
-	}
-
-	static void
-	debug_tx_u64(u64 value)
-	{
-		if (debug_usb_diagnostic_signal_received)
-		{
-			char buffer[20];
-			u8   length = serialize_u64(buffer, countof(buffer), value);
-			debug_tx_chars(buffer, length);
-		}
-	}
-
-	static void
-	debug_tx_i64(i64 value)
-	{
-		if (debug_usb_diagnostic_signal_received)
-		{
-			char buffer[20];
-			u8   length = serialize_i64(buffer, countof(buffer), value);
-			debug_tx_chars(buffer, length);
-		}
-	}
-
 	static u8 // Amount of data copied into dst.
 	debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13) for keyboard enter.
 	{ // TODO we could use memcpy if we need to speed this up
@@ -1246,15 +1153,6 @@ ISR(USB_COM_vect)
 		}
 
 		return result;
-	}
-
-	static void
-	debug_tx_H8(u8 value) // TODO Duplicated.
-	{
-		char digits[2] = {0};
-		digits[0] = ((value >> 4) & 0x0F) < 10 ? '0' + ((value >> 4) & 0x0F) : 'A' + (((value >> 4) & 0x0F) - 10);
-		digits[1] = ((value >> 0) & 0x0F) < 10 ? '0' + ((value >> 0) & 0x0F) : 'A' + (((value >> 0) & 0x0F) - 10);
-		debug_tx_chars(digits, countof(digits));
 	}
 #endif
 
@@ -1572,13 +1470,12 @@ ISR(USB_COM_vect)
 */
 
 /* [Endpoint 0: Data-Transfer from Device to Host].
-	This procedure is called when we are in a state where endpoint 0 needs to transmit
-	some data to the host in response to a SETUP-transaction. This process is
-	non-trivial since the data that needs to be sent might have to be broken up into
-	multiple transactions and also the fact that the host could abort early.
+	We are in a state where endpoint 0 needs to transmit some data to the host in response to
+	a SETUP-transaction, and this process here is non-trivial since the data that needs to be sent
+	might have to be broken up into multiple transactions and also the fact that the host could
+	abort early.
 
 	Consider the following diagram:
-
 	.......................................................................
 	: =====================     ==================     ================== :
 	: ( SETUP-TRANSACTION ) --> ( IN-TRANSACTION ) --> ( IN-TRANSACTION ) :
@@ -1590,17 +1487,15 @@ ISR(USB_COM_vect)
 	:   ===================     ==================     ================== :
 	........... EXAMPLE OF ENDPOINT 0 SENDING DATA TO THE HOST ............
 
-	Before this procedure was called, endpoint 0 received a SETUP-transaction where the
-	host, say, asked the device for the string of its manufacturer's name. If
-	endpoint 0's buffer is small and/or the requested amount of data is large enough,
-	then this transferring of data will be done through a series of IN-transactions.
+	At the beginning, endpoint 0 received a SETUP-transaction where the host, say, asked the
+	device for the string of its manufacturer's name. If endpoint 0's buffer is small and/or the
+	requested amount of data is large enough, then this transferring of data will be done through
+	a series of IN-transactions.
 
-	The procedure will be called to begin handling the series of IN-transactions that
-	will be sent by the host. In each IN-transaction, the procedure will fill up
-	endpoint 0's buffer as much as possible. Only the data-packet in the last
-	IN-transaction may be smaller than endpoint 0's maximum capacity in the case that
-	the requested amount of data is not a perfect multiple of the buffer size (1). In
-	other words, we should be expecting the host to stop sending IN-transactions when
+	In that series of IN-transactions, endpoint 0's buffer will be filled as much as possible.
+	Only the data-packet in the last IN-transaction may be smaller than endpoint 0's maximum
+	capacity in the case that the requested amount of data is not a perfect multiple of the buffer
+	size (1). In other words, we should be expecting the host to stop sending IN-transactions when
 	the requested amount of data has been sent or if the data-packet it received is
 	shorter than endpoint 0's maximum capacity.
 
@@ -1850,7 +1745,7 @@ ISR(USB_COM_vect)
 	far back into the history of a communication systems, starting at the age old thing called
 	POTS (Plain Old Telephone Service):
 	.......................................................................
-	.                                                                     :
+	:                                                                     :
 	:                    ||                         ||                    :
 	:                  |=||=|~~~~~~~~~~~~~~~~~~~~~|=||=|                  :
 	:                    ||            ^            ||                    :
@@ -1868,7 +1763,7 @@ ISR(USB_COM_vect)
 	"demodulate" analog signals back into the original digital signals.
 	This modulator-demodulator is the "modem".
 	.......................................................................
-	.                                                                     :
+	:                                                                     :
 	:                    ||                         ||                    :
 	:                  |=||=|~~~~~~~~~~~~~~~~~~~~~|=||=|                  :
 	:                    ||            ^            ||                    :
@@ -2029,7 +1924,39 @@ ISR(USB_COM_vect)
 */
 
 /* [Mass Storage Device Class].
-	TODO
+	The mass storage device class is a hot mess. I mean, it's pretty simple I suppose. Simple as
+	minimal as a specification could get, but it's just the fact that you have to use a command set
+	with SCSI being the de-facto standard. And oh boy what a mess that is. Anyways, we are
+	specifically using the bulk-only transport (BOT) protocol to be able to communicate stuff to
+	the host. After exchanging pleasantries, the host can command us to send it sectors of our
+	flash drive data. Sectors are just the smallest unit of addressable part of a storage device,
+	and is commonly 512 bytes. Thus writing a single byte or reading a single byte will consequently
+	result in a 512-byte read/write command. Overall, this is pretty negligible for us.
+
+	Now, originally, I was planning to just fool the host by sending the right sectors to convince
+	that it was looking at some FAT32 file system. This would allow us to not have to require an
+	actual external storage component to contain the entire file system, because all we needed was
+	to make the host be able to send image data to us. When the image data comes in, we would parse
+	it in the moment and not actually store it long-term.
+
+	... turns out things are never that simple. For one, Windows makes some system files and
+	directories when you plug in a fresh mass storage device. Things like
+	"System Volume Information" and "Index Volume GUID", a whole bunch of junk. I believe these are
+	for things like system restore points and optimizing the file indexing in File Explorer, but
+	overall useless and unnecessary for us. I eventuall tweaked some random values in the register
+	editor and disabled some arbitrary service so that Windows would not do this, but that wouldn't
+	really fix anything, since the entire endgoal of this was to have it function on my iPhone, and
+	last time I checked, I don't think I'd be able to do something like that. And maybe I wouldn't
+	have worried about it at all if Apple didn't have their own equivalent of system files for
+	mass storage devices, but they unfortunately do. This time they give the system folder the
+	beautiful name of ".Spotlight-V100", and didn't bother to actually set the bit for the FAT32
+	entry to make this directory hidden, so it ends up junking stuff up more. Ugh.
+
+	So that strategy of "fooling" the host wasn't going to work. Even if I did send everything to the
+	host one-to-one what my geniune flash drive would have, the host would need to write to these
+	system files or change things around, and so long-term storage was just a necessity.
+
+	// TODO Document how it is optimized.
 */
 
 /* [Endpoint 0: SetAddress].
@@ -2157,15 +2084,6 @@ ISR(USB_COM_vect)
 	with huge mouse deltas.
 */
 
-/* [Endpoint 0: MS-Specific GetMaxLUN].
-	Despite (1) saying that the device MAY stall on this, Window's driver seems to be persistent
-	on doing this request. Eventually, the driver will move on and do the mass storage enumeration
-	stuff, but there'd be a solid couple seconds of delay. So we just might as well handle this
-	request.
-
-	(1) "Get Max LUN" @ Source(12) @ Section(3.2) @ Page(7).
-*/
-
 /* [Endpoint 0: HID-Specific SetIdle].
 	The host wants to reduce the amount of data being transferred in the case where HID report
 	payloads ends up being the same as the previous. We seem to be alright in ignoring the (1)
@@ -2180,6 +2098,96 @@ ISR(USB_COM_vect)
 
 	(1) "GetLineCoding" @ Source(6) @ Section(6.2.13) @ AbsPage(69)
 	(2) "SetLineControlLineState" @ Source(6) @ Section(6.2.14) @ AbsPage(69-70).
+*/
+
+/* [Mass Storage Bulk-Only Transfer Communication].
+	As if it couldn't get any more absurd, the mass storage specification (1) only lightly
+	describes what the class needs to do, and instead there are multiple different
+	transportation methods that this class can use, such as Control/Bulk/Interrupt,
+	Bulk-Only, UFI, etc. I chose the bulk-only transport (BOT) since that's what most flash drives
+	seem to implement... but once again, the specification (2) for that just describes the
+	"communication" method with (3) pretty much encapsulating the main idea. This transportation
+	protocol doesn't describe at all how to make the device into something that the host will use
+	as a flash drive. For that, a command set must be selected, with SCSI being seemingly also the
+	de-facto standard. It's crazy. There's like five layers of protocol and specifications going on
+	here, but whatever. That's just life, I guess.
+
+	Anyways, if we want to send data to the host, then we do the following series of transactions:
+	...................................................................
+	: =========================      =============     =============  :
+	: ( COMMAND-BLOCK WRAPPER )  --> (  DATA 1/4 ) --> (  DATA 2/4 )  :
+	: ======== BULK-OUT =======      == BULK-IN ==     == BULK-IN ==  :
+	:                                                          |      :
+	:                                                          v      :
+	: ==========================     =============      ============= :
+	: ( COMMAND-STATUS WRAPPER ) <-- (  DATA 4/4 )  <-- (  DATA 3/4 ) :
+	: ======== BULK-IN =========     == BULK-IN ==      == BULK-IN == :
+	:                                                                 :
+	............. EXAMPLE OF DATA FLOWING FROM DEVICE TO HOST  ........
+
+	This is extremely similar to how the default control endpoint carries out SETUP-transaction,
+	but since control-typed endpoints are the only ones that are bidirectional, two endpoints must
+	be used for this mass storage transaction. The first transaction transports the
+	struct USBMSCommandBlockWrapper data from host to device, which describe things like the
+	amount of data the host is expecting in the later BULK-IN-transactions. Assuming the device has
+	enough data to actually send to the host, the first couple of BULK-IN-transactions will be part
+	of the "data". Once the amount of expected data has been sent, the last BULK-IN-transaction will
+	be for the command status. The command status just helps make the host sure that nothing went
+	wrong or whatever.
+
+	... but what if there isn't enough data to send? Or if we can't fulfill a command? Well, we
+	have to do something pretty weird:
+	....................................................................
+	: =========================             ===============            :
+	: ( COMMAND-BLOCK WRAPPER )   -->       (   !STALL!   )            :
+	: ======== BULK-OUT =======             === BULK-IN ===            :
+	:                                              |                   :
+	:                                              v                   :
+	:  ==========================     ================================ :
+	:  ( COMMAND-STATUS WRAPPER ) <-- ( CLEAR BULK-IN ENDPOINT STALL ) :
+	:  ======== BULK-IN =========     ============ DEFAULT =========== :
+	:                                                                  :
+	........... EXAMPLE OF REPONSE TO INVALID COMMAND-BLOCK  ...........
+
+	When we receive a command-block wrapper that we can't handle or is invalid or for whatever
+	reason, then we stall the BULK-IN endpoint (if the host is sending data to us, then the
+	BULK-OUT endpoint is the one that is stalled). When the host attempts to perform a
+	transaction on the corresponding bulk-typed endpoint, it'll receive a STALL-HANDSHAKE and the
+	host driver will recognize that the command failed. A SETUP-transaction is then sent to the
+	default endpoint requesting to clear the stall condition on the bulk-typed endpoint and then
+	the host requests for the command status. From there on, we continue onto the next
+	command/data/status transfer.
+
+	The transfer for data flowing from host to device is pretty much identical, except the BULK-OUT
+	endpoint is now being the one used in the data stage.
+	.................................................................
+	: =========================      ============     ============  :
+	: ( COMMAND-BLOCK WRAPPER )  --> ( DATA 1/4 ) --> ( DATA 2/4 )  :
+	: ======== BULK-OUT =======      = BULK-OUT =     = BULK-OUT =  :
+	:                                                       |       :
+	:                                                       v       :
+	: ==========================     ============     ============  :
+	: ( COMMAND-STATUS WRAPPER ) <-- ( DATA 4/4 ) <-- ( DATA 3/4 )  :
+	: ======== BULK-IN =========     = BULK-OUT =     = BULK-OUT =  :
+	:                                                               :
+	......... EXAMPLE OF DATA FLOWING FROM HOST TO DEVICE  ..........
+
+	In the case that no data is to be transferred, then there won't be a data stage. The host will
+	send a command-block wrapper immediately followed by a request for the command-status wrapper.
+	If we can't carry out the command, then stalling the bulk-typed endpoints isn't necessary
+	either; we can also just immediately send the command-status wrapper with the status code
+	indicating failure.
+
+	Alright, so all of this is just to be able to send commands back and forth using SCSI, an
+	ancient command set from the 90s that interfaced with hard drives and printers and all sorts of
+	random stuff, much like USB. The SCSI specification in its own right is a mess, but I am
+	honestly too tired to really get into that, but essentially we just send some info to the host
+	beforehand about what kind of SCSI device we are and what not. After that, the host can begin
+	to query and write to specific sectors of our device, mimicking a flashdrive.
+
+	(1) Base Mass Storage Specification @ Source(11).
+	(2) Bulk-Only Transport Specification @ Source(12).
+	(3) "Command/Data/Status Flow" @ Source(12) @ Figure(1) @ AbsPage(12).
 */
 
 /* TODO[USB Regulator vs Interface]

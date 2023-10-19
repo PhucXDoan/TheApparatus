@@ -112,6 +112,7 @@ enum SPIPrescaler // See: Source(1) @ Table(17-5) @ Page(186).
 //
 
 #define FAT32_SECTOR_SIZE 512
+#define FAT32_MAX_SECTORS 61919232 // TODO Pick smaller amount?
 
 enum SDCommand // Non-exhaustive. See: Source(19) @ Section(7.3.1.3) @ AbsPage(113-117).
 {
@@ -159,6 +160,13 @@ enum USBEndpointTransferType
 	USBEndpointTransferType_isochronous = 0b01, // Bounded latency, one-way, guaranteed data bandwidth (but no guarantee of successful delivery). Ex: audio/video.
 	USBEndpointTransferType_bulk        = 0b10, // No latency guarantees, one-way, large amount of data. Ex: file upload.
 	USBEndpointTransferType_interrupt   = 0b11, // Low-latency, one-way, small amount of data. Ex: keyboard.
+};
+
+enum USBFeatureSelector // See: "Standard Feature Selectors" @ Source(2) @ Table(9-6) @ Page(252).
+{
+	USBFeatureSelector_endpoint_halt        = 0,
+	USBFeatureSelector_device_remote_wakeup = 1,
+	USBFeatureSelector_device_test_mode     = 2,
 };
 
 enum USBClass // Non-exhaustive. See: Source(5).
@@ -226,7 +234,7 @@ struct USBSetupRequest // See: Source(2) @ Table(9-2) @ Page(248).
 		struct // See: Standard "Clear Feature" on Endpoints @ Source(2) @ Section(9.4.1) @ Page(252).
 		{
 			u16 feature_selector; // Must be zero.
-			u16 endpoint_index;
+			u16 endpoint;         // Endpoint index that is also potentially OR'd with USBEndpointAddressFlag_in.
 		} endpoint_clear_feature;
 
 		struct // See: CDC-Specific "SetLineCoding" @ Source(6) @ Setion(6.2.12) @ AbsPage(68-69).
@@ -704,69 +712,46 @@ struct USBConfig // This layout is defined uniquely for our device application.
 				' ', ' ', ' ', ' ',
 		};
 
-	static const u8 USB_MS_SCSI_UNIT_SERIAL_NUMBER[] PROGMEM =
+	static const u8 USB_MS_SCSI_READ_CAPACITY_DATA[] PROGMEM = // See: Source(14) @ Section(5.10.2) @ Page(54-55).
 		{
-			// "PERIPHERAL QUALIFIER"         : We support the following specified peripheral device type. See: Source(*) @ Table(60) @ Page(95).
-			//     | "PERIPHERAL DEVICE TYPE" : The device is a "direct access block device", e.g. SD cards, flashdrives, etc. See: Source(*) @ Table(61) @ Page(96).
-			//     |    |
-			//    vvv vvvvv
-				0b000'00000,
+			// "RETURNED LOGICAL BLOCK ADDRESS" : Big-endian address of the last addressable sector.
+				(u32(FAT32_MAX_SECTORS - 1) >> 24) & 0xFF,
+				(u32(FAT32_MAX_SECTORS - 1) >> 16) & 0xFF,
+				(u32(FAT32_MAX_SECTORS - 1) >>  8) & 0xFF,
+				(u32(FAT32_MAX_SECTORS - 1) >>  0) & 0xFF,
 
-			// "PAGE CODE"
-				0x80,
-
-			// Reserved.
-				0,
-
-			// "PAGE LENGTH",
-				1,
-
-			// "PRODUCT SERIAL NUMBER"
-				' ',
+			// "BLOCK LENGTH IN BYTES" : Big-endian size of sectors.
+				(u32(FAT32_SECTOR_SIZE) >> 24) & 0xFF,
+				(u32(FAT32_SECTOR_SIZE) >> 16) & 0xFF,
+				(u32(FAT32_SECTOR_SIZE) >>  8) & 0xFF,
+				(u32(FAT32_SECTOR_SIZE) >>  0) & 0xFF,
 		};
 
-	static const u8 USB_MS_SCSI_READ_CAPACITY_DATA[] PROGMEM = // See: Source(*) @ Table(120) @ Page(156).
+	static const u8 USB_MS_SCSI_UNSUPPORTED_COMMAND_SENSE[] PROGMEM = // See: Source(13) @ Section(7.20.2) @ Page(136-138).
 		{
-			// "RETURNED LOGICAL BLOCK ADDRESS" in big-endian.
-				0, 177, 79, 255,
+			// "VALID"              : Must be 1 for this sense data to comply with the standard. See: Source(13) @ Section(7.20.2) @ Page(136).
+			//    | "RESPONSE CODE" : 0x70 says taht the sense data is about the "current errors" that the device just had. See: Source(13) @ Section(7.20.4) @ Page(140).
+			//    |    |
+			//    v vvvvvvv
+				0b1'1110000,
 
-			// "BLOCK LENGTH IN BYTES" in big-endian.
-				(((u32) FAT32_SECTOR_SIZE) >> 24) & 0xFF,
-				(((u32) FAT32_SECTOR_SIZE) >> 16) & 0xFF,
-				(((u32) FAT32_SECTOR_SIZE) >>  8) & 0xFF,
-				(((u32) FAT32_SECTOR_SIZE) >>  0) & 0xFF,
-		};
-
-	static const u8 USB_MS_SCSI_MODE_SENSE[] PROGMEM =
-		{
-			// "MODE DATA LENGTH".
-				12,
-
-			// "MEDIUM TYPE".
-				0x00,
-
-			// "DEVICE-SPECIFIC PARAMETER"
-				0x00,
-
-			// Reserved.
-			//       | "LONGLBA"
-			//       |    |
-			//    vvvvvvv v
-				0b0000000'0,
-
-			// "DENSITY CODE"
-				0x00,
-
-			// "NUMBER OF BLOCKS" in Big endian.
-				0, 0, 0,
-
-			// Reserved.
+			// Obsolete.
 				0,
 
-			// "BLOCK LENGTH" in Big endian.
-				(((u32) FAT32_SECTOR_SIZE) >> 16) & 0xFF,
-				(((u32) FAT32_SECTOR_SIZE) >>  8) & 0xFF,
-				(((u32) FAT32_SECTOR_SIZE) >>  0) & 0xFF,
+			// "FILEMARK"             : Irrelevant; only for sequential-access devices such as magnetic tapes. See: Source(13) @ Section(7.20.2) @ Page(136).
+			//    | "EOM"             : Irrelevant; only for sequential-access and printer devices. See: Source(13) @ Section(7.20.2) @ Page(136).
+			//    | | "ILI"           : Irrelevant; meaning of this bit is broadly whenever the data is "incorrect length". See: Source(13) @ Section(7.20.2) @ Page(137).
+			//    | | | Reserved.
+			//    | | | | "SENSE KEY" : 0x05 for illegal requests where we don't support the command or we don't understand a parameter. See: Source(13) @ Table(107) @ Page(141-142).
+			//    | | | |  |
+			//    v v v v vvvv
+				0b0'0'0'0'0101,
+
+			// "INFORMATION" : For our direct-access device, this would be the big-endian "unsigned logical block address associated with the sense key"; seems irrelevant. See: Source(13) @ Section(7.20.2) @ Page(137).
+				0, 0, 0, 0,
+
+			// "ADDITIONAL SENSE LENGTH" : Amount of remaining data after this byte. See: Source(13) @ Section(7.20.2) @ Page(137). // TODO necessairly 10?
+				0,
 		};
 
 	static const struct USBDescDevice USB_DESC_DEVICE PROGMEM =
@@ -774,7 +759,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 			.bLength            = sizeof(struct USBDescDevice),
 			.bDescriptorType    = USBDescType_device,
 			.bcdUSB             = 0x0200,        // We are still pretty much USB 2.0 despite using IADs.
-			.bDeviceClass       = USBClass_misc, // This gives the host a heads up to load drivers for our multi-function device. See: Source(9) @ Section(1) @ AbsPage(5).
+			.bDeviceClass       = USBClass_misc, // See: "bDeviceClass" @ Source(9) @ Table(1-1) @ AbsPage(5).
 			.bDeviceSubClass    = 0x02,          // See: "bDeviceSubClass" @ Source(9) @ Table(1-1) @ AbsPage(5).
 			.bDeviceProtocol    = 0x01,          // See: "bDeviceProtocol" @ Source(9) @ Table(1-1) @ AbsPage(5).
 			.bMaxPacketSize0    = USB_ENDPOINT_DFLT_SIZE,
@@ -840,8 +825,8 @@ struct USBConfig // This layout is defined uniquely for our device application.
 							.bLength            = sizeof(struct USBDescCDCUnion),
 							.bDescriptorType    = USBDescType_cdc_interface,
 							.bDescriptorSubtype = USBDescCDCSubtype_union,
-							.bMasterInterface   = 0,
-							.bSlaveInterface    = { 1 }
+							.bMasterInterface   = USB_CDC_INTERFACE_INDEX,
+							.bSlaveInterface    = { USB_CDC_DATA_INTERFACE_INDEX }
 						},
 				},
 			.cdc_data =
@@ -949,76 +934,75 @@ struct USBConfig // This layout is defined uniquely for our device application.
 		};
 #endif
 
-#if PROGRAM_DIPLOMAT && DEBUG
-	static volatile u8 debug_usb_cdc_in_buffer [USB_ENDPOINT_CDC_IN_SIZE ] = {0};
-	static volatile u8 debug_usb_cdc_out_buffer[USB_ENDPOINT_CDC_OUT_SIZE] = {0};
-
-	static volatile u8 debug_usb_cdc_in_writer  = 0; // Main program writes the IN-buffer.
-	static volatile u8 debug_usb_cdc_in_reader  = 0; // Interrupt routine reads the IN-buffer.
-	static volatile u8 debug_usb_cdc_out_writer = 0; // Interrupt routine writes the OUT-buffer.
-	static volatile u8 debug_usb_cdc_out_reader = 0; // Main program reads the OUT-buffer.
-
-	#define debug_usb_cdc_in_writer_masked(OFFSET)  ((debug_usb_cdc_in_writer  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
-	#define debug_usb_cdc_in_reader_masked(OFFSET)  ((debug_usb_cdc_in_reader  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
-	#define debug_usb_cdc_out_writer_masked(OFFSET) ((debug_usb_cdc_out_writer + (OFFSET)) & (countof(debug_usb_cdc_out_buffer) - 1))
-	#define debug_usb_cdc_out_reader_masked(OFFSET) ((debug_usb_cdc_out_reader + (OFFSET)) & (countof(debug_usb_cdc_out_buffer) - 1))
-
-	// A read/write index with a size greater than a byte makes "atomic" read/write operations difficult to guarantee; it can be done, but probably not worthwhile.
-	static_assert(sizeof(debug_usb_cdc_in_writer) == 1 && sizeof(debug_usb_cdc_in_reader) == 1 && sizeof(debug_usb_cdc_out_writer) == 1 && sizeof(debug_usb_cdc_out_reader) == 1);
-
-	// The read/write indices must be able to address any element in the corresponding buffer.
-	static_assert(countof(debug_usb_cdc_in_buffer ) < (((u64) 1) << bitsof(debug_usb_cdc_in_reader )));
-	static_assert(countof(debug_usb_cdc_in_buffer ) < (((u64) 1) << bitsof(debug_usb_cdc_in_writer )));
-	static_assert(countof(debug_usb_cdc_out_buffer) < (((u64) 1) << bitsof(debug_usb_cdc_out_reader)));
-	static_assert(countof(debug_usb_cdc_out_buffer) < (((u64) 1) << bitsof(debug_usb_cdc_out_writer)));
-
-	// Buffer sizes must be a power of two for the "debug_usb_cdc_X_Y_masked" macros.
-	static_assert(countof(debug_usb_cdc_in_buffer ) && !(countof(debug_usb_cdc_in_buffer ) & (countof(debug_usb_cdc_in_buffer ) - 1)));
-	static_assert(countof(debug_usb_cdc_out_buffer) && !(countof(debug_usb_cdc_out_buffer) & (countof(debug_usb_cdc_out_buffer) - 1)));
-
-	static volatile b8 debug_usb_diagnostic_signal_received = false;
-#endif
-
 #define USB_MOUSE_CALIBRATIONS_REQUIRED 128
 
 #if PROGRAM_DIPLOMAT
-	// Only the interrupt can read and write these.
-	static u8 _usb_mouse_calibrations = 0;
-	static u8 _usb_mouse_curr_x       = 0; // Origin is top-left.
-	static u8 _usb_mouse_curr_y       = 0; // Origin is top-left.
-	static b8 _usb_mouse_held         = false;
+	#if PROGRAM_DIPLOMAT
+		// Only the interrupt can read and write these.
+		static u8 _usb_mouse_calibrations = 0;
+		static u8 _usb_mouse_curr_x       = 0; // Origin is top-left.
+		static u8 _usb_mouse_curr_y       = 0; // Origin is top-left.
+		static b8 _usb_mouse_held         = false;
 
-	static volatile u16 _usb_mouse_command_buffer[8] = {0}; // See: [USB Mouse Commands].
-	static volatile u8  _usb_mouse_command_writer    = 0;   // Main program writes the buffer.
-	static volatile u8  _usb_mouse_command_reader    = 0;   // Interrupt reads the buffer.
+		static volatile u16 _usb_mouse_command_buffer[8] = {0}; // See: [Mouse Commands] @ "Diplomat_usb.c".
+		static volatile u8  _usb_mouse_command_writer    = 0;   // Main program writes.
+		static volatile u8  _usb_mouse_command_reader    = 0;   // Interrupt reads.
 
-	#define _usb_mouse_command_writer_masked(OFFSET) ((_usb_mouse_command_writer + (OFFSET)) & (countof(_usb_mouse_command_buffer) - 1))
-	#define _usb_mouse_command_reader_masked(OFFSET) ((_usb_mouse_command_reader + (OFFSET)) & (countof(_usb_mouse_command_buffer) - 1))
+		#define _usb_mouse_command_writer_masked(OFFSET) ((_usb_mouse_command_writer + (OFFSET)) & (countof(_usb_mouse_command_buffer) - 1))
+		#define _usb_mouse_command_reader_masked(OFFSET) ((_usb_mouse_command_reader + (OFFSET)) & (countof(_usb_mouse_command_buffer) - 1))
 
-	// A read/write index with a size greater than a byte makes "atomic" read/write operations difficult to guarantee; it can be done, but probably not worthwhile.
-	static_assert(sizeof(_usb_mouse_command_writer) == 1 && sizeof(_usb_mouse_command_reader) == 1);
+		// A read/write index with a size greater than a byte makes "atomic" read/write operations difficult to guarantee; it can be done, but probably not worthwhile.
+		static_assert(sizeof(_usb_mouse_command_writer) == 1 && sizeof(_usb_mouse_command_reader) == 1);
 
-	// The read/write indices must be able to address any element in the corresponding buffer.
-	static_assert(countof(_usb_mouse_command_buffer) < (((u64) 1) << bitsof(_usb_mouse_command_reader)));
-	static_assert(countof(_usb_mouse_command_buffer) < (((u64) 1) << bitsof(_usb_mouse_command_writer)));
+		// The read/write indices must be able to address any element in the corresponding buffer.
+		static_assert(countof(_usb_mouse_command_buffer) < (((u64) 1) << bitsof(_usb_mouse_command_reader)));
+		static_assert(countof(_usb_mouse_command_buffer) < (((u64) 1) << bitsof(_usb_mouse_command_writer)));
 
-	// Buffer sizes must be a power of two for the "_usb_mouse_X_masked" macros.
-	static_assert(countof(_usb_mouse_command_buffer) && !(countof(_usb_mouse_command_buffer) & (countof(_usb_mouse_command_buffer) - 1)));
+		// Buffer sizes must be a power of two for the "_usb_mouse_X_masked" macros.
+		static_assert(countof(_usb_mouse_command_buffer) && !(countof(_usb_mouse_command_buffer) & (countof(_usb_mouse_command_buffer) - 1)));
 
-	static struct SCSISense { u8 bytes[18]; } _usb_ms_sense = {0}; // See: Source(*) @ Section(2.4.1.2) @ Page(56).
+		static enum USBMSState                  _usb_ms_state                         = USBMSState_ready_for_command;
+		static const u8*                        _usb_ms_scsi_info_data                = 0;
+		static u8                               _usb_ms_scsi_info_size                = 0;
+		static u32                              _usb_ms_sectors_left                  = 0;
+		static u8                               _usb_ms_sending_sector_fragment_index = 0;
+		static struct USBMSCommandStatusWrapper _usb_ms_status                        = {0};
 
-	static enum USBMSState                  _usb_ms_state                         = USBMSState_ready_for_command;
-	static const u8*                        _usb_ms_scsi_info_data                = 0;
-	static u8                               _usb_ms_scsi_info_size                = 0;
-	static b8                               _usb_ms_send_sense                    = false;
-	static u32                              _usb_ms_sectors_left                  = 0;
-	static u8                               _usb_ms_sending_sector_fragment_index = 0;
-	static struct USBMSCommandStatusWrapper _usb_ms_status                        = {0};
+		static volatile b8  sector_write                     = false;
+		static volatile u32 abs_sector_address               = 0;
+		static          u8  loaded_sector[FAT32_SECTOR_SIZE] = {0};
+		static volatile b8  sector_request                   = false;
+	#endif
 
-	static volatile b8  sector_write                     = false;
-	static volatile u32 abs_sector_address               = 0;
-	static          u8  loaded_sector[FAT32_SECTOR_SIZE] = {0};
-	static volatile b8  sector_request                   = false;
+	#if DEBUG
+		static volatile u8 debug_usb_cdc_in_buffer [USB_ENDPOINT_CDC_IN_SIZE ] = {0};
+		static volatile u8 debug_usb_cdc_out_buffer[USB_ENDPOINT_CDC_OUT_SIZE] = {0};
+
+		static volatile u8 debug_usb_cdc_in_writer  = 0; // Main program writes.
+		static volatile u8 debug_usb_cdc_in_reader  = 0; // Interrupt routine reads.
+		static volatile u8 debug_usb_cdc_out_writer = 0; // Interrupt routine writes.
+		static volatile u8 debug_usb_cdc_out_reader = 0; // Main program reads.
+
+		#define debug_usb_cdc_in_writer_masked(OFFSET)  ((debug_usb_cdc_in_writer  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
+		#define debug_usb_cdc_in_reader_masked(OFFSET)  ((debug_usb_cdc_in_reader  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
+		#define debug_usb_cdc_out_writer_masked(OFFSET) ((debug_usb_cdc_out_writer + (OFFSET)) & (countof(debug_usb_cdc_out_buffer) - 1))
+		#define debug_usb_cdc_out_reader_masked(OFFSET) ((debug_usb_cdc_out_reader + (OFFSET)) & (countof(debug_usb_cdc_out_buffer) - 1))
+
+		// A read/write index with a size greater than a byte makes "atomic" read/write operations difficult to guarantee; it can be done, but probably not worthwhile.
+		static_assert(sizeof(debug_usb_cdc_in_writer) == 1 && sizeof(debug_usb_cdc_in_reader) == 1 && sizeof(debug_usb_cdc_out_writer) == 1 && sizeof(debug_usb_cdc_out_reader) == 1);
+
+		// The read/write indices must be able to address any element in the corresponding buffer.
+		static_assert(countof(debug_usb_cdc_in_buffer ) < (u64(1) << bitsof(debug_usb_cdc_in_reader )));
+		static_assert(countof(debug_usb_cdc_in_buffer ) < (u64(1) << bitsof(debug_usb_cdc_in_writer )));
+		static_assert(countof(debug_usb_cdc_out_buffer) < (u64(1) << bitsof(debug_usb_cdc_out_reader)));
+		static_assert(countof(debug_usb_cdc_out_buffer) < (u64(1) << bitsof(debug_usb_cdc_out_writer)));
+
+		// Buffer sizes must be a power of two for the "debug_usb_cdc_X_Y_masked" macros.
+		static_assert(countof(debug_usb_cdc_in_buffer ) && !(countof(debug_usb_cdc_in_buffer ) & (countof(debug_usb_cdc_in_buffer ) - 1)));
+		static_assert(countof(debug_usb_cdc_out_buffer) && !(countof(debug_usb_cdc_out_buffer) & (countof(debug_usb_cdc_out_buffer) - 1)));
+
+		static volatile b8 debug_usb_diagnostic_signal_received = false;
+	#endif
 #endif
 
 //
@@ -1038,8 +1022,8 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	Source(10) := USB 3.0 Specification (Dated: November 12, 2008).
 	Source(11) := Universal Serial Bus Mass Storage Class Specification Overview (Dated: February 19, 2010).
 	Source(12) := Universal Serial Bus Mass Storage Class Bulk-Only Transport (Dated: September 31, 1999).
-	Source(13) := dpANS Project T10/1236-D (SCSI Primary Commands - 2) (SPC-2) (Dated: 18 July 2001).
-	Source(14) := Working Draft Project American National T10/1417-D Standard (SCSI Block Commands - 2) (SBC-2) (Dated: 13 November 2004).
+	+Source(13) := dpANS Project T10/1236-D (SCSI Primary Commands - 2) (SPC-2) (Dated: 18 July 2001).
+	+Source(14) := Working Draft Project American National T10/1417-D Standard (SCSI Block Commands - 2) (SBC-2) (Dated: 13 November 2004).
 	Source(15) := Microsoft FAT Specification (Dated: August 30 2005).
 	Source(16) := "Master boot record" on Wikipedia (Accessed: October 7, 2023).
 	Source(17) := FAT Filesystem by Elm-Chan (Updated on: October 31, 2020).
@@ -1061,6 +1045,16 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	a lot of information compared to v1.1. Perhaps we're supposed to use the errata for
 	the more up-to-date details, but fallback to v1.1 when needed. Regardless, USB
 	should be quite backwards-compatiable, so we should be fine with v1.1.
+
+	+ It was absolutely hell for me to be able to finally find these documents. The
+	"SCSI Commands Reference Manual" by SEAGATE is the densest document I had ever
+	gone through, and it managed to make my reading experience through USB's specification
+	feel a light romance reading in comparison. The lack of clarity just cannot be
+	underestimated. There weren't a whole lot of other alternative sources either.
+	Especially by T10, one of the working group on the SCSI command set I believe, since
+	they thought it would be an amazing idea to lock it behind to only members, even
+	documents from decades ago. I guess if you want access to these, you had to pay the
+	hefty ol' price of sixty bucks. Absolutely absurd what I had to go through.
 */
 
 /* [USB Strings].

@@ -31,8 +31,6 @@ main(void)
 		for(;;);
 	}
 
-	debug_u16(0);
-
 	sei();
 	spi_init();
 	sd_init();

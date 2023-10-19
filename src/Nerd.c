@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "defs.h"
-#include "misc.c"
+//#include "misc.c"
 #include "pin.c"
 //#include "Nerd_uart.c"
 #undef  PIN_HALT_SOURCE
