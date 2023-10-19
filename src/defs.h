@@ -130,7 +130,7 @@ enum SPIPrescaler // See: Source(1) @ Table(17-5) @ Page(186).
 	SPIPrescaler_64_ = 0b1'1'1, // Equivalent to SPIPrescaler_64 (0b0'1'0).
 };
 
-#define SPI_PRESCALER SPIPrescaler_128
+#define SPI_PRESCALER SPIPrescaler_2
 
 //
 // "sd.c"
@@ -168,7 +168,7 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 #if DEBUG // Used to disable some USB functionalities for development purposes, but does not necessairly remove all data and control flow.
 	#define USB_CDC_ENABLE true
 	#define USB_HID_ENABLE false
-	#define USB_MS_ENABLE  false
+	#define USB_MS_ENABLE  true
 #else
 	#define USB_CDC_ENABLE false
 	#define USB_HID_ENABLE true

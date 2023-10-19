@@ -40,62 +40,21 @@ main(void)
 	usb_init();
 	timer_init();
 
-	#define PROFILER_MAX_SECTORS 8
-
-	u32 iterations = 0;
-	u32 mismatches = 0;
-	for (;;)
+	while (true)
 	{
-		debug_tx_cstr("Iteration (");
-		debug_tx_u64(iterations);
-		debug_tx_cstr(") | Mismatches (");
-		debug_tx_u64(mismatches);
-		debug_tx_cstr(")\n");
-		u32 beginning_ms = timer_ms();
-
-		u8 sector_data[FAT32_SECTOR_SIZE] = {0};
-		for (u32 abs_sector_address = 0; abs_sector_address < PROFILER_MAX_SECTORS; abs_sector_address += 1)
+		if (sector_request)
 		{
-			sd_write(sector_data, abs_sector_address);
-		}
-
-		u64 checksum = 0;
-		u64 temp     = 134;
-		for (u32 abs_sector_address = 0; abs_sector_address < PROFILER_MAX_SECTORS; abs_sector_address += 1)
-		{
-			sd_read(sector_data, abs_sector_address);
-			for (u16 i = 0; i < countof(sector_data); i += 1)
+			if (sector_write)
 			{
-				temp           *= sector_data[(i - 1) & (countof(sector_data) - 1)];
-				temp           += abs_sector_address + i;
-				sector_data[i]  = temp;
-				temp            = (temp << 8) | ((temp >> 8) & 0xFF);
+				sd_write(loaded_sector, abs_sector_address_);
 			}
-			sd_write(sector_data, abs_sector_address);
-		}
-
-		for (u32 abs_sector_address = 0; abs_sector_address < PROFILER_MAX_SECTORS; abs_sector_address += 1)
-		{
-			sd_read(sector_data, abs_sector_address);
-			for (u16 i = 0; i < countof(sector_data); i += 1)
+			else
 			{
-				checksum += u64(sector_data[i]) << (i % 64);
+				sd_read(loaded_sector, abs_sector_address_);
 			}
-		}
 
-		u64 ending_ms = timer_ms();
-		debug_tx_cstr("\t0x");
-		debug_tx_64H(checksum);
-		debug_tx_cstr("\n\t");
-		debug_tx_u64(ending_ms - beginning_ms);
-		debug_tx_cstr("ms\n");
-
-		if (checksum != 0xA7FE'F9FF'1630'19BE)
-		{
-			mismatches += 1;
-			debug_tx_cstr("CHECKSUM MISMATCH.\n");
+			sector_request = false;
 		}
-		iterations += 1;
 	}
 
 	for(;;);

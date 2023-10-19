@@ -1,14 +1,21 @@
 #if PROGRAM_DIPLOMAT
 	// TODO Would having a separate procedure for sending data vs receiving data affect performance?
 
-	static u8           // From slave device.
-	spi_trade(u8 value) // To slave device.
-	{ // See: "SPI_MasterTransmit" @ Source(1) @ Section(17) @ Page(181).
+	static void
+	spi_tx(u8 value) // See: "SPI_MasterTransmit" @ Source(1) @ Section(17) @ Page(181).
+	{
 		SPDR = value;
+		while (!(SPSR & (1 << SPIF))); // We must wait so we don't accidentally overwrite SPDR while it's still being sent.
+	}
+
+	[[nodiscard]]
+	static u8
+	spi_rx(void) // Dummy 0xFF is sent.
+	{
+		SPDR = 0xFF;
 		while (!(SPSR & (1 << SPIF)));
 		return SPDR;
 	}
-
 	#if DEBUG
 		static void
 		debug_dump(u8* data, u16 length)
@@ -16,7 +23,7 @@
 			pin_low(PIN_DUMP_SS);
 			for (u16 i = 0; i < length; i += 1)
 			{
-				spi_trade(data[i]);
+				spi_tx(data[i]);
 				_delay_ms(1.0);
 			}
 			pin_high(PIN_DUMP_SS);

@@ -1,7 +1,7 @@
 #define SD_CMD8_ARGUMENT                0x00000'1'AA // See: Source(19) @ Table(7-5) @ AbsPage(119).
 #define SD_CMD8_CRC7                    0x43         // See: [CRC7 Calculation].
-#define SD_MAX_RESTART_ATTEMPTS         2048
-#define SD_MAX_COMMAND_RESPONSE_LATENCY 1024
+#define SD_MAX_COMMAND_RETRIES          8192
+#define SD_MAX_COMMAND_RESPONSE_LATENCY (u16(1) << 15)
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE HaltSource_sd
 
@@ -13,24 +13,24 @@ _sd_command(enum SDCommand command, u32 argument)
 	// See: "Commands" @ Source(19) @ Section(4.7) @ AbsPage(57).
 	//
 
-	spi_trade
+	spi_tx
 	(
 		(0 << 7) | // "Start bit".
 		(1 << 6) | // "Transmission bit".
 		command
 	);
 
-	spi_trade((argument >> 24) & 0xFF);
-	spi_trade((argument >> 16) & 0xFF);
-	spi_trade((argument >>  8) & 0xFF);
-	spi_trade((argument >>  0) & 0xFF);
+	spi_tx((argument >> 24) & 0xFF);
+	spi_tx((argument >> 16) & 0xFF);
+	spi_tx((argument >>  8) & 0xFF);
+	spi_tx((argument >>  0) & 0xFF);
 
 	// CRC7 field followed by the end bit; CRC is ignored by default in most commands, but not all. See: Source(19) @ Section(7.2.2) @ AbsPage(107) & [CRC7 Calculation].
 	switch (command)
 	{
-		case SDCommand_GO_IDLE_STATE : spi_trade((0x4A         << 1) | 1); break;
-		case SDCommand_SEND_IF_COND  : spi_trade((SD_CMD8_CRC7 << 1) | 1); break;
-		default                      : spi_trade(                      1); break;
+		case SDCommand_GO_IDLE_STATE : spi_tx((0x4A         << 1) | 1); break;
+		case SDCommand_SEND_IF_COND  : spi_tx((SD_CMD8_CRC7 << 1) | 1); break;
+		default                      : spi_tx(                      1); break;
 	}
 
 	//
@@ -41,7 +41,7 @@ _sd_command(enum SDCommand command, u32 argument)
 	u16 attempts = 0;
 	do
 	{
-		response  = spi_trade(0xFF);
+		response  = spi_rx();
 		attempts += 1;
 	}
 	while ((response & (1 << 7)) && attempts < SD_MAX_COMMAND_RESPONSE_LATENCY);
@@ -57,16 +57,16 @@ _sd_get_data_block(u8* dst_buffer, u16 dst_size) // See: "Data Transfer" @ Sourc
 
 	for (u16 i = 0; i < SD_MAX_COMMAND_RESPONSE_LATENCY; i += 1)
 	{
-		if (spi_trade(0xFF) == 0b1111'1110) // Starting token. See: Source(19) @ Section(7.3.3.2) @ AbsPage(122-123).
+		if (spi_rx() == 0b1111'1110) // Starting token. See: Source(19) @ Section(7.3.3.2) @ AbsPage(122-123).
 		{
 			for (u16 i = 0; i < dst_size; i += 1)
 			{
-				dst_buffer[i] = spi_trade(0xFF);
+				dst_buffer[i] = spi_rx();
 			}
 
 			// 16-bit CRC that we ignore.
-			spi_trade(0xFF);
-			spi_trade(0xFF);
+			(void) spi_rx();
+			(void) spi_rx();
 
 			success = true;
 			break;
@@ -117,10 +117,10 @@ sd_write(u8* src, u32 abs_sector_address) // src must be at least FAT32_SECTOR_S
 		// Send data block.
 		//
 
-		spi_trade(0b1111'1110); // Starting token. See: Source(19) @ Section(7.3.3.2) @ AbsPage(122-123).
+		spi_tx(0b1111'1110); // Starting token. See: Source(19) @ Section(7.3.3.2) @ AbsPage(122-123).
 		for (u16 i = 0; i < FAT32_SECTOR_SIZE; i += 1)
 		{
-			spi_trade(src[i]);
+			spi_tx(src[i]);
 		}
 
 		//
@@ -130,7 +130,7 @@ sd_write(u8* src, u32 abs_sector_address) // src must be at least FAT32_SECTOR_S
 		u16 attempts = 0;
 		while (true)
 		{
-			u8 response = spi_trade(0xFF);
+			u8 response = spi_rx();
 
 			if (response == 0xFF) // SD still busy with parsing command.
 			{
@@ -160,7 +160,7 @@ sd_write(u8* src, u32 abs_sector_address) // src must be at least FAT32_SECTOR_S
 		attempts = 0;
 		while (true)
 		{
-			u8 response = spi_trade(0xFF);
+			u8 response = spi_rx();
 
 			if (response == 0xFF) // When the SD is finished, the data line will be released from the low state.
 			{
@@ -193,7 +193,7 @@ sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
 
 	for (u8 i = 0; i < 255; i += 1) // Doing this improves reliability after powering up.
 	{
-		spi_trade(0xFF);
+		spi_tx(0xFF);
 	}
 
 	//
@@ -211,7 +211,7 @@ sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
 		{
 			break;
 		}
-		else if (attempts < SD_MAX_RESTART_ATTEMPTS)
+		else if (attempts < SD_MAX_COMMAND_RETRIES)
 		{
 			attempts += 1;
 		}
@@ -233,12 +233,12 @@ sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
 			error; // SD went out of idle mode, or the command timed-out.
 		}
 
-		spi_trade(0xFF); // Irrelevant command version in high-nibble, rest are reserved.
-		spi_trade(0xFF); // Reserved bits.
+		(void) spi_rx(); // Irrelevant command version in high-nibble, rest are reserved.
+		(void) spi_rx(); // Reserved bits.
 
 		u16 echo_back = 0;
-		echo_back   = spi_trade(0xFF) << 8;  // See: "voltage accepted" @ Source(19) @ Table(4-34) @ AbsPage(71).
-		echo_back  |= spi_trade(0xFF);       // Echo-back pattern provided by SD_CMD8_ARGUMENT.
+		echo_back   = spi_rx() << 8;  // See: "voltage accepted" @ Source(19) @ Table(4-34) @ AbsPage(71).
+		echo_back  |= spi_rx();       // Echo-back pattern provided by SD_CMD8_ARGUMENT.
 		echo_back  &= 0b0000'1111'1111'1111;
 
 		if (echo_back != SD_CMD8_ARGUMENT)
@@ -276,7 +276,7 @@ sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
 		{
 			error; // Error signaled in R1 response, or the command timed out.
 		}
-		else if (attempts < SD_MAX_RESTART_ATTEMPTS)
+		else if (attempts < SD_MAX_COMMAND_RETRIES)
 		{
 			attempts += 1;
 		}
@@ -333,8 +333,9 @@ sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
 //
 
 /* [Overview].
-	This file just defines a thin interface to be able to read and write sectors. It does not
-	handle file systems itself, nor handle all SD cards in existence. Your milage may vary!
+	This file just defines a thin interface to be able to read and write sectors of SD cards.
+	It does not handle file systems itself, nor handle all SD cards in existence.
+	Your milage may vary!
 */
 
 /* [CRC7 Calculation].

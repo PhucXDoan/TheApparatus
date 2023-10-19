@@ -30,12 +30,83 @@
 PIN_XMDT(MAKE)
 #undef MAKE
 
+#if DEBUG
+	// Long pulse followed by pairs of flashes.
+	__attribute__((noreturn))
+	static void
+	debug_halt(u8 amount)
+	{
+		cli();
+
+		pin_output(HALT);
+		for (;;)
+		{
+			pin_high(HALT);
+			_delay_ms(2000.0);
+			pin_low(HALT);
+			_delay_ms(1000.0);
+
+			for (u8 i = 0; i < amount; i += 1)
+			{
+				pin_high(HALT);
+				_delay_ms(25.0);
+				pin_low(HALT);
+				_delay_ms(25.0);
+				pin_high(HALT);
+				_delay_ms(25.0);
+				pin_low(HALT);
+				_delay_ms(1000.0);
+			}
+		}
+	}
+
+	#if PROGRAM_DIPLOMAT
+		static void
+		debug_u16(u16 value)
+		{
+			pin_output(PIN_U16_CLK);
+			pin_output(PIN_U16_DATA);
+			pin_low(PIN_U16_CLK);
+			pin_low(PIN_U16_DATA);
+
+			for (u8 i = 0; i < sizeof(value) * 8; i += 1)
+			{
+				if ((value >> i) & 1)
+				{
+					pin_high(PIN_U16_DATA);
+				}
+				else
+				{
+					pin_low(PIN_U16_DATA);
+				}
+
+				pin_high(PIN_U16_CLK);
+				pin_low(PIN_U16_CLK);
+			}
+		}
+
+		__attribute__((noreturn))
+		static void
+		debug_unhandled(u16 line_number, enum HaltSource source)
+		{
+			cli();
+			debug_u16(line_number);
+			debug_halt(source);
+		}
+		#define debug_unhandled debug_unhandled(__LINE__, PIN_HALT_SOURCE)
+	#endif
+#endif
+
 // Rapid flashes follwed by pulses indicating the source of error.
 __attribute__((noreturn))
 static void
-error(enum HaltSource source)
+error(u16 line_number, enum HaltSource source)
 {
 	cli();
+
+	#if PROGRAM_DIPLOMAT // TEMP
+	debug_u16(line_number);
+	#endif
 
 	pin_output(HALT);
 	for (;;)
@@ -74,76 +145,7 @@ error(enum HaltSource source)
 		#undef OFF
 	}
 }
-#define error error(PIN_HALT_SOURCE)
-
-#if DEBUG
-// Long pulse followed by pairs of flashes.
-__attribute__((noreturn))
-static void
-debug_halt(u8 amount)
-{
-	cli();
-
-	pin_output(HALT);
-	for (;;)
-	{
-		pin_high(HALT);
-		_delay_ms(2000.0);
-		pin_low(HALT);
-		_delay_ms(1000.0);
-
-		for (u8 i = 0; i < amount; i += 1)
-		{
-			pin_high(HALT);
-			_delay_ms(25.0);
-			pin_low(HALT);
-			_delay_ms(25.0);
-			pin_high(HALT);
-			_delay_ms(25.0);
-			pin_low(HALT);
-			_delay_ms(1000.0);
-		}
-	}
-}
-#endif
-
-#if DEBUG
-	#if PROGRAM_DIPLOMAT
-		static void
-		debug_u16(u16 value)
-		{
-			pin_output(PIN_U16_CLK);
-			pin_output(PIN_U16_DATA);
-			pin_low(PIN_U16_CLK);
-			pin_low(PIN_U16_DATA);
-
-			for (u8 i = 0; i < sizeof(value) * 8; i += 1)
-			{
-				if ((value >> i) & 1)
-				{
-					pin_high(PIN_U16_DATA);
-				}
-				else
-				{
-					pin_low(PIN_U16_DATA);
-				}
-
-				pin_high(PIN_U16_CLK);
-				pin_low(PIN_U16_CLK);
-			}
-		}
-
-		__attribute__((noreturn))
-		static void
-		debug_unhandled(u16 line_number, enum HaltSource source)
-		{
-			cli();
-			debug_u16(line_number);
-			debug_halt(source);
-		}
-		#define debug_unhandled debug_unhandled(__LINE__, PIN_HALT_SOURCE)
-	#endif
-#endif
+#define error error(__LINE__, PIN_HALT_SOURCE)
 
 //
 // Documentation.
