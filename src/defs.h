@@ -136,8 +136,8 @@ enum SPIPrescaler // See: Source(1) @ Table(17-5) @ Page(186).
 // "sd.c"
 //
 
-#define FAT32_SECTOR_SIZE 512
-#define FAT32_MAX_SECTORS 61919232 // TODO Pick smaller amount?
+#define FAT32_SECTOR_SIZE        512
+#define FAT32_TOTAL_SECTOR_COUNT 61951999
 
 enum SDCommand // Non-exhaustive. See: Source(19) @ Section(7.3.1.3) @ AbsPage(113-117).
 {
@@ -706,6 +706,21 @@ struct USBConfig // This layout is defined uniquely for our device application.
 			USBHIDItem_main_end_collection,
 		};
 
+	static const u8 USB_MS_SCSI_READ_CAPACITY_DATA[] PROGMEM = // See: Source(14) @ Section(5.10.2) @ Page(54-55).
+		{
+			// "RETURNED LOGICAL BLOCK ADDRESS" : Big-endian address of the last addressable sector.
+				(u32(FAT32_TOTAL_SECTOR_COUNT) >> 24) & 0xFF,
+				(u32(FAT32_TOTAL_SECTOR_COUNT) >> 16) & 0xFF,
+				(u32(FAT32_TOTAL_SECTOR_COUNT) >>  8) & 0xFF,
+				(u32(FAT32_TOTAL_SECTOR_COUNT) >>  0) & 0xFF,
+
+			// "BLOCK LENGTH IN BYTES" : Big-endian size of sectors.
+				(u32(FAT32_SECTOR_SIZE) >> 24) & 0xFF,
+				(u32(FAT32_SECTOR_SIZE) >> 16) & 0xFF,
+				(u32(FAT32_SECTOR_SIZE) >>  8) & 0xFF,
+				(u32(FAT32_SECTOR_SIZE) >>  0) & 0xFF,
+		};
+
 	static const u8 USB_MS_SCSI_INQUIRY_DATA[] PROGMEM = // See: Source(13) @ Section(7.3.2) @ Page(82-86).
 		{
 			// "PERIPHERAL QUALIFIER"         : We support the following specified peripheral device type. See: Source(13) @ Table(47) @ Page(83).
@@ -773,22 +788,6 @@ struct USBConfig // This layout is defined uniquely for our device application.
 			// "PRODUCT REVISION LEVEL" : Irrelevant; 4 character text representing the product version. See: Source(13) @ Section(7.3.2) @ Page(86).
 				' ', ' ', ' ', ' ',
 		};
-
-	static const u8 USB_MS_SCSI_READ_CAPACITY_DATA[] PROGMEM = // See: Source(14) @ Section(5.10.2) @ Page(54-55).
-		{
-			// "RETURNED LOGICAL BLOCK ADDRESS" : Big-endian address of the last addressable sector.
-				(u32(FAT32_MAX_SECTORS - 1) >> 24) & 0xFF,
-				(u32(FAT32_MAX_SECTORS - 1) >> 16) & 0xFF,
-				(u32(FAT32_MAX_SECTORS - 1) >>  8) & 0xFF,
-				(u32(FAT32_MAX_SECTORS - 1) >>  0) & 0xFF,
-
-			// "BLOCK LENGTH IN BYTES" : Big-endian size of sectors.
-				(u32(FAT32_SECTOR_SIZE) >> 24) & 0xFF,
-				(u32(FAT32_SECTOR_SIZE) >> 16) & 0xFF,
-				(u32(FAT32_SECTOR_SIZE) >>  8) & 0xFF,
-				(u32(FAT32_SECTOR_SIZE) >>  0) & 0xFF,
-		};
-
 	static const u8 USB_MS_SCSI_UNSUPPORTED_COMMAND_SENSE[] PROGMEM = // See: Source(13) @ Section(7.20.2) @ Page(136-138).
 		{
 			// "VALID"              : Must be 1 for this sense data to comply with the standard. See: Source(13) @ Section(7.20.2) @ Page(136).
@@ -1028,18 +1027,16 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	// Buffer sizes must be a power of two for the "_usb_mouse_X_masked" macros.
 	static_assert(countof(_usb_mouse_command_buffer) && !(countof(_usb_mouse_command_buffer) & (countof(_usb_mouse_command_buffer) - 1)));
 
-	static enum USBMSState                  _usb_ms_state                         = USBMSState_ready_for_command;
-	static const u8*                        _usb_ms_scsi_info_data                = 0;
-	static u8                               _usb_ms_scsi_info_size                = 0;
-	static u32                              _usb_ms_sectors_left                  = 0;
-	static u8                               _usb_ms_sending_sector_fragment_index = 0;
-	static struct USBMSCommandStatusWrapper _usb_ms_status                        = {0};
-
 	#if USB_MS_ENABLE
-		static volatile b8  sector_write                     = false;
-		static volatile u32 abs_sector_address_              = 0;
-		static          u8  loaded_sector[FAT32_SECTOR_SIZE] = {0};
-		static volatile b8  sector_request                   = false;
+		static enum USBMSState                  _usb_ms_state              = USBMSState_ready_for_command;
+		static const u8*                        _usb_ms_scsi_info_data     = 0;
+		static u8                               _usb_ms_scsi_info_size     = 0;
+		static b8                               _usb_ms_sector_write       = false;
+		static u8                               _usb_ms_sector[FAT32_SECTOR_SIZE] = {0}; // TODO have one global sector
+		static u32                              _usb_ms_abs_sector_address = 0;
+		static u32                              _usb_ms_sectors_left       = 0;
+		static struct USBMSCommandStatusWrapper _usb_ms_status             = {0};
+
 	#endif
 
 	#if DEBUG

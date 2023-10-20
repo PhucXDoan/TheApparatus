@@ -448,22 +448,9 @@ ISR(USB_GEN_vect)
 											!control
 										)
 										{
-											if (_usb_ms_sending_sector_fragment_index)
-											{
-												debug_unhandled;
-											}
-
-											_usb_ms_sectors_left = sector_count;
-											sector_write         = false;
-											abs_sector_address_  = addr;
-											if (sector_request)
-											{
-												debug_unhandled;
-											}
-											else
-											{
-												sector_request = true;
-											}
+											_usb_ms_sectors_left       = sector_count;
+											_usb_ms_sector_write       = false;
+											_usb_ms_abs_sector_address = addr;
 										}
 										else
 										{
@@ -476,7 +463,7 @@ ISR(USB_GEN_vect)
 									}
 								} break;
 
-								case USBMSSCSIOpcode_write: // TODO For some reason, this is sent when we open Device Monitoring Studio afterwards...?
+								case USBMSSCSIOpcode_write:
 								{
 									u8  wrprotect = (command.CBWCB[1] >> 5) & 0b111;
 									b8  dpo       = (command.CBWCB[1] >> 4) & 0b1;
@@ -507,22 +494,9 @@ ISR(USB_GEN_vect)
 											!control
 										)
 										{
-											if (_usb_ms_sending_sector_fragment_index)
-											{
-												debug_unhandled;
-											}
-
-											_usb_ms_sectors_left = sector_count;
-											sector_write         = true;
-											abs_sector_address_  = addr;
-											if (sector_request)
-											{
-												debug_unhandled;
-											}
-											else
-											{
-												sector_request = true;
-											}
+											_usb_ms_sectors_left       = sector_count;
+											_usb_ms_abs_sector_address = addr;
+											_usb_ms_sector_write       = true;
 										}
 										else
 										{
@@ -652,7 +626,7 @@ ISR(USB_GEN_vect)
 							}
 							else if (_usb_ms_sectors_left)
 							{
-								if (sector_write)
+								if (_usb_ms_sector_write)
 								{
 									_usb_ms_state = USBMSState_receiving_data;
 								}
@@ -714,8 +688,6 @@ ISR(USB_GEN_vect)
 					debug_u16(TEMP);
 					TEMP += 1;
 
-					b8 sent = true;
-
 					if (_usb_ms_scsi_info_size)
 					{
 						for (u8 i = 0; i < _usb_ms_scsi_info_size; i += 1)
@@ -723,43 +695,38 @@ ISR(USB_GEN_vect)
 							UEDATX = pgm_read_byte(&_usb_ms_scsi_info_data[i]);
 						}
 						_usb_ms_scsi_info_size = 0;
+
+						UEINTX &= ~(1 << TXINI);
+						UEINTX &= ~(1 << FIFOCON);
 					}
-					else if (_usb_ms_sectors_left && !sector_request)
+					else if (_usb_ms_sectors_left)
 					{
-						for (u8 i = 0; i < USB_ENDPOINT_MS_IN_SIZE; i += 1)
+						sd_read(_usb_ms_sector, _usb_ms_abs_sector_address);
+
+						for (u8 fragment_index = 0; fragment_index < FAT32_SECTOR_SIZE / USB_ENDPOINT_MS_IN_SIZE; fragment_index += 1)
 						{
-							UEDATX = loaded_sector[_usb_ms_sending_sector_fragment_index * USB_ENDPOINT_MS_IN_SIZE + i];
+							while (!(UEINTX & (1 << TXINI)));
+
+							for (u8 byte_index = 0; byte_index < USB_ENDPOINT_MS_IN_SIZE; byte_index += 1)
+							{
+								UEDATX = _usb_ms_sector[u16(fragment_index) * USB_ENDPOINT_MS_IN_SIZE + byte_index];
+							}
+
+							UEINTX &= ~(1 << TXINI);
+							UEINTX &= ~(1 << FIFOCON);
 						}
 
-						if (_usb_ms_sending_sector_fragment_index == FAT32_SECTOR_SIZE / USB_ENDPOINT_MS_IN_SIZE - 1)
-						{
-							_usb_ms_sending_sector_fragment_index  = 0;
-							_usb_ms_sectors_left                  -= 1;
-							abs_sector_address_                   += 1;
-							if (_usb_ms_sectors_left)
-							{
-								sector_request = true;
-							}
-						}
-						else
-						{
-							_usb_ms_sending_sector_fragment_index += 1;
-						}
+						_usb_ms_sectors_left       -= 1;
+						_usb_ms_abs_sector_address += 1;
 					}
 					else
 					{
-						sent = false;
+						debug_unhandled;
 					}
 
 					if (!_usb_ms_sectors_left)
 					{
 						_usb_ms_state = USBMSState_ready_for_status;
-					}
-
-					if (sent)
-					{
-						UEINTX &= ~(1 << TXINI);
-						UEINTX &= ~(1 << FIFOCON);
 					}
 				}
 			} break;
@@ -767,49 +734,38 @@ ISR(USB_GEN_vect)
 			case USBMSState_receiving_data:
 			{
 				UENUM = USB_ENDPOINT_MS_OUT_INDEX;
-				if ((UEINTX & (1 << RXOUTI)) && !sector_request)
+				if (UEINTX & (1 << RXOUTI))
 				{
 					if (!_usb_ms_sectors_left)
 					{
 						debug_unhandled;
 					}
 
-					if (_usb_ms_sending_sector_fragment_index == FAT32_SECTOR_SIZE / USB_ENDPOINT_MS_OUT_SIZE)
+					for (u8 fragment_index = 0; fragment_index < FAT32_SECTOR_SIZE / USB_ENDPOINT_MS_OUT_SIZE; fragment_index += 1)
 					{
-						_usb_ms_sending_sector_fragment_index  = 0;
-						_usb_ms_sectors_left                  -= 1;
-						abs_sector_address_                   += 1;
-						UEINTX &= ~(1 << RXOUTI);
-						UEINTX &= ~(1 << FIFOCON);
+						while (!(UEINTX & (1 << RXOUTI)));
 
-						if (!_usb_ms_sectors_left)
-						{
-							_usb_ms_state = USBMSState_ready_for_status;
-						}
-					}
-					else
-					{
 						if (UEBCX != USB_ENDPOINT_MS_OUT_SIZE)
 						{
 							debug_unhandled;
 						}
 
-						for (u8 i = 0; i < USB_ENDPOINT_MS_IN_SIZE; i += 1)
+						for (u8 byte_index = 0; byte_index < USB_ENDPOINT_MS_OUT_SIZE; byte_index += 1)
 						{
-							loaded_sector[_usb_ms_sending_sector_fragment_index * USB_ENDPOINT_MS_IN_SIZE + i] = UEDATX;
+							_usb_ms_sector[fragment_index * USB_ENDPOINT_MS_OUT_SIZE + byte_index] = UEDATX;
 						}
 
-						_usb_ms_sending_sector_fragment_index += 1;
+						UEINTX &= ~(1 << RXOUTI);
+						UEINTX &= ~(1 << FIFOCON);
+					}
 
-						if (_usb_ms_sending_sector_fragment_index == FAT32_SECTOR_SIZE / USB_ENDPOINT_MS_OUT_SIZE)
-						{
-							sector_request = true;
-						}
-						else
-						{
-							UEINTX &= ~(1 << RXOUTI);
-							UEINTX &= ~(1 << FIFOCON);
-						}
+					sd_write(_usb_ms_sector, _usb_ms_abs_sector_address);
+					_usb_ms_sectors_left       -= 1;
+					_usb_ms_abs_sector_address += 1;
+
+					if (!_usb_ms_sectors_left)
+					{
+						_usb_ms_state = USBMSState_ready_for_status;
 					}
 				}
 			} break;

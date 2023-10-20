@@ -184,7 +184,7 @@ sd_write(u8* src, u32 abs_sector_address) // src must be at least FAT32_SECTOR_S
 	pin_high(PIN_SD_SS);
 }
 
-static u32 // Sector count.
+static void
 sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
 { // See: Source(19) @ Section(4.2.2) @ AbsPage(24).
 
@@ -324,8 +324,10 @@ sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
 		error; // Card has unexpected/unsupported parameters.
 	}
 
-	static_assert(FAT32_SECTOR_SIZE == 512);
-	return (csd_C_SIZE + 1) * 1024; // See: "C_SIZE" @ Source(19) @ Section(5.3.3) @ AbsPage(98).
+	/* If needed, the following expression calculates the sector count of the inserted SD card.
+		static_assert(FAT32_SECTOR_SIZE == 512);
+		(csd_C_SIZE + 1) * 1024; // See: "C_SIZE" @ Source(19) @ Section(5.3.3) @ AbsPage(98).
+	*/
 }
 
 //

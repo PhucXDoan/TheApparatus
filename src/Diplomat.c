@@ -17,9 +17,9 @@
 #include "misc.c"
 #include "pin.c"
 #include "spi.c"
-#include "Diplomat_usb.c"
 #include "sd.c"
 #include "timer.c"
+#include "Diplomat_usb.c"
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE HaltSource_diplomat
 
@@ -39,23 +39,6 @@ main(void)
 	sd_init();
 	usb_init();
 	timer_init();
-
-	while (true)
-	{
-		if (sector_request)
-		{
-			if (sector_write)
-			{
-				sd_write(loaded_sector, abs_sector_address_);
-			}
-			else
-			{
-				sd_read(loaded_sector, abs_sector_address_);
-			}
-
-			sector_request = false;
-		}
-	}
 
 	for(;;);
 }
@@ -78,4 +61,57 @@ main(void)
 
 	See: "Watchdog Reset" @ Source(1) @ Section(8.6) @ Page(53-54).
 	See: "Watchdog Timer" @ Source(1) @ Section(8.9) @ Page(55-56).
+*/
+
+/*
+let data =
+	Array
+		.from(document.querySelectorAll("p.st03"))
+		.map(x => [x.innerText, x.querySelector("span").innerText])
+		.map(([x, y]) => [x.slice(x.indexOf('+') + 1), y.slice(y.indexOf("Get ") + 6)])
+		.map(([x, y]) => [x.slice(0, x.indexOf(' ') - 1), y.slice(0, y.indexOf(" "))])
+		.map(([x, y]) => [parseFloat(x), parseInt(y, 16)])
+		.filter(([x, y]) => y % 512 == 0 && y)
+
+console.table(data)
+let reduction = data.reduce((acc, [x, y]) => [acc[0] + x, acc[1] + y], [0, 0])
+console.log(`${reduction[0] / reduction[1] * 1000.0 * 1000.0}us/byte`)
+*/
+
+/* [Addendum: Optimizing Mass Storage].
+
+	1. Before optimizations.
+		86.19012262482745us/byte
+		86.6420833083653us/byte
+
+	2. By increasing SPI speed to 8MHz.
+		17.830957711557726us/byte
+		17.83118092951088us/byte
+
+	3. By moving the SD reading into the interrupt routine itself.
+		5.8796026155650285us/byte
+		5.879522185220327us/byte
+
+	4. Further simplications to the MS state machine.
+		TODO
+
+	5. Increasing endpoint size and double buffering.
+		TODO
+
+	6. Simplifying the FAT32 layout.
+		TODO
+```
+let data =
+	Array
+		.from(document.querySelectorAll("p.st03"))
+		.map(x => [x.innerText, x.querySelector("span").innerText])
+		.map(([x, y]) => [x.slice(x.indexOf('+') + 1), y.slice(y.indexOf("Get ") + 6)])
+		.map(([x, y]) => [x.slice(0, x.indexOf(' ') - 1), y.slice(0, y.indexOf(" "))])
+		.map(([x, y]) => [parseFloat(x), parseInt(y, 16)])
+		.filter(([x, y]) => y % 512 == 0 && y)
+
+console.table(data)
+let reduction = data.reduce((acc, [x, y]) => [acc[0] + x, acc[1] + y], [0, 0]);
+`${reduction[0] / reduction[1] * 1000.0 * 1000.0}us/byte`
+```
 */
