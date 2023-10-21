@@ -161,6 +161,8 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 	SDR1ResponseFlag_parameter_error      = 1 << 6,
 };
 
+static u8 sd_sector[FAT32_SECTOR_SIZE] = {0};
+
 //
 // "Diplomat_usb.c"
 //
@@ -214,7 +216,7 @@ enum USBClass // Non-exhaustive. See: Source(5).
 	USBClass_misc     = 0XEF, // For IADs. See: Source(9) @ Table(1-1) @ AbsPage(5).
 };
 
-enum USBSetupRequestKind // "bmRequestType" and "bRequest" bytes are combined. See: Source(2) @ Table(9-2) @ Page(248).
+enum USBSetupRequestKind // "bmRequestType" in LSB and "bRequest" in MSB. See: Source(2) @ Table(9-2) @ Page(248).
 {
 	#define MAKE(BM_REQUEST_TYPE, B_REQUEST) ((u16(B_REQUEST) << 8) | (BM_REQUEST_TYPE))
 
@@ -225,6 +227,7 @@ enum USBSetupRequestKind // "bmRequestType" and "bRequest" bytes are combined. S
 	USBSetupRequestKind_set_address            = MAKE(0b0'00'00000, 5),
 	USBSetupRequestKind_get_desc               = MAKE(0b1'00'00000, 6),
 	USBSetupRequestKind_set_config             = MAKE(0b0'00'00000, 9),
+	USBSetupRequestKind_interface_get_status   = MAKE(0b1'00'00010, 0),
 
 	// Non-exhaustive.
 	// See: CDC-Specific Requests @ Source(6) @ Table(44) @ AbsPage(62-63).
@@ -245,7 +248,7 @@ enum USBSetupRequestKind // "bmRequestType" and "bRequest" bytes are combined. S
 
 struct USBSetupRequest // See: Source(2) @ Table(9-2) @ Page(248).
 {
-	u16 kind; // Aliasing enum USBSetupRequestKind. The "bmRequestType" and "bRequest" bytes are combined.
+	u16 kind; // Aliasing enum USBSetupRequestKind. "bmRequestType" in LSB and "bRequest" in MSB.
 	union
 	{
 		struct // See: Standard "GetDescriptor" @ Source(2) @ Section(9.4.3) @ Page(253).
@@ -271,6 +274,13 @@ struct USBSetupRequest // See: Source(2) @ Table(9-2) @ Page(248).
 			u16 feature_selector; // Must be zero.
 			u16 endpoint;         // Endpoint index that is also potentially OR'd with USBEndpointAddressFlag_in.
 		} endpoint_clear_feature;
+
+		struct
+		{
+			u16 _zero;
+			u16 designated_interface_index;
+			u16 _two;
+		} interface_get_status;
 
 		struct // See: CDC-Specific "SetLineCoding" @ Source(6) @ Setion(6.2.12) @ AbsPage(68-69).
 		{
@@ -527,14 +537,12 @@ struct USBMSCommandStatusWrapper // See: Source(12) @ Section(5.2) @ Page(14-15)
 enum USBMSSCSIOpcode
 {
 	// Non-exhaustive. See: Source(13) @ Table(13) @ Page(41-42).
-	USBMSSCSIOpcode_test_unit_ready              = 0x00,
-	USBMSSCSIOpcode_request_sense                = 0x03,
-	USBMSSCSIOpcode_inquiry                      = 0x12,
-	USBMSSCSIOpcode_mode_sense                   = 0x1A, // 6-byte version.
-	USBMSSCSIOpcode_prevent_allow_medium_removal = 0x1E,
+	USBMSSCSIOpcode_test_unit_ready = 0x00,
+	USBMSSCSIOpcode_request_sense   = 0x03,
+	USBMSSCSIOpcode_inquiry         = 0x12,
+	USBMSSCSIOpcode_mode_sense      = 0x1A, // 6-byte version.
 
 	// Non-exhaustive. See: Source(14) @ Table(10) @ Page(31-33).
-	USBMSSCSIOpcode_start_stop_unit              = 0x1B,
 	USBMSSCSIOpcode_read_capacity                = 0x25, // 10-byte version.
 	USBMSSCSIOpcode_read                         = 0x28, // 10-byte version.
 	USBMSSCSIOpcode_write                        = 0x2A, // 10-byte version.
@@ -1028,15 +1036,8 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	static_assert(countof(_usb_mouse_command_buffer) && !(countof(_usb_mouse_command_buffer) & (countof(_usb_mouse_command_buffer) - 1)));
 
 	#if USB_MS_ENABLE
-		static enum USBMSState                  _usb_ms_state              = USBMSState_ready_for_command;
-		static const u8*                        _usb_ms_scsi_info_data     = 0;
-		static u8                               _usb_ms_scsi_info_size     = 0;
-		static b8                               _usb_ms_sector_write       = false;
-		static u8                               _usb_ms_sector[FAT32_SECTOR_SIZE] = {0}; // TODO have one global sector
-		static u32                              _usb_ms_abs_sector_address = 0;
-		static u32                              _usb_ms_sectors_left       = 0;
-		static struct USBMSCommandStatusWrapper _usb_ms_status             = {0};
-
+		static struct USBMSCommandStatusWrapper _usb_ms_status      = { .dCSWSignature = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE };
+		static b8                               _usb_ms_send_status = false;
 	#endif
 
 	#if DEBUG

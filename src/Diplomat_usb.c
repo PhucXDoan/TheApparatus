@@ -92,7 +92,7 @@ ISR(USB_GEN_vect)
 
 	if (UDINT & (1 << SOFI)) // Start-of-Frame.
 	{
-		#if DEBUG && USB_CDC_ENABLE
+#if DEBUG && USB_CDC_ENABLE
 		UENUM = USB_ENDPOINT_CDC_IN_INDEX;
 		if (UEINTX & (1 << TXINI)) // Endpoint's buffer is ready to be filled up with data to send to the host.
 		{
@@ -109,9 +109,9 @@ ISR(USB_GEN_vect)
 			UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
 			UEINTX &= ~(1 << FIFOCON); // Allow the USB controller to send the data for the next IN-transaction. See: Source(1) @ Section(22.14) @ Page(276)
 		}
-		#endif
+#endif
 
-		#if DEBUG && USB_CDC_ENABLE
+#if DEBUG && USB_CDC_ENABLE
 		UENUM = USB_ENDPOINT_CDC_OUT_INDEX;
 		if (UEINTX & (1 << RXOUTI)) // Endpoint's buffer has data from the host to be copied.
 		{
@@ -137,9 +137,9 @@ ISR(USB_GEN_vect)
 				UEINTX &= ~(1 << FIFOCON); // Free up this endpoint's buffer so the USB controller can copy the data in the next OUT-transaction to it.
 			}
 		}
-		#endif
+#endif
 
-		#if USB_HID_ENABLE
+#if USB_HID_ENABLE
 		UENUM = USB_ENDPOINT_HID_INDEX;
 		if (UEINTX & (1 << TXINI)) // See: [Mouse Commands].
 		{
@@ -206,590 +206,340 @@ ISR(USB_GEN_vect)
 			UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
 			UEINTX &= ~(1 << FIFOCON); // Allow the USB controller to send the data for the next IN-transaction. See: Source(1) @ Section(22.14) @ Page(276)
 		}
-		#endif
+#endif
 
-		#if USB_MS_ENABLE
-		static u16 TEMP = 0;
-		switch (_usb_ms_state) // [Mass Storage Bulk-Only Transfer Communication].
+#if USB_MS_ENABLE // [Mass Storage Bulk-Only Transfer Communication].
+
+		//
+		// Handle command.
+		//
+
+		UENUM = USB_ENDPOINT_MS_OUT_INDEX;
+		if (!_usb_ms_send_status && (UEINTX & (1 << RXOUTI)))
 		{
-			case USBMSState_ready_for_command:
+			static u16 TEMP = 0;
+			debug_u16(TEMP);
+			TEMP += 1;
+
+			//
+			// Fetch command.
+			//
+
+			struct USBMSCommandBlockWrapper command = {0};
+			static_assert(sizeof(command) <= USB_ENDPOINT_MS_OUT_SIZE);
+
+			if (UEBCX != sizeof(command)) // We supposedly received a CBW packet that's not 31 bytes in length. See: Source(12) @ Section(6.2.1) @ Page(17).
 			{
-				UENUM = USB_ENDPOINT_MS_OUT_INDEX;
-				if (UEINTX & (1 << RXOUTI))
+				error;
+			}
+
+			for (u8 i = 0; i < sizeof(command); i += 1)
+			{
+				((u8*) &command)[i] = UEDATX;
+			}
+			UEINTX &= ~(1 << RXOUTI);
+			UEINTX &= ~(1 << FIFOCON);
+
+			if // Is the CBW valid and meaningful? See: Source(12) @ Section(6.2) @ Page(17).
+			(
+				!(
+					command.dCBWSignature == USB_MS_COMMAND_BLOCK_WRAPPER_SIGNATURE &&
+					!(command.bmCBWFlags & 0b0111'1111) &&
+					command.bCBWLUN == 0 &&
+					1 <= command.bCBWCBLength && command.bCBWCBLength <= 16
+				)
+			)
+			{
+				error;
+			}
+
+			//
+			// Execute command.
+			//
+
+			_usb_ms_send_status    = true;
+			_usb_ms_status.dCSWTag = command.dCBWTag;
+
+			if (command.CBWCB[0] == USBMSSCSIOpcode_read || command.CBWCB[0] == USBMSSCSIOpcode_write)
+			{
+				u8  wrdprotect     = (command.CBWCB[1] >> 5) & 0b111;
+				b8  dpo            = (command.CBWCB[1] >> 4) & 0b1;
+				b8  fua            = (command.CBWCB[1] >> 3) & 0b1;
+				b8  fua_nv         = (command.CBWCB[1] >> 1) & 0b1;
+				u32 sector_address =
+						(((u32) command.CBWCB[2]) << 24) |
+						(((u32) command.CBWCB[3]) << 16) |
+						(((u32) command.CBWCB[4]) <<  8) |
+						(((u32) command.CBWCB[5]) <<  0);
+				u8  group_number = command.CBWCB[6] & 0b11111;
+				u32 sector_count = ((command.CBWCB[7] << 8) | command.CBWCB[8]);
+				u8  control      = command.CBWCB[9];
+
+				if
+				(
+					!(
+						command.dCBWDataTransferLength == sector_count * FAT32_SECTOR_SIZE &&
+						(command.CBWCB[0] == USBMSSCSIOpcode_read) == !!command.bmCBWFlags && // Ensures data transaction direction matches.
+						command.bCBWCBLength == 10
+					)
+				)
 				{
-					struct USBMSCommandBlockWrapper command = {0};
-					static_assert(sizeof(command) <= USB_ENDPOINT_MS_OUT_SIZE);
-
-					if (UEBCX == sizeof(command))
-					{
-						debug_u16(TEMP);
-						TEMP += 1;
-
-						for (u8 i = 0; i < sizeof(command); i += 1)
-						{
-							((u8*) &command)[i] = UEDATX;
-						}
-
-						if // Is command valid and meaningful?
-						(
-							command.dCBWSignature == USB_MS_COMMAND_BLOCK_WRAPPER_SIGNATURE &&
-							!(command.bmCBWFlags & 0b0111'1111) &&
-							command.bCBWLUN == 0 &&
-							1 <= command.bCBWCBLength && command.bCBWCBLength <= 16
-						)
-						{
-							b8 unsupported_command = false;
-
-							switch (command.CBWCB[0])
-							{
-								case USBMSSCSIOpcode_test_unit_ready:
-								{
-									u8 control = command.CBWCB[5];
-
-									if
-									(
-										command.dCBWDataTransferLength == 0 &&
-										command.bCBWCBLength == 6
-									)
-									{
-										if (control)
-										{
-											debug_unhandled;
-										}
-									}
-									else
-									{
-										debug_unhandled;
-									}
-								} break;
-
-								case USBMSSCSIOpcode_inquiry: // See: Source(*) @ Section(3.6.1) @ Page(92).
-								{
-									b8 enable_vital_product_data = (command.CBWCB[1] >> 0) & 1;
-									b8 command_support_data      = (command.CBWCB[1] >> 1) & 1;
-									u8 page_operation_code       =  command.CBWCB[2];
-									u8 allocation_length         =  command.CBWCB[4];
-									u8 control                   =  command.CBWCB[5];
-
-									if
-									(
-										command.dCBWDataTransferLength == allocation_length &&
-										command.bmCBWFlags &&
-										command.bCBWCBLength == 6
-									)
-									{
-										if
-										(
-											!enable_vital_product_data &&
-											!command_support_data &&
-											!page_operation_code &&
-											control == 0
-										)
-										{
-											_usb_ms_scsi_info_data = USB_MS_SCSI_INQUIRY_DATA;
-											_usb_ms_scsi_info_size = sizeof(USB_MS_SCSI_INQUIRY_DATA);
-											static_assert(sizeof(USB_MS_SCSI_INQUIRY_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
-										}
-										else if
-										(
-											enable_vital_product_data &&
-											!command_support_data &&
-											page_operation_code == 0x80 &&
-											control == 0
-										)
-										{
-											unsupported_command = true;
-										}
-										else
-										{
-											debug_unhandled;
-										}
-									}
-									else
-									{
-										debug_unhandled;
-									}
-								} break;
-
-								case USBMSSCSIOpcode_request_sense: // See: Source(*) @ Section(3.37) @ Page(195).
-								{
-									u8 allocation_length = command.CBWCB[4];
-									u8 control           = command.CBWCB[5];
-
-									if
-									(
-										command.dCBWDataTransferLength == allocation_length &&
-										command.bmCBWFlags &&
-										command.bCBWCBLength == 12 // For some reason 12 and not 6.
-									)
-									{
-										if (control)
-										{
-											debug_unhandled;
-										}
-										else
-										{
-											_usb_ms_scsi_info_data = USB_MS_SCSI_UNSUPPORTED_COMMAND_SENSE;
-											_usb_ms_scsi_info_size = sizeof(USB_MS_SCSI_UNSUPPORTED_COMMAND_SENSE);
-											static_assert(sizeof(USB_MS_SCSI_UNSUPPORTED_COMMAND_SENSE) <= USB_ENDPOINT_MS_IN_SIZE);
-										}
-									}
-									else
-									{
-										debug_unhandled;
-									}
-								} break;
-
-								case USBMSSCSIOpcode_mode_sense:
-								{
-									b8 disable_block_descriptors = (command.CBWCB[1] >> 3) & 1;
-									u8 page_control              = (command.CBWCB[2] >> 6) & 0b11;
-									u8 page_code                 = (command.CBWCB[2] >> 0) & 0b11'1111;
-									u8 allocation_length         = command.CBWCB[4];
-									u8 control                   = command.CBWCB[5];
-
-									if
-									(
-										command.dCBWDataTransferLength == allocation_length &&
-										command.bmCBWFlags &&
-										command.bCBWCBLength == 6
-									)
-									{
-										if
-										(
-											!disable_block_descriptors &&
-											page_control == 0b00 &&
-											(page_code == 0x1C || page_code == 0x08 || page_code == 0x3F) &&
-											!control
-										)
-										{
-											_usb_ms_scsi_info_data = USB_MS_SCSI_READ_CAPACITY_DATA;
-											_usb_ms_scsi_info_size = sizeof(USB_MS_SCSI_READ_CAPACITY_DATA);
-											static_assert(sizeof(USB_MS_SCSI_READ_CAPACITY_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
-										}
-										else
-										{
-											debug_unhandled;
-										}
-									}
-									else
-									{
-										debug_unhandled;
-									}
-								} break;
-
-								case USBMSSCSIOpcode_read_capacity: // See: Source(*) @ Section(3.22) @ Page(155).
-								{
-									u32 abs_sector_address =
-										(((u32) command.CBWCB[2]) << 24) |
-										(((u32) command.CBWCB[3]) << 16) |
-										(((u32) command.CBWCB[4]) <<  8) |
-										(((u32) command.CBWCB[5]) <<  0);
-									b8 partial_medium_indicator = command.CBWCB[8] & 1;
-									u8 control                  = command.CBWCB[9];
-
-									if
-									(
-										command.dCBWDataTransferLength == 8 &&
-										command.bmCBWFlags &&
-										command.bCBWCBLength == 10
-									)
-									{
-										if
-										(
-											!abs_sector_address &&
-											!partial_medium_indicator &&
-											!control
-										)
-										{
-											_usb_ms_scsi_info_data = USB_MS_SCSI_READ_CAPACITY_DATA;
-											_usb_ms_scsi_info_size = sizeof(USB_MS_SCSI_READ_CAPACITY_DATA);
-											static_assert(sizeof(USB_MS_SCSI_READ_CAPACITY_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
-										}
-										else
-										{
-											debug_unhandled;
-										}
-									}
-									else
-									{
-										debug_unhandled;
-									}
-								} break;
-
-								case USBMSSCSIOpcode_read:
-								{
-									u8  rdprotect = (command.CBWCB[1] >> 5) & 0b111;
-									b8  dpo       = (command.CBWCB[1] >> 4) & 0b1;
-									b8  fua       = (command.CBWCB[1] >> 3) & 0b1;
-									b8  fua_nv    = (command.CBWCB[1] >> 1) & 0b1;
-									u32 addr      =
-											(((u32) command.CBWCB[2]) << 24) |
-											(((u32) command.CBWCB[3]) << 16) |
-											(((u32) command.CBWCB[4]) <<  8) |
-											(((u32) command.CBWCB[5]) <<  0);
-									u8  group_number = command.CBWCB[6] & 0b11111;
-									u32 sector_count = ((command.CBWCB[7] << 8) | command.CBWCB[8]);
-									u8  control      = command.CBWCB[9];
-
-									if
-									(
-										command.dCBWDataTransferLength == sector_count * FAT32_SECTOR_SIZE &&
-										command.bmCBWFlags &&
-										command.bCBWCBLength == 10
-									)
-									{
-										if
-										(
-											!rdprotect &&
-											!dpo &&
-											!fua &&
-											!fua_nv &&
-											!control
-										)
-										{
-											_usb_ms_sectors_left       = sector_count;
-											_usb_ms_sector_write       = false;
-											_usb_ms_abs_sector_address = addr;
-										}
-										else
-										{
-											debug_unhandled;
-										}
-									}
-									else
-									{
-										debug_unhandled;
-									}
-								} break;
-
-								case USBMSSCSIOpcode_write:
-								{
-									u8  wrprotect = (command.CBWCB[1] >> 5) & 0b111;
-									b8  dpo       = (command.CBWCB[1] >> 4) & 0b1;
-									b8  fua       = (command.CBWCB[1] >> 3) & 0b1;
-									b8  fua_nv    = (command.CBWCB[1] >> 1) & 0b1;
-									u32 addr      =
-											(((u32) command.CBWCB[2]) << 24) |
-											(((u32) command.CBWCB[3]) << 16) |
-											(((u32) command.CBWCB[4]) <<  8) |
-											(((u32) command.CBWCB[5]) <<  0);
-									u8  group_number = command.CBWCB[6] & 0b11111;
-									u32 sector_count = ((command.CBWCB[7] << 8) | command.CBWCB[8]);
-									u8  control      = command.CBWCB[9];
-
-									if
-									(
-										command.dCBWDataTransferLength == sector_count * FAT32_SECTOR_SIZE &&
-										!command.bmCBWFlags &&
-										command.bCBWCBLength == 10
-									)
-									{
-										if
-										(
-											!wrprotect &&
-											!dpo &&
-											!fua &&
-											!fua_nv &&
-											!control
-										)
-										{
-											_usb_ms_sectors_left       = sector_count;
-											_usb_ms_abs_sector_address = addr;
-											_usb_ms_sector_write       = true;
-										}
-										else
-										{
-											debug_unhandled;
-										}
-									}
-									else
-									{
-										debug_unhandled;
-									}
-								} break;
-
-								case USBMSSCSIOpcode_prevent_allow_medium_removal:
-								{
-									u8 prevent = command.CBWCB[4] & 0b11;
-									u8 control = command.CBWCB[5];
-
-									if
-									(
-										command.dCBWDataTransferLength == 0 &&
-										command.bCBWCBLength == 6
-									)
-									{
-										if
-										(
-											(prevent == 0b00 || prevent == 0b01) &&
-											!control
-										)
-										{
-											// Nothing.
-										}
-										else
-										{
-											debug_unhandled;
-										}
-									}
-									else
-									{
-										debug_unhandled;
-									}
-								} break;
-
-								case USBMSSCSIOpcode_start_stop_unit:
-								{
-									b8 immed           = (command.CBWCB[1] >> 0) & 1;
-									b8 start           = (command.CBWCB[4] >> 0) & 1;
-									b8 loej            = (command.CBWCB[4] >> 1) & 1;
-									u8 power_condition = (command.CBWCB[4] >> 4) & 0b1111;
-									u8 control         = command.CBWCB[5];
-
-									if
-									(
-										command.dCBWDataTransferLength == 0 &&
-										command.bCBWCBLength == 6
-									)
-									{
-										if
-										(
-											!immed &&
-											!loej &&
-											!power_condition &&
-											!control
-										)
-										{
-											// Nothing.
-										}
-										else
-										{
-											debug_unhandled;
-										}
-									}
-									else
-									{
-										debug_unhandled;
-									}
-								} break;
-
-								default:
-								{
-									unsupported_command = true;
-								} break;
-							}
-
-							if (unsupported_command)
-							{
-								if (!command.dCBWDataTransferLength)
-								{
-									// No stalling necessary.
-								}
-								else if (command.bmCBWFlags) // Device to host.
-								{
-									UENUM = USB_ENDPOINT_MS_IN_INDEX;
-									UECONX |= (1 << STALLRQ);
-								}
-								else // Host to device.
-								{
-									debug_unhandled;
-								}
-
-								_usb_ms_state  = USBMSState_ready_for_status;
-								_usb_ms_status =
-									(struct USBMSCommandStatusWrapper)
-									{
-										.dCSWSignature   = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE,
-										.dCSWTag         = command.dCBWTag,
-										.dCSWDataResidue = command.dCBWDataTransferLength,
-										.bCSWStatus      = USBMSCommandStatusWrapperStatus_failed,
-									};
-							}
-							else if (_usb_ms_scsi_info_size)
-							{
-								u32 dCSWDataResidue = 0;
-								if (command.dCBWDataTransferLength >= _usb_ms_scsi_info_size)
-								{
-									dCSWDataResidue = command.dCBWDataTransferLength - _usb_ms_scsi_info_size;
-								}
-
-								_usb_ms_state  = USBMSState_sending_data;
-								_usb_ms_status =
-									(struct USBMSCommandStatusWrapper)
-									{
-										.dCSWSignature   = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE,
-										.dCSWTag         = command.dCBWTag,
-										.dCSWDataResidue = dCSWDataResidue,
-										.bCSWStatus      = USBMSCommandStatusWrapperStatus_success,
-									};
-							}
-							else if (_usb_ms_sectors_left)
-							{
-								if (_usb_ms_sector_write)
-								{
-									_usb_ms_state = USBMSState_receiving_data;
-								}
-								else
-								{
-									_usb_ms_state = USBMSState_sending_data;
-								}
-
-								_usb_ms_status =
-									(struct USBMSCommandStatusWrapper)
-									{
-										.dCSWSignature   = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE,
-										.dCSWTag         = command.dCBWTag,
-										.dCSWDataResidue = 0,
-										.bCSWStatus      = USBMSCommandStatusWrapperStatus_success,
-									};
-							}
-							else if (!command.dCBWDataTransferLength)
-							{
-								_usb_ms_state  = USBMSState_ready_for_status;
-								_usb_ms_status =
-									(struct USBMSCommandStatusWrapper)
-									{
-										.dCSWSignature   = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE,
-										.dCSWTag         = command.dCBWTag,
-										.dCSWDataResidue = 0,
-										.bCSWStatus      = USBMSCommandStatusWrapperStatus_success,
-									};
-							}
-							else
-							{
-								debug_unhandled;
-							}
-						}
-						else // The CBW isn't valid or meaningful. See: Source(12) @ Section(6.2) @ Page(17).
-						{
-							debug_unhandled;
-						}
-					}
-					else if (!UEBCX)
-					{
-						// TODO Why??
-					}
-					else // We supposedly received a CBW packet that's not 31 bytes in length. See: Source(12) @ Section(6.2.1) @ Page(17).
-					{
-						debug_unhandled;
-					}
-
-					UEINTX &= ~(1 << RXOUTI);
-					UEINTX &= ~(1 << FIFOCON);
+					error;
 				}
-			} break;
 
-			case USBMSState_sending_data:
-			{
-				UENUM = USB_ENDPOINT_MS_IN_INDEX;
-				if (UEINTX & (1 << TXINI))
+				if (!(!wrdprotect && !dpo && !fua && !fua_nv && !control))
 				{
-					debug_u16(TEMP);
-					TEMP += 1;
+					error;
+				}
 
-					if (_usb_ms_scsi_info_size)
+				if (command.CBWCB[0] == USBMSSCSIOpcode_read)
+				{
+					UENUM = USB_ENDPOINT_MS_IN_INDEX;
+					for (u32 sector_index = 0; sector_index < sector_count; sector_index += 1)
 					{
-						for (u8 i = 0; i < _usb_ms_scsi_info_size; i += 1)
+						sd_read(sector_address + sector_index);
+
+						for (u16 sector_byte_index = 0; sector_byte_index < countof(sd_sector); sector_byte_index += 1)
 						{
-							UEDATX = pgm_read_byte(&_usb_ms_scsi_info_data[i]);
+							if (!(UEINTX & (1 << RWAL))) // Flush buffer and wait for it to open up.
+							{
+								UEINTX &= ~(1 << TXINI);
+								UEINTX &= ~(1 << FIFOCON);
+								while (!(UEINTX & (1 << TXINI)));
+							}
+
+							UEDATX = sd_sector[sector_byte_index];
 						}
-						_usb_ms_scsi_info_size = 0;
+
+						//
+						// Flush buffer.
+						//
 
 						UEINTX &= ~(1 << TXINI);
 						UEINTX &= ~(1 << FIFOCON);
 					}
-					else if (_usb_ms_sectors_left)
+				}
+				else
+				{
+					for (u32 sector_index = 0; sector_index < sector_count; sector_index += 1)
 					{
-						sd_read(_usb_ms_sector, _usb_ms_abs_sector_address);
-
-						for (u8 fragment_index = 0; fragment_index < FAT32_SECTOR_SIZE / USB_ENDPOINT_MS_IN_SIZE; fragment_index += 1)
+						for (u16 sector_byte_index = 0; sector_byte_index < countof(sd_sector); sector_byte_index += 1)
 						{
-							while (!(UEINTX & (1 << TXINI)));
-
-							for (u8 byte_index = 0; byte_index < USB_ENDPOINT_MS_IN_SIZE; byte_index += 1)
+							if (!(UEINTX & (1 << RWAL))) // Free buffer and wait for next payload.
 							{
-								UEDATX = _usb_ms_sector[u16(fragment_index) * USB_ENDPOINT_MS_IN_SIZE + byte_index];
+								UEINTX &= ~(1 << RXOUTI);
+								UEINTX &= ~(1 << FIFOCON);
+								while (!(UEINTX & (1 << RXOUTI)));
 							}
 
-							UEINTX &= ~(1 << TXINI);
-							UEINTX &= ~(1 << FIFOCON);
+							sd_sector[sector_byte_index] = UEDATX;
 						}
 
-						_usb_ms_sectors_left       -= 1;
-						_usb_ms_abs_sector_address += 1;
-					}
-					else
-					{
-						debug_unhandled;
-					}
+						//
+						// Flush.
+						//
 
-					if (!_usb_ms_sectors_left)
-					{
-						_usb_ms_state = USBMSState_ready_for_status;
-					}
-				}
-			} break;
-
-			case USBMSState_receiving_data:
-			{
-				UENUM = USB_ENDPOINT_MS_OUT_INDEX;
-				if (UEINTX & (1 << RXOUTI))
-				{
-					if (!_usb_ms_sectors_left)
-					{
-						debug_unhandled;
-					}
-
-					for (u8 fragment_index = 0; fragment_index < FAT32_SECTOR_SIZE / USB_ENDPOINT_MS_OUT_SIZE; fragment_index += 1)
-					{
-						while (!(UEINTX & (1 << RXOUTI)));
-
-						if (UEBCX != USB_ENDPOINT_MS_OUT_SIZE)
-						{
-							debug_unhandled;
-						}
-
-						for (u8 byte_index = 0; byte_index < USB_ENDPOINT_MS_OUT_SIZE; byte_index += 1)
-						{
-							_usb_ms_sector[fragment_index * USB_ENDPOINT_MS_OUT_SIZE + byte_index] = UEDATX;
-						}
-
+						sd_write(sector_address + sector_index);
 						UEINTX &= ~(1 << RXOUTI);
 						UEINTX &= ~(1 << FIFOCON);
 					}
-
-					sd_write(_usb_ms_sector, _usb_ms_abs_sector_address);
-					_usb_ms_sectors_left       -= 1;
-					_usb_ms_abs_sector_address += 1;
-
-					if (!_usb_ms_sectors_left)
-					{
-						_usb_ms_state = USBMSState_ready_for_status;
-					}
 				}
-			} break;
 
-			case USBMSState_ready_for_status:
+				_usb_ms_status.dCSWDataResidue = 0;
+				_usb_ms_status.bCSWStatus      = USBMSCommandStatusWrapperStatus_success;
+			}
+			else
 			{
-				UENUM = USB_ENDPOINT_MS_IN_INDEX;
-				if (UEINTX & (1 << TXINI))
+				b8        unsupported_command = false;
+				const u8* info_data           = 0;
+				u8        info_size           = 0;
+
+				switch (command.CBWCB[0])
 				{
-					static_assert(sizeof(_usb_ms_status) <= USB_ENDPOINT_MS_IN_SIZE);
-					for (u8 i = 0; i < sizeof(_usb_ms_status); i += 1)
+					case USBMSSCSIOpcode_test_unit_ready:
 					{
-						UEDATX = ((u8*) &_usb_ms_status)[i];
+						u8 control = command.CBWCB[5];
+
+						if (!(command.dCBWDataTransferLength == 0 && command.bCBWCBLength == 6))
+						{
+							error;
+						}
+
+						if (control)
+						{
+							error;
+						}
+					} break;
+
+					case USBMSSCSIOpcode_inquiry: // See: Source(*) @ Section(3.6.1) @ Page(92).
+					{
+						b8 enable_vital_product_data = (command.CBWCB[1] >> 0) & 1;
+						b8 command_support_data      = (command.CBWCB[1] >> 1) & 1;
+						u8 page_operation_code       =  command.CBWCB[2];
+						u8 allocation_length         =  command.CBWCB[4];
+						u8 control                   =  command.CBWCB[5];
+
+						if (!(command.dCBWDataTransferLength == allocation_length && command.bmCBWFlags && command.bCBWCBLength == 6))
+						{
+							error;
+						}
+
+						if (!enable_vital_product_data && !command_support_data && !page_operation_code && !control)
+						{
+							info_data = USB_MS_SCSI_INQUIRY_DATA;
+							info_size = sizeof(USB_MS_SCSI_INQUIRY_DATA);
+							static_assert(sizeof(USB_MS_SCSI_INQUIRY_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
+						}
+						else
+						{
+							unsupported_command = true;
+						}
+					} break;
+
+					case USBMSSCSIOpcode_request_sense: // See: Source(*) @ Section(3.37) @ Page(195).
+					{
+						u8 allocation_length = command.CBWCB[4];
+						u8 control           = command.CBWCB[5];
+
+						// bCBWCBLength is for some reason 12 on Windows; likely a driver bug or something...
+						if (!(command.dCBWDataTransferLength == allocation_length && command.bmCBWFlags && (command.bCBWCBLength == 6 || command.bCBWCBLength == 12)))
+						{
+							error;
+						}
+
+						if (control)
+						{
+							error;
+						}
+
+						info_data = USB_MS_SCSI_UNSUPPORTED_COMMAND_SENSE;
+						info_size = sizeof(USB_MS_SCSI_UNSUPPORTED_COMMAND_SENSE);
+						static_assert(sizeof(USB_MS_SCSI_UNSUPPORTED_COMMAND_SENSE) <= USB_ENDPOINT_MS_IN_SIZE);
+					} break;
+
+					case USBMSSCSIOpcode_mode_sense:
+					{
+						b8 disable_block_descriptors = (command.CBWCB[1] >> 3) & 1;
+						u8 page_control              = (command.CBWCB[2] >> 6) & 0b11;
+						u8 page_code                 = (command.CBWCB[2] >> 0) & 0b11'1111;
+						u8 allocation_length         = command.CBWCB[4];
+						u8 control                   = command.CBWCB[5];
+
+						if (!(command.dCBWDataTransferLength == allocation_length && command.bmCBWFlags && command.bCBWCBLength == 6))
+						{
+							error;
+						}
+
+						// TODO Document.
+						if (!(!disable_block_descriptors && page_control == 0b00 && (page_code == 0x1C || page_code == 0x08 || page_code == 0x3F) && !control))
+						{
+							error;
+						}
+
+						info_data = USB_MS_SCSI_READ_CAPACITY_DATA;
+						info_size = sizeof(USB_MS_SCSI_READ_CAPACITY_DATA);
+						static_assert(sizeof(USB_MS_SCSI_READ_CAPACITY_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
+					} break;
+
+					case USBMSSCSIOpcode_read_capacity: // See: Source(*) @ Section(3.22) @ Page(155).
+					{
+						u32 sector_address =
+							(((u32) command.CBWCB[2]) << 24) |
+							(((u32) command.CBWCB[3]) << 16) |
+							(((u32) command.CBWCB[4]) <<  8) |
+							(((u32) command.CBWCB[5]) <<  0);
+						b8 partial_medium_indicator = command.CBWCB[8] & 1;
+						u8 control                  = command.CBWCB[9];
+
+						if (!(command.dCBWDataTransferLength == 8 && command.bmCBWFlags && command.bCBWCBLength == 10))
+						{
+							error;
+						}
+
+						if (!(!sector_address && !partial_medium_indicator && !control))
+						{
+							error;
+						}
+
+						info_data = USB_MS_SCSI_READ_CAPACITY_DATA;
+						info_size = sizeof(USB_MS_SCSI_READ_CAPACITY_DATA);
+						static_assert(sizeof(USB_MS_SCSI_READ_CAPACITY_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
+					} break;
+
+					default:
+					{
+						unsupported_command = true;
+					} break;
+				}
+
+				if (unsupported_command)
+				{
+					if (!command.dCBWDataTransferLength)
+					{
+						// No stalling necessary.
+					}
+					else if (command.bmCBWFlags) // Device to host.
+					{
+						UENUM   = USB_ENDPOINT_MS_IN_INDEX;
+						UECONX |= (1 << STALLRQ);
+					}
+					else // Host to device.
+					{
+						error; // Haven't encountered a situation where this case needed to be handled, but could be implemented if needed.
 					}
 
+					_usb_ms_status.dCSWDataResidue = command.dCBWDataTransferLength;
+					_usb_ms_status.bCSWStatus      = USBMSCommandStatusWrapperStatus_failed;
+				}
+				else if (info_size)
+				{
+					u8 amount_to_send = info_size;
+					if (amount_to_send > command.dCBWDataTransferLength)
+					{
+						amount_to_send = command.dCBWDataTransferLength;
+					}
+
+					UENUM = USB_ENDPOINT_MS_IN_INDEX;
+					while (!(UEINTX & (1 << TXINI)));
+					for (u8 i = 0; i < amount_to_send; i += 1)
+					{
+						UEDATX = pgm_read_byte(&info_data[i]);
+					}
 					UEINTX &= ~(1 << TXINI);
 					UEINTX &= ~(1 << FIFOCON);
 
-					_usb_ms_state  = USBMSState_ready_for_command;
-					_usb_ms_status = (struct USBMSCommandStatusWrapper) {0}; // TODO Obviously we shouldn't waste time clearing the entire thing.
+					_usb_ms_status.dCSWDataResidue = command.dCBWDataTransferLength - amount_to_send;
+					_usb_ms_status.bCSWStatus      = USBMSCommandStatusWrapperStatus_success;
 				}
-			} break;
+				else
+				{
+					_usb_ms_status.dCSWDataResidue = 0;
+					_usb_ms_status.bCSWStatus      = USBMSCommandStatusWrapperStatus_success;
+				}
+			}
 		}
-		#endif
+
+		//
+		// Send status.
+		//
+
+		UENUM = USB_ENDPOINT_MS_IN_INDEX;
+		if (_usb_ms_send_status && !(UECONX & (1 << STALLRQ)))
+		{
+			_usb_ms_send_status = false;
+
+			while (!(UEINTX & (1 << TXINI)));
+
+			static_assert(sizeof(_usb_ms_status) <= USB_ENDPOINT_MS_IN_SIZE);
+			for (u8 i = 0; i < sizeof(_usb_ms_status); i += 1)
+			{
+				UEDATX = ((u8*) &_usb_ms_status)[i];
+			}
+
+			UEINTX &= ~(1 << TXINI);
+			UEINTX &= ~(1 << FIFOCON);
+		}
+#endif
 	}
 
 	UDINT = 0; // Clear interrupt flags to prevent this routine from executing again.
@@ -1039,10 +789,12 @@ ISR(USB_COM_vect)
 				}
 			} break;
 
-			case USBSetupRequestKind_ms_get_max_lun: // See: Source(12) @ Section(3.2) @ Page(7).
+			case USBSetupRequestKind_ms_get_max_lun       : // We send back a single zero byte. See: Source(12) @ Section(3.2) @ Page(7).
+			case USBSetupRequestKind_interface_get_status : // We send back two zero bytes. See: Standard "Get Status" on Interfaces @ Source(2) @ Section(9.4.5) @ Page(254).
 			{
-				// Despite the fact that the mass storage specification specifically states that we may stall if we
-				// don't support multiple logical units, Apple does not seem to like it, so we're going to implement it anyways.
+				// USBSetupRequestKind_ms_get_max_lun:
+				//     Despite the fact that the mass storage specification specifically states that we may stall if we
+				//     don't support multiple logical units, Apple does not seem to like it, so we're going to implement it anyways.
 
 				b8 sent = false;
 				while (true) // See: [Endpoint 0: Data-Transfer from Device to Host].
@@ -1057,7 +809,13 @@ ISR(USB_COM_vect)
 						if (!sent)
 						{
 							UEDATX = 0;
-							sent   = true;
+
+							if (request.kind == USBSetupRequestKind_interface_get_status)
+							{
+								UEDATX = 0;
+							}
+
+							sent = true;
 						}
 
 						UEINTX &= ~(1 << TXINI);
@@ -1072,12 +830,18 @@ ISR(USB_COM_vect)
 				UECONX |= (1 << STALLRQ);
 			} break;
 
+			case 0b11111111'00100001: // TODO MS reset?
+			{
+				debug_halt(10);
+			} break;
+
 			default:
 			{
 				UECONX |= (1 << STALLRQ);
 
 				#if DEBUG
-				debug_unhandled;
+				debug_u16(request.kind);
+				debug_halt(-1);
 				#endif
 			} break;
 		}

@@ -77,7 +77,7 @@ _sd_get_data_block(u8* dst_buffer, u16 dst_size) // See: "Data Transfer" @ Sourc
 }
 
 static void
-sd_read(u8* dst, u32 abs_sector_address) // dst must be at least FAT32_SECTOR_SIZE bytes.
+sd_read(u32 abs_sector_address)
 { // See: Source(19) @ Section(7.2.3) @ AbsPage(107).
 
 	pin_low(PIN_SD_SS);
@@ -92,7 +92,7 @@ sd_read(u8* dst, u32 abs_sector_address) // dst must be at least FAT32_SECTOR_SI
 	{
 		error; // Failed to command.
 	}
-	else if (!_sd_get_data_block(dst, FAT32_SECTOR_SIZE))
+	else if (!_sd_get_data_block(sd_sector, FAT32_SECTOR_SIZE))
 	{
 		error; // Failed to receive data.
 	}
@@ -101,7 +101,7 @@ sd_read(u8* dst, u32 abs_sector_address) // dst must be at least FAT32_SECTOR_SI
 }
 
 static void
-sd_write(u8* src, u32 abs_sector_address) // src must be at least FAT32_SECTOR_SIZE bytes.
+sd_write(u32 abs_sector_address)
 { // See: Source(19) @ Section(7.2.4) @ AbsPage(108).
 
 	pin_low(PIN_SD_SS);
@@ -120,7 +120,7 @@ sd_write(u8* src, u32 abs_sector_address) // src must be at least FAT32_SECTOR_S
 		spi_tx(0b1111'1110); // Starting token. See: Source(19) @ Section(7.3.3.2) @ AbsPage(122-123).
 		for (u16 i = 0; i < FAT32_SECTOR_SIZE; i += 1)
 		{
-			spi_tx(src[i]);
+			spi_tx(sd_sector[i]);
 		}
 
 		//
