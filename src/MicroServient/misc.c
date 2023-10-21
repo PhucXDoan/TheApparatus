@@ -1,74 +1,77 @@
-#if DEBUG
-#define debug_halt() __debugbreak()
-#define error_unhandled \
-	do \
-	{ \
-		debug_halt(); \
-		exit(1); \
-	} \
-	while (false)
-#else
-#define error_unhandled \
-	do \
-	{ \
-		exit(1); \
-	} \
-	while (false)
-#endif
-
-static b32 // Error.
-malloc_read_file(str* dst, str file_path)
+#define error(STRLIT, ...) \
+	error_abort("(\"%.*s\") :: " STRLIT, i32(file_path.length), file_path.data,##__VA_ARGS__)
+static str
+malloc_read_file(str file_path)
 {
-	b32 err = true;
-	*dst = (str) {0};
+	str result = {0};
 
-	char file_path_cstrbuf[256] = {0};
-	if (file_path.length < countof(file_path_cstrbuf))
+	//
+	// Turn lengthed string into null-terminated string.
+	//
+
+	char file_path_cstr[256] = {0};
+	if (file_path.length >= countof(file_path_cstr))
 	{
-		memmove(file_path_cstrbuf, file_path.data, file_path.length);
+		error("File path too long.");
+	}
+	memmove(file_path_cstr, file_path.data, file_path.length);
 
-		FILE* file = fopen(file_path_cstrbuf, "rb");
-		if (file)
+	//
+	// Get file length.
+	//
+
+	FILE* file = fopen(file_path_cstr, "rb");
+	if (!file)
+	{
+		error("`fopen` failed. Does the file exist?");
+	}
+
+	if (fseek(file, 0, SEEK_END))
+	{
+		error("`fseek` failed.");
+	}
+
+	result.length = ftell(file);
+	if (result.length == -1)
+	{
+		error("`ftell` failed.");
+	}
+
+	//
+	// Get file data.
+	//
+
+	if (result.length)
+	{
+		result.data = malloc(result.length);
+		if (!result.data)
 		{
-			if (!fseek(file, 0, SEEK_END))
-			{
-				dst->length = ftell(file);
-				if (dst->length != -1)
-				{
-					dst->data = malloc(dst->length);
-					if (dst->data)
-					{
-						if (!fseek(file, 0, SEEK_SET))
-						{
-							if (!fread(dst->data, dst->length, 1, file) != 1)
-							{
-								err = false;
-							}
-						}
-					}
-				}
-			}
+			error("Failed to allocate enough memory");
+		}
 
-			if (fclose(file))
-			{
-				err = true;
-			}
+		if (fseek(file, 0, SEEK_SET))
+		{
+			error("`fseek` failed.");
+		}
+
+		if (fread(result.data, result.length, 1, file) != 1)
+		{
+			error("`fread` failed.");
 		}
 	}
 
+	//
+	// Clean up.
+	//
 
-	if (err)
+	if (fclose(file))
 	{
-		if (dst->data)
-		{
-			free(dst->data);
-		}
-
-		*dst = (str) {0};
+		error("`fclose` failed.");
 	}
 
-	return err;
+	return result;
 }
+#undef error
 
 static void
 free_read_file(str* src)
@@ -76,20 +79,3 @@ free_read_file(str* src)
 	free(src->data);
 	*src = (str) {0};
 }
-
-static b32 // dst was written completely.
-eat_stream_(void* dst, i64 dst_size, str* src)
-{
-	b32 result = false;
-
-	if (dst_size <= src->length)
-	{
-		memmove(dst, src->data, dst_size);
-		src->length -= dst_size;
-		src->data   += dst_size;
-		result       = true;
-	}
-
-	return result;
-}
-#define eat_stream(DST, SRC) eat_stream_((DST), sizeof(*(DST)), (SRC))

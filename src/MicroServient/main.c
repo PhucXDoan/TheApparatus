@@ -10,11 +10,7 @@
 int
 main(void)
 {
-	struct BMP bmp = {0};
-	if (bmp_malloc_read_file(&bmp, str("W:/data/wordbites_0.bmp")))
-	{
-		error_unhandled;
-	}
+	struct BMP bmp = bmp_malloc_read_file(str("W:/data/wordbites_0.bmp"));
 
 //	if (bmp_file.length < sizeof(struct BMPFileHeader) + sizeof(struct BMPInfoHeader))
 //	{
@@ -79,6 +75,5 @@ main(void)
 	debug_halt();
 
 	bmp_free_read_file(&bmp);
-
 	return 0;
 }
