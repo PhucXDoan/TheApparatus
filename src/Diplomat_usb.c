@@ -59,9 +59,8 @@ usb_init(void)
 	#endif
 }
 
-ISR(USB_GEN_vect)
-{ // [USB Device Interrupt Routine].
-
+ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
+{
 	if (UDINT & (1 << EORSTI)) // End-of-Reset.
 	{
 		for (u8 endpoint_index = 0; endpoint_index < countof(USB_ENDPOINT_UECFGNX); endpoint_index += 1)
@@ -85,9 +84,13 @@ ISR(USB_GEN_vect)
 			}
 		}
 
-		// Enable the interrupt source in the event that endpoint 0 receives a SETUP-transaction.
+		// Enable the interrupt source for the event that endpoint 0 receives a SETUP-transaction.
 		UENUM  = USB_ENDPOINT_DFLT_INDEX;
 		UEIENX = (1 << RXSTPE);
+
+		// Enable the interrupt source for the event that mass storage's BULK-OUT endpoint receives (hopefully) a command wrapper.
+		UENUM  = USB_ENDPOINT_MS_OUT_INDEX;
+		UEIENX = (1 << RXOUTE);
 	}
 
 	if (UDINT & (1 << SOFI)) // Start-of-Frame.
@@ -207,6 +210,312 @@ ISR(USB_GEN_vect)
 			UEINTX &= ~(1 << FIFOCON); // Allow the USB controller to send the data for the next IN-transaction. See: Source(1) @ Section(22.14) @ Page(276)
 		}
 #endif
+	}
+
+	UDINT = 0; // Clear interrupt flags to prevent this routine from executing again.
+}
+
+ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
+{
+	UENUM = USB_ENDPOINT_DFLT_INDEX;
+	if (UEINTX & (1 << RXSTPI)) // [Endpoint 0: SETUP-Transactions].
+	{
+		UECONX |= (1 << STALLRQC); // SETUP-transactions lift STALL conditions. See: Source(2) @ Section(8.5.3.4) @ Page(228) & [Endpoint 0: Request Error].
+
+		struct USBSetupRequest request;
+		for (u8 i = 0; i < sizeof(request); i += 1)
+		{
+			((u8*) &request)[i] = UEDATX;
+		}
+		UEINTX = ~(1 << RXSTPI);
+
+		switch (request.kind)
+		{
+			case USBSetupRequestKind_get_desc:     // [Endpoint 0: GetDescriptor].
+			case USBSetupRequestKind_hid_get_desc: // [Endpoint 0: GetDescriptor].
+			{
+				u8        payload_length = 0; // Any payload we send will not exceed 255 bytes.
+				const u8* payload_data   = 0;
+
+				if (request.kind == USBSetupRequestKind_get_desc)
+				{
+					switch ((enum USBDescType) request.get_desc.desc_type)
+					{
+						case USBDescType_device: // See: [Endpoint 0: GetDescriptor].
+						{
+							payload_data   = (const u8*) &USB_DESC_DEVICE;
+							payload_length = sizeof(USB_DESC_DEVICE);
+							static_assert(sizeof(USB_DESC_DEVICE) < (u64(1) << bitsof(payload_length)));
+						} break;
+
+						case USBDescType_config: // [Interfaces, Configurations, and Classes].
+						{
+							if (!request.get_desc.desc_index) // We only have a single configuration.
+							{
+								payload_data   = (const u8*) &USB_CONFIG;
+								payload_length = sizeof(USB_CONFIG);
+								static_assert(sizeof(USB_CONFIG) < (u64(1) << bitsof(payload_length)));
+							}
+						} break;
+
+						case USBDescType_device_qualifier: // See: Source(2) @ Section(9.6.2) @ Page(264).
+						case USBDescType_string:           // See: [USB Strings] @ File(defs.h).
+						{
+							// We induce STALL condition. See: [Endpoint 0: Request Error].
+						} break;
+
+						default:
+						{
+							// We currently don't handle any other standard requests, but if needed we could.
+							#if DEBUG
+							debug_unhandled;
+							#endif
+						} break;
+					}
+				}
+				#if USB_HID_ENABLE
+				else if
+				(
+					request.hid_get_desc.desc_type                  == USBDescType_hid_report &&
+					request.hid_get_desc.designated_interface_index == USBConfigInterface_hid
+				)
+				{
+					payload_data   = (const u8*) &USB_DESC_HID_REPORT;
+					payload_length = sizeof(USB_DESC_HID_REPORT);
+					static_assert(sizeof(USB_DESC_HID_REPORT) < (u64(1) << bitsof(payload_length)));
+				}
+				#endif
+				else
+				{
+					// We currently don't handle any other requests, but if needed we could.
+					#if DEBUG
+					debug_unhandled;
+					#endif
+				}
+
+				if (payload_length) // [Endpoint 0: Data-Transfer from Device to Host].
+				{
+					const u8* payload_reader    = payload_data;
+					u8        payload_remaining = payload_length;
+
+					if (payload_length > request.get_desc.requested_amount)
+					{
+						payload_remaining = request.get_desc.requested_amount;
+					}
+
+					while (true)
+					{
+						if (UEINTX & (1 << RXOUTI)) // Received OUT-transaction?
+						{
+							UEINTX &= ~(1 << RXOUTI); // The OUT-transaction should be zero-lengthed, so discard immediately.
+							break;
+						}
+						else if (UEINTX & (1 << TXINI)) // Endpoint 0's buffer ready to be filled?
+						{
+							u8 packet_size = payload_remaining;
+
+							if (packet_size > USB_ENDPOINT_DFLT_SIZE)
+							{
+								packet_size = USB_ENDPOINT_DFLT_SIZE;
+							}
+
+							for (u8 i = 0; i < packet_size; i += 1)
+							{
+								UEDATX             = pgm_read_byte(payload_reader);
+								payload_remaining -= 1;
+								payload_reader    += 1;
+							}
+
+							UEINTX &= ~(1 << TXINI); // Transmit endpoint 0's buffer.
+						}
+					}
+				}
+				else
+				{
+					UECONX |= (1 << STALLRQ); // See: [Endpoint 0: Request Error].
+				}
+			} break;
+
+			case USBSetupRequestKind_set_address: // [Endpoint 0: SetAddress].
+			{
+				if (request.set_address.address < 0b0111'1111)
+				{
+					UDADDR = request.set_address.address;
+
+					UEINTX &= ~(1 << TXINI);          // Send out zero-length data-packet for the upcoming IN-transaction.
+					while (!(UEINTX & (1 << TXINI))); // Wait for the IN-transaction to be completed.
+
+					UDADDR |= (1 << ADDEN);
+				}
+				else
+				{
+					UECONX |= (1 << STALLRQ); // The host somehow sent us an address that's not within 7-bits. See: Source(2) @ Section(8.3.2.1) @ Page(197).
+				}
+			} break;
+
+			case USBSetupRequestKind_set_config: // [Endpoint 0: SetConfiguration].
+			{
+				switch (request.set_config.id)
+				{
+					#if DEBUG
+					case 0:
+					{
+						debug_unhandled; // In the case that the host, for some reason, wants to set the device back to the "address state", we should handle this.
+					} break;
+					#endif
+
+					case USB_CONFIG_ID:
+					{
+						UEINTX &= ~(1 << TXINI); // Send out zero-length data-packet for the host's upcoming IN-transaction to acknowledge this request.
+					} break;
+
+					default:
+					{
+						UECONX |= (1 << STALLRQ);
+					} break;
+				}
+			} break;
+
+			#if USB_CDC_ENABLE
+			case USBSetupRequestKind_cdc_set_line_coding: // [Endpoint 0: CDC-Specific SetLineCoding].
+			{
+				if (request.cdc_set_line_coding.incoming_line_coding_datapacket_size == sizeof(struct USBCDCLineCoding))
+				{
+					while (!(UEINTX & (1 << RXOUTI))); // Wait for the completion of an OUT-transaction.
+
+					// Copy data-packet of OUT-transaction.
+					struct USBCDCLineCoding desired_line_coding = {0};
+					for (u8 i = 0; i < sizeof(struct USBCDCLineCoding); i += 1)
+					{
+						((u8*) &desired_line_coding)[i] = UEDATX;
+					}
+
+					// These two lines can't be combined. I'm guessing because the USB hardware will get confused and think whatever's in
+					// endpoint 0's buffer from the OUT-transaction is what we want to send to the host for the IN-transaction.
+					UEINTX &= ~(1 << RXOUTI); // Let the hardware know that we finished copying the OUT-transaction's data-packet.
+					UEINTX &= ~(1 << TXINI);  // Send a zero-length data-packet for the upcoming IN-transaction to acknowledge the host's SetLineCoding request.
+
+					switch (desired_line_coding.dwDTERate)
+					{
+						case BOOTLOADER_BAUD_SIGNAL:
+						{
+							*(u16*) 0x0800 = 0x7777; // Magic!
+							wdt_enable(WDTO_15MS);
+							for(;;);
+						} break;
+
+						#if DEBUG
+						case DIAGNOSTIC_BAUD_SIGNAL:
+						{
+							debug_usb_diagnostic_signal_received = true;
+						} break;
+						#endif
+
+						default:
+						{
+							// Nothing particularly interesting about this baud rate.
+						} break;
+					}
+				}
+				else
+				{
+					UECONX |= (1 << STALLRQ);
+				}
+			} break;
+			#endif
+
+			case USBSetupRequestKind_endpoint_clear_feature: // See: "Clear Feature" @ Source(2) @ Section(9.4.1) @ Page(252).
+			{
+				if (request.endpoint_clear_feature.feature_selector == USBFeatureSelector_endpoint_halt)
+				{
+					UEINTX &= ~(1 << TXINI);
+					while (!(UEINTX & (1 << TXINI)));
+
+					if (request.endpoint_clear_feature.endpoint) // Endpoint 0 does not need any special handling.
+					{
+						u8 endpoint_index = request.endpoint_clear_feature.endpoint & ~USBEndpointAddressFlag_in;
+						if
+						(
+							endpoint_index < countof(USB_ENDPOINT_UECFGNX) &&                          // Endpoint index within bounds?
+							pgm_read_byte(&USB_ENDPOINT_UECFGNX[endpoint_index][1]) &&                 // Endpoint exists?
+							!!(pgm_read_byte(&USB_ENDPOINT_UECFGNX[endpoint_index][0]) & (1 << EPDIR)) // Endpoint has the right transfer direction?
+								== !!(request.endpoint_clear_feature.endpoint & USBEndpointAddressFlag_in)
+						)
+						{
+							UENUM  = endpoint_index;
+							UECONX = (1 << STALLRQC) | (1 << RSTDT) | (1 << EPEN); // Clear stall condition, reset data-toggle to DATA0. See: Source(2) @ Section(9.4.5) @ Page(256).
+							UERST  = (1 << endpoint_index);                        // Set to begin resetting FIFO state machine on the endpoint.
+							UERST  = 0;                                            // Clear to finish resetting FIFO.
+						}
+						else
+						{
+							UECONX |= (1 << STALLRQ); // An invalid endpoint was requested.
+						}
+					}
+				}
+				else
+				{
+					UECONX |= (1 << STALLRQ); // The standard USB only defines one feature for endpoints.
+				}
+			} break;
+
+			case USBSetupRequestKind_ms_get_max_lun       : // We send back a single zero byte. See: Source(12) @ Section(3.2) @ Page(7).
+			case USBSetupRequestKind_interface_get_status : // We send back two zero bytes. See: Standard "Get Status" on Interfaces @ Source(2) @ Section(9.4.5) @ Page(254).
+			{
+				// USBSetupRequestKind_ms_get_max_lun:
+				//     Despite the fact that the mass storage specification specifically states that we may stall if we
+				//     don't support multiple logical units, Apple does not seem to like it, so we're going to implement it anyways.
+
+				b8 sent = false;
+				while (true) // See: [Endpoint 0: Data-Transfer from Device to Host].
+				{
+					if (UEINTX & (1 << RXOUTI))
+					{
+						UEINTX &= ~(1 << RXOUTI);
+						break;
+					}
+					else if (UEINTX & (1 << TXINI))
+					{
+						if (!sent)
+						{
+							UEDATX = 0;
+
+							if (request.kind == USBSetupRequestKind_interface_get_status)
+							{
+								UEDATX = 0;
+							}
+
+							sent = true;
+						}
+
+						UEINTX &= ~(1 << TXINI);
+					}
+				}
+			} break;
+
+			case USBSetupRequestKind_cdc_get_line_coding:        // [Endpoint 0: Extraneous CDC-Specific Requests].
+			case USBSetupRequestKind_cdc_set_control_line_state: // [Endpoint 0: Extraneous CDC-Specific Requests].
+			case USBSetupRequestKind_hid_set_idle:               // [Endpoint 0: HID-Specific SetIdle].
+			{
+				UECONX |= (1 << STALLRQ);
+			} break;
+
+			case USBSetupRequestKind_ms_reset:
+			{
+				debug_halt(10); // TODO Implement.
+			} break;
+
+			default:
+			{
+				UECONX |= (1 << STALLRQ);
+
+				#if DEBUG
+				debug_u16(request.kind);
+				debug_halt(-1);
+				#endif
+			} break;
+		}
+	}
 
 #if USB_MS_ENABLE // [Mass Storage Bulk-Only Transfer Communication].
 		//
@@ -558,312 +867,6 @@ ISR(USB_GEN_vect)
 			UEINTX &= ~(1 << FIFOCON);
 		}
 #endif
-	}
-
-	UDINT = 0; // Clear interrupt flags to prevent this routine from executing again.
-}
-
-ISR(USB_COM_vect)
-{ // See: [USB Endpoint Interrupt Routine].
-	UENUM = USB_ENDPOINT_DFLT_INDEX;
-	if (UEINTX & (1 << RXSTPI)) // [Endpoint 0: SETUP-Transactions]. // TODO Remove this if-statement if we in the end aren't adding any other interrupt source.
-	{
-		UECONX |= (1 << STALLRQC); // SETUP-transactions lift STALL conditions. See: Source(2) @ Section(8.5.3.4) @ Page(228) & [Endpoint 0: Request Error].
-
-		struct USBSetupRequest request;
-		for (u8 i = 0; i < sizeof(request); i += 1)
-		{
-			((u8*) &request)[i] = UEDATX;
-		}
-		UEINTX = ~(1 << RXSTPI);
-
-		switch (request.kind)
-		{
-			case USBSetupRequestKind_get_desc:     // [Endpoint 0: GetDescriptor].
-			case USBSetupRequestKind_hid_get_desc: // [Endpoint 0: GetDescriptor].
-			{
-				u8        payload_length = 0; // Any payload we send will not exceed 255 bytes.
-				const u8* payload_data   = 0;
-
-				if (request.kind == USBSetupRequestKind_get_desc)
-				{
-					switch ((enum USBDescType) request.get_desc.desc_type)
-					{
-						case USBDescType_device: // See: [Endpoint 0: GetDescriptor].
-						{
-							payload_data   = (const u8*) &USB_DESC_DEVICE;
-							payload_length = sizeof(USB_DESC_DEVICE);
-							static_assert(sizeof(USB_DESC_DEVICE) < (u64(1) << bitsof(payload_length)));
-						} break;
-
-						case USBDescType_config: // [Interfaces, Configurations, and Classes].
-						{
-							if (!request.get_desc.desc_index) // We only have a single configuration.
-							{
-								payload_data   = (const u8*) &USB_CONFIG;
-								payload_length = sizeof(USB_CONFIG);
-								static_assert(sizeof(USB_CONFIG) < (u64(1) << bitsof(payload_length)));
-							}
-						} break;
-
-						case USBDescType_device_qualifier: // See: Source(2) @ Section(9.6.2) @ Page(264).
-						case USBDescType_string:           // See: [USB Strings] @ File(defs.h).
-						{
-							// We induce STALL condition. See: [Endpoint 0: Request Error].
-						} break;
-
-						default:
-						{
-							// We currently don't handle any other standard requests, but if needed we could.
-							#if DEBUG
-							debug_unhandled;
-							#endif
-						} break;
-					}
-				}
-				#if USB_HID_ENABLE
-				else if
-				(
-					request.hid_get_desc.desc_type                  == USBDescType_hid_report &&
-					request.hid_get_desc.designated_interface_index == USBConfigInterface_hid
-				)
-				{
-					payload_data   = (const u8*) &USB_DESC_HID_REPORT;
-					payload_length = sizeof(USB_DESC_HID_REPORT);
-					static_assert(sizeof(USB_DESC_HID_REPORT) < (u64(1) << bitsof(payload_length)));
-				}
-				#endif
-				else
-				{
-					// We currently don't handle any other requests, but if needed we could.
-					#if DEBUG
-					debug_unhandled;
-					#endif
-				}
-
-				if (payload_length) // [Endpoint 0: Data-Transfer from Device to Host].
-				{
-					const u8* payload_reader    = payload_data;
-					u8        payload_remaining = payload_length;
-
-					if (payload_length > request.get_desc.requested_amount)
-					{
-						payload_remaining = request.get_desc.requested_amount;
-					}
-
-					while (true)
-					{
-						if (UEINTX & (1 << RXOUTI)) // Received OUT-transaction?
-						{
-							UEINTX &= ~(1 << RXOUTI); // The OUT-transaction should be zero-lengthed, so discard immediately.
-							break;
-						}
-						else if (UEINTX & (1 << TXINI)) // Endpoint 0's buffer ready to be filled?
-						{
-							u8 packet_size = payload_remaining;
-
-							if (packet_size > USB_ENDPOINT_DFLT_SIZE)
-							{
-								packet_size = USB_ENDPOINT_DFLT_SIZE;
-							}
-
-							for (u8 i = 0; i < packet_size; i += 1)
-							{
-								UEDATX             = pgm_read_byte(payload_reader);
-								payload_remaining -= 1;
-								payload_reader    += 1;
-							}
-
-							UEINTX &= ~(1 << TXINI); // Transmit endpoint 0's buffer.
-						}
-					}
-				}
-				else
-				{
-					UECONX |= (1 << STALLRQ); // See: [Endpoint 0: Request Error].
-				}
-			} break;
-
-			case USBSetupRequestKind_set_address: // [Endpoint 0: SetAddress].
-			{
-				if (request.set_address.address < 0b0111'1111)
-				{
-					UDADDR = request.set_address.address;
-
-					UEINTX &= ~(1 << TXINI);          // Send out zero-length data-packet for the upcoming IN-transaction.
-					while (!(UEINTX & (1 << TXINI))); // Wait for the IN-transaction to be completed.
-
-					UDADDR |= (1 << ADDEN);
-				}
-				else
-				{
-					UECONX |= (1 << STALLRQ); // The host somehow sent us an address that's not within 7-bits. See: Source(2) @ Section(8.3.2.1) @ Page(197).
-				}
-			} break;
-
-			case USBSetupRequestKind_set_config: // [Endpoint 0: SetConfiguration].
-			{
-				switch (request.set_config.id)
-				{
-					#if DEBUG
-					case 0:
-					{
-						debug_unhandled; // In the case that the host, for some reason, wants to set the device back to the "address state", we should handle this.
-					} break;
-					#endif
-
-					case USB_CONFIG_ID:
-					{
-						UEINTX &= ~(1 << TXINI); // Send out zero-length data-packet for the host's upcoming IN-transaction to acknowledge this request.
-					} break;
-
-					default:
-					{
-						UECONX |= (1 << STALLRQ);
-					} break;
-				}
-			} break;
-
-			#if USB_CDC_ENABLE
-			case USBSetupRequestKind_cdc_set_line_coding: // [Endpoint 0: CDC-Specific SetLineCoding].
-			{
-				if (request.cdc_set_line_coding.incoming_line_coding_datapacket_size == sizeof(struct USBCDCLineCoding))
-				{
-					while (!(UEINTX & (1 << RXOUTI))); // Wait for the completion of an OUT-transaction.
-
-					// Copy data-packet of OUT-transaction.
-					struct USBCDCLineCoding desired_line_coding = {0};
-					for (u8 i = 0; i < sizeof(struct USBCDCLineCoding); i += 1)
-					{
-						((u8*) &desired_line_coding)[i] = UEDATX;
-					}
-
-					// These two lines can't be combined. I'm guessing because the USB hardware will get confused and think whatever's in
-					// endpoint 0's buffer from the OUT-transaction is what we want to send to the host for the IN-transaction.
-					UEINTX &= ~(1 << RXOUTI); // Let the hardware know that we finished copying the OUT-transaction's data-packet.
-					UEINTX &= ~(1 << TXINI);  // Send a zero-length data-packet for the upcoming IN-transaction to acknowledge the host's SetLineCoding request.
-
-					switch (desired_line_coding.dwDTERate)
-					{
-						case BOOTLOADER_BAUD_SIGNAL:
-						{
-							*(u16*) 0x0800 = 0x7777; // Magic!
-							wdt_enable(WDTO_15MS);
-							for(;;);
-						} break;
-
-						#if DEBUG
-						case DIAGNOSTIC_BAUD_SIGNAL:
-						{
-							debug_usb_diagnostic_signal_received = true;
-						} break;
-						#endif
-
-						default:
-						{
-							// Nothing particularly interesting about this baud rate.
-						} break;
-					}
-				}
-				else
-				{
-					UECONX |= (1 << STALLRQ);
-				}
-			} break;
-			#endif
-
-			case USBSetupRequestKind_endpoint_clear_feature: // See: "Clear Feature" @ Source(2) @ Section(9.4.1) @ Page(252).
-			{
-				if (request.endpoint_clear_feature.feature_selector == USBFeatureSelector_endpoint_halt)
-				{
-					UEINTX &= ~(1 << TXINI);
-					while (!(UEINTX & (1 << TXINI)));
-
-					if (request.endpoint_clear_feature.endpoint) // Endpoint 0 does not need any special handling.
-					{
-						u8 endpoint_index = request.endpoint_clear_feature.endpoint & ~USBEndpointAddressFlag_in;
-						if
-						(
-							endpoint_index < countof(USB_ENDPOINT_UECFGNX) &&                          // Endpoint index within bounds?
-							pgm_read_byte(&USB_ENDPOINT_UECFGNX[endpoint_index][1]) &&                 // Endpoint exists?
-							!!(pgm_read_byte(&USB_ENDPOINT_UECFGNX[endpoint_index][0]) & (1 << EPDIR)) // Endpoint has the right transfer direction?
-								== !!(request.endpoint_clear_feature.endpoint & USBEndpointAddressFlag_in)
-						)
-						{
-							UENUM  = endpoint_index;
-							UECONX = (1 << STALLRQC) | (1 << RSTDT) | (1 << EPEN); // Clear stall condition, reset data-toggle to DATA0. See: Source(2) @ Section(9.4.5) @ Page(256).
-							UERST  = (1 << endpoint_index);                        // Set to begin resetting FIFO state machine on the endpoint.
-							UERST  = 0;                                            // Clear to finish resetting FIFO.
-						}
-						else
-						{
-							UECONX |= (1 << STALLRQ); // An invalid endpoint was requested.
-						}
-					}
-				}
-				else
-				{
-					UECONX |= (1 << STALLRQ); // The standard USB only defines one feature for endpoints.
-				}
-			} break;
-
-			case USBSetupRequestKind_ms_get_max_lun       : // We send back a single zero byte. See: Source(12) @ Section(3.2) @ Page(7).
-			case USBSetupRequestKind_interface_get_status : // We send back two zero bytes. See: Standard "Get Status" on Interfaces @ Source(2) @ Section(9.4.5) @ Page(254).
-			{
-				// USBSetupRequestKind_ms_get_max_lun:
-				//     Despite the fact that the mass storage specification specifically states that we may stall if we
-				//     don't support multiple logical units, Apple does not seem to like it, so we're going to implement it anyways.
-
-				b8 sent = false;
-				while (true) // See: [Endpoint 0: Data-Transfer from Device to Host].
-				{
-					if (UEINTX & (1 << RXOUTI))
-					{
-						UEINTX &= ~(1 << RXOUTI);
-						break;
-					}
-					else if (UEINTX & (1 << TXINI))
-					{
-						if (!sent)
-						{
-							UEDATX = 0;
-
-							if (request.kind == USBSetupRequestKind_interface_get_status)
-							{
-								UEDATX = 0;
-							}
-
-							sent = true;
-						}
-
-						UEINTX &= ~(1 << TXINI);
-					}
-				}
-			} break;
-
-			case USBSetupRequestKind_cdc_get_line_coding:        // [Endpoint 0: Extraneous CDC-Specific Requests].
-			case USBSetupRequestKind_cdc_set_control_line_state: // [Endpoint 0: Extraneous CDC-Specific Requests].
-			case USBSetupRequestKind_hid_set_idle:               // [Endpoint 0: HID-Specific SetIdle].
-			{
-				UECONX |= (1 << STALLRQ);
-			} break;
-
-			case USBSetupRequestKind_ms_reset:
-			{
-				debug_halt(10); // TODO Implement.
-			} break;
-
-			default:
-			{
-				UECONX |= (1 << STALLRQ);
-
-				#if DEBUG
-				debug_u16(request.kind);
-				debug_halt(-1);
-				#endif
-			} break;
-		}
-	}
 }
 
 #if DEBUG && USB_CDC_ENABLE
@@ -1203,7 +1206,8 @@ ISR(USB_COM_vect)
 	sending out buffered data or to copy an endpoint's buffer into our own ring buffer. An
 	interrupt could be made for each specific endpoint within Start-of-Frame event to be instead
 	triggered in USB_COM_vect, but these interrupts would be executed so often that it'll grind the
-	MCU down to a halt.
+	MCU down to a halt. The only exception is the mass storage, since we want to prioritize this to
+	allow the flashdrive functionality to be as snappy as it can be.
 
 	(1) "USB Device Controller Interrupt System" @ Source(1) @ Figure(22-4) @ Page(279).
 	(2) Endpoint Memory Management @ Source(1) @ Section(21.9) @ Page(263-264).
