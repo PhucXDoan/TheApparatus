@@ -94,6 +94,7 @@ console.log(`${reduction[0] / reduction[1] * 1000.0 * 1000.0}us/byte`)
 
 	4. Further simplications to the MS state machine.
 		4.532714766774499us/byte
+		4.528247211434246us/byte
 
 	5. Increasing endpoint size and double buffering.
 		TODO

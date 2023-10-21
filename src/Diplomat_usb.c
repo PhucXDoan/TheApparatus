@@ -209,7 +209,6 @@ ISR(USB_GEN_vect)
 #endif
 
 #if USB_MS_ENABLE // [Mass Storage Bulk-Only Transfer Communication].
-
 		//
 		// Handle command.
 		//
@@ -260,20 +259,26 @@ ISR(USB_GEN_vect)
 			_usb_ms_send_status    = true;
 			_usb_ms_status.dCSWTag = command.dCBWTag;
 
-			if (command.CBWCB[0] == USBMSSCSIOpcode_read || command.CBWCB[0] == USBMSSCSIOpcode_write)
+			if
+			(
+				command.CBWCB[0] == USBMSSCSIOpcode_read || // See: Source(14) @ Table(28) @ Page(48).
+				command.CBWCB[0] == USBMSSCSIOpcode_write   // See: Source(14) @ Table(62) @ Page(79).
+			)
 			{
-				u8  wrdprotect     = (command.CBWCB[1] >> 5) & 0b111;
-				b8  dpo            = (command.CBWCB[1] >> 4) & 0b1;
-				b8  fua            = (command.CBWCB[1] >> 3) & 0b1;
-				b8  fua_nv         = (command.CBWCB[1] >> 1) & 0b1;
+				// Pretty irrelevant fields.
+				u8 rd_wr_protect                 = (command.CBWCB[1] >> 5) & 0b111;
+				b8 disable_page_out              = (command.CBWCB[1] >> 4) & 0b1;
+				b8 force_unit_access             = (command.CBWCB[1] >> 3) & 0b1;
+				b8 force_unit_access_nonvolatile = (command.CBWCB[1] >> 1) & 0b1;
+				u8 group_number                  = command.CBWCB[6] & 0b11111;
+				u8 control                       = command.CBWCB[9];
+
+				u32 sector_count   = ((command.CBWCB[7] << 8) | command.CBWCB[8]);
 				u32 sector_address =
 						(((u32) command.CBWCB[2]) << 24) |
 						(((u32) command.CBWCB[3]) << 16) |
 						(((u32) command.CBWCB[4]) <<  8) |
 						(((u32) command.CBWCB[5]) <<  0);
-				u8  group_number = command.CBWCB[6] & 0b11111;
-				u32 sector_count = ((command.CBWCB[7] << 8) | command.CBWCB[8]);
-				u8  control      = command.CBWCB[9];
 
 				if
 				(
@@ -284,12 +289,12 @@ ISR(USB_GEN_vect)
 					)
 				)
 				{
-					error;
+					error; // Command wrapper does not match the actual wrapped command.
 				}
 
-				if (!(!wrdprotect && !dpo && !fua && !fua_nv && !control))
+				if (!(!rd_wr_protect && !disable_page_out && !force_unit_access && !force_unit_access_nonvolatile && !control))
 				{
-					error;
+					error; // The common values for the fields are different for some reason; we should probably handle it if this happens.
 				}
 
 				if (command.CBWCB[0] == USBMSSCSIOpcode_read)
@@ -348,7 +353,7 @@ ISR(USB_GEN_vect)
 				_usb_ms_status.dCSWDataResidue = 0;
 				_usb_ms_status.bCSWStatus      = USBMSCommandStatusWrapperStatus_success;
 			}
-			else
+			else // Miscellaneous SCSI commands.
 			{
 				b8        unsupported_command = false;
 				const u8* info_data           = 0;
@@ -356,35 +361,41 @@ ISR(USB_GEN_vect)
 
 				switch (command.CBWCB[0])
 				{
-					case USBMSSCSIOpcode_test_unit_ready:
+					case USBMSSCSIOpcode_test_unit_ready: // See: Source(13) @ Section(7.25) @ Page(163).
 					{
 						u8 control = command.CBWCB[5];
 
 						if (!(command.dCBWDataTransferLength == 0 && command.bCBWCBLength == 6))
 						{
-							error;
+							error; // Command wrapper does not match the actual wrapped command.
 						}
 
 						if (control)
 						{
-							error;
+							error; // The common values for the fields are different for some reason; we should probably handle it if this happens.
 						}
 					} break;
 
-					case USBMSSCSIOpcode_inquiry: // See: Source(*) @ Section(3.6.1) @ Page(92).
+					case USBMSSCSIOpcode_inquiry: // See: Source(13) @ Section(7.3.1) @ Page(80).
 					{
-						b8 enable_vital_product_data = (command.CBWCB[1] >> 0) & 1;
-						b8 command_support_data      = (command.CBWCB[1] >> 1) & 1;
+						// Pretty irrelevant fields.
+						b8 enable_vital_product_data = (command.CBWCB[1] >> 0) & 1; // "EVPD".
+						b8 command_support_data      = (command.CBWCB[1] >> 1) & 1; // "CMDT".
 						u8 page_operation_code       =  command.CBWCB[2];
 						u8 allocation_length         =  command.CBWCB[4];
 						u8 control                   =  command.CBWCB[5];
 
 						if (!(command.dCBWDataTransferLength == allocation_length && command.bmCBWFlags && command.bCBWCBLength == 6))
 						{
-							error;
+							error; // Command wrapper does not match the actual wrapped command.
 						}
 
-						if (!enable_vital_product_data && !command_support_data && !page_operation_code && !control)
+						if
+						(
+							!enable_vital_product_data && !command_support_data && // Host requests for standard inquiry data.
+							!page_operation_code &&                                // Must be zero for standard inquiry data request.
+							!control
+						)
 						{
 							info_data = USB_MS_SCSI_INQUIRY_DATA;
 							info_size = sizeof(USB_MS_SCSI_INQUIRY_DATA);
@@ -396,20 +407,21 @@ ISR(USB_GEN_vect)
 						}
 					} break;
 
-					case USBMSSCSIOpcode_request_sense: // See: Source(*) @ Section(3.37) @ Page(195).
+					case USBMSSCSIOpcode_request_sense: // See: Source(13) @ Section(7.20) @ Page(135).
 					{
 						u8 allocation_length = command.CBWCB[4];
 						u8 control           = command.CBWCB[5];
 
-						// bCBWCBLength is for some reason 12 on Windows; likely a driver bug or something...
+						// bCBWCBLength is for some reason 12 on Windows, even thought the command is only 6 bytes long.
+						// Apple seems to do this correctly though, so maybe a Windows driver bug?
 						if (!(command.dCBWDataTransferLength == allocation_length && command.bmCBWFlags && (command.bCBWCBLength == 6 || command.bCBWCBLength == 12)))
 						{
-							error;
+							error; // Command wrapper does not match the actual wrapped command.
 						}
 
 						if (control)
 						{
-							error;
+							error; // The common values for the fields are different for some reason; we should probably handle it if this happens.
 						}
 
 						info_data = USB_MS_SCSI_UNSUPPORTED_COMMAND_SENSE;
@@ -417,48 +429,54 @@ ISR(USB_GEN_vect)
 						static_assert(sizeof(USB_MS_SCSI_UNSUPPORTED_COMMAND_SENSE) <= USB_ENDPOINT_MS_IN_SIZE);
 					} break;
 
-					case USBMSSCSIOpcode_mode_sense:
+					case USBMSSCSIOpcode_mode_sense: // See: Source(13) @ Section(7.8) @ Page(100).
 					{
+						// Pretty irrelevant fields.
 						b8 disable_block_descriptors = (command.CBWCB[1] >> 3) & 1;
 						u8 page_control              = (command.CBWCB[2] >> 6) & 0b11;
 						u8 page_code                 = (command.CBWCB[2] >> 0) & 0b11'1111;
-						u8 allocation_length         = command.CBWCB[4];
-						u8 control                   = command.CBWCB[5];
+						u8 allocation_length         =  command.CBWCB[4];
+						u8 control                   =  command.CBWCB[5];
 
 						if (!(command.dCBWDataTransferLength == allocation_length && command.bmCBWFlags && command.bCBWCBLength == 6))
 						{
-							error;
+							error; // Command wrapper does not match the actual wrapped command.
 						}
 
-						// TODO Document.
-						if (!(!disable_block_descriptors && page_control == 0b00 && (page_code == 0x1C || page_code == 0x08 || page_code == 0x3F) && !control))
+						// Apple wants us to at least acknowledge the "return all mode pages" (0x3F) usage; other than that, this command is pretty irrelevant. See: Source(13) @ Table(64) @ Page(101).
+						if (!(!disable_block_descriptors && page_control == 0b00 && page_code == 0x3F && !control))
 						{
-							error;
+							unsupported_command = true;
 						}
-
-						info_data = USB_MS_SCSI_READ_CAPACITY_DATA;
-						info_size = sizeof(USB_MS_SCSI_READ_CAPACITY_DATA);
-						static_assert(sizeof(USB_MS_SCSI_READ_CAPACITY_DATA) <= USB_ENDPOINT_MS_IN_SIZE);
 					} break;
 
-					case USBMSSCSIOpcode_read_capacity: // See: Source(*) @ Section(3.22) @ Page(155).
+					case USBMSSCSIOpcode_read_capacity: // See: Source(14) @ Section(5.10) @ Page(54).
 					{
+						// Pretty irrelevant fields.
+						b8 partial_medium_indicator = (command.CBWCB[8] & 1); // "PMI".
+						u8 control                  =  command.CBWCB[9];
+
 						u32 sector_address =
 							(((u32) command.CBWCB[2]) << 24) |
 							(((u32) command.CBWCB[3]) << 16) |
 							(((u32) command.CBWCB[4]) <<  8) |
 							(((u32) command.CBWCB[5]) <<  0);
-						b8 partial_medium_indicator = command.CBWCB[8] & 1;
-						u8 control                  = command.CBWCB[9];
 
 						if (!(command.dCBWDataTransferLength == 8 && command.bmCBWFlags && command.bCBWCBLength == 10))
 						{
-							error;
+							error; // Command wrapper does not match the actual wrapped command.
 						}
 
-						if (!(!sector_address && !partial_medium_indicator && !control))
+						if
+						(
+							!(
+								!sector_address &&
+								!partial_medium_indicator && // We send information about the last addressable logical block.
+								!control
+							)
+						)
 						{
-							error;
+							error; // The common values for the fields are different for some reason; we should probably handle it if this happens.
 						}
 
 						info_data = USB_MS_SCSI_READ_CAPACITY_DATA;
@@ -472,7 +490,7 @@ ISR(USB_GEN_vect)
 					} break;
 				}
 
-				if (unsupported_command)
+				if (unsupported_command) // Denote a failure status.
 				{
 					if (!command.dCBWDataTransferLength)
 					{
@@ -485,13 +503,13 @@ ISR(USB_GEN_vect)
 					}
 					else // Host to device.
 					{
-						error; // Haven't encountered a situation where this case needed to be handled, but could be implemented if needed.
+						error; // Haven't encountered a situation where this case needs to be handled, but should be implemented if needed.
 					}
 
 					_usb_ms_status.dCSWDataResidue = command.dCBWDataTransferLength;
 					_usb_ms_status.bCSWStatus      = USBMSCommandStatusWrapperStatus_failed;
 				}
-				else if (info_size)
+				else if (command.dCBWDataTransferLength) // Send SCSI device server info to host.
 				{
 					u8 amount_to_send = info_size;
 					if (amount_to_send > command.dCBWDataTransferLength)
@@ -511,7 +529,7 @@ ISR(USB_GEN_vect)
 					_usb_ms_status.dCSWDataResidue = command.dCBWDataTransferLength - amount_to_send;
 					_usb_ms_status.bCSWStatus      = USBMSCommandStatusWrapperStatus_success;
 				}
-				else
+				else // No data transferring needs to occur.
 				{
 					_usb_ms_status.dCSWDataResidue = 0;
 					_usb_ms_status.bCSWStatus      = USBMSCommandStatusWrapperStatus_success;
@@ -524,7 +542,7 @@ ISR(USB_GEN_vect)
 		//
 
 		UENUM = USB_ENDPOINT_MS_IN_INDEX;
-		if (_usb_ms_send_status && !(UECONX & (1 << STALLRQ)))
+		if (_usb_ms_send_status && !(UECONX & (1 << STALLRQ))) // If a stall condition has been placed, we wait until the default endpoint clears it first.
 		{
 			_usb_ms_send_status = false;
 
@@ -830,9 +848,9 @@ ISR(USB_COM_vect)
 				UECONX |= (1 << STALLRQ);
 			} break;
 
-			case 0b11111111'00100001: // TODO MS reset?
+			case USBSetupRequestKind_ms_reset:
 			{
-				debug_halt(10);
+				debug_halt(10); // TODO Implement.
 			} break;
 
 			default:

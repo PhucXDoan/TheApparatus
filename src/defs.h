@@ -241,6 +241,7 @@ enum USBSetupRequestKind // "bmRequestType" in LSB and "bRequest" in MSB. See: S
 	USBSetupRequestKind_hid_set_idle = MAKE(0b0'01'00001, 0x0A),
 
 	// Non-exhuastive. See: MS-Specific Requests @ Source(12) @ Section(3) @ Page(7).
+	USBSetupRequestKind_ms_reset       = MAKE(0b0'01'00001, 0b11111111),
 	USBSetupRequestKind_ms_get_max_lun = MAKE(0b1'01'00001, 0b11111110),
 
 	#undef MAKE
@@ -540,20 +541,13 @@ enum USBMSSCSIOpcode
 	USBMSSCSIOpcode_test_unit_ready = 0x00,
 	USBMSSCSIOpcode_request_sense   = 0x03,
 	USBMSSCSIOpcode_inquiry         = 0x12,
-	USBMSSCSIOpcode_mode_sense      = 0x1A, // 6-byte version.
+
+	USBMSSCSIOpcode_mode_sense      = 0x1A,
 
 	// Non-exhaustive. See: Source(14) @ Table(10) @ Page(31-33).
 	USBMSSCSIOpcode_read_capacity                = 0x25, // 10-byte version.
 	USBMSSCSIOpcode_read                         = 0x28, // 10-byte version.
 	USBMSSCSIOpcode_write                        = 0x2A, // 10-byte version.
-};
-
-enum USBMSState // TODO Flesh out the state machine.
-{
-	USBMSState_ready_for_command,
-	USBMSState_sending_data,
-	USBMSState_receiving_data,
-	USBMSState_ready_for_status,
 };
 
 enum USBConfigInterface // These interfaces are defined uniquely for our device application.
@@ -819,7 +813,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 			// "INFORMATION" : For our direct-access device, this would be the big-endian "unsigned logical block address associated with the sense key"; seems irrelevant. See: Source(13) @ Section(7.20.2) @ Page(137).
 				0, 0, 0, 0,
 
-			// "ADDITIONAL SENSE LENGTH" : Amount of remaining data after this byte. See: Source(13) @ Section(7.20.2) @ Page(137). // TODO necessairly 10?
+			// "ADDITIONAL SENSE LENGTH" : Amount of remaining data after this byte. See: Source(13) @ Section(7.20.2) @ Page(137).
 				0,
 		};
 
