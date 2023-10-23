@@ -94,6 +94,8 @@ PIN_XMDT(MAKE)
 			debug_halt(source);
 		}
 		#define debug_unhandled debug_unhandled(__LINE__, PIN_HALT_SOURCE)
+
+		#define assert(CONDITION) do { if (!(CONDITION)) { debug_unhandled; } } while (false)
 	#endif
 #endif
 

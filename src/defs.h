@@ -7,6 +7,9 @@
 #define countof(...)     (sizeof(__VA_ARGS__) / sizeof((__VA_ARGS__)[0]))
 #define bitsof(...)      (sizeof(__VA_ARGS__) * 8)
 #define static_assert(X) _Static_assert((X), #X)
+#if !DEBUG
+#define assert(CONDITION)
+#endif
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
@@ -183,9 +186,11 @@ enum USBEndpointSizeCode // See: Source(1) @ Section(22.18.2) @ Page(287).
 	USBEndpointSizeCode_16  = 0b001,
 	USBEndpointSizeCode_32  = 0b010,
 	USBEndpointSizeCode_64  = 0b011,
-	USBEndpointSizeCode_128 = 0b100,
-	USBEndpointSizeCode_256 = 0b101,
-	USBEndpointSizeCode_512 = 0b110,
+	USBEndpointSizeCode_128 = 0b100, // See: [Endpoint Sizes] @ "Diplomat_usb.c".
+	USBEndpointSizeCode_256 = 0b101, // See: [Endpoint Sizes] @ "Diplomat_usb.c".
+
+	// See: [Endpoint Sizes] @ "Diplomat_usb.c".
+	// USBEndpointSizeCode_512 = 0b110,
 };
 
 // See: ATmega32U4's Bitcodes @ Source(1) @ Section(22.18.2) @ Page(286).
@@ -241,7 +246,6 @@ enum USBSetupRequestKind // "bmRequestType" in LSB and "bRequest" in MSB. See: S
 	USBSetupRequestKind_hid_set_idle = MAKE(0b0'01'00001, 0x0A),
 
 	// Non-exhuastive. See: MS-Specific Requests @ Source(12) @ Section(3) @ Page(7).
-	USBSetupRequestKind_ms_reset       = MAKE(0b0'01'00001, 0b11111111),
 	USBSetupRequestKind_ms_get_max_lun = MAKE(0b1'01'00001, 0b11111110),
 
 	#undef MAKE
@@ -609,41 +613,52 @@ struct USBConfig // This layout is defined uniquely for our device application.
 // Endpoint buffer sizes must be one of the names of enum USBEndpointSizeCode.
 // The maximum capacity between endpoints also differ. See: Source(1) @ Section(22.1) @ Page(270).
 
-#define USB_ENDPOINT_DFLT_INDEX            0                               // "Default Endpoint" is synonymous with endpoint 0.
-#define USB_ENDPOINT_DFLT_TRANSFER_TYPE    USBEndpointTransferType_control // The default endpoint is always a control-typed endpoint.
-#define USB_ENDPOINT_DFLT_TRANSFER_DIR     0                               // See: [ATmega32U4's Configuration of Endpoint 0].
-#define USB_ENDPOINT_DFLT_SIZE             8
+#define USB_ENDPOINT_DFLT_INDEX         0                               // "Default Endpoint" is synonymous with endpoint 0.
+#define USB_ENDPOINT_DFLT_TRANSFER_TYPE USBEndpointTransferType_control // The default endpoint is always a control-typed endpoint.
+#define USB_ENDPOINT_DFLT_TRANSFER_DIR  0                               // See: [ATmega32U4's Configuration of Endpoint 0].
+#define USB_ENDPOINT_DFLT_SIZE          8
+#define USB_ENDPOINT_DFLT_DOUBLE_BANK   false
 
 #if USB_CDC_ENABLE
-	#define USB_ENDPOINT_CDC_IN_INDEX          2
+	#define USB_ENDPOINT_CDC_IN_INDEX          1
 	#define USB_ENDPOINT_CDC_IN_TRANSFER_TYPE  USBEndpointTransferType_bulk
 	#define USB_ENDPOINT_CDC_IN_TRANSFER_DIR   USBEndpointAddressFlag_in
 	#define USB_ENDPOINT_CDC_IN_SIZE           64
+	#define USB_ENDPOINT_CDC_IN_DOUBLE_BANK    true
 
-	#define USB_ENDPOINT_CDC_OUT_INDEX         3
+	#define USB_ENDPOINT_CDC_OUT_INDEX         2
 	#define USB_ENDPOINT_CDC_OUT_TRANSFER_TYPE USBEndpointTransferType_bulk
 	#define USB_ENDPOINT_CDC_OUT_TRANSFER_DIR  0
 	#define USB_ENDPOINT_CDC_OUT_SIZE          64
+	#define USB_ENDPOINT_CDC_OUT_DOUBLE_BANK   true
 #endif
 
 #if USB_HID_ENABLE
-	#define USB_ENDPOINT_HID_INDEX         4
+	#define USB_ENDPOINT_HID_INDEX         3
 	#define USB_ENDPOINT_HID_TRANSFER_TYPE USBEndpointTransferType_interrupt
 	#define USB_ENDPOINT_HID_TRANSFER_DIR  USBEndpointAddressFlag_in
 	#define USB_ENDPOINT_HID_SIZE          8
+	#define USB_ENDPOINT_HID_DOUBLE_BANK   true
 #endif
 
 #if USB_MS_ENABLE
-	#define USB_ENDPOINT_MS_IN_INDEX         5
+	#define USB_ENDPOINT_MS_IN_INDEX         4
 	#define USB_ENDPOINT_MS_IN_TRANSFER_TYPE USBEndpointTransferType_bulk
 	#define USB_ENDPOINT_MS_IN_TRANSFER_DIR  USBEndpointAddressFlag_in
 	#define USB_ENDPOINT_MS_IN_SIZE          64
+	#define USB_ENDPOINT_MS_IN_DOUBLE_BANK   true
 
-	#define USB_ENDPOINT_MS_OUT_INDEX         6
+	#define USB_ENDPOINT_MS_OUT_INDEX         5
 	#define USB_ENDPOINT_MS_OUT_TRANSFER_TYPE USBEndpointTransferType_bulk
 	#define USB_ENDPOINT_MS_OUT_TRANSFER_DIR  0
 	#define USB_ENDPOINT_MS_OUT_SIZE          64
+	#define USB_ENDPOINT_MS_OUT_DOUBLE_BANK   true
+
+	// Maximum packet size is 64. See: "wMaxPacketSize" @ Source(12) @ Table(4.6) @ Page(11).
+	static_assert(USB_ENDPOINT_MS_IN_SIZE  <= 64);
+	static_assert(USB_ENDPOINT_MS_OUT_SIZE <= 64);
 #endif
+
 
 #if PROGRAM_DIPLOMAT
 	static const u8 USB_ENDPOINT_UECFGNX[][2] PROGMEM = // UECFG0X and UECFG1X that an endpoint will be configured with.
@@ -652,7 +667,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 				[USB_ENDPOINT_##NAME##_INDEX] = \
 					{ \
 						(USB_ENDPOINT_##NAME##_TRANSFER_TYPE << EPTYPE0) | ((!!USB_ENDPOINT_##NAME##_TRANSFER_DIR) << EPDIR), \
-						(concat(USBEndpointSizeCode_, USB_ENDPOINT_##NAME##_SIZE) << EPSIZE0) | (1 << ALLOC), \
+						(concat(USBEndpointSizeCode_, USB_ENDPOINT_##NAME##_SIZE) << EPSIZE0) | (USB_ENDPOINT_##NAME##_DOUBLE_BANK << EPBK0) | (1 << ALLOC), \
 					},
 			MAKE(DFLT)
 			#if USB_CDC_ENABLE
@@ -1053,10 +1068,10 @@ struct USBConfig // This layout is defined uniquely for our device application.
 			static_assert(sizeof(debug_usb_cdc_in_writer) == 1 && sizeof(debug_usb_cdc_in_reader) == 1 && sizeof(debug_usb_cdc_out_writer) == 1 && sizeof(debug_usb_cdc_out_reader) == 1);
 
 			// The read/write indices must be able to address any element in the corresponding buffer.
-			static_assert(countof(debug_usb_cdc_in_buffer ) < (u64(1) << bitsof(debug_usb_cdc_in_reader )));
-			static_assert(countof(debug_usb_cdc_in_buffer ) < (u64(1) << bitsof(debug_usb_cdc_in_writer )));
-			static_assert(countof(debug_usb_cdc_out_buffer) < (u64(1) << bitsof(debug_usb_cdc_out_reader)));
-			static_assert(countof(debug_usb_cdc_out_buffer) < (u64(1) << bitsof(debug_usb_cdc_out_writer)));
+			static_assert(countof(debug_usb_cdc_in_buffer ) <= (u64(1) << bitsof(debug_usb_cdc_in_reader )));
+			static_assert(countof(debug_usb_cdc_in_buffer ) <= (u64(1) << bitsof(debug_usb_cdc_in_writer )));
+			static_assert(countof(debug_usb_cdc_out_buffer) <= (u64(1) << bitsof(debug_usb_cdc_out_reader)));
+			static_assert(countof(debug_usb_cdc_out_buffer) <= (u64(1) << bitsof(debug_usb_cdc_out_writer)));
 
 			// Buffer sizes must be a power of two for the "debug_usb_cdc_X_Y_masked" macros.
 			static_assert(countof(debug_usb_cdc_in_buffer ) && !(countof(debug_usb_cdc_in_buffer ) & (countof(debug_usb_cdc_in_buffer ) - 1)));
@@ -1071,8 +1086,8 @@ struct USBConfig // This layout is defined uniquely for our device application.
 // Documentation.
 //
 
-/*
-	source(1)  := ATmega32U4 Datasheet ("Atmel-7766J-USB-ATmega16U4/32U4-Datasheet_04/2016").
+/* [Overview].
+	Source(1)  := ATmega32U4 Datasheet ("Atmel-7766J-USB-ATmega16U4/32U4-Datasheet_04/2016").
 	Source(2)  := USB 2.0 Specification (Dated: April 27, 2000).
 	Source(3)  := Arduino Leonardo Pinout Diagram (STORE.ARDUINO.CC/LEONARDO) (Dated: 17/06/2020).
 	Source(4)  := USB in a NutShell by BeyondLogic (Accessed: September 19, 2023).
@@ -1092,6 +1107,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	Source(18) := Arduino Mega 2560 Rev3 Pinout Diagram (STORE.ARDUINO.CC/MEGA-2560-REV3) (Updated on: 16/12/2020).
 	Source(19) := SD Specifications Part 1 Physical Layer Simplified Specification Version 2.00 (Dated: September 25, 2006).
 	Source(20) := "How to Use MMC/SDC" by Elm-Chan (Updated on: December 26, 2019).
+	Source(21) := "8-bit Atmel Microcontroller with 64/128Kbytes of ISP Flash and USB Controller" datasheet (Dated: 9/12).
 
 	We are working within the environment of the ATmega32U4 and ATmega2560 microcontrollers,
 	which are 8-bit CPUs. This consequently means that there are no padding bytes to
@@ -1151,6 +1167,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 
 	(1) EPDIR @ Source(1) @ Section(22.18.2) @ Page(287).
 */
+
 
 /* TODO Note this.
 	"SYSTEM~1"

@@ -1,8 +1,8 @@
 #define F_CPU               16'000'000
 #define PROGRAM_DIPLOMAT    true
 #define BOARD_LEONARDO      true
-#define PIN_DUMP_SS         0
-#define PIN_USB_SPINLOCKING 0
+#define PIN_DUMP_SS         2
+#define PIN_USB_SPINLOCKING 2
 #define PIN_U16_CLK         4
 #define PIN_U16_DATA        5
 #define PIN_SD_SS           7
@@ -41,6 +41,11 @@ main(void)
 	timer_init();
 
 	for(;;);
+	//for(;;)
+	//{
+	//	debug_tx_cstr("meow\n");
+	//	_delay_ms(1000.0);
+	//}
 }
 
 //
@@ -93,11 +98,15 @@ console.log(`${reduction[0] / reduction[1] * 1000.0 * 1000.0}us/byte`)
 		5.879522185220327us/byte
 
 	4. Further simplications to the MS state machine.
-		4.51884202124819us/byte
-		4.517779210078674us/byte
+		4.62184988857523us/byte
+		4.644121174125516us/byte
 
-	5. Increasing endpoint size and double buffering.
-		TODO
+	5. Double buffering.
+		3.90665591674541us/byte
+		4.402410773992042us/byte
+		3.9088519507718384us/byte
+		4.183835597591506us/byte
+		3.940001925166678us/byte
 
 	6. Simplifying the FAT32 layout.
 		TODO

@@ -88,9 +88,11 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 		UENUM  = USB_ENDPOINT_DFLT_INDEX;
 		UEIENX = (1 << RXSTPE);
 
+		#if USB_MS_ENABLE
 		// Enable the interrupt source for the event that mass storage's BULK-OUT endpoint receives (hopefully) a command wrapper.
 		UENUM  = USB_ENDPOINT_MS_OUT_INDEX;
 		UEIENX = (1 << RXOUTE);
+		#endif
 	}
 
 	if (UDINT & (1 << SOFI)) // Start-of-Frame.
@@ -231,8 +233,9 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 		switch (request.kind)
 		{
-			case USBSetupRequestKind_get_desc:     // [Endpoint 0: GetDescriptor].
-			case USBSetupRequestKind_hid_get_desc: // [Endpoint 0: GetDescriptor].
+			// [Endpoint 0: GetDescriptor].
+			case USBSetupRequestKind_get_desc:
+			case USBSetupRequestKind_hid_get_desc:
 			{
 				u8        payload_length = 0; // Any payload we send will not exceed 255 bytes.
 				const u8* payload_data   = 0;
@@ -367,6 +370,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 					case USB_CONFIG_ID:
 					{
 						UEINTX &= ~(1 << TXINI); // Send out zero-length data-packet for the host's upcoming IN-transaction to acknowledge this request.
+						while (!(UEINTX & (1 << TXINI)));
 					} break;
 
 					default:
@@ -429,7 +433,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 				if (request.endpoint_clear_feature.feature_selector == USBFeatureSelector_endpoint_halt)
 				{
 					UEINTX &= ~(1 << TXINI);
-					while (!(UEINTX & (1 << TXINI)));
+					while (!(UEINTX & (1 << TXINI))); // Acknowledge this request.
 
 					if (request.endpoint_clear_feature.endpoint) // Endpoint 0 does not need any special handling.
 					{
@@ -500,11 +504,6 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 				UECONX |= (1 << STALLRQ);
 			} break;
 
-			case USBSetupRequestKind_ms_reset:
-			{
-				debug_halt(10); // TODO Implement.
-			} break;
-
 			default:
 			{
 				UECONX |= (1 << STALLRQ);
@@ -526,8 +525,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 		if (!_usb_ms_send_status && (UEINTX & (1 << RXOUTI)))
 		{
 			static u16 TEMP = 0;
-			debug_u16(TEMP);
-			TEMP += 1;
+			debug_u16(TEMP += 1);
 
 			//
 			// Fetch command.
@@ -613,49 +611,69 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 					{
 						sd_read(sector_address + sector_index);
 
-						for (u16 sector_byte_index = 0; sector_byte_index < countof(sd_sector); sector_byte_index += 1)
+						u16 sector_byte_index = 0;
+						while (sector_byte_index < countof(sd_sector))
 						{
-							if (!(UEINTX & (1 << RWAL))) // Flush buffer and wait for it to open up.
+							//
+							// Wait for endpoint buffer to be free.
+							//
+
+							while (!(UEINTX & (1 << TXINI)));
+
+							//
+							// Fill endpoint buffer with chunk of the sector data to send to the host.
+							//
+
+							static_assert(FAT32_SECTOR_SIZE % USB_ENDPOINT_MS_IN_SIZE == 0); // This allows us to now worry about each chunk payload being different lengths.
+							while (UEINTX & (1 << RWAL))
 							{
-								UEINTX &= ~(1 << TXINI);
-								UEINTX &= ~(1 << FIFOCON);
-								while (!(UEINTX & (1 << TXINI)));
+								UEDATX             = sd_sector[sector_byte_index];
+								sector_byte_index += 1;
 							}
 
-							UEDATX = sd_sector[sector_byte_index];
+							//
+							// Send the chunk of the sector data to the host.
+							//
+
+							UEINTX &= ~(1 << TXINI);
+							UEINTX &= ~(1 << FIFOCON);
 						}
-
-						//
-						// Flush buffer.
-						//
-
-						UEINTX &= ~(1 << TXINI);
-						UEINTX &= ~(1 << FIFOCON);
 					}
 				}
 				else
 				{
 					for (u32 sector_index = 0; sector_index < sector_count; sector_index += 1)
 					{
-						for (u16 sector_byte_index = 0; sector_byte_index < countof(sd_sector); sector_byte_index += 1)
+						u16 sector_byte_index = 0;
+						while (sector_byte_index < countof(sd_sector))
 						{
-							if (!(UEINTX & (1 << RWAL))) // Free buffer and wait for next payload.
+							//
+							// Wait for chunk of the sector data from the host.
+							//
+
+							while (!(UEINTX & (1 << RXOUTI)));
+
+							//
+							// Copy the chunk of the sector data from host.
+							//
+
+							static_assert(USB_ENDPOINT_MS_OUT_SIZE == 64); // We want this transaction to be fast as possible, but the largest endpoint buffer size that Apple seems to support is 64.
+							assert(UEBCX == USB_ENDPOINT_MS_OUT_SIZE);     // Ensures that the payloads aren't varying in lengths.
+							while (UEINTX & (1 << RWAL))
 							{
-								UEINTX &= ~(1 << RXOUTI);
-								UEINTX &= ~(1 << FIFOCON);
-								while (!(UEINTX & (1 << RXOUTI)));
+								sd_sector[sector_byte_index]  = UEDATX;
+								sector_byte_index            += 1;
 							}
 
-							sd_sector[sector_byte_index] = UEDATX;
+							//
+							// Flush the endpoint buffer.
+							//
+
+							UEINTX &= ~(1 << RXOUTI);
+							UEINTX &= ~(1 << FIFOCON);
 						}
 
-						//
-						// Flush.
-						//
-
 						sd_write(sector_address + sector_index);
-						UEINTX &= ~(1 << RXOUTI);
-						UEINTX &= ~(1 << FIFOCON);
 					}
 				}
 
@@ -940,13 +958,10 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 		2. "Configure PLL interface and enable PLL".
 			PLL refers to a phase-locked-loop device. I don't know much about the mechanisms of
 			the circuit, but it seems like you give it some input frequency and it'll output a
-			higher frequency after it has synced up onto it.
+			higher frequency after it has synced up onto it. For full-speed USB, we must use the
+			external crystal oscillator of the CPU (15), so that's what we'll be using.
 
-			I've heard that using the default 16MHz clock signal is more reliable as the input to
-			the PLL (TODO Citation!), especially when using full-speed USB connection. So that's
-			what we'll be using.
-
-			But we can't actually use the 16MHz frequency directly since the actual PLL unit itself
+			But we can't actually use the (16MHz) frequency directly since the actual PLL unit itself
 			expects 8MHz, so we'll need to half our 16MHz clock to get that. Luckily, there's a
 			PLL clock prescaler as seen in (2) that just does this for us.
 
@@ -1013,6 +1028,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 	(12) "USB Reset" @ Source(1) @ Section(22.4) @ Page(271).
 	(13) Clearing EPEN @ Source(1) @ Section(22.6) @ Page(272).
 	(14) "Endpoint Reset" @ Source(1) @ Section(22.3) @ Page(270).
+	(15) "Crystal-less Operation" @ Source(1) @ Section(21.4) @ Page(259).
 */
 
 /* [About: Endpoints].
@@ -1937,20 +1953,24 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 	(3) "Command/Data/Status Flow" @ Source(12) @ Figure(1) @ AbsPage(12).
 */
 
+/* [Endpoint Sizes].
+	The datasheet for some reason lists 512 bytes as a possible endpoint buffer size (1), but really
+	the largest any endpoint buffer could be is 256 bytes (2). The AT90USB64/128 also have
+	USB capabilities (furthermore USB host support), and its datasheet doesn't even show that
+	512 bytes is possible (3). So very likely that this was some weird mistake that crept through,
+	ugh...
+
+	On top of that, setting an endpoint size to be bigger than 64 seems to act weird on my PC.
+	The USB analyzer says that the SetConfiguration request is returned with a status of
+	"0xC0001000" which apparently means "insufficient resources"? Doesn't many any sense at all
+	since it works on my laptop and Apple is fine with it. Likely some weird obscure driver bug...?
+
+	(1) "512 bytes" @ Source(1) @ Section(22.18.2) @ Page(287).
+	(2) "Introduction" @ Source(1) @ Section(22.1) @ Page(270).
+	(3) Endpoint Sizes @ Source(21) @ Section(23.18.2) @ Page(279).
+*/
+
 /* TODO[USB Regulator vs Interface]
 	There's a different bit for enabling the USB pad regulator and USB interface,
 	but why are these separate? Perhaps for saving state?
-*/
-
-/* TODO 512 Byte Endpoint?
-	The datasheet claims that an endpoint size can be 512 bytes,
-	but makes no other mention to this at all. The introduction
-	states that endpoint 1 can have a "FIFO up to 256 bytes in ping-pong mode",
-	while the others have it up to 64 bytes. So how could an endpoint ever get to 512 bytes?
-	Maybe it's saying that for endpoint 1 that one bank is 256 bytes, and
-	in ping-pong mode, it's another 256 bytes, and 512 bytes total,
-	but this still doesn't really make sense as to why we can
-	configure an endpoint in UECFG1X to be have 512 bytes!
-	* UECFG1X @ Source(1) @ Section(22.18.2) @ Page(287).
-	* Endpoint Size Statements @ Source(1) @ Section(22.1) @ Page(270).
 */
