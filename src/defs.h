@@ -136,11 +136,124 @@ enum SPIPrescaler // See: Source(1) @ Table(17-5) @ Page(186).
 #define SPI_PRESCALER SPIPrescaler_2
 
 //
-// "sd.c"
+// FAT32.
 //
 
-#define FAT32_SECTOR_SIZE        512
-#define FAT32_TOTAL_SECTOR_COUNT 61951999
+// Arbitrary values really; mostly taken from how Windows formats the boot sector.
+// With only one FAT, the reported drive capacity should be: (FAT32_TOTAL_SECTOR_COUNT - FAT32_RESERVED_SECTOR_COUNT - FAT32_TABLE_SECTOR_COUNT) * FAT32_SECTOR_SIZE.
+#define FAT32_TOTAL_SECTOR_COUNT    16777216
+#define FAT32_RESERVED_SECTOR_COUNT 6144
+#define FAT32_TABLE_SECTOR_COUNT    1024
+#define FAT32_SECTOR_SIZE           512
+#define FAT32_SECTORS_PER_CLUSTER   128
+
+#define FAT32_MEDIA_TYPE                        0xF8
+#define FAT32_BACKUP_BOOT_SECTOR_OFFSET         6
+#define FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET 1
+#define FAT32_ROOT_CLUSTER                      2
+
+static_assert(FAT32_SECTORS_PER_CLUSTER && !(FAT32_SECTORS_PER_CLUSTER & (FAT32_SECTORS_PER_CLUSTER - 1)) && FAT32_SECTORS_PER_CLUSTER <= 128); // See: "BPB_SecPerClus" @ Source(15) @ Section(3.1) @ Page(8).
+static_assert((FAT32_TOTAL_SECTOR_COUNT - FAT32_RESERVED_SECTOR_COUNT - FAT32_TABLE_SECTOR_COUNT) / FAT32_SECTORS_PER_CLUSTER >= 65'525);       // See: Source(15) @ Section(3.5) @ Page(15).
+
+struct FAT32BootSector // See: Source(15) @ Section(3.1) @ Page(7-9) & Source(15) @ Section(3.3) @ Page(11-12).
+{
+	u8   BS_jmpBoot[3];    // Best as { 0xEB, 0x00, 0x90 }.
+	char BS_OEMName[8];    // Best as "MSWIN4.1". See: "Boot Sector and BPB" @ Source(17).
+	u16  BPB_BytsPerSec;   // Must be 512, 1024, 2048, or 4096 bytes per sector.
+	u8   BPB_SecPerClus;   // Must be power of two no greater than 128.
+	u16  BPB_RsvdSecCnt;   // Must be non-zero.
+	u8   BPB_NumFATs;      // Fine as 1.
+	u16  BPB_RootEntCnt;   // Must be zero.
+	u16  BPB_TotSec16;     // Must be zero.
+	u8   BPB_Media;        // Best as 0xF8 for "fixed (non-removable) media"; must be also in lower 8-bits of the first FAT entry.
+	u16  BPB_FATSz16;      // Must be zero.
+	u16  BPB_SecPerTrk;    // Irrelevant.
+	u16  BPB_NumHeads;     // Irrelevant.
+	u32  BPB_HiddSec;      // Seems irrelevant; best as 0.
+	u32  BPB_TotSec32;     // Must be non-zero.
+	u32  BPB_FATSz32;      // Sectors per FAT.
+	u16  BPB_ExtFlags;     // Seems irrelevant; best as 0.
+	u16  BPB_FSVer;        // Must be zero.
+	u32  BPB_RootClus;     // Cluster number of the first cluster of the root directory; best as 2.
+	u16  BPB_FSInfo;       // Sector of the "FSINFO"; usually 1.
+	u16  BPB_BkBootSec;    // Sector of the duplicated boot record; best as 6.
+	u8   BPB_Reserved[12]; // Must be zero.
+	u8   BS_DrvNum;        // Seems irrelevant; best as 0x80.
+	u8   BS_Reserved;      // Must be zero.
+	u8   BS_BootSig;       // Must be 0x29.
+	u32  BS_VolID;         // Irrelevant.
+	char BS_VolLab[11];    // Essentially a name.
+	char BS_FilSysType[8]; // Must be "FAT32   ".
+	u8   BS_BootCode[420]; // Irrelevant.
+	u16  BS_BootSign;      // Must be 0xAA55.
+};
+
+struct FAT32FileStructureInfo // See: Source(15) @ Page(21-22).
+{
+	u32 FSI_LeadSig;        // Must be 0x41615252.
+	u8  FSI_Reserved1[480];
+	u32 FSI_StrucSig;       // Must be 0x61417272.
+	u32 FSI_Free_Count;     // Last known free cluster; best as 0xFFFFFFFF to signify unknown.
+	u32 FSI_Nxt_Free;       // Hints the FAT driver of where to look for the next free cluster; best as 0xFFFFFFFF to signify no hint.
+	u8  FSI_Reserved2[12];
+	u32 FSI_TrailSig;       // Must be 0xAA550000.
+};
+
+static const struct FAT32BootSector FAT32_BOOT_SECTOR PROGMEM =
+	{
+		.BS_jmpBoot     = { 0xEB, 0x00, 0x90 },
+		.BS_OEMName     = "MSWIN4.1",
+		.BPB_BytsPerSec = FAT32_SECTOR_SIZE,
+		.BPB_SecPerClus = FAT32_SECTORS_PER_CLUSTER,
+		.BPB_RsvdSecCnt = FAT32_RESERVED_SECTOR_COUNT,
+		.BPB_NumFATs    = 1,
+		.BPB_Media      = FAT32_MEDIA_TYPE,
+		.BPB_TotSec32   = 0x01000000,
+		.BPB_FATSz32    = FAT32_TABLE_SECTOR_COUNT,
+		.BPB_RootClus   = FAT32_ROOT_CLUSTER,
+		.BPB_FSInfo     = FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET,
+		.BPB_BkBootSec  = FAT32_BACKUP_BOOT_SECTOR_OFFSET,
+		.BS_DrvNum      = 0x80,
+		.BS_BootSig     = 0x29,
+		.BS_VolID       = (u32('B') << 0) | (u32('o') << 8) | (u32('o') << 16) | (u32('b') << 24),
+		.BS_VolLab      = "Le Diplomat",
+		.BS_FilSysType  = "FAT32   ",
+		.BS_BootSign    = 0xAA55,
+	};
+
+static const struct FAT32FileStructureInfo FAT32_FILE_STRUCTURE_INFO PROGMEM =
+	{
+		.FSI_LeadSig    = 0x41615252,
+		.FSI_StrucSig   = 0x61417272,
+		.FSI_Free_Count = 0xFFFFFFFF,
+		.FSI_Nxt_Free   = 0xFFFFFFFF,
+		.FSI_TrailSig   = 0xAA550000,
+	};
+
+static const u32 FAT32_TABLE[128] PROGMEM = // Most significant nibbles are reserved. See: Source(15) @ Section(4) @ Page(16).
+	{
+		[0]                  = 0x0'FFFFF'00 | FAT32_MEDIA_TYPE, // See: Source(15) @ Section(4.2) @ Page(19).
+		[1]                  = 0xF'FFFFFFF,                     // For format utilities. Seems to be commonly always all set. See: Source(15) @ Section(4.2) @ Page(19).
+		[FAT32_ROOT_CLUSTER] = 0x0'FFFFFFF,
+	};
+
+// Includes the reserved region, the FAT itself, and the root cluster.
+#define FAT32_WIPE_SECTOR_COUNT FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT + FAT32_SECTORS_PER_CLUSTER
+
+#define FAT32_SECTOR_XMDT(X) \
+	X(FAT32_BOOT_SECTOR        , 0) \
+	X(FAT32_FILE_STRUCTURE_INFO, 1) \
+	X(FAT32_BOOT_SECTOR        , 6) \
+	X(FAT32_FILE_STRUCTURE_INFO, 7) \
+	X(FAT32_TABLE              , FAT32_RESERVED_SECTOR_COUNT)
+
+#define MAKE(SECTOR_DATA, SECTOR_ADDRESS) static_assert(sizeof(SECTOR_DATA) == 512);
+FAT32_SECTOR_XMDT(MAKE)
+#undef MAKE
+
+//
+// "sd.c"
+//
 
 enum SDCommand // Non-exhaustive. See: Source(19) @ Section(7.3.1.3) @ AbsPage(113-117).
 {
@@ -726,10 +839,10 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	static const u8 USB_MS_SCSI_READ_CAPACITY_DATA[] PROGMEM = // See: Source(14) @ Section(5.10.2) @ Page(54-55).
 		{
 			// "RETURNED LOGICAL BLOCK ADDRESS" : Big-endian address of the last addressable sector.
-				(u32(FAT32_TOTAL_SECTOR_COUNT) >> 24) & 0xFF,
-				(u32(FAT32_TOTAL_SECTOR_COUNT) >> 16) & 0xFF,
-				(u32(FAT32_TOTAL_SECTOR_COUNT) >>  8) & 0xFF,
-				(u32(FAT32_TOTAL_SECTOR_COUNT) >>  0) & 0xFF,
+				(u32(FAT32_TOTAL_SECTOR_COUNT - 1) >> 24) & 0xFF,
+				(u32(FAT32_TOTAL_SECTOR_COUNT - 1) >> 16) & 0xFF,
+				(u32(FAT32_TOTAL_SECTOR_COUNT - 1) >>  8) & 0xFF,
+				(u32(FAT32_TOTAL_SECTOR_COUNT - 1) >>  0) & 0xFF,
 
 			// "BLOCK LENGTH IN BYTES" : Big-endian size of sectors.
 				(u32(FAT32_SECTOR_SIZE) >> 24) & 0xFF,
@@ -1166,15 +1279,4 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	control-typed endpoints are bidirectional.
 
 	(1) EPDIR @ Source(1) @ Section(22.18.2) @ Page(287).
-*/
-
-
-/* TODO Note this.
-	"SYSTEM~1"
-		.padEnd(11, " ")
-		.split("")
-		.map(c => c.charCodeAt(0))
-		.reduce((acc, x) => (((acc >> 1) | ((acc & 1) << 7)) + x) & 0xFF)
-		.toString(16)
-		.toUpperCase()
 */
