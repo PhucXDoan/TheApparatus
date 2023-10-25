@@ -97,8 +97,12 @@ bmp_malloc_read_file(str file_path)
 						{
 							for (i64 x = 0; x < dib_header->v5.bV5Width; x += 1)
 							{
-								u8* channels = ((u8*) file_content.data) + file_header->bfOffBits + y * bytes_per_row;
+								u8* channels =
+									((u8*) file_content.data) + file_header->bfOffBits
+										+ y * bytes_per_row
+										+ x * (dib_header->v5.bV5BitCount / bitsof(u8));
 
+								// It's probably somewhere, but couldn't find where the byte ordering was explicitly described in the documentation.
 								result.data[y * result.dim_x + x] =
 									(struct BMPPixel)
 									{
@@ -173,7 +177,59 @@ bmp_malloc_read_file(str file_path)
 static void
 bmp_export(struct BMP src, str file_path)
 {
-	error("TODO");
+	char file_path_cstr[256] = {0};
+	if (file_path.length >= countof(file_path_cstr))
+	{
+		error("File path too long.");
+	}
+	memmove(file_path_cstr, file_path.data, file_path.length);
+
+	FILE* file = fopen(file_path_cstr, "wb");
+	if (!file)
+	{
+		error("`fopen` failed.");
+	}
+
+	struct BMPDIBHeaderV4 dib_header =
+		{
+			.bV4Size          = sizeof(dib_header),
+			.bV4Width         = src.dim_x,
+			.bV4Height        = src.dim_y,
+			.bV4Planes        = 1,
+			.bV4BitCount      = bitsof(struct BMPPixel),
+			.bV4Compression   = BMPCompression_BI_BITFIELDS,
+			.bV4RedMask       = u32(0xFF) << (offsetof(struct BMPPixel, r) * 8),
+			.bV4GreenMask     = u32(0xFF) << (offsetof(struct BMPPixel, g) * 8),
+			.bV4BlueMask      = u32(0xFF) << (offsetof(struct BMPPixel, b) * 8),
+			.bV4AlphaMask     = u32(0xFF) << (offsetof(struct BMPPixel, a) * 8),
+			.bV4CSType        = BMPColorSpace_LCS_CALIBRATED_RGB,
+		};
+	struct BMPFileHeader file_header =
+		{
+			.bfType    = u16('B') | (u16('M') << 8),
+			.bfSize    = sizeof(file_header) + sizeof(dib_header) + src.dim_x * src.dim_y * sizeof(struct BMPPixel),
+			.bfOffBits = sizeof(file_header) + sizeof(dib_header),
+		};
+
+	if (fwrite(&file_header, sizeof(file_header), 1, file) != 1)
+	{
+		error("Failed to write BMP file header.");
+	}
+
+	if (fwrite(&dib_header, sizeof(dib_header), 1, file) != 1)
+	{
+		error("Failed to write DIB header.");
+	}
+
+	if (fwrite(src.data, src.dim_x * src.dim_y * sizeof(*src.data), 1, file) != 1)
+	{
+		error("Failed to write pixel data.");
+	}
+
+	if (fclose(file))
+	{
+		error("`fclose` failed.");
+	}
 }
 #undef error
 

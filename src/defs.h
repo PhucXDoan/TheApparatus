@@ -124,41 +124,41 @@ union BMPDIBHeader
 
 	struct BMPDIBHeaderInfo // See: "BITMAPINFOHEADER" @ Source(22) @ Page(287).
 	{
-		u32 biSize;
-		i32 biWidth;
-		i32 biHeight;
-		u16 biPlanes;
-		u16 biBitCount;
-		u32 biCompression;
-		u32 biSizeImage;
-		i32 biXPelsPerMeter;
-		i32 biYPelsPerMeter;
-		u32 biClrUsed;
-		u32 biClrImportant;
+		u32 biSize;          // Must be sizeof(struct BMPDIBHeaderInfo).
+		i32 biWidth;         // Width of image after decompression.
+		i32 biHeight;        // Generally, height of image where positive is bottom-up and negative is top-down, but check documentation.
+		u16 biPlanes;        // Must be 1.
+		u16 biBitCount;      // Bits per pixel.
+		u32 biCompression;   // Either BMPCompression_BI_RGB or BMPCompression_BI_BITFIELDS.
+		u32 biSizeImage;     // Byte count of the image; can be zero for uncompressed RGB images.
+		i32 biXPelsPerMeter; // Irrelevant.
+		i32 biYPelsPerMeter; // Irrelevant.
+		u32 biClrUsed;       // Colors used in color table.
+		u32 biClrImportant;  // Pretty much irrelevant.
 	} info;
 
 	struct BMPDIBHeaderV4 // See: "BITMAPV4HEADER" @ Source(22) @ Page(293).
 	{
-		u32                    bV4Size;
-		i32                    bV4Width;
-		i32                    bV4Height;
-		u16                    bV4Planes;
-		u16                    bV4BitCount;
-		u32                    bV4V4Compression;
-		u32                    bV4SizeImage;
-		i32                    bV4XPelsPerMeter;
-		i32                    bV4YPelsPerMeter;
-		u32                    bV4ClrUsed;
-		u32                    bV4ClrImportant;
-		u32                    bV4RedMask;
-		u32                    bV4GreenMask;
-		u32                    bV4BlueMask;
-		u32                    bV4AlphaMask;
-		u32                    bV4CSType;
-		struct BMPCIEXYZTRIPLE bV4Endpoints;
-		u32                    bV4GammaRed;
-		u32                    bV4GammaGreen;
-		u32                    bV4GammaBlue;
+		u32                    bV4Size;          // Must be sizeof(struct BMPDIBHeaderV4).
+		i32                    bV4Width;         // Width of image after decompression.
+		i32                    bV4Height;        // Height of image where positive is bottom-up and negative is top-down. Must conform to bV5Compression's restrictions.
+		u16                    bV4Planes;        // Must be 1.
+		u16                    bV4BitCount;      // Bits per pixel.
+		u32                    bV4Compression;   // Aliasing enum BMPCompression.
+		u32                    bV4SizeImage;     // Meaning varies depending on the compression method used.
+		i32                    bV4XPelsPerMeter; // Irrelevant.
+		i32                    bV4YPelsPerMeter; // Irrelevant.
+		u32                    bV4ClrUsed;       // Colors used in color table.
+		u32                    bV4ClrImportant;  // Pretty much irrelevant.
+		u32                    bV4RedMask;       // When bV5Compression is CompressionMethod_BI_BITFIELDS, bit mask for the red channel.
+		u32                    bV4GreenMask;     // When bV5Compression is CompressionMethod_BI_BITFIELDS, bit mask for the green channel.
+		u32                    bV4BlueMask;      // When bV5Compression is CompressionMethod_BI_BITFIELDS, bit mask for the blue channel.
+		u32                    bV4AlphaMask;     // Bit mask for the alpha channel; doesn't say anything about bV5Compression though...
+		u32                    bV4CSType;        // Minor; if we want to be extremely color-correct, we should probably consider this, but nah...
+		struct BMPCIEXYZTRIPLE bV4Endpoints;     // Minor; stuff with color spaces.
+		u32                    bV4GammaRed;      // Minor.
+		u32                    bV4GammaGreen;    // Minor.
+		u32                    bV4GammaBlue;     // Minor.
 	} v4;
 
 	struct BMPDIBHeaderV5 // See: "BITMAPV5HEADER" @ Source(22) @ Page(300).
@@ -168,7 +168,7 @@ union BMPDIBHeader
 		i32                    bV5Height;        // Height of image where positive is bottom-up and negative is top-down. Must conform to bV5Compression's restrictions.
 		u16                    bV5Planes;        // Must be 1.
 		u16                    bV5BitCount;      // Bits per pixel.
-		u32                    bV5Compression;   // Aliasing enum BMPCompression
+		u32                    bV5Compression;   // Aliasing enum BMPCompression.
 		u32                    bV5SizeImage;     // Meaning varies depending on the compression method used.
 		i32                    bV5XPelsPerMeter; // Irrelevant.
 		i32                    bV5YPelsPerMeter; // Irrelevant.
@@ -177,7 +177,7 @@ union BMPDIBHeader
 		u32                    bV5RedMask;       // When bV5Compression is CompressionMethod_BI_BITFIELDS, bit mask for the red channel.
 		u32                    bV5GreenMask;     // When bV5Compression is CompressionMethod_BI_BITFIELDS, bit mask for the green channel.
 		u32                    bV5BlueMask;      // When bV5Compression is CompressionMethod_BI_BITFIELDS, bit mask for the blue channel.
-		u32                    bV5AlphaMask;     // When bV5Compression is CompressionMethod_BI_BITFIELDS, bit mask for the alpha channel.
+		u32                    bV5AlphaMask;     // Bit mask for the alpha channel; doesn't say anything about bV5Compression though...
 		u32                    bV5CSType;        // Minor; if we want to be extremely color-correct, we should probably consider this, but nah...
 		struct BMPCIEXYZTRIPLE bV5Endpoints;     // Minor; stuff with color spaces.
 		u32                    bV5GammaRed;      // Minor.

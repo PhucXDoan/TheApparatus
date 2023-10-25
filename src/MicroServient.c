@@ -12,70 +12,30 @@ main(void)
 {
 	struct BMP bmp = bmp_malloc_read_file(str("W:/data/wordbites_1.bmp"));
 
-	bmp_export(bmp, str("W:/data/export.bmp"));
+	struct BMP modified =
+		{
+			.data  = malloc(bmp.dim_x * bmp.dim_y * sizeof(struct BMPPixel)),
+			.dim_x = bmp.dim_y,
+			.dim_y = bmp.dim_x,
+		};
+	if (!modified.data)
+	{
+		error_abort("");
+	}
 
-//	if (bmp_file.length < sizeof(struct BMPFileHeader) + sizeof(struct BMPInfoHeader))
-//	{
-//		error();
-//	}
-//	struct BMPFileHeader* input_bmp_file_header = (struct BMPFileHeader*) input_bmp_file_data;
-//	struct BMPInfoHeader* input_bmp_info_header = (struct BMPInfoHeader*) (input_bmp_file_data + sizeof(struct BMPFileHeader));
-//
-//	if (!(input_bmp_file_header->header_field[0] == 'B' && input_bmp_file_header->header_field[1] == 'M'))
-//	{
-//		error();
-//	}
-//	if (input_bmp_file_header->file_size != bmp_file.length)
-//	{
-//		error();
-//	}
-//	if (input_bmp_info_header->header_size < sizeof(struct BMPInfoHeader))
-//	{
-//		error();
-//	}
-//	if (input_bmp_info_header->image_width < 0)
-//	{
-//		error();
-//	}
-//	if (input_bmp_info_header->image_height < 0)
-//	{
-//		error();
-//	}
-//	if (input_bmp_info_header->color_plane_count != 1)
-//	{
-//		error();
-//	}
-//	if (input_bmp_info_header->pixel_bitwidth != 24)
-//	{
-//		error();
-//	}
-//	if (input_bmp_info_header->compression_method)
-//	{
-//		error();
-//	}
-//
-//	u32 padded_row_size =
-//		(u32(input_bmp_info_header->image_width) * (input_bmp_info_header->pixel_bitwidth / 8) + 3)
-//			/ 4
-//			* 4;
-//
-//	if (input_bmp_info_header->image_size != padded_row_size * input_bmp_info_header->image_height)
-//	{
-//		error();
-//	}
-//	if (input_bmp_info_header->palatte_color_count)
-//	{
-//		error();
-//	}
-//
-//	struct LERGBA* input_pixels = malloc(sizeof(struct LERGBA) * input_bmp_info_header->image_width * input_bmp_info_header->image_height);
-//	if (!input_pixels)
-//	{
-//		error();
-//	}
+	for (i32 y = 0; y < modified.dim_y; y += 1)
+	{
+		for (i32 x = 0; x < modified.dim_x; x += 1)
+		{
+			modified.data[y * modified.dim_x + x] = bmp.data[x * bmp.dim_x + y];
+		}
+	}
 
-	debug_halt();
+	bmp_export(modified, str("W:/data/export.bmp"));
 
+	//debug_halt();
+
+	free(modified.data);
 	bmp_free_read_file(&bmp);
 	return 0;
 }
