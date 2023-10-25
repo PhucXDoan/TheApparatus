@@ -36,12 +36,36 @@ typedef int64_t  b64;
 #define b64(...) ((b64) (__VA_ARGS__))
 
 #if PROGRAM_MICROSERVIENT
+	typedef float  f32;
+	typedef double f64;
+
 	typedef struct { char* data; i64 length; } str;
 	#define str(STRLIT) (str) { (STRLIT), sizeof(STRLIT) - 1 }
 	#define STR(STRLIT)       { (STRLIT), sizeof(STRLIT) - 1 }
 #endif
 
 static_assert(LITTLE_ENDIAN);
+
+//
+// "MicroServient_strbuf.c"
+//
+
+#if PROGRAM_MICROSERVIENT
+	#define StrBuf(SIZE) ((struct StrBuf) { .data = (char[SIZE]) {0}, .size = (SIZE) })
+	struct StrBuf
+	{
+		union
+		{
+			struct
+			{
+				char* data;
+				i64   length;
+				i64   size;
+			};
+			str str;
+		};
+	};
+#endif
 
 //
 // "MicroServient_bmp.c"
@@ -1351,7 +1375,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 #endif
 
 //
-// "Microservient.c".
+// "MicroServient.c".
 //
 
 #define WORDBITES_BOARD_SLOTS_X  8

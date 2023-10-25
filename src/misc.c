@@ -1,3 +1,35 @@
+static u8  u8_min (u8  x, u8  y) { return x <= y ? x : y; }
+static u16 u16_min(u16 x, u16 y) { return x <= y ? x : y; }
+static u32 u32_min(u32 x, u32 y) { return x <= y ? x : y; }
+static u64 u64_min(u64 x, u64 y) { return x <= y ? x : y; }
+static i8  i8_min (i8  x, i8  y) { return x <= y ? x : y; }
+static i16 i16_min(i16 x, i16 y) { return x <= y ? x : y; }
+static i32 i32_min(i32 x, i32 y) { return x <= y ? x : y; }
+static i64 i64_min(i64 x, i64 y) { return x <= y ? x : y; }
+
+static u8  u8_max (u8  x, u8  y) { return x >= y ? x : y; }
+static u16 u16_max(u16 x, u16 y) { return x >= y ? x : y; }
+static u32 u32_max(u32 x, u32 y) { return x >= y ? x : y; }
+static u64 u64_max(u64 x, u64 y) { return x >= y ? x : y; }
+static i8  i8_max (i8  x, i8  y) { return x >= y ? x : y; }
+static i16 i16_max(i16 x, i16 y) { return x >= y ? x : y; }
+static i32 i32_max(i32 x, i32 y) { return x >= y ? x : y; }
+static i64 i64_max(i64 x, i64 y) { return x >= y ? x : y; }
+
+static u8  u8_clamp (u8  value, u8  min, u8  max) { return value <= min ? min : value >= max ? max : value; }
+static u16 u16_clamp(u16 value, u16 min, u16 max) { return value <= min ? min : value >= max ? max : value; }
+static u32 u32_clamp(u32 value, u32 min, u32 max) { return value <= min ? min : value >= max ? max : value; }
+static u64 u64_clamp(u64 value, u64 min, u64 max) { return value <= min ? min : value >= max ? max : value; }
+static i8  i8_clamp (i8  value, i8  min, i8  max) { return value <= min ? min : value >= max ? max : value; }
+static i16 i16_clamp(i16 value, i16 min, i16 max) { return value <= min ? min : value >= max ? max : value; }
+static i32 i32_clamp(i32 value, i32 min, i32 max) { return value <= min ? min : value >= max ? max : value; }
+static i64 i64_clamp(i64 value, i64 min, i64 max) { return value <= min ? min : value >= max ? max : value; }
+
+static i8  i8_mod (i8  x, i8  y) { return ((x % y) + y) % y; }
+static i16 i16_mod(i16 x, i16 y) { return ((x % y) + y) % y; }
+static i32 i32_mod(i32 x, i32 y) { return ((x % y) + y) % y; }
+static i64 i64_mod(i64 x, i64 y) { return ((x % y) + y) % y; }
+
 static u8 // Amount written; will never exceed 255 since all serialized u64s will be 20 bytes or shorter.
 serialize_u64(char* dst, u16 dst_size, u64 value) // "dst_size" of at least 20 will handle all values.
 {

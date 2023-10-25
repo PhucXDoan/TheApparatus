@@ -5,8 +5,8 @@
 #include <stdio.h>
 #include "defs.h"
 #include "misc.c"
-#include "Microservient_bmp.c"
-
+#include "MicroServient_bmp.c"
+#include "MicroServient_strbuf.c"
 
 int
 main(int argc, char** argv)
@@ -75,6 +75,26 @@ main(int argc, char** argv)
 
 	if (cli_parsed)
 	{
+		str input_file_name_extless = cli.input_file_path;
+		for
+		(
+			i64 i = input_file_name_extless.length - 1;
+			i >= 0;
+			i -= 1
+		)
+		{
+			if (input_file_name_extless.data[i] == '.')
+			{
+				input_file_name_extless.length = i;
+			}
+			else if (input_file_name_extless.data[i] == '/' || input_file_name_extless.data[i] == '\\')
+			{
+				input_file_name_extless.length -= i + 1;
+				input_file_name_extless.data   += i + 1;
+				break;
+			}
+		}
+
 		struct BMP bmp = bmp_malloc_read_file(cli.input_file_path);
 
 		struct BMP slot =
@@ -105,11 +125,17 @@ main(int argc, char** argv)
 					}
 				}
 
-				char file_path_buf[] = "W:/data/export_XX.bmp";
-				file_path_buf[15] = (char) ('0' + slot_pos_x);
-				file_path_buf[16] = (char) ('0' + slot_pos_y);
-				str file_path = { file_path_buf, strlen(file_path_buf) };
-				bmp_export(slot, file_path);
+				struct StrBuf output_file_path = StrBuf(256);
+				strbuf_str (&output_file_path, cli.output_dir_path);
+				strbuf_char(&output_file_path, '/');
+				strbuf_str (&output_file_path, input_file_name_extless);
+				strbuf_char(&output_file_path, '_');
+				strbuf_u64 (&output_file_path, slot_pos_x);
+				strbuf_char(&output_file_path, '_');
+				strbuf_u64 (&output_file_path, slot_pos_y);
+				strbuf_cstr(&output_file_path, ".bmp");
+				printf("Exporting: \"%.*s\"\n", i32(output_file_path.length), output_file_path.data);
+				bmp_export(slot, output_file_path.str);
 			}
 		}
 
