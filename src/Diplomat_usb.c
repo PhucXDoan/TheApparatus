@@ -5,24 +5,24 @@
 // "DEST_X" : Must be within [0, 127].
 // "DEST_Y" : Must be within [0, 255].
 // See: [Mouse Commands].
+#if USB_HID_ENABLE
 #define usb_mouse_command(HELD, DEST_X, DEST_Y) usb_mouse_command_(((HELD) << 15) | ((DEST_X) << 8) | (DEST_Y))
 static void
 usb_mouse_command_(u16 command)
 {
-	#if USB_HID_ENABLE
-	pin_high(PIN_USB_SPINLOCKING);
+	pin_high(PIN_USB_BUSY);
 	while (_usb_mouse_command_writer_masked(1) == _usb_mouse_command_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
 	_usb_mouse_command_buffer[_usb_mouse_command_writer_masked(0)] = command;
 	_usb_mouse_command_writer += 1;
-	pin_low(PIN_USB_SPINLOCKING);
-	#endif
+	pin_low(PIN_USB_BUSY);
 }
+#endif
 
 static void
 usb_init(void)
 { // [USB Initialization Process].
 
-	pin_output(PIN_USB_SPINLOCKING);
+	pin_output(PIN_USB_BUSY);
 
 	// 1. "Power on USB pads regulator".
 	UHWCON = (1 << UVREGE);
@@ -45,7 +45,7 @@ usb_init(void)
 	// i.e. wait momentairly for the diagnostic signal.
 
 	#if DEBUG && USB_CDC_ENABLE
-	pin_high(PIN_USB_SPINLOCKING);
+	pin_high(PIN_USB_BUSY);
 	for (u8 i = 0; i < 255; i += 1)
 	{
 		if (debug_usb_diagnostic_signal_received)
@@ -57,7 +57,7 @@ usb_init(void)
 			_delay_ms(8.0);
 		}
 	}
-	pin_low(PIN_USB_SPINLOCKING);
+	pin_low(PIN_USB_BUSY);
 	#endif
 }
 
@@ -80,7 +80,7 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 				#if DEBUG
 				if (!(UESTA0X & (1 << CFGOK)))
 				{
-					debug_unhandled; // Invald configuration.
+					debug_unhandled(); // Invald configuration.
 				}
 				#endif
 			}
@@ -273,7 +273,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 						{
 							// We currently don't handle any other standard requests, but if needed we could.
 							#if DEBUG
-							debug_unhandled;
+							debug_unhandled();
 							#endif
 						} break;
 					}
@@ -294,7 +294,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 				{
 					// We currently don't handle any other requests, but if needed we could.
 					#if DEBUG
-					debug_unhandled;
+					debug_unhandled();
 					#endif
 				}
 
@@ -365,7 +365,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 					#if DEBUG
 					case 0:
 					{
-						debug_unhandled; // In the case that the host, for some reason, wants to set the device back to the "address state", we should handle this.
+						debug_unhandled(); // In the case that the host, for some reason, wants to set the device back to the "address state", we should handle this.
 					} break;
 					#endif
 
@@ -538,7 +538,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 		if (UEBCX != sizeof(command)) // We supposedly received a CBW packet that's not 31 bytes in length. See: Source(12) @ Section(6.2.1) @ Page(17).
 		{
-			error;
+			error();
 		}
 
 		for (u8 i = 0; i < sizeof(command); i += 1)
@@ -558,7 +558,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 			)
 		)
 		{
-			error;
+			error();
 		}
 
 		//
@@ -584,10 +584,10 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 			u32 sector_count   = ((command.CBWCB[7] << 8) | command.CBWCB[8]);
 			u32 sector_address =
-					(((u32) command.CBWCB[2]) << 24) |
-					(((u32) command.CBWCB[3]) << 16) |
-					(((u32) command.CBWCB[4]) <<  8) |
-					(((u32) command.CBWCB[5]) <<  0);
+					(u32(command.CBWCB[2]) << 24) |
+					(u32(command.CBWCB[3]) << 16) |
+					(u32(command.CBWCB[4]) <<  8) |
+					(u32(command.CBWCB[5]) <<  0);
 
 			if
 			(
@@ -598,12 +598,12 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 				)
 			)
 			{
-				error; // Command wrapper does not match the actual wrapped command.
+				error(); // Command wrapper does not match the actual wrapped command.
 			}
 
 			if (!(!rd_wr_protect && !disable_page_out && !force_unit_access && !force_unit_access_nonvolatile && !control))
 			{
-				error; // The common values for the fields are different for some reason; we should probably handle it if this happens.
+				error(); // The common values for the fields are different for some reason; we should probably handle it if this happens.
 			}
 
 			if (command.CBWCB[0] == USBMSSCSIOpcode_read)
@@ -696,12 +696,12 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 					if (!(command.dCBWDataTransferLength == 0 && command.bCBWCBLength == 6))
 					{
-						error; // Command wrapper does not match the actual wrapped command.
+						error(); // Command wrapper does not match the actual wrapped command.
 					}
 
 					if (control)
 					{
-						error; // The common values for the fields are different for some reason; we should probably handle it if this happens.
+						error(); // The common values for the fields are different for some reason; we should probably handle it if this happens.
 					}
 				} break;
 
@@ -718,7 +718,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 					// but when formatting the drive, this changes to 12 for some reason!
 					if (!(command.dCBWDataTransferLength == allocation_length && command.bmCBWFlags && (command.bCBWCBLength == 6 || command.bCBWCBLength == 12)))
 					{
-						error; // Command wrapper does not match the actual wrapped command.
+						error(); // Command wrapper does not match the actual wrapped command.
 					}
 
 					if
@@ -747,12 +747,12 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 					// Apple seems to do this correctly though, so maybe a Windows driver bug?
 					if (!(command.dCBWDataTransferLength == allocation_length && command.bmCBWFlags && (command.bCBWCBLength == 6 || command.bCBWCBLength == 12)))
 					{
-						error; // Command wrapper does not match the actual wrapped command.
+						error(); // Command wrapper does not match the actual wrapped command.
 					}
 
 					if (control)
 					{
-						error; // The common values for the fields are different for some reason; we should probably handle it if this happens.
+						error(); // The common values for the fields are different for some reason; we should probably handle it if this happens.
 					}
 
 					info_data = USB_MS_SCSI_UNSUPPORTED_COMMAND_SENSE;
@@ -771,7 +771,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 					if (!(command.dCBWDataTransferLength == allocation_length && command.bmCBWFlags && command.bCBWCBLength == 6))
 					{
-						error; // Command wrapper does not match the actual wrapped command.
+						error(); // Command wrapper does not match the actual wrapped command.
 					}
 
 					// Apple wants us to at least acknowledge the "return all mode pages" (0x3F) usage; other than that, this command is pretty irrelevant. See: Source(13) @ Table(64) @ Page(101).
@@ -788,14 +788,14 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 					u8 control                  =  command.CBWCB[9];
 
 					u32 sector_address =
-						(((u32) command.CBWCB[2]) << 24) |
-						(((u32) command.CBWCB[3]) << 16) |
-						(((u32) command.CBWCB[4]) <<  8) |
-						(((u32) command.CBWCB[5]) <<  0);
+						(u32(command.CBWCB[2]) << 24) |
+						(u32(command.CBWCB[3]) << 16) |
+						(u32(command.CBWCB[4]) <<  8) |
+						(u32(command.CBWCB[5]) <<  0);
 
 					if (!(command.dCBWDataTransferLength == 8 && command.bmCBWFlags && command.bCBWCBLength == 10))
 					{
-						error; // Command wrapper does not match the actual wrapped command.
+						error(); // Command wrapper does not match the actual wrapped command.
 					}
 
 					if
@@ -807,7 +807,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 						)
 					)
 					{
-						error; // The common values for the fields are different for some reason; we should probably handle it if this happens.
+						error(); // The common values for the fields are different for some reason; we should probably handle it if this happens.
 					}
 
 					info_data = USB_MS_SCSI_READ_CAPACITY_DATA;
@@ -834,7 +834,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 				}
 				else // Host to device.
 				{
-					error; // Haven't encountered a situation where this case needs to be handled, but should be implemented if needed.
+					error(); // Haven't encountered a situation where this case needs to be handled, but should be implemented if needed.
 				}
 
 				_usb_ms_status.dCSWDataResidue = command.dCBWDataTransferLength;
@@ -897,14 +897,14 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 	{
 		if (debug_usb_diagnostic_signal_received)
 		{
-			pin_high(PIN_USB_SPINLOCKING);
+			pin_high(PIN_USB_BUSY);
 			for (u16 i = 0; i < value_size; i += 1)
 			{
 				while (debug_usb_cdc_in_writer_masked(1) == debug_usb_cdc_in_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
 				debug_usb_cdc_in_buffer[debug_usb_cdc_in_writer_masked(0)] = value[i];
 				debug_usb_cdc_in_writer += 1;
 			}
-			pin_low(PIN_USB_SPINLOCKING);
+			pin_low(PIN_USB_BUSY);
 		}
 	}
 

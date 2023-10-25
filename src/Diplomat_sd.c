@@ -90,11 +90,11 @@ sd_read(u32 abs_sector_address)
 
 	if (_sd_command(SDCommand_READ_SINGLE_BLOCK, abs_sector_address))
 	{
-		error; // Failed to command.
+		error(); // Failed to command.
 	}
 	else if (!_sd_get_data_block(sd_sector, FAT32_SECTOR_SIZE))
 	{
-		error; // Failed to receive data.
+		error(); // Failed to receive data.
 	}
 
 	pin_high(PIN_SD_SS);
@@ -109,7 +109,7 @@ sd_write(u32 abs_sector_address)
 	// "WRITE_BLOCK" responds with R1 format, similar to "READ_SINGLE_BLOCK". See: Source(19) @ Table(4-20) @ AbsPage(62).
 	if (_sd_command(SDCommand_WRITE_BLOCK, abs_sector_address))
 	{
-		error; // Failed to command.
+		error(); // Failed to command.
 	}
 	else
 	{
@@ -140,7 +140,7 @@ sd_write(u32 abs_sector_address)
 				}
 				else
 				{
-					error; // Timed out waiting for SD's response to the data that we sent.
+					error(); // Timed out waiting for SD's response to the data that we sent.
 				}
 			}
 			else if ((response & 0b000'11111) == 0b000'0'010'1) // See: "Data accepted" @ Source(19) @ Section(7.3.3.1) @ AbsPage(122).
@@ -149,7 +149,7 @@ sd_write(u32 abs_sector_address)
 			}
 			else
 			{
-				error; // Unknown response received.
+				error(); // Unknown response received.
 			}
 		}
 
@@ -168,7 +168,7 @@ sd_write(u32 abs_sector_address)
 			}
 			else if (response)
 			{
-				error; // Unknown response received.
+				error(); // Unknown response received.
 			}
 			else if (attempts < SD_MAX_COMMAND_RESPONSE_LATENCY)
 			{
@@ -176,7 +176,7 @@ sd_write(u32 abs_sector_address)
 			}
 			else
 			{
-				error; // Timed out waiting for the SD to finish writing.
+				error(); // Timed out waiting for the SD to finish writing.
 			}
 		}
 	}
@@ -217,7 +217,7 @@ sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
 		}
 		else
 		{
-			error; // Timed out waiting for the SD to restart; SD card potentially not inserted.
+			error(); // Timed out waiting for the SD to restart; SD card potentially not inserted.
 		}
 	}
 
@@ -230,7 +230,7 @@ sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
 		// The command uses the 5-byte R7 response format where the first byte identical to R1. See: Source(19) @ Section(7.3.2.6) @ AbsPage(122).
 		if (_sd_command(SDCommand_SEND_IF_COND, SD_CMD8_ARGUMENT) != SDR1ResponseFlag_in_idle_state)
 		{
-			error; // SD went out of idle mode, or the command timed-out.
+			error(); // SD went out of idle mode, or the command timed-out.
 		}
 
 		(void) spi_rx(); // Irrelevant command version in high-nibble, rest are reserved.
@@ -243,7 +243,7 @@ sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
 
 		if (echo_back != SD_CMD8_ARGUMENT)
 		{
-			error; // Echoed values do not match.
+			error(); // Echoed values do not match.
 		}
 	}
 	pin_high(PIN_SD_SS);
@@ -260,11 +260,11 @@ sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
 		// The application-specific command "SD_SEND_OP_COND" must be sent with a prefixing command.
 		if (_sd_command(SDCommand_APP_CMD, 0) & ~SDR1ResponseFlag_in_idle_state)
 		{
-			error; // Error signaled in R1 response, or the command timed-out.
+			error(); // Error signaled in R1 response, or the command timed-out.
 		}
 
 		// Attempt to initialize SD and let it know we support high-capacity cards (HCS bit). Responds with R1.
-		u8 response = _sd_command(SDCommand_SD_SEND_OP_COND, ((u32) 1) << 30);
+		u8 response = _sd_command(SDCommand_SD_SEND_OP_COND, u32(1) << 30);
 
 		pin_high(PIN_SD_SS);
 
@@ -274,7 +274,7 @@ sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
 		}
 		else if (response & ~SDR1ResponseFlag_in_idle_state)
 		{
-			error; // Error signaled in R1 response, or the command timed out.
+			error(); // Error signaled in R1 response, or the command timed out.
 		}
 		else if (attempts < SD_MAX_COMMAND_RETRIES)
 		{
@@ -282,7 +282,7 @@ sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
 		}
 		else
 		{
-			error; // Timed out waiting for the SD to initialize.
+			error(); // Timed out waiting for the SD to initialize.
 		}
 	}
 
@@ -293,7 +293,7 @@ sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
 	pin_low(PIN_SD_SS);
 	if (_sd_command(SDCommand_SEND_CSD, 0))
 	{
-		error; // Error signaled in R1 response, or the command timed out.
+		error(); // Error signaled in R1 response, or the command timed out.
 	}
 	pin_high(PIN_SD_SS);
 
@@ -305,23 +305,23 @@ sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
 	u8 csd[16];
 	if (!_sd_get_data_block(csd, countof(csd)))
 	{
-		error; // Failed to get CSD data-block.
+		error(); // Failed to get CSD data-block.
 	}
 	pin_high(PIN_SD_SS);
 
 	u8  csd_READ_BL_LEN  = csd[5] & 0xF;
 	u8  csd_WRITE_BL_LEN = ((csd[12] & 0b11) << 2) | (csd[13] >> 6);
-	u32 csd_C_SIZE       = (((u32) (csd[7] & 0b00'111111)) << 16) | (((u32) csd[8]) << 8) | csd[9];
+	u32 csd_C_SIZE       = (u32(csd[7] & 0b00'111111) << 16) | (u32(csd[8]) << 8) | csd[9];
 
 	if
 	(
 		!(
-			(((u64) 1) << csd_READ_BL_LEN ) == FAT32_SECTOR_SIZE &&
-			(((u64) 1) << csd_WRITE_BL_LEN) == FAT32_SECTOR_SIZE
+			(u64(1) << csd_READ_BL_LEN ) == FAT32_SECTOR_SIZE &&
+			(u64(1) << csd_WRITE_BL_LEN) == FAT32_SECTOR_SIZE
 		)
 	)
 	{
-		error; // Card has unexpected/unsupported parameters.
+		error(); // Card has unexpected/unsupported parameters.
 	}
 
 	/* If needed, the following expression calculates the sector count of the inserted SD card.

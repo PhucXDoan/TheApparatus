@@ -6,10 +6,8 @@
 #define concat(X, Y)     concat_(X, Y)
 #define countof(...)     (sizeof(__VA_ARGS__) / sizeof((__VA_ARGS__)[0]))
 #define bitsof(...)      (sizeof(__VA_ARGS__) * 8)
+#define implies(P, Q)    (!(P) || (Q))
 #define static_assert(X) _Static_assert((X), #X)
-#if !DEBUG
-#define assert(CONDITION)
-#endif
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
@@ -36,6 +34,162 @@ typedef int64_t  b64;
 #define b16(...) ((b16) (__VA_ARGS__))
 #define b32(...) ((b32) (__VA_ARGS__))
 #define b64(...) ((b64) (__VA_ARGS__))
+
+#if PROGRAM_MICROSERVIENT
+typedef struct { char* data; i64 length; } str;
+#endif
+#define str(STRLIT) (str) { (STRLIT), sizeof(STRLIT) - 1 }
+#define STR(STRLIT)       { (STRLIT), sizeof(STRLIT) - 1 }
+
+static_assert(LITTLE_ENDIAN);
+
+//
+// "MicroServient_bmp.c"
+//
+/* [Overview]. // TODO
+	Source(1) := Library of Congress on BMPs ("Bitmap Image File (BMP), Version 5") (loc.gov/preservation/digital/formats/fdd/fdd000189.shtml/) (Dated: 2022-04-27).
+	Source(2) := 2.1.1.7 Compression Enumeration (https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-wmf/4e588f70-bd92-4a6f-b77f-35d0feaf7a57) (Dated: 06/24/2021).
+	Source(3) := 2.1.1.14 LogicalColorSpace Enumeration (https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-wmf/eb4bbd50-b3ce-4917-895c-be31f214797f) (Dated: 06/24/2021).
+*/
+
+struct BMPPixel
+{
+	u8 b;
+	u8 g;
+	u8 r;
+	u8 a;
+};
+
+struct BMP
+{
+	struct BMPPixel* data;
+	i32              dim_x;
+	i32              dim_y;
+};
+
+struct BMPCIEXYZTRIPLE // Defined by Windows as "CIEXYZTRIPLE".
+{
+	struct
+	{
+		u32 ciexyzX;
+		u32 ciexyzY;
+		u32 ciexyzZ;
+	} ciexyzRed, ciexyzGreen, ciexyzBlue;
+};
+
+enum BMPCompression // See: Source(2). // TODO
+{
+	BMPCompression_RGB       = 0x0,
+	BMPCompression_RLE8      = 0x1,
+	BMPCompression_RLE4      = 0x2,
+	BMPCompression_BITFIELDS = 0x3,
+	BMPCompression_JPEG      = 0x4,
+	BMPCompression_PNG       = 0x5,
+	BMPCompression_CMYK      = 0xB,
+	BMPCompression_CMYKRLE8  = 0xC,
+	BMPCompression_CMYKRLE4  = 0xD,
+};
+
+enum BMPColorSpace // See: Source(3). // TODO
+{
+	BMPColorSpace_LCS_CALIBRATED_RGB      = 0x00000000,
+	BMPColorSpace_LCS_sRGB                = 0x73524742,
+	BMPColorSpace_LCS_WINDOWS_COLOR_SPACE = 0x57696E20,
+};
+
+#pragma pack(push, 1)
+struct BMPFileHeader // See: "BITMAPFILEHEADER" @ Source(1). // TODO
+{
+	u16 bfType;      // Must be 'B' followed by 'M', i.e. 0x4D42.
+	u32 bfSize;      // Size of the entire BMP file in bytes.
+	u16 bfReserved1;
+	u16 bfReserved2;
+	u32 bfOffBits;   // Byte offset into the BMP file where the image's pixel data is stored.
+};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+union BMPDIBHeader // See: "DIB Header" @ Source(1). // TODO
+{
+	u32 size; // Helps determine which of the following headers below are used.
+
+	struct BMPDIBHeaderCore // See: "BITMAPCOREHEADER" @ Source(1). // TODO
+	{
+		u32 bcSize;    // Must be sizeof(struct BMPDIBHeaderCore).
+		u16 bcWidth;
+		u16 bcHeight;
+		u16 bcPlanes;
+		u16 bcBitCount;
+	} core;
+
+	struct BMPDIBHeaderInfo // See: "BITMAPINFOHEADER" @ Source(1). // TODO
+	{
+		u32 biSize;
+		i32 biWidth;
+		i32 biHeight;
+		u16 biPlanes;
+		u16 biBitCount;
+		u32 biCompression;
+		u32 biSizeImage;
+		i32 biXPelsPerMeter;
+		i32 biYPelsPerMeter;
+		u32 biClrUsed;
+		u32 biClrImportant;
+	} info;
+
+	struct BMPDIBHeaderV4 // See: "BITMAPV4HEADER" @ Source(1). // TODO
+	{
+		u32                    bV4Size;
+		i32                    bV4Width;
+		i32                    bV4Height;
+		u16                    bV4Planes;
+		u16                    bV4BitCount;
+		u32                    bV4V4Compression;
+		u32                    bV4SizeImage;
+		i32                    bV4XPelsPerMeter;
+		i32                    bV4YPelsPerMeter;
+		u32                    bV4ClrUsed;
+		u32                    bV4ClrImportant;
+		u32                    bV4RedMask;
+		u32                    bV4GreenMask;
+		u32                    bV4BlueMask;
+		u32                    bV4AlphaMask;
+		u32                    bV4CSType;
+		struct BMPCIEXYZTRIPLE bV4Endpoints;
+		u32                    bV4GammaRed;
+		u32                    bV4GammaGreen;
+		u32                    bV4GammaBlue;
+	} v4;
+
+	struct BMPDIBHeaderV5 // See: "BITMAPV5HEADER" @ Source(1). // TODO
+	{
+		u32                    bV5Size;          // Must be sizeof(struct BMPDIBHeaderV5).
+		i32                    bV5Width;         // Width of image after decompression.
+		i32                    bV5Height;        // Height of image where positive is bottom-up and negative is top-down. Must conform to bV5Compression's restrictions.
+		u16                    bV5Planes;        // Must be 1.
+		u16                    bV5BitCount;      // Bits per pixel.
+		u32                    bV5Compression;   // Aliasing enum BMPCompression
+		u32                    bV5SizeImage;     // Meaning varies depending on the compression method used.
+		i32                    bV5XPelsPerMeter; // Irrelevant.
+		i32                    bV5YPelsPerMeter; // Irrelevant.
+		u32                    bV5ClrUsed;       // Colors used in color table.
+		u32                    bV5ClrImportant;  // Pretty much irrelevant.
+		u32                    bV5RedMask;       // Bit mask for the red channel.
+		u32                    bV5GreenMask;     // Bit mask for the green channel.
+		u32                    bV5BlueMask;      // Bit mask for the blue channel.
+		u32                    bV5AlphaMask;     // Bit mask for the alpha channel.
+		u32                    bV5CSType;        // Aliasing enum BMPColorSpace.
+		struct BMPCIEXYZTRIPLE bV5Endpoints;     // Minor; stuff with color spaces.
+		u32                    bV5GammaRed;      // Minor.
+		u32                    bV5GammaGreen;    // Minor.
+		u32                    bV5GammaBlue;     // Minor.
+		u32                    bV5Intent;        // Minor.
+		u32                    bV5ProfileData;   // Minor.
+		u32                    bV5ProfileSize;   // Minor.
+		u32                    bV5Reserved;
+	} v5;
+};
+#pragma pack(pop)
 
 //
 // "pin.c"
@@ -152,6 +306,9 @@ enum SPIPrescaler // See: Source(1) @ Table(17-5) @ Page(186).
 #define FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET 1
 #define FAT32_ROOT_CLUSTER                      2
 
+// Includes the reserved region, the FAT itself, and the root cluster.
+#define FAT32_WIPE_SECTOR_COUNT FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT + FAT32_SECTORS_PER_CLUSTER
+
 static_assert(FAT32_SECTORS_PER_CLUSTER && !(FAT32_SECTORS_PER_CLUSTER & (FAT32_SECTORS_PER_CLUSTER - 1)) && FAT32_SECTORS_PER_CLUSTER <= 128); // See: "BPB_SecPerClus" @ Source(15) @ Section(3.1) @ Page(8).
 static_assert((FAT32_TOTAL_SECTOR_COUNT - FAT32_RESERVED_SECTOR_COUNT - FAT32_TABLE_SECTOR_COUNT) / FAT32_SECTORS_PER_CLUSTER >= 65'525);       // See: Source(15) @ Section(3.5) @ Page(15).
 
@@ -199,60 +356,59 @@ struct FAT32FileStructureInfo // See: Source(15) @ Page(21-22).
 	u32 FSI_TrailSig;       // Must be 0xAA550000.
 };
 
-static const struct FAT32BootSector FAT32_BOOT_SECTOR PROGMEM =
-	{
-		.BS_jmpBoot     = { 0xEB, 0x00, 0x90 },
-		.BS_OEMName     = "MSWIN4.1",
-		.BPB_BytsPerSec = FAT32_SECTOR_SIZE,
-		.BPB_SecPerClus = FAT32_SECTORS_PER_CLUSTER,
-		.BPB_RsvdSecCnt = FAT32_RESERVED_SECTOR_COUNT,
-		.BPB_NumFATs    = 1,
-		.BPB_Media      = FAT32_MEDIA_TYPE,
-		.BPB_TotSec32   = 0x01000000,
-		.BPB_FATSz32    = FAT32_TABLE_SECTOR_COUNT,
-		.BPB_RootClus   = FAT32_ROOT_CLUSTER,
-		.BPB_FSInfo     = FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET,
-		.BPB_BkBootSec  = FAT32_BACKUP_BOOT_SECTOR_OFFSET,
-		.BS_DrvNum      = 0x80,
-		.BS_BootSig     = 0x29,
-		.BS_VolID       = (u32('B') << 0) | (u32('o') << 8) | (u32('o') << 16) | (u32('b') << 24),
-		.BS_VolLab      = "Le Diplomat",
-		.BS_FilSysType  = "FAT32   ",
-		.BS_BootSign    = 0xAA55,
-	};
+#if PROGRAM_DIPLOMAT
+	static const struct FAT32BootSector FAT32_BOOT_SECTOR PROGMEM =
+		{
+			.BS_jmpBoot     = { 0xEB, 0x00, 0x90 },
+			.BS_OEMName     = "MSWIN4.1",
+			.BPB_BytsPerSec = FAT32_SECTOR_SIZE,
+			.BPB_SecPerClus = FAT32_SECTORS_PER_CLUSTER,
+			.BPB_RsvdSecCnt = FAT32_RESERVED_SECTOR_COUNT,
+			.BPB_NumFATs    = 1,
+			.BPB_Media      = FAT32_MEDIA_TYPE,
+			.BPB_TotSec32   = 0x01000000,
+			.BPB_FATSz32    = FAT32_TABLE_SECTOR_COUNT,
+			.BPB_RootClus   = FAT32_ROOT_CLUSTER,
+			.BPB_FSInfo     = FAT32_FILE_STRUCTURE_INFO_SECTOR_OFFSET,
+			.BPB_BkBootSec  = FAT32_BACKUP_BOOT_SECTOR_OFFSET,
+			.BS_DrvNum      = 0x80,
+			.BS_BootSig     = 0x29,
+			.BS_VolID       = (u32('B') << 0) | (u32('o') << 8) | (u32('o') << 16) | (u32('b') << 24),
+			.BS_VolLab      = "Le Diplomat",
+			.BS_FilSysType  = "FAT32   ",
+			.BS_BootSign    = 0xAA55,
+		};
 
-static const struct FAT32FileStructureInfo FAT32_FILE_STRUCTURE_INFO PROGMEM =
-	{
-		.FSI_LeadSig    = 0x41615252,
-		.FSI_StrucSig   = 0x61417272,
-		.FSI_Free_Count = 0xFFFFFFFF,
-		.FSI_Nxt_Free   = 0xFFFFFFFF,
-		.FSI_TrailSig   = 0xAA550000,
-	};
+	static const struct FAT32FileStructureInfo FAT32_FILE_STRUCTURE_INFO PROGMEM =
+		{
+			.FSI_LeadSig    = 0x41615252,
+			.FSI_StrucSig   = 0x61417272,
+			.FSI_Free_Count = 0xFFFFFFFF,
+			.FSI_Nxt_Free   = 0xFFFFFFFF,
+			.FSI_TrailSig   = 0xAA550000,
+		};
 
-static const u32 FAT32_TABLE[128] PROGMEM = // Most significant nibbles are reserved. See: Source(15) @ Section(4) @ Page(16).
-	{
-		[0]                  = 0x0'FFFFF'00 | FAT32_MEDIA_TYPE, // See: Source(15) @ Section(4.2) @ Page(19).
-		[1]                  = 0xF'FFFFFFF,                     // For format utilities. Seems to be commonly always all set. See: Source(15) @ Section(4.2) @ Page(19).
-		[FAT32_ROOT_CLUSTER] = 0x0'FFFFFFF,
-	};
+	static const u32 FAT32_TABLE[128] PROGMEM = // Most significant nibbles are reserved. See: Source(15) @ Section(4) @ Page(16).
+		{
+			[0]                  = 0x0'FFFFF'00 | FAT32_MEDIA_TYPE, // See: Source(15) @ Section(4.2) @ Page(19).
+			[1]                  = 0xF'FFFFFFF,                     // For format utilities. Seems to be commonly always all set. See: Source(15) @ Section(4.2) @ Page(19).
+			[FAT32_ROOT_CLUSTER] = 0x0'FFFFFFF,
+		};
 
-// Includes the reserved region, the FAT itself, and the root cluster.
-#define FAT32_WIPE_SECTOR_COUNT FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT + FAT32_SECTORS_PER_CLUSTER
+	#define FAT32_SECTOR_XMDT(X) \
+		X(FAT32_BOOT_SECTOR        , 0) \
+		X(FAT32_FILE_STRUCTURE_INFO, 1) \
+		X(FAT32_BOOT_SECTOR        , 6) \
+		X(FAT32_FILE_STRUCTURE_INFO, 7) \
+		X(FAT32_TABLE              , FAT32_RESERVED_SECTOR_COUNT)
 
-#define FAT32_SECTOR_XMDT(X) \
-	X(FAT32_BOOT_SECTOR        , 0) \
-	X(FAT32_FILE_STRUCTURE_INFO, 1) \
-	X(FAT32_BOOT_SECTOR        , 6) \
-	X(FAT32_FILE_STRUCTURE_INFO, 7) \
-	X(FAT32_TABLE              , FAT32_RESERVED_SECTOR_COUNT)
-
-#define MAKE(SECTOR_DATA, SECTOR_ADDRESS) static_assert(sizeof(SECTOR_DATA) == 512);
-FAT32_SECTOR_XMDT(MAKE)
-#undef MAKE
+	#define MAKE(SECTOR_DATA, SECTOR_ADDRESS) static_assert(sizeof(SECTOR_DATA) == 512);
+	FAT32_SECTOR_XMDT(MAKE)
+	#undef MAKE
+#endif
 
 //
-// "sd.c"
+// "Diplomat_sd.c"
 //
 
 enum SDCommand // Non-exhaustive. See: Source(19) @ Section(7.3.1.3) @ AbsPage(113-117).
@@ -285,7 +441,7 @@ static u8 sd_sector[FAT32_SECTOR_SIZE] = {0};
 
 #if DEBUG // Used to disable some USB functionalities for development purposes, but does not necessairly remove all data and control flow.
 	#define USB_CDC_ENABLE true
-	#define USB_HID_ENABLE false
+	#define USB_HID_ENABLE true
 	#define USB_MS_ENABLE  true
 #else
 	#define USB_CDC_ENABLE false
@@ -772,7 +928,6 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	static_assert(USB_ENDPOINT_MS_OUT_SIZE <= 64);
 #endif
 
-
 #if PROGRAM_DIPLOMAT
 	static const u8 USB_ENDPOINT_UECFGNX[][2] PROGMEM = // UECFG0X and UECFG1X that an endpoint will be configured with.
 		{
@@ -1151,8 +1306,8 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	static_assert(sizeof(_usb_mouse_command_writer) == 1 && sizeof(_usb_mouse_command_reader) == 1);
 
 	// The read/write indices must be able to address any element in the corresponding buffer.
-	static_assert(countof(_usb_mouse_command_buffer) < (((u64) 1) << bitsof(_usb_mouse_command_reader)));
-	static_assert(countof(_usb_mouse_command_buffer) < (((u64) 1) << bitsof(_usb_mouse_command_writer)));
+	static_assert(countof(_usb_mouse_command_buffer) < (u64(1) << bitsof(_usb_mouse_command_reader)));
+	static_assert(countof(_usb_mouse_command_buffer) < (u64(1) << bitsof(_usb_mouse_command_writer)));
 
 	// Buffer sizes must be a power of two for the "_usb_mouse_X_masked" macros.
 	static_assert(countof(_usb_mouse_command_buffer) && !(countof(_usb_mouse_command_buffer) & (countof(_usb_mouse_command_buffer) - 1)));

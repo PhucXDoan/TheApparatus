@@ -4,14 +4,25 @@ setlocal EnableDelayedExpansion
 REM To list AVRDUDE's supported AVR devices: "avrdude -c avrisp".
 REM To list AVRDUDE's supported programmers: "avrdude -c asd".
 
-set AVR_GCC_PRACTICAL_DISABLED_WARNINGS=^
+set MSVC_PRACTICAL_DISABLED_WARNINGS= ^
+	/wd4668 /wd5045 /wd4820 /wd4711 /wd4710
+
+set MSVC_DEVELOPMENT_DISABLED_WARNINGS= ^
+	/wd4189 /wd4101 /wd4102 /wd4100
+
+set MSVC_FLAGS= ^
+	/nologo /Od /std:c17 /IW:\ /Zi /D DEBUG=1 /D LITTLE_ENDIAN=1 /D PROGRAM_MICROSERVIENT=1 ^
+	/Wall /WX !MSVC_PRACTICAL_DISABLED_WARNINGS! !MSVC_DEVELOPMENT_DISABLED_WARNINGS! ^
+	/link /incremental:no
+
+set AVR_GCC_PRACTICAL_DISABLED_WARNINGS= ^
 	-Wno-unused-function -Wno-implicit-fallthrough -Wno-missing-field-initializers
 
-set AVR_GCC_DEVELOPMENT_DISABLED_WARNINGS=^
+set AVR_GCC_DEVELOPMENT_DISABLED_WARNINGS= ^
 	-Wno-unused-label -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-comment
 
 set AVR_GCC_FLAGS= ^
-	-std=c2x -Os -D DEBUG=1 -fshort-enums -I W:/ -fno-strict-aliasing ^
+	-std=c2x -Os -D DEBUG=1 -D LITTLE_ENDIAN=1 -fshort-enums -I W:/ -fno-strict-aliasing ^
 	-Werror -Wall -Wextra -fmax-errors=1 !AVR_GCC_PRACTICAL_DISABLED_WARNINGS! !AVR_GCC_DEVELOPMENT_DISABLED_WARNINGS! ^
 	--param=min-pagesize=0
 
@@ -51,6 +62,15 @@ pushd W:\build\
 	del *.s *.o *.elf *.hex > nul 2>&1
 
 	REM
+	REM Compile MicroServient.c.
+	REM
+
+	cl W:\src\MicroServient.c /Fe:MicroServient.exe !MSVC_FLAGS!
+	if not !ERRORLEVEL! == 0 (
+		goto ABORT
+	)
+
+	REM
 	REM Compile C source code into assembly and ELF.
 	REM
 
@@ -81,7 +101,7 @@ pushd W:\build\
 	)
 
 	REM
-	REM Find bootloader COM and upload.
+	REM Find Nerd's bootloader.
 	REM
 
 	mode | findstr "COM!NERD_BOOTLOADER_COM!:" > nul
@@ -96,9 +116,19 @@ pushd W:\build\
 		goto OPEN_PUTTY
 	)
 
+	REM
+	REM Find Diplomat's bootloader.
+	REM
+
 	mode | findstr "COM!DIPLOMAT_DIAGNOSTIC_COM!:" > nul
 	if !ERRORLEVEL! == 0 (
 		mode COM!DIPLOMAT_DIAGNOSTIC_COM!: BAUD=!DIPLOMAT_BOOTLOADER_BAUD_SIGNAL! > nul
+	) else (
+		mode | findstr "COM!DIPLOMAT_BOOTLOADER_COM!:" > nul
+		if not !ERRORLEVEL! == 0 (
+			echo No bootloader found.
+			goto ABORT
+		)
 	)
 
 	for /L %%n in (1,1,64) do (
@@ -119,6 +149,9 @@ pushd W:\build\
 					ping 127.0.0.1 -n 1 -w 500 > nul
 				)
 			)
+
+			echo No diagnostic port found.
+			goto ABORT
 		) else (
 			ping 127.0.0.1 -n 1 -w 500 > nul
 		)
@@ -126,6 +159,10 @@ pushd W:\build\
 
 	echo No bootloader found.
 	goto ABORT
+
+	REM
+	REM Open PuTTY!
+	REM
 
 	:OPEN_PUTTY
 	if not "!PUTTY_ARGS!" == "" (

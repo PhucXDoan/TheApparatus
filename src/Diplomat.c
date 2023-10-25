@@ -1,23 +1,22 @@
-#define F_CPU               16'000'000
-#define PROGRAM_DIPLOMAT    true
-#define BOARD_LEONARDO      true
-#define PIN_DUMP_SS         2
-#define PIN_USB_SPINLOCKING 2
-#define PIN_U16_CLK         4
-#define PIN_U16_DATA        5
-#define PIN_SD_SS           7
+#define F_CPU            16'000'000
+#define PROGRAM_DIPLOMAT true
+#define BOARD_LEONARDO   true
+#define PIN_USB_BUSY     2
+#define PIN_U16_CLK      4
+#define PIN_U16_DATA     5
+#define PIN_SD_SS        7
 #include <avr/io.h>
-#include <util/delay.h>
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
 #include <avr/pgmspace.h>
+#include <util/delay.h>
 #include <stdint.h>
 #include <string.h>
 #include "defs.h"
-#include "misc.c"
 #include "pin.c"
+#include "misc.c"
 #include "spi.c"
-#include "sd.c"
+#include "Diplomat_sd.c"
 #include "Diplomat_usb.c"
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE HaltSource_diplomat
@@ -39,31 +38,78 @@ main(void)
 
 	usb_init();
 
-	//for(;;);
 	for(;;)
 	{
 		char c;
 		if (debug_rx(&c, 1))
 		{
-			cli();
-
-			memset(sd_sector, 0, sizeof(sd_sector));
-			for (u32 abs_sector_address = 0; abs_sector_address < FAT32_WIPE_SECTOR_COUNT; abs_sector_address += 1)
+			switch (c)
 			{
-				sd_write(abs_sector_address);
-				debug_u16(abs_sector_address);
+				case 'A':
+				{
+					usb_mouse_command(false, 10, 128);
+				} break;
+
+				case 'D':
+				{
+					usb_mouse_command(false, 120, 120);
+				} break;
+
+				case 'S':
+				{
+					usb_mouse_command(false, 64, 10);
+				} break;
+
+				case 'W':
+				{
+					usb_mouse_command(false, 64, 250);
+				} break;
+
+				case ' ':
+				{
+					//
+					// Disconnect.
+					//
+
+					cli();
+					USBCON &= ~(1 << USBE); // See: Source(1) @ Section(22.2) @ Page(270).
+
+					//
+					// Wipe relevant sectors.
+					//
+
+					memset(sd_sector, 0, sizeof(sd_sector));
+					for (u32 abs_sector_address = 0; abs_sector_address < FAT32_WIPE_SECTOR_COUNT; abs_sector_address += 1)
+					{
+						sd_write(abs_sector_address);
+						debug_u16(abs_sector_address);
+					}
+
+					//
+					// Write FAT32 file system.
+					//
+
+					#define MAKE(SECTOR_DATA, SECTOR_ADDRESS) \
+						{ \
+							memcpy_P(sd_sector, &(SECTOR_DATA), sizeof(SECTOR_DATA)); \
+							sd_write((SECTOR_ADDRESS)); \
+						}
+					FAT32_SECTOR_XMDT(MAKE)
+					#undef MAKE
+
+					//
+					// Restart.
+					//
+
+					wdt_enable(WDTO_15MS);
+					for(;;);
+				} break;
+
+				default:
+				{
+					debug_tx_chars(&c, 1);
+				} break;
 			}
-
-			#define MAKE(SECTOR_DATA, SECTOR_ADDRESS) \
-				{ \
-					memcpy_P(sd_sector, &(SECTOR_DATA), sizeof(SECTOR_DATA)); \
-					sd_write((SECTOR_ADDRESS)); \
-				}
-			FAT32_SECTOR_XMDT(MAKE)
-			#undef MAKE
-
-			wdt_enable(WDTO_15MS);
-			for(;;);
 		}
 	}
 }

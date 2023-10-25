@@ -22,7 +22,7 @@
 //{
 //	if (spi_writer + 1 == spi_reader)
 //	{
-//		error;
+//		error();
 //	}
 //	else
 //	{
