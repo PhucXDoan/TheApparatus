@@ -53,52 +53,107 @@ bmp_malloc_read_file(str file_path)
 
 			switch (dib_header->v5.bV5Compression)
 			{
-				case BMPCompression_RGB:
+				case BMPCompression_BI_RGB:
 				{
-					result.dim_x = dib_header->v5.bV5Width;
-					result.dim_y = abs(dib_header->v5.bV5Height);
+					if
+					(
+						!(
+							dib_header->v5.bV5Width > 0 &&
+							dib_header->v5.bV5Height != 0 &&
+							dib_header->v5.bV5Planes == 1
+						)
+					)
+					{
+						error("Bitmap DIB header (BITMAPV5HEADER) with an invalid field.");
+					}
 
-					debug_halt();
+					if
+					(
+						dib_header->v5.bV5BitCount == 24 &&
+						dib_header->v5.bV5Compression == BMPCompression_BI_RGB &&
+						dib_header->v5.bV5Height > 0
+					)
+					{
+						u32 bytes_per_row = (dib_header->v5.bV5Width * (dib_header->v5.bV5BitCount / bitsof(u8)) + 3) / 4 * 4;
+						if (dib_header->v5.bV5SizeImage != bytes_per_row * dib_header->v5.bV5Height)
+						{
+							error("Bitmap DIB header (BITMAPV5HEADER) configured with an invalid field.");
+						}
+
+						result =
+							(struct BMP)
+							{
+								.dim_x = dib_header->v5.bV5Width,
+								.dim_y = dib_header->v5.bV5Height,
+								.data  = malloc(dib_header->v5.bV5Width * dib_header->v5.bV5Height * sizeof(struct BMPPixel)),
+							};
+
+						if (!result.data)
+						{
+							error("Failed to allocate.");
+						}
+
+						for (i64 y = 0; y < dib_header->v5.bV5Height; y += 1)
+						{
+							for (i64 x = 0; x < dib_header->v5.bV5Width; x += 1)
+							{
+								u8* channels = ((u8*) file_content.data) + file_header->bfOffBits + y * bytes_per_row;
+
+								result.data[y * result.dim_x + x] =
+									(struct BMPPixel)
+									{
+										.r = channels[2],
+										.g = channels[1],
+										.b = channels[0],
+										.a = 255,
+									};
+							}
+						}
+					}
+					else
+					{
+						error("Bitmap with DIB header (BITMAPV5HEADER) configuration that's not yet supported.");
+					}
 				} break;
 
-				case BMPCompression_RLE8:
+				case BMPCompression_BI_RLE8:
 				{
-					error("BMPCompression_RLE8 not handled... yet.");
+					error("BI_RLE8 not handled... yet.");
 				} break;
 
-				case BMPCompression_RLE4:
+				case BMPCompression_BI_RLE4:
 				{
-					error("BMPCompression_RLE4 not handled... yet.");
+					error("BI_RLE4 not handled... yet.");
 				} break;
 
-				case BMPCompression_BITFIELDS:
+				case BMPCompression_BI_BITFIELDS:
 				{
-					error("BMPCompression_BITFIELDS not handled... yet.");
+					error("BI_BITFIELDS not handled... yet.");
 				} break;
 
-				case BMPCompression_JPEG:
+				case BMPCompression_BI_JPEG:
 				{
-					error("BMPCompression_JPEG not handled... yet.");
+					error("BI_JPEG not handled... yet.");
 				} break;
 
-				case BMPCompression_PNG:
+				case BMPCompression_BI_PNG:
 				{
-					error("BMPCompression_PNG not handled... yet.");
+					error("BI_PNG not handled... yet.");
 				} break;
 
-				case BMPCompression_CMYK:
+				case BMPCompression_BI_CMYK:
 				{
-					error("BMPCompression_CMYK not handled... yet.");
+					error("BI_CMYK not handled... yet.");
 				} break;
 
-				case BMPCompression_CMYKRLE8:
+				case BMPCompression_BI_CMYKRLE8:
 				{
-					error("BMPCompression_CMYKRLE8 not handled... yet.");
+					error("BI_CMYKRLE8 not handled... yet.");
 				} break;
 
-				case BMPCompression_CMYKRLE4:
+				case BMPCompression_BI_CMYKRLE4:
 				{
-					error("BMPCompression_CMYKRLE4 not handled... yet.");
+					error("BI_CMYKRLE4 not handled... yet.");
 				} break;
 
 				default:
@@ -111,6 +166,14 @@ bmp_malloc_read_file(str file_path)
 
 	free_read_file(&file_content);
 	return result;
+}
+#undef error
+
+#define error(STRLIT, ...) error_abort("(\"%.*s\") :: " STRLIT, i32(file_path.length), file_path.data,##__VA_ARGS__)
+static void
+bmp_export(struct BMP src, str file_path)
+{
+	error("TODO");
 }
 #undef error
 

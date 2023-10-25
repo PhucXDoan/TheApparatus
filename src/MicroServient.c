@@ -10,7 +10,9 @@
 int
 main(void)
 {
-	struct BMP bmp = bmp_malloc_read_file(str("W:/data/wordbites_0.bmp"));
+	struct BMP bmp = bmp_malloc_read_file(str("W:/data/wordbites_1.bmp"));
+
+	bmp_export(bmp, str("W:/data/export.bmp"));
 
 //	if (bmp_file.length < sizeof(struct BMPFileHeader) + sizeof(struct BMPInfoHeader))
 //	{

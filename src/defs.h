@@ -36,38 +36,33 @@ typedef int64_t  b64;
 #define b64(...) ((b64) (__VA_ARGS__))
 
 #if PROGRAM_MICROSERVIENT
-typedef struct { char* data; i64 length; } str;
+	typedef struct { char* data; i64 length; } str;
+	#define str(STRLIT) (str) { (STRLIT), sizeof(STRLIT) - 1 }
+	#define STR(STRLIT)       { (STRLIT), sizeof(STRLIT) - 1 }
 #endif
-#define str(STRLIT) (str) { (STRLIT), sizeof(STRLIT) - 1 }
-#define STR(STRLIT)       { (STRLIT), sizeof(STRLIT) - 1 }
 
 static_assert(LITTLE_ENDIAN);
 
 //
 // "MicroServient_bmp.c"
 //
-/* [Overview]. // TODO
-	Source(1) := Library of Congress on BMPs ("Bitmap Image File (BMP), Version 5") (loc.gov/preservation/digital/formats/fdd/fdd000189.shtml/) (Dated: 2022-04-27).
-	Source(2) := 2.1.1.7 Compression Enumeration (https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-wmf/4e588f70-bd92-4a6f-b77f-35d0feaf7a57) (Dated: 06/24/2021).
-	Source(3) := 2.1.1.14 LogicalColorSpace Enumeration (https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-wmf/eb4bbd50-b3ce-4917-895c-be31f214797f) (Dated: 06/24/2021).
-*/
 
 struct BMPPixel
 {
-	u8 b;
-	u8 g;
 	u8 r;
+	u8 g;
+	u8 b;
 	u8 a;
 };
 
-struct BMP
+struct BMP // Left-right, bottom-up.
 {
 	struct BMPPixel* data;
 	i32              dim_x;
 	i32              dim_y;
 };
 
-struct BMPCIEXYZTRIPLE // Defined by Windows as "CIEXYZTRIPLE".
+struct BMPCIEXYZTRIPLE // "CIEXYZTRIPLE" in Windows's "wingdi.h".
 {
 	struct
 	{
@@ -77,28 +72,33 @@ struct BMPCIEXYZTRIPLE // Defined by Windows as "CIEXYZTRIPLE".
 	} ciexyzRed, ciexyzGreen, ciexyzBlue;
 };
 
-enum BMPCompression // See: Source(2). // TODO
+enum BMPCompression // See: Source(23) @ Section(2.1.1.7) @ Page(118).
 {
-	BMPCompression_RGB       = 0x0,
-	BMPCompression_RLE8      = 0x1,
-	BMPCompression_RLE4      = 0x2,
-	BMPCompression_BITFIELDS = 0x3,
-	BMPCompression_JPEG      = 0x4,
-	BMPCompression_PNG       = 0x5,
-	BMPCompression_CMYK      = 0xB,
-	BMPCompression_CMYKRLE8  = 0xC,
-	BMPCompression_CMYKRLE4  = 0xD,
+	BMPCompression_BI_RGB       = 0x0,
+	BMPCompression_BI_RLE8      = 0x1,
+	BMPCompression_BI_RLE4      = 0x2,
+	BMPCompression_BI_BITFIELDS = 0x3,
+	BMPCompression_BI_JPEG      = 0x4,
+	BMPCompression_BI_PNG       = 0x5,
+	BMPCompression_BI_CMYK      = 0xB,
+	BMPCompression_BI_CMYKRLE8  = 0xC,
+	BMPCompression_BI_CMYKRLE4  = 0xD,
 };
 
-enum BMPColorSpace // See: Source(3). // TODO
+enum BMPColorSpace
 {
+	// See: "LogicalColorSpace" @ Source(23) @ Section(2.1.1.14) @ Page(127).
 	BMPColorSpace_LCS_CALIBRATED_RGB      = 0x00000000,
 	BMPColorSpace_LCS_sRGB                = 0x73524742,
 	BMPColorSpace_LCS_WINDOWS_COLOR_SPACE = 0x57696E20,
+
+	// See: "LogicalColorSpaceV5" @ Source(23) @ Section(2.1.1.15) @ Page(128).
+	BMPColorSpace_LCS_PROFILE_LINKED   = 0x4C494E4B,
+	BMPColorSpace_LCS_PROFILE_EMBEDDED = 0x4D424544,
 };
 
 #pragma pack(push, 1)
-struct BMPFileHeader // See: "BITMAPFILEHEADER" @ Source(1). // TODO
+struct BMPFileHeader // See: "BITMAPFILEHEADER" @ Source(22) @ Page(281).
 {
 	u16 bfType;      // Must be 'B' followed by 'M', i.e. 0x4D42.
 	u32 bfSize;      // Size of the entire BMP file in bytes.
@@ -109,11 +109,11 @@ struct BMPFileHeader // See: "BITMAPFILEHEADER" @ Source(1). // TODO
 #pragma pack(pop)
 
 #pragma pack(push, 1)
-union BMPDIBHeader // See: "DIB Header" @ Source(1). // TODO
+union BMPDIBHeader
 {
 	u32 size; // Helps determine which of the following headers below are used.
 
-	struct BMPDIBHeaderCore // See: "BITMAPCOREHEADER" @ Source(1). // TODO
+	struct BMPDIBHeaderCore // See: "BITMAPCOREHEADER" @ Source(22) @ Page(277).
 	{
 		u32 bcSize;    // Must be sizeof(struct BMPDIBHeaderCore).
 		u16 bcWidth;
@@ -122,7 +122,7 @@ union BMPDIBHeader // See: "DIB Header" @ Source(1). // TODO
 		u16 bcBitCount;
 	} core;
 
-	struct BMPDIBHeaderInfo // See: "BITMAPINFOHEADER" @ Source(1). // TODO
+	struct BMPDIBHeaderInfo // See: "BITMAPINFOHEADER" @ Source(22) @ Page(287).
 	{
 		u32 biSize;
 		i32 biWidth;
@@ -137,7 +137,7 @@ union BMPDIBHeader // See: "DIB Header" @ Source(1). // TODO
 		u32 biClrImportant;
 	} info;
 
-	struct BMPDIBHeaderV4 // See: "BITMAPV4HEADER" @ Source(1). // TODO
+	struct BMPDIBHeaderV4 // See: "BITMAPV4HEADER" @ Source(22) @ Page(293).
 	{
 		u32                    bV4Size;
 		i32                    bV4Width;
@@ -161,7 +161,7 @@ union BMPDIBHeader // See: "DIB Header" @ Source(1). // TODO
 		u32                    bV4GammaBlue;
 	} v4;
 
-	struct BMPDIBHeaderV5 // See: "BITMAPV5HEADER" @ Source(1). // TODO
+	struct BMPDIBHeaderV5 // See: "BITMAPV5HEADER" @ Source(22) @ Page(300).
 	{
 		u32                    bV5Size;          // Must be sizeof(struct BMPDIBHeaderV5).
 		i32                    bV5Width;         // Width of image after decompression.
@@ -174,11 +174,11 @@ union BMPDIBHeader // See: "DIB Header" @ Source(1). // TODO
 		i32                    bV5YPelsPerMeter; // Irrelevant.
 		u32                    bV5ClrUsed;       // Colors used in color table.
 		u32                    bV5ClrImportant;  // Pretty much irrelevant.
-		u32                    bV5RedMask;       // Bit mask for the red channel.
-		u32                    bV5GreenMask;     // Bit mask for the green channel.
-		u32                    bV5BlueMask;      // Bit mask for the blue channel.
-		u32                    bV5AlphaMask;     // Bit mask for the alpha channel.
-		u32                    bV5CSType;        // Aliasing enum BMPColorSpace.
+		u32                    bV5RedMask;       // When bV5Compression is CompressionMethod_BI_BITFIELDS, bit mask for the red channel.
+		u32                    bV5GreenMask;     // When bV5Compression is CompressionMethod_BI_BITFIELDS, bit mask for the green channel.
+		u32                    bV5BlueMask;      // When bV5Compression is CompressionMethod_BI_BITFIELDS, bit mask for the blue channel.
+		u32                    bV5AlphaMask;     // When bV5Compression is CompressionMethod_BI_BITFIELDS, bit mask for the alpha channel.
+		u32                    bV5CSType;        // Minor; if we want to be extremely color-correct, we should probably consider this, but nah...
 		struct BMPCIEXYZTRIPLE bV5Endpoints;     // Minor; stuff with color spaces.
 		u32                    bV5GammaRed;      // Minor.
 		u32                    bV5GammaGreen;    // Minor.
@@ -1376,6 +1376,8 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	Source(19) := SD Specifications Part 1 Physical Layer Simplified Specification Version 2.00 (Dated: September 25, 2006).
 	Source(20) := "How to Use MMC/SDC" by Elm-Chan (Updated on: December 26, 2019).
 	Source(21) := "8-bit Atmel Microcontroller with 64/128Kbytes of ISP Flash and USB Controller" datasheet (Dated: 9/12).
+	Source(22) := Microsofts's "Windows GDI" PDF Article (Dated: 01/24/2023).
+	Source(23) := Microsoft's "Open Specifications" PDF Article (Dated: 08/01/2023).
 
 	We are working within the environment of the ATmega32U4 and ATmega2560 microcontrollers,
 	which are 8-bit CPUs. This consequently means that there are no padding bytes to
