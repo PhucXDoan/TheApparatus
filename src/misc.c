@@ -271,7 +271,7 @@ serialize_i64(char* dst, u16 dst_size, i64 value) // "dst_size" of at least 20 w
 	#define error_abort(...) \
 		do \
 		{ \
-			fprintf(stderr, __FILE__ ":%s:%d: ", __func__, __LINE__); \
+			fprintf(stderr, __FILE__ ":%d:%s: ", __LINE__, __func__); \
 			fprintf(stderr, __VA_ARGS__); \
 			fprintf(stderr, "\n"); \
 			__debugbreak(); \
@@ -281,6 +281,9 @@ serialize_i64(char* dst, u16 dst_size, i64 value) // "dst_size" of at least 20 w
 
 	#if DEBUG
 		#define debug_halt() __debugbreak()
+		#define assert(...) do { if (!(__VA_ARGS__)) { debug_halt(); } } while (false)
+	#else
+		#define assert(...)
 	#endif
 
 	#define error(STRLIT, ...) error_abort("(\"%.*s\") :: " STRLIT, i32(file_path.length), file_path.data,##__VA_ARGS__)

@@ -1351,6 +1351,77 @@ struct USBConfig // This layout is defined uniquely for our device application.
 #endif
 
 //
+// "Microservient.c".
+//
+
+#define WORDBITES_BOARD_SLOTS_X  8
+#define WORDBITES_BOARD_SLOTS_Y  9
+
+#define PHONE_DIM_X 1170
+#define PHONE_DIM_Y 2532
+
+#define WORDBITES_RAW_SLOT_PX_DIM    140
+#define WORDBITES_RAW_BOARD_PX_POS_X 25
+#define WORDBITES_RAW_BOARD_PX_POS_Y 354 // Bottom-up.
+#define WORDBITES_RAW_BOARD_PX_DIM_X (WORDBITES_BOARD_SLOTS_X * WORDBITES_RAW_SLOT_PX_DIM)
+#define WORDBITES_RAW_BOARD_PX_DIM_Y (WORDBITES_BOARD_SLOTS_Y * WORDBITES_RAW_SLOT_PX_DIM)
+
+static_assert(WORDBITES_RAW_BOARD_PX_POS_X + WORDBITES_RAW_BOARD_PX_DIM_X <= PHONE_DIM_X); // Should not obviously exceed phone screen boundries.
+static_assert(WORDBITES_RAW_BOARD_PX_POS_Y + WORDBITES_RAW_BOARD_PX_DIM_Y <= PHONE_DIM_Y); // Should not obviously exceed phone screen boundries.
+
+#define CLI_EXE_NAME_STRLIT "MicroServient.exe"
+#define CLI_XMDT(X) \
+	X(input_file_path, str, "File path to the screenshot of the word game.") \
+	X(output_dir_path, str, "Directory path to output the extracted letters.")
+
+#if PROGRAM_MICROSERVIENT
+	#define MAKE(NAME, TYPE, ...) char NAME[sizeof(#NAME) - 1];
+	static const i32 CLI_LONGEST_NAME_LENGTH = sizeof(union { CLI_XMDT(MAKE) });
+	#undef MAKE
+
+	struct CLI
+	{
+		#define MAKE(NAME, TYPE, ...) TYPE NAME;
+		CLI_XMDT(MAKE)
+		#undef MAKE
+	};
+
+	enum CLIFieldTyping
+	{
+		CLIFieldTyping_str,
+	};
+
+	enum CLIField
+	{
+		#define MAKE(NAME, TYPE, ...) CLIField_##NAME,
+		CLI_XMDT(MAKE)
+		#undef MAKE
+		CLIField_COUNT
+	};
+
+	struct CLIFieldMetaData
+	{
+		i64                 offset;
+		enum CLIFieldTyping typing;
+		str                 name;
+		str                 desc;
+	};
+
+	static const struct CLIFieldMetaData CLI_FIELD_METADATA[] =
+		{
+			#define MAKE(NAME, TYPE, DESC, ...) \
+				{ \
+					.offset = offsetof(struct CLI, NAME), \
+					.typing = CLIFieldTyping_##TYPE, \
+					.name   = STR(#NAME), \
+					.desc   = STR(DESC), \
+				},
+			CLI_XMDT(MAKE)
+			#undef MAKE
+		};
+#endif
+
+//
 // Documentation.
 //
 

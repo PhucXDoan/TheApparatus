@@ -5,7 +5,7 @@ REM To list AVRDUDE's supported AVR devices: "avrdude -c avrisp".
 REM To list AVRDUDE's supported programmers: "avrdude -c asd".
 
 set MSVC_PRACTICAL_DISABLED_WARNINGS= ^
-	/wd4668 /wd5045 /wd4820 /wd4711 /wd4710
+	/wd4668 /wd5045 /wd4820 /wd4711 /wd4710 /wd4116
 
 set MSVC_DEVELOPMENT_DISABLED_WARNINGS= ^
 	/wd4189 /wd4101 /wd4102 /wd4100
