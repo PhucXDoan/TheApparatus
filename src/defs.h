@@ -52,6 +52,32 @@ typedef int64_t  b64;
 static_assert(LITTLE_ENDIAN);
 
 //
+// "dary.c"
+//
+
+struct Dary_void
+{
+	void* data;
+	i64   length;
+	i64   size;
+};
+
+#define Dary_def(NAME, TYPE) \
+	struct Dary_##NAME \
+	{ \
+		union \
+		{ \
+			struct \
+			{ \
+				TYPE* data; \
+				i64   length; \
+				i64   size; \
+			}; \
+			struct Dary_void dary_void; \
+		}; \
+	}
+
+//
 // "strbuf.c"
 //
 

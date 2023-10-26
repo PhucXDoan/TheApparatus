@@ -9,6 +9,7 @@
 #include "str.c"
 #include "strbuf.c"
 #include "bmp.c"
+#include "dary.c"
 
 int
 main(int argc, char** argv)
