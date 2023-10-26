@@ -300,7 +300,7 @@ serialize_i64(char* dst, u16 dst_size, i64 value) // "dst_size" of at least 20 w
 #endif
 
 #if PROGRAM_MICROSERVIENT
-	#define error_abort(...) \
+	#define error(...) \
 		do \
 		{ \
 			fprintf(stderr, __FILE__ ":%d:%s: ", __LINE__, __func__); \

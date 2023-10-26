@@ -1,0 +1,30 @@
+static str
+str_cstr(char* cstr)
+{
+	str result = { cstr, strlen(cstr) };
+	return result;
+}
+
+static b32
+str_ends_with_caseless(str src, str ending)
+{
+	b32 result = true;
+
+	if (src.length >= ending.length)
+	{
+		for (i64 i = 0; i < ending.length; i += 1)
+		{
+			if (to_lower(src.data[src.length - ending.length + i]) != to_lower(ending.data[i]))
+			{
+				result = false;
+				break;
+			}
+		}
+	}
+	else
+	{
+		result = false;
+	}
+
+	return result;
+}

@@ -52,7 +52,7 @@ typedef int64_t  b64;
 static_assert(LITTLE_ENDIAN);
 
 //
-// "MicroServient_strbuf.c"
+// "strbuf.c"
 //
 
 #if PROGRAM_MICROSERVIENT
@@ -73,7 +73,7 @@ static_assert(LITTLE_ENDIAN);
 #endif
 
 //
-// "MicroServient_bmp.c"
+// "bmp.c"
 //
 
 struct BMPPixel
@@ -293,7 +293,9 @@ enum TimerPrescaler // Prescalers for Timer0's TCCR0B register. See: Source(1) @
 
 #define TIMER_INITIAL_COUNTER 6 // See: [Overview] @ "timer.c".
 
-static volatile u32 _timer_ms = 0;
+#if 0
+	static volatile u32 _timer_ms = 0;
+#endif
 
 //
 // "spi.c"
@@ -437,7 +439,7 @@ struct FAT32FileStructureInfo // See: Source(15) @ Page(21-22).
 #endif
 
 //
-// "Diplomat_sd.c"
+// "sd.c"
 //
 
 enum SDCommand // Non-exhaustive. See: Source(19) @ Section(7.3.1.3) @ AbsPage(113-117).
@@ -462,7 +464,9 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 	SDR1ResponseFlag_parameter_error      = 1 << 6,
 };
 
-static u8 sd_sector[FAT32_SECTOR_SIZE] = {0};
+#if PROGRAM_DIPLOMAT
+	static u8 sd_sector[FAT32_SECTOR_SIZE] = {0};
+#endif
 
 //
 // "Diplomat_usb.c"
@@ -1398,28 +1402,37 @@ struct USBConfig // This layout is defined uniquely for our device application.
 static_assert(WORDBITES_RAW_BOARD_PX_POS_X + WORDBITES_RAW_BOARD_PX_DIM_X <= PHONE_DIM_X); // Should not obviously exceed phone screen boundries.
 static_assert(WORDBITES_RAW_BOARD_PX_POS_Y + WORDBITES_RAW_BOARD_PX_DIM_Y <= PHONE_DIM_Y); // Should not obviously exceed phone screen boundries.
 
+#define CLI_TYPING_XMDT(X) \
+	X(string, union { struct { char* data; i64 length; }; char* cstr; str str; })
+
 #define CLI_EXE_NAME str("MicroServient.exe")
 #define CLI_EXE_DESC str("Exports JSON of the average RGB values in screenshots.")
 #define CLI_XMDT(X) \
-	X(input_wildcard_path  , str, "Wildcard path that'll be filtered for screenshots.") \
-	X(output_json_file_path, str, "File path of the exported JSON describing the RGB distribution.")
+	X(input_wildcard_path  , string, "Wildcard path that'll be filtered for screenshots.") \
+	X(output_json_file_path, string, "File path of the exported JSON describing the RGB distribution.")
 
 #if PROGRAM_MICROSERVIENT
+	enum CLIFieldTyping
+	{
+		#define MAKE(NAME, TYPE) CLIFieldTyping_##NAME,
+		CLI_TYPING_XMDT(MAKE)
+		#undef MAKE
+	};
+
+	#define MAKE(NAME, TYPE) typedef TYPE CLIFieldTyping_##NAME##_t;
+	CLI_TYPING_XMDT(MAKE)
+	#undef MAKE
+
 	struct CLI
 	{
-		#define MAKE(NAME, TYPE, ...) TYPE NAME;
+		#define MAKE(FIELD_NAME, TYPING_NAME, ...) CLIFieldTyping_##TYPING_NAME##_t FIELD_NAME;
 		CLI_XMDT(MAKE)
 		#undef MAKE
 	};
 
-	enum CLIFieldTyping
-	{
-		CLIFieldTyping_str,
-	};
-
 	enum CLIField
 	{
-		#define MAKE(NAME, TYPE, ...) CLIField_##NAME,
+		#define MAKE(FIELD_NAME, TYPING_NAME, ...) CLIField_##FIELD_NAME,
 		CLI_XMDT(MAKE)
 		#undef MAKE
 		CLIField_COUNT
@@ -1435,11 +1448,11 @@ static_assert(WORDBITES_RAW_BOARD_PX_POS_Y + WORDBITES_RAW_BOARD_PX_DIM_Y <= PHO
 
 	static const struct CLIFieldMetaData CLI_FIELD_METADATA[] =
 		{
-			#define MAKE(NAME, TYPE, DESC, ...) \
+			#define MAKE(FIELD_NAME, TYPING_NAME, DESC, ...) \
 				{ \
-					.offset = offsetof(struct CLI, NAME), \
-					.typing = CLIFieldTyping_##TYPE, \
-					.name   = STR(#NAME), \
+					.offset = offsetof(struct CLI, FIELD_NAME), \
+					.typing = CLIFieldTyping_##TYPING_NAME, \
+					.name   = STR(#FIELD_NAME), \
 					.desc   = STR(DESC), \
 				},
 			CLI_XMDT(MAKE)

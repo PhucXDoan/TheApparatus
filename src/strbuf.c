@@ -1,4 +1,4 @@
-#define error() error_abort("`%s` reached maximum capacity.", __func__)
+#define error_capacity() error("`%s` reached maximum capacity.", __func__)
 
 static str
 strbuf_char(struct StrBuf* buf, char value)
@@ -18,7 +18,7 @@ strbuf_char(struct StrBuf* buf, char value)
 	}
 	else
 	{
-		error();
+		error_capacity();
 	}
 
 	return result;
@@ -39,7 +39,7 @@ strbuf_char_n(struct StrBuf* buf, char value, i64 count)
 
 	if (result.length != capped_count)
 	{
-		error();
+		error_capacity();
 	}
 
 	return result;
@@ -61,7 +61,7 @@ strbuf_str(struct StrBuf* buf, str value)
 
 	if (result.length != value.length)
 	{
-		error();
+		error_capacity();
 	}
 
 	return result;
@@ -75,7 +75,7 @@ strbuf_cstr(struct StrBuf* buf, char* value)
 
 	if (result.length != string.length)
 	{
-		error();
+		error_capacity();
 	}
 
 	return result;
@@ -99,4 +99,4 @@ strbuf_i64(struct StrBuf* buf, i64 value) // Remaining space of at least 20 will
 	return result;
 }
 
-#undef error
+#undef error_capacity

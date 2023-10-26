@@ -16,7 +16,7 @@
 #include "pin.c"
 #include "misc.c"
 #include "spi.c"
-#include "Diplomat_sd.c"
+#include "sd.c"
 #include "Diplomat_usb.c"
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE HaltSource_diplomat
