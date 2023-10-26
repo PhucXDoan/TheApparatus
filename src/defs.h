@@ -1383,8 +1383,8 @@ struct USBConfig // This layout is defined uniquely for our device application.
 // "MicroServient.c".
 //
 
-#define WORDBITES_BOARD_SLOTS_X  8
-#define WORDBITES_BOARD_SLOTS_Y  9
+#define WORDBITES_BOARD_SLOTS_X 8
+#define WORDBITES_BOARD_SLOTS_Y 9
 
 #define PHONE_DIM_X 1170
 #define PHONE_DIM_Y 2532
@@ -1398,16 +1398,13 @@ struct USBConfig // This layout is defined uniquely for our device application.
 static_assert(WORDBITES_RAW_BOARD_PX_POS_X + WORDBITES_RAW_BOARD_PX_DIM_X <= PHONE_DIM_X); // Should not obviously exceed phone screen boundries.
 static_assert(WORDBITES_RAW_BOARD_PX_POS_Y + WORDBITES_RAW_BOARD_PX_DIM_Y <= PHONE_DIM_Y); // Should not obviously exceed phone screen boundries.
 
-#define CLI_EXE_NAME_STRLIT "MicroServient.exe"
+#define CLI_EXE_NAME str("MicroServient.exe")
+#define CLI_EXE_DESC str("Exports JSON of the average RGB values in screenshots.")
 #define CLI_XMDT(X) \
-	X(input_file_path, str, "File path to the screenshot of the word game.") \
-	X(output_dir_path, str, "Directory path to output the extracted letters.")
+	X(input_wildcard_path  , str, "Wildcard path that'll be filtered for screenshots.") \
+	X(output_json_file_path, str, "File path of the exported JSON describing the RGB distribution.")
 
 #if PROGRAM_MICROSERVIENT
-	#define MAKE(NAME, TYPE, ...) char NAME[sizeof(#NAME) - 1];
-	static const i32 CLI_LONGEST_NAME_LENGTH = sizeof(union { CLI_XMDT(MAKE) });
-	#undef MAKE
-
 	struct CLI
 	{
 		#define MAKE(NAME, TYPE, ...) TYPE NAME;
