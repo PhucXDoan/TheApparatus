@@ -744,18 +744,4 @@ Calc.setState(state)
 
 ///////////////////////////////
 
-let input = document.createElement("input");
-input.type = "file";
-input.onchange = e =>
-{
-	let file   = e.target.files[0];
-	let reader = new FileReader();
-	reader.readAsText(file, "UTF-8");
-	reader.onload = e =>
-	{
-		let content = JSON.parse(e.target.result);
-		console.log(content);
-	};
-};
-input.click();
 */
