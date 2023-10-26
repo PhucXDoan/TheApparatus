@@ -105,8 +105,10 @@ main(int argc, char** argv)
 			};
 		if (!slot.data)
 		{
-			error_abort("");
+			error_abort("Failed to allocate BMP for slot.");
 		}
+
+		f64_3 avg_rgbs[WORDBITES_BOARD_SLOTS_Y][WORDBITES_BOARD_SLOTS_X] = {0};
 
 		for (i32 slot_pos_y = 0; slot_pos_y < WORDBITES_BOARD_SLOTS_Y; slot_pos_y += 1)
 		{
@@ -116,12 +118,18 @@ main(int argc, char** argv)
 				{
 					for (i32 slot_px_x = 0; slot_px_x < slot.dim_x; slot_px_x += 1)
 					{
-						slot.data[slot_px_y * slot.dim_x + slot_px_x] =
+						struct BMPPixel* pixel = &slot.data[slot_px_y * slot.dim_x + slot_px_x];
+
+						*pixel =
 							bmp.data
 							[
 								(WORDBITES_RAW_BOARD_PX_POS_Y + slot_pos_y * WORDBITES_RAW_SLOT_PX_DIM + slot_px_y) * bmp.dim_x
 									+ (WORDBITES_RAW_BOARD_PX_POS_X + slot_pos_x * WORDBITES_RAW_SLOT_PX_DIM + slot_px_x)
 							];
+
+						avg_rgbs[slot_pos_y][slot_pos_x].x += pixel->r / 256.0 / (WORDBITES_RAW_SLOT_PX_DIM * WORDBITES_RAW_SLOT_PX_DIM);
+						avg_rgbs[slot_pos_y][slot_pos_x].y += pixel->g / 256.0 / (WORDBITES_RAW_SLOT_PX_DIM * WORDBITES_RAW_SLOT_PX_DIM);
+						avg_rgbs[slot_pos_y][slot_pos_x].z += pixel->b / 256.0 / (WORDBITES_RAW_SLOT_PX_DIM * WORDBITES_RAW_SLOT_PX_DIM);
 					}
 				}
 
@@ -134,10 +142,42 @@ main(int argc, char** argv)
 				strbuf_char(&output_file_path, '_');
 				strbuf_u64 (&output_file_path, slot_pos_y);
 				strbuf_cstr(&output_file_path, ".bmp");
-				printf("Exporting: \"%.*s\"\n", i32(output_file_path.length), output_file_path.data);
+
+				printf
+				(
+					"Exporting(%.*s) | AvgRGB(%3d, %3d, %3d)\n",
+					i32(output_file_path.length), output_file_path.data,
+					i32(avg_rgbs[slot_pos_y][slot_pos_x].x * 256.0),
+					i32(avg_rgbs[slot_pos_y][slot_pos_x].y * 256.0),
+					i32(avg_rgbs[slot_pos_y][slot_pos_x].z * 256.0)
+				);
+
 				bmp_export(slot, output_file_path.str);
 			}
 		}
+
+		printf("[");
+		for (i32 slot_pos_y = 0; slot_pos_y < WORDBITES_BOARD_SLOTS_Y; slot_pos_y += 1)
+		{
+			for (i32 slot_pos_x = 0; slot_pos_x < WORDBITES_BOARD_SLOTS_X; slot_pos_x += 1)
+			{
+				printf
+				(
+					"{ x: %d, y: %d, r: %f, g: %f, b: %f }",
+					slot_pos_x,
+					slot_pos_y,
+					avg_rgbs[slot_pos_y][slot_pos_x].x,
+					avg_rgbs[slot_pos_y][slot_pos_x].y,
+					avg_rgbs[slot_pos_y][slot_pos_x].z
+				);
+
+				if (!(slot_pos_x == WORDBITES_BOARD_SLOTS_X - 1 && slot_pos_y == WORDBITES_BOARD_SLOTS_Y - 1))
+				{
+					printf(", ");
+				}
+			}
+		}
+		printf("]");
 
 		free(slot.data);
 		bmp_free_read_file(&bmp);
@@ -166,3 +206,81 @@ main(int argc, char** argv)
 
 	return err;
 }
+
+//
+// Documentation.
+//
+
+/* [Overview].
+const WORDBITES_BOARD_SLOTS_X = 8;
+const WORDBITES_BOARD_SLOTS_Y = 9;
+
+let slots = [];
+
+// wordbites_0.bmp
+// let slots_of_interest = [{ x: 0, y: 2 }, { x: 0, y: 3 }, { x: 0, y: 6 }, { x: 1, y: 8 }, { x: 2, y: 2 }, { x: 2, y: 6 }, { x: 3, y: 0 }, { x: 3, y: 2 }, { x: 3, y: 6 }, { x: 4, y: 4 }, { x: 4, y: 8 }, { x: 5, y: 6 }, { x: 5, y: 8 }, { x: 6, y: 2 }, { x: 6, y: 4 }, { x: 6, y: 6 }].map(slot => slot.y * WORDBITES_BOARD_SLOTS_X + slot.x);
+
+let slots_of_interest = [];
+
+slots_of_interest_indices = slots_of_interest.map(slot => slot.y * WORDBITES_BOARD_SLOTS_X + slot.x)
+
+let state = Calc.getState();
+state.expressions =
+	{
+		list:
+			[
+				{
+					type: "expression",
+					latex: `P = \\left[${slots_of_interest_indices}\\right]`
+				},
+				{
+					type: "expression",
+					latex: `P_n = \\left[${new Array(WORDBITES_BOARD_SLOTS_X * WORDBITES_BOARD_SLOTS_Y).fill(null).map((_, i) => i).filter(x => slots_of_interest_indices.indexOf(x) == -1)}\\right]`
+				},
+				{
+					type: "expression",
+					color: "#FF0000",
+					latex: `y = \\operatorname{mean}\\left(R\\left[P_n + 1\\right]\\right)`
+				},
+				{
+					type: "expression",
+					color: "#00FF00",
+					latex: `y = \\operatorname{mean}\\left(G\\left[P_n + 1\\right]\\right)`
+				},
+				{
+					type: "expression",
+					color: "#0000FF",
+					latex: `y = \\operatorname{mean}\\left(B\\left[P_n + 1\\right]\\right)`
+				},
+				{
+					type: "table",
+					columns:
+						[
+							{ values: slots.map((_, i) => i.toString()), latex: "I" },
+							{ values: slots.map(slot => slot.r.toString()), color: "#FF0000", latex: "R" },
+							{ values: slots.map(slot => slot.g.toString()), color: "#00FF00", latex: "G" },
+							{ values: slots.map(slot => slot.b.toString()), color: "#0000FF", latex: "B" },
+						]
+				},
+				{
+					type: "expression",
+					color: "#FF0000",
+					pointStyle: "OPEN",
+					latex: `\\left(P, R\\left[P + 1\\right]\\right)`
+				},
+				{
+					type: "expression",
+					color: "#00FF00",
+					pointStyle: "OPEN",
+					latex: `\\left(P, G\\left[P + 1\\right]\\right)`
+				},
+				{
+					type: "expression",
+					color: "#0000FF",
+					pointStyle: "OPEN",
+					latex: `\\left(P, B\\left[P + 1\\right]\\right)`
+				}
+			]
+	};
+Calc.setState(state)
+*/

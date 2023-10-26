@@ -38,6 +38,11 @@ typedef int64_t  b64;
 #if PROGRAM_MICROSERVIENT
 	typedef float  f32;
 	typedef double f64;
+	#define f32(...) ((f32) (__VA_ARGS__))
+	#define f64(...) ((f64) (__VA_ARGS__))
+
+	typedef struct { f64 x; f64 y; f64 z; } f64_3;
+	#define f64_3(X, Y, Z) ((f64_3) { (X), (Y), (Z) })
 
 	typedef struct { char* data; i64 length; } str;
 	#define str(STRLIT) (str) { (STRLIT), sizeof(STRLIT) - 1 }
