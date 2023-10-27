@@ -62,7 +62,7 @@ struct Dary_void
 	i64   size;
 };
 
-#define Dary_def(NAME, TYPE) \
+#define Dary_define(NAME, TYPE) \
 	struct Dary_##NAME \
 	{ \
 		union \
@@ -76,6 +76,7 @@ struct Dary_void
 			struct Dary_void dary_void; \
 		}; \
 	}
+#define Dary_def(TYPE) Dary_define(TYPE, TYPE)
 
 //
 // "strbuf.c"
@@ -1429,14 +1430,15 @@ static_assert(WORDBITES_RAW_BOARD_PX_POS_X + WORDBITES_RAW_BOARD_PX_DIM_X <= PHO
 static_assert(WORDBITES_RAW_BOARD_PX_POS_Y + WORDBITES_RAW_BOARD_PX_DIM_Y <= PHONE_DIM_Y); // Should not obviously exceed phone screen boundries.
 
 #define CLI_TYPING_XMDT(X) \
-	X(string, union { struct { char* data; i64 length; }; char* cstr; str str; })
+	X(string     , union { struct { char* data; i64 length; }; char* cstr; str str; }) \
+	X(dary_string, struct Dary_CLIFieldTyping_string_t)
 
 #define CLI_ARG_ADDITIONAL_MARGIN 2
 #define CLI_EXE_NAME              str("MicroServient.exe")
 #define CLI_EXE_DESC              str("Calculates average RGB values in screenshots.")
 #define CLI_XMDT(X) \
-	X(input_wildcard_path  , string, "input"   , "Wildcard path that'll be filtered for screenshots.") \
-	X(output_json_file_path, string, "-output=", "Save the results as a JSON file by providing a file path.")
+	X(input_wildcard_paths , dary_string, "input...", "Wildcard paths that'll be filtered for screenshots.") \
+	X(output_json_file_path, string     , "-output=", "Save the results as a JSON file by providing a file path.")
 
 #if PROGRAM_MICROSERVIENT
 	enum CLIFieldTyping
@@ -1449,6 +1451,8 @@ static_assert(WORDBITES_RAW_BOARD_PX_POS_Y + WORDBITES_RAW_BOARD_PX_DIM_Y <= PHO
 	#define MAKE(NAME, TYPE) typedef TYPE CLIFieldTyping_##NAME##_t;
 	CLI_TYPING_XMDT(MAKE)
 	#undef MAKE
+
+	Dary_def(CLIFieldTyping_string_t);
 
 	struct CLI
 	{

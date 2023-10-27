@@ -55,7 +55,7 @@ main(int argc, char** argv)
 			//
 
 			enum CLIField cli_field = CLIField_COUNT;
-			str           cli_param = {0};
+			char*         cli_param = 0;
 
 			for (enum CLIField canidate_cli_field = {0}; canidate_cli_field < CLIField_COUNT; canidate_cli_field += 1)
 			{
@@ -70,14 +70,18 @@ main(int argc, char** argv)
 					if (str_begins_with(str_cstr(argv[arg_index]), canidate_metadata.pattern))
 					{
 						cli_field = canidate_cli_field;
-						cli_param = str_cstr(argv[arg_index] + canidate_metadata.pattern.length);
+						cli_param = argv[arg_index] + canidate_metadata.pattern.length;
 						break;
 					}
 				}
-				else if (!cli_field_filled[canidate_cli_field] && cli_field == CLIField_COUNT) // Required field that hadn't already been filled and we haven't already pre-selected a required field.
+				else if // Canidate field that is required.
+				(
+					(!cli_field_filled[canidate_cli_field] || str_ends_with(canidate_metadata.pattern, str("..."))) &&
+					cli_field == CLIField_COUNT
+				)
 				{
 					cli_field = canidate_cli_field;
-					cli_param = str_cstr(argv[arg_index]);
+					cli_param = argv[arg_index];
 				}
 			}
 
@@ -92,12 +96,22 @@ main(int argc, char** argv)
 			}
 			else
 			{
+				u8* cli_member = (((u8*) &cli) + CLI_FIELD_METADATA[cli_field].offset);
+
 				switch (CLI_FIELD_METADATA[cli_field].typing)
 				{
 					case CLIFieldTyping_string:
 					{
-						*(CLIFieldTyping_string_t*) (((u8*) &cli) + CLI_FIELD_METADATA[cli_field].offset) =
-							(CLIFieldTyping_string_t) { .str = cli_param };
+						((CLIFieldTyping_string_t*) cli_member)->str = str_cstr(cli_param);
+					} break;
+
+					case CLIFieldTyping_dary_string:
+					{
+						dary_push // Buffer is purposely leaked; no need to clean it up really.
+						(
+							(CLIFieldTyping_dary_string_t*) cli_member,
+							(CLIFieldTyping_string_t[]) { { .str = str_cstr(cli_param) } }
+						);
 					} break;
 				}
 
@@ -171,180 +185,228 @@ main(int argc, char** argv)
 		OUTPUT_WRITE("{\n");
 
 		//
-		// Begin generating JSON data of average RGB values of the screenshots.
+		// Begin outputting data of average RGB values of the screenshots.
 		//
-
-		str input_dir_path = cli.input_wildcard_path.str;
-		while (input_dir_path.length && (input_dir_path.data[input_dir_path.length - 1] != '/' && input_dir_path.data[input_dir_path.length - 1] != '\\'))
-		{
-			input_dir_path.length -= 1;
-		}
-
-		WIN32_FIND_DATAA finder_data   = {0};
-		HANDLE           finder_handle = FindFirstFileA(cli.input_wildcard_path.cstr, &finder_data);
-
-		if (finder_handle == INVALID_HANDLE_VALUE && GetLastError() != ERROR_FILE_NOT_FOUND)
-		{
-			error("`FindFirstFileA` failed on \"%s\".", cli.input_wildcard_path.cstr);
-		}
 
 		OUTPUT_WRITE
 		(
-			"\t\"avg_screenshot_rgbs\":\n"
+			"\t\"avg_screenshot_rgb_analysis\":\n"
 			"\t\t[\n"
 		);
-		if (finder_handle != INVALID_HANDLE_VALUE)
+
+		for (i32 input_wildcard_path_index = 0; input_wildcard_path_index < cli.input_wildcard_paths.length; input_wildcard_path_index += 1)
 		{
-			i32   processed_amount    = 0;
-			f64_3 overall_avg_rgb     = {0};
-			f64_3 overall_min_avg_rgb = {0};
-			f64_3 overall_max_avg_rgb = {0};
+			CLIFieldTyping_string_t input_wildcard_path = cli.input_wildcard_paths.data[input_wildcard_path_index];
 
-			while (true)
+			if (input_wildcard_path_index)
 			{
-				//
-				// Analyze image.
-				//
-
-				if
-				(
-					!(finder_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
-					str_ends_with_caseless(str_cstr(finder_data.cFileName), str(".bmp"))
-				)
-				{
-					struct StrBuf input_file_path = StrBuf(256);
-					strbuf_str(&input_file_path, input_dir_path);
-					strbuf_str(&input_file_path, str_cstr(finder_data.cFileName));
-
-					struct BMP bmp = bmp_malloc_read_file(input_file_path.str);
-
-					if (bmp.dim_x == PHONE_DIM_X && bmp.dim_y == PHONE_DIM_Y)
-					{
-						f64_3 avg_rgb = {0};
-						for (i32 i = 0; i < bmp.dim_x * bmp.dim_y; i += 1)
-						{
-							avg_rgb.x += bmp.data[i].r;
-							avg_rgb.y += bmp.data[i].g;
-							avg_rgb.z += bmp.data[i].b;
-						}
-						overall_avg_rgb.x += avg_rgb.x;
-						overall_avg_rgb.y += avg_rgb.y;
-						overall_avg_rgb.z += avg_rgb.z;
-						avg_rgb.x         /= 256.0 * bmp.dim_x * bmp.dim_y;
-						avg_rgb.y         /= 256.0 * bmp.dim_x * bmp.dim_y;
-						avg_rgb.z         /= 256.0 * bmp.dim_x * bmp.dim_y;
-
-						if (processed_amount)
-						{
-							overall_min_avg_rgb.x = f64_min(overall_min_avg_rgb.x, avg_rgb.x);
-							overall_min_avg_rgb.y = f64_min(overall_min_avg_rgb.y, avg_rgb.y);
-							overall_min_avg_rgb.z = f64_min(overall_min_avg_rgb.z, avg_rgb.z);
-
-							overall_max_avg_rgb.x = f64_max(overall_max_avg_rgb.x, avg_rgb.x);
-							overall_max_avg_rgb.y = f64_max(overall_max_avg_rgb.y, avg_rgb.y);
-							overall_max_avg_rgb.z = f64_max(overall_max_avg_rgb.z, avg_rgb.z);
-						}
-						else
-						{
-							overall_min_avg_rgb.x = avg_rgb.x;
-							overall_min_avg_rgb.y = avg_rgb.y;
-							overall_min_avg_rgb.z = avg_rgb.z;
-
-							overall_max_avg_rgb.x = avg_rgb.x;
-							overall_max_avg_rgb.y = avg_rgb.y;
-							overall_max_avg_rgb.z = avg_rgb.z;
-						}
-
-						printf
-						(
-							"% 4d : %.*s : AvgRGB(%.3f, %.3f, %.3f).\n",
-							processed_amount,
-							i32(input_file_path.length), input_file_path.data,
-							avg_rgb.x * 256.0,
-							avg_rgb.y * 256.0,
-							avg_rgb.z * 256.0
-						);
-
-						if (processed_amount)
-						{
-							OUTPUT_WRITE(",\n");
-						}
-
-						OUTPUT_WRITE
-						(
-							"\t\t\t{ \"name\": \"%s\", \"avg_rgb\": { \"r\": %f, \"g\": %f, \"b\": %f } }",
-							finder_data.cFileName,
-							avg_rgb.x,
-							avg_rgb.y,
-							avg_rgb.z
-						);
-
-						processed_amount += 1;
-					}
-
-					free(bmp.data);
-				}
-
-				//
-				// Iterate to the next file.
-				//
-
-				if (!FindNextFileA(finder_handle, &finder_data))
-				{
-					if (GetLastError() == ERROR_NO_MORE_FILES)
-					{
-						if (processed_amount)
-						{
-							OUTPUT_WRITE("\n");
-						}
-
-						break;
-					}
-					else
-					{
-						error("`FindNextFileA` failed.");
-					}
-				}
-			}
-
-			if (processed_amount)
-			{
-				overall_avg_rgb.x /= 256.0 * processed_amount * PHONE_DIM_X * PHONE_DIM_Y;
-				overall_avg_rgb.y /= 256.0 * processed_amount * PHONE_DIM_X * PHONE_DIM_Y;
-				overall_avg_rgb.z /= 256.0 * processed_amount * PHONE_DIM_X * PHONE_DIM_Y;
 				printf("\n");
 			}
 
-			printf("Processed %d images with \"%s\"", processed_amount, cli.input_wildcard_path.cstr);
-			if (cli_field_filled[CLIField_output_json_file_path])
-			{
-				printf("; outputted to \"%s\"", cli.output_json_file_path.cstr);
-			}
-			printf(".\n");
+			printf("[%d/%lld] Processing \"%s\".\n", input_wildcard_path_index + 1, cli.input_wildcard_paths.length, input_wildcard_path.cstr);
 
-			if (processed_amount)
+			OUTPUT_WRITE
+			(
+				"\t\t\t{\n"
+				"\t\t\t\t\"wildcard_path\": \""
+			);
+			for (i32 i = 0; i < input_wildcard_path.length; i += 1)
 			{
-				printf
-				(
-					"Overall maximum RGB : (%7.3f, %7.3f, %7.3f).\n"
-					"Overall average RGB : (%7.3f, %7.3f, %7.3f).\n"
-					"Overall minimum RGB : (%7.3f, %7.3f, %7.3f).\n"
-					"Minimum wiggle room : (%7.3f, %7.3f, %7.3f).\n",
-					overall_max_avg_rgb.x * 256.0, overall_max_avg_rgb.y * 256.0, overall_max_avg_rgb.z * 256.0,
-					overall_avg_rgb    .x * 256.0, overall_avg_rgb    .y * 256.0, overall_avg_rgb    .z * 256.0,
-					overall_min_avg_rgb.x * 256.0, overall_min_avg_rgb.y * 256.0, overall_min_avg_rgb.z * 256.0,
-					f64_max(f64_abs(overall_min_avg_rgb.x - overall_avg_rgb.x), f64_abs(overall_max_avg_rgb.x - overall_avg_rgb.x)) * 256.0,
-					f64_max(f64_abs(overall_min_avg_rgb.y - overall_avg_rgb.y), f64_abs(overall_max_avg_rgb.y - overall_avg_rgb.y)) * 256.0,
-					f64_max(f64_abs(overall_min_avg_rgb.z - overall_avg_rgb.z), f64_abs(overall_max_avg_rgb.z - overall_avg_rgb.z)) * 256.0
-				);
+				if (input_wildcard_path.data[i] == '\\')
+				{
+					OUTPUT_WRITE("\\\\");
+				}
+				else
+				{
+					OUTPUT_WRITE("%c", input_wildcard_path.data[i]);
+				}
+			}
+			OUTPUT_WRITE
+			(
+				"\",\n"
+				"\t\t\t\t\"samples\":\n"
+				"\t\t\t\t\t[\n"
+			);
+
+			//
+			// Set up iterator to go through the directory.
+			//
+
+			str input_dir_path = input_wildcard_path.str;
+			while (input_dir_path.length && (input_dir_path.data[input_dir_path.length - 1] != '/' && input_dir_path.data[input_dir_path.length - 1] != '\\'))
+			{
+				input_dir_path.length -= 1;
+			}
+
+			WIN32_FIND_DATAA finder_data   = {0};
+			HANDLE           finder_handle = FindFirstFileA(input_wildcard_path.cstr, &finder_data);
+
+			if (finder_handle == INVALID_HANDLE_VALUE && GetLastError() != ERROR_FILE_NOT_FOUND)
+			{
+				error("`FindFirstFileA` failed on \"%s\".", input_wildcard_path.cstr);
+			}
+
+			if (finder_handle != INVALID_HANDLE_VALUE)
+			{
+				i32   processed_amount    = 0;
+				f64_3 overall_avg_rgb     = {0};
+				f64_3 overall_min_avg_rgb = {0};
+				f64_3 overall_max_avg_rgb = {0};
+
+				while (true)
+				{
+					//
+					// Analyze image.
+					//
+
+					if
+					(
+						!(finder_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
+						str_ends_with_caseless(str_cstr(finder_data.cFileName), str(".bmp"))
+					)
+					{
+						struct StrBuf input_file_path = StrBuf(256);
+						strbuf_str(&input_file_path, input_dir_path);
+						strbuf_str(&input_file_path, str_cstr(finder_data.cFileName));
+
+						struct BMP bmp = bmp_malloc_read_file(input_file_path.str);
+
+						if (bmp.dim_x == PHONE_DIM_X && bmp.dim_y == PHONE_DIM_Y)
+						{
+							f64_3 avg_rgb = {0};
+							for (i32 i = 0; i < bmp.dim_x * bmp.dim_y; i += 1)
+							{
+								avg_rgb.x += bmp.data[i].r;
+								avg_rgb.y += bmp.data[i].g;
+								avg_rgb.z += bmp.data[i].b;
+							}
+							overall_avg_rgb.x += avg_rgb.x;
+							overall_avg_rgb.y += avg_rgb.y;
+							overall_avg_rgb.z += avg_rgb.z;
+							avg_rgb.x         /= 256.0 * bmp.dim_x * bmp.dim_y;
+							avg_rgb.y         /= 256.0 * bmp.dim_x * bmp.dim_y;
+							avg_rgb.z         /= 256.0 * bmp.dim_x * bmp.dim_y;
+
+							if (processed_amount)
+							{
+								overall_min_avg_rgb.x = f64_min(overall_min_avg_rgb.x, avg_rgb.x);
+								overall_min_avg_rgb.y = f64_min(overall_min_avg_rgb.y, avg_rgb.y);
+								overall_min_avg_rgb.z = f64_min(overall_min_avg_rgb.z, avg_rgb.z);
+
+								overall_max_avg_rgb.x = f64_max(overall_max_avg_rgb.x, avg_rgb.x);
+								overall_max_avg_rgb.y = f64_max(overall_max_avg_rgb.y, avg_rgb.y);
+								overall_max_avg_rgb.z = f64_max(overall_max_avg_rgb.z, avg_rgb.z);
+							}
+							else
+							{
+								overall_min_avg_rgb.x = avg_rgb.x;
+								overall_min_avg_rgb.y = avg_rgb.y;
+								overall_min_avg_rgb.z = avg_rgb.z;
+
+								overall_max_avg_rgb.x = avg_rgb.x;
+								overall_max_avg_rgb.y = avg_rgb.y;
+								overall_max_avg_rgb.z = avg_rgb.z;
+							}
+
+							printf
+							(
+								"% 4d : %.*s : AvgRGB(%.3f, %.3f, %.3f).\n",
+								processed_amount + 1,
+								i32(input_file_path.length), input_file_path.data,
+								avg_rgb.x * 256.0,
+								avg_rgb.y * 256.0,
+								avg_rgb.z * 256.0
+							);
+
+							if (processed_amount)
+							{
+								OUTPUT_WRITE(",\n");
+							}
+
+							OUTPUT_WRITE
+							(
+								"\t\t\t\t\t\t{ \"name\": \"%s\", \"avg_rgb\": { \"r\": %f, \"g\": %f, \"b\": %f } }",
+								finder_data.cFileName,
+								avg_rgb.x,
+								avg_rgb.y,
+								avg_rgb.z
+							);
+
+							processed_amount += 1;
+						}
+
+						free(bmp.data);
+					}
+
+					//
+					// Iterate to the next file.
+					//
+
+					if (!FindNextFileA(finder_handle, &finder_data))
+					{
+						if (GetLastError() == ERROR_NO_MORE_FILES)
+						{
+							if (processed_amount)
+							{
+								OUTPUT_WRITE
+								(
+									"\n"
+									"\t\t\t\t\t]\n"
+									"\t\t\t}"
+								);
+
+								if (input_wildcard_path_index != cli.input_wildcard_paths.length - 1)
+								{
+									if (processed_amount)
+									{
+										OUTPUT_WRITE(",");
+									}
+								}
+
+								OUTPUT_WRITE("\n");
+							}
+
+							break;
+						}
+						else
+						{
+							error("`FindNextFileA` failed.");
+						}
+					}
+				}
+
+				if (processed_amount)
+				{
+					overall_avg_rgb.x /= 256.0 * processed_amount * PHONE_DIM_X * PHONE_DIM_Y;
+					overall_avg_rgb.y /= 256.0 * processed_amount * PHONE_DIM_X * PHONE_DIM_Y;
+					overall_avg_rgb.z /= 256.0 * processed_amount * PHONE_DIM_X * PHONE_DIM_Y;
+				}
+
+				if (processed_amount)
+				{
+					printf
+					(
+						"\tOverall maximum RGB : (%7.3f, %7.3f, %7.3f).\n"
+						"\tOverall average RGB : (%7.3f, %7.3f, %7.3f).\n"
+						"\tOverall minimum RGB : (%7.3f, %7.3f, %7.3f).\n"
+						"\tMinimum wiggle room : (%7.3f, %7.3f, %7.3f).\n",
+						overall_max_avg_rgb.x * 256.0, overall_max_avg_rgb.y * 256.0, overall_max_avg_rgb.z * 256.0,
+						overall_avg_rgb    .x * 256.0, overall_avg_rgb    .y * 256.0, overall_avg_rgb    .z * 256.0,
+						overall_min_avg_rgb.x * 256.0, overall_min_avg_rgb.y * 256.0, overall_min_avg_rgb.z * 256.0,
+						f64_max(f64_abs(overall_min_avg_rgb.x - overall_avg_rgb.x), f64_abs(overall_max_avg_rgb.x - overall_avg_rgb.x)) * 256.0,
+						f64_max(f64_abs(overall_min_avg_rgb.y - overall_avg_rgb.y), f64_abs(overall_max_avg_rgb.y - overall_avg_rgb.y)) * 256.0,
+						f64_max(f64_abs(overall_min_avg_rgb.z - overall_avg_rgb.z), f64_abs(overall_max_avg_rgb.z - overall_avg_rgb.z)) * 256.0
+					);
+				}
+			}
+
+			if (!FindClose(finder_handle))
+			{
+				error("`FindClose` failed on \"%s\".", input_wildcard_path.cstr);
 			}
 		}
+
 		OUTPUT_WRITE("\t\t]\n");
-
-		if (!FindClose(finder_handle))
-		{
-			error("`FindClose` failed on \"%s\".", cli.input_wildcard_path.cstr);
-		}
 
 		//
 		// Finish JSON.
