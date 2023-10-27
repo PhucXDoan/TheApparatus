@@ -69,4 +69,4 @@ dummy_input.onchange = ({ target: { files: [dummy_blob] } }) =>
 		Calc.setState(state);
 	};
 };
-setTimeout(() => document.querySelector("div.align-right-container").appendChild(dummy_input), 500);
+setTimeout(() => document.querySelector("div.align-right-container").appendChild(dummy_input), 100);

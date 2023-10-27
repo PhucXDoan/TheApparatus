@@ -1431,11 +1431,12 @@ static_assert(WORDBITES_RAW_BOARD_PX_POS_Y + WORDBITES_RAW_BOARD_PX_DIM_Y <= PHO
 #define CLI_TYPING_XMDT(X) \
 	X(string, union { struct { char* data; i64 length; }; char* cstr; str str; })
 
-#define CLI_EXE_NAME str("MicroServient.exe")
-#define CLI_EXE_DESC str("Exports JSON of the average RGB values in screenshots.")
+#define CLI_ARG_ADDITIONAL_MARGIN 2
+#define CLI_EXE_NAME              str("MicroServient.exe")
+#define CLI_EXE_DESC              str("Calculates average RGB values in screenshots.")
 #define CLI_XMDT(X) \
-	X(input_wildcard_path  , string, "Wildcard path that'll be filtered for screenshots.") \
-	X(output_json_file_path, string, "File path of the exported JSON describing the RGB distribution.")
+	X(input_wildcard_path  , string, "input"   , "Wildcard path that'll be filtered for screenshots.") \
+	X(output_json_file_path, string, "-output=", "Save the results as a JSON file by providing a file path.")
 
 #if PROGRAM_MICROSERVIENT
 	enum CLIFieldTyping
@@ -1468,18 +1469,18 @@ static_assert(WORDBITES_RAW_BOARD_PX_POS_Y + WORDBITES_RAW_BOARD_PX_DIM_Y <= PHO
 	{
 		i64                 offset;
 		enum CLIFieldTyping typing;
-		str                 name;
+		str                 pattern;
 		str                 desc;
 	};
 
 	static const struct CLIFieldMetaData CLI_FIELD_METADATA[] =
 		{
-			#define MAKE(FIELD_NAME, TYPING_NAME, DESC, ...) \
+			#define MAKE(FIELD_NAME, TYPING_NAME, PATTERN, DESC, ...) \
 				{ \
-					.offset = offsetof(struct CLI, FIELD_NAME), \
-					.typing = CLIFieldTyping_##TYPING_NAME, \
-					.name   = STR(#FIELD_NAME), \
-					.desc   = STR(DESC), \
+					.offset  = offsetof(struct CLI, FIELD_NAME), \
+					.typing  = CLIFieldTyping_##TYPING_NAME, \
+					.pattern = STR(PATTERN), \
+					.desc    = STR(DESC), \
 				},
 			CLI_XMDT(MAKE)
 			#undef MAKE

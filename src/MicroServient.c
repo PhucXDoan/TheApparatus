@@ -11,76 +11,129 @@
 #include "bmp.c"
 #include "dary.c"
 
+static i32 // Amount of characters printed.
+print_cli_field(enum CLIField cli_field)
+{
+	i32 result = 0;
+
+	printf("%c", CLI_FIELD_METADATA[cli_field].pattern.data[0] == '-' ? '(' : '[');
+	result += 1;
+
+	printf("%.*s", i32(CLI_FIELD_METADATA[cli_field].pattern.length), CLI_FIELD_METADATA[cli_field].pattern.data);
+	result += i32(CLI_FIELD_METADATA[cli_field].pattern.length);
+
+	printf("%c", CLI_FIELD_METADATA[cli_field].pattern.data[0] == '-' ? ')' : ']');
+	result += 1;
+
+	return result;
+}
+
 int
 main(int argc, char** argv)
 {
-	b32 err = 0;
+	b32 err = false;
 
 	//
 	// Parse CLI arguments.
 	//
 
-	b32        cli_parsed = false;
-	struct CLI cli        = {0};
+	b32        cli_parsed                       = false;
+	b32        cli_field_filled[CLIField_COUNT] = {0};
+	struct CLI cli                              = {0};
 
 	if (argc >= 2)
 	{
-		b32 cli_field_parsed[CLIField_COUNT] = {0};
-
 		//
-		// Parse each argument passed by the user.
+		// Parse arguments.
 		//
 
-		for
-		(
-			i32 arg_index = 1;
-			arg_index < argc;
-			arg_index += 1
-		)
+		i32 arg_index = 1;
+		while (arg_index < argc && !err)
+		{
+			//
+			// Determine the most appropriate CLI field and the argument's parameter.
+			//
+
+			enum CLIField cli_field = CLIField_COUNT;
+			str           cli_param = {0};
+
+			for (enum CLIField canidate_cli_field = {0}; canidate_cli_field < CLIField_COUNT; canidate_cli_field += 1)
+			{
+				struct CLIFieldMetaData canidate_metadata = CLI_FIELD_METADATA[canidate_cli_field];
+
+				if // Canidate field is optional with explicit parameter.
+				(
+					canidate_metadata.pattern.data[0] == '-' &&
+					canidate_metadata.pattern.data[canidate_metadata.pattern.length - 1] == '='
+				)
+				{
+					if (str_begins_with(str_cstr(argv[arg_index]), canidate_metadata.pattern))
+					{
+						cli_field = canidate_cli_field;
+						cli_param = str_cstr(argv[arg_index] + canidate_metadata.pattern.length);
+						break;
+					}
+				}
+				else if (!cli_field_filled[canidate_cli_field] && cli_field == CLIField_COUNT) // Required field that hadn't already been filled and we haven't already pre-selected a required field.
+				{
+					cli_field = canidate_cli_field;
+					cli_param = str_cstr(argv[arg_index]);
+				}
+			}
+
+			//
+			// Parse parameter.
+			//
+
+			if (cli_field == CLIField_COUNT)
+			{
+				printf("Unknown argument \"%s\".\n", argv[arg_index]);
+				err = true;
+			}
+			else
+			{
+				switch (CLI_FIELD_METADATA[cli_field].typing)
+				{
+					case CLIFieldTyping_string:
+					{
+						*(CLIFieldTyping_string_t*) (((u8*) &cli) + CLI_FIELD_METADATA[cli_field].offset) =
+							(CLIFieldTyping_string_t) { .str = cli_param };
+					} break;
+				}
+
+				cli_field_filled[cli_field] = true;
+
+				arg_index += 1;
+			}
+		}
+
+		//
+		// Verify fields.
+		//
+
+		if (!err)
 		{
 			for (enum CLIField cli_field = {0}; cli_field < CLIField_COUNT; cli_field += 1)
 			{
-				if (!cli_field_parsed[cli_field])
+				struct CLIFieldMetaData metadata = CLI_FIELD_METADATA[cli_field];
+				if
+				(
+					!(metadata.pattern.data[0] == '-') && // Field is not optional.
+					!cli_field_filled[cli_field]
+				)
 				{
-					switch (CLI_FIELD_METADATA[cli_field].typing)
-					{
-						case CLIFieldTyping_string:
-						{
-							*(CLIFieldTyping_string_t*) (((u8*) &cli) + CLI_FIELD_METADATA[cli_field].offset) =
-								(CLIFieldTyping_string_t)
-								{
-									.data   = argv[arg_index],
-									.length = strlen(argv[arg_index]),
-								};
-						} break;
-					}
-
-					cli_field_parsed[cli_field] = true;
+					printf("Required argument ");
+					print_cli_field(cli_field);
+					printf(" not provided.\n");
+					err = true;
 					break;
 				}
 			}
 		}
 
-		//
-		// Verify all required arguments were fulfilled.
-		//
-
-		cli_parsed = true;
-		for (enum CLIField cli_field = {0}; cli_field < CLIField_COUNT; cli_field += 1)
+		if (!err)
 		{
-			if (!cli_field_parsed[cli_field])
-			{
-				cli_parsed = false;
-				err        = true;
-
-				printf
-				(
-					"Required argument [%.*s] not provided.\n",
-					i32(CLI_FIELD_METADATA[cli_field].name.length), CLI_FIELD_METADATA[cli_field].name.data
-				);
-
-				break;
-			}
+			cli_parsed = true;
 		}
 	}
 
@@ -94,23 +147,28 @@ main(int argc, char** argv)
 		// Set up JSON.
 		//
 
-		FILE* output_json_file = fopen(cli.output_json_file_path.cstr, "wb");
-		if (!output_json_file)
+		FILE* output_json_file = 0;
+
+		if (cli_field_filled[CLIField_output_json_file_path])
 		{
-			error("`fopen` failed on \"%s\".", cli.output_json_file_path.cstr);
+			output_json_file = fopen(cli.output_json_file_path.cstr, "wb");
+			if (!output_json_file)
+			{
+				error("`fopen` failed on \"%s\".", cli.output_json_file_path.cstr);
+			}
 		}
 
-		#define TRY_WRITE(STRLIT, ...) \
+		#define OUTPUT_WRITE(STRLIT, ...) \
 			do \
 			{ \
-				if (fprintf(output_json_file, (STRLIT),##__VA_ARGS__) < 0) \
+				if (output_json_file && fprintf(output_json_file, (STRLIT),##__VA_ARGS__) < 0) \
 				{ \
 					error("`fwrite` failed."); \
 				} \
 			} \
 			while (false)
 
-		TRY_WRITE("{\n");
+		OUTPUT_WRITE("{\n");
 
 		//
 		// Begin generating JSON data of average RGB values of the screenshots.
@@ -130,7 +188,7 @@ main(int argc, char** argv)
 			error("`FindFirstFileA` failed on \"%s\".", cli.input_wildcard_path.cstr);
 		}
 
-		TRY_WRITE
+		OUTPUT_WRITE
 		(
 			"\t\"avg_screenshot_rgbs\":\n"
 			"\t\t[\n"
@@ -199,7 +257,8 @@ main(int argc, char** argv)
 
 						printf
 						(
-							"%.*s : AvgRGB(%.3f, %.3f, %.3f).\n",
+							"% 4d : %.*s : AvgRGB(%.3f, %.3f, %.3f).\n",
+							processed_amount,
 							i32(input_file_path.length), input_file_path.data,
 							avg_rgb.x * 256.0,
 							avg_rgb.y * 256.0,
@@ -208,10 +267,10 @@ main(int argc, char** argv)
 
 						if (processed_amount)
 						{
-							TRY_WRITE(",\n");
+							OUTPUT_WRITE(",\n");
 						}
 
-						TRY_WRITE
+						OUTPUT_WRITE
 						(
 							"\t\t\t{ \"name\": \"%s\", \"avg_rgb\": { \"r\": %f, \"g\": %f, \"b\": %f } }",
 							finder_data.cFileName,
@@ -236,7 +295,7 @@ main(int argc, char** argv)
 					{
 						if (processed_amount)
 						{
-							TRY_WRITE("\n");
+							OUTPUT_WRITE("\n");
 						}
 
 						break;
@@ -256,7 +315,12 @@ main(int argc, char** argv)
 				printf("\n");
 			}
 
-			printf("Processed %d images with \"%s\"; outputted to \"%s\".\n", processed_amount, cli.input_wildcard_path.cstr, cli.output_json_file_path.cstr);
+			printf("Processed %d images with \"%s\"", processed_amount, cli.input_wildcard_path.cstr);
+			if (cli_field_filled[CLIField_output_json_file_path])
+			{
+				printf("; outputted to \"%s\"", cli.output_json_file_path.cstr);
+			}
+			printf(".\n");
 
 			if (processed_amount)
 			{
@@ -275,7 +339,7 @@ main(int argc, char** argv)
 				);
 			}
 		}
-		TRY_WRITE("\t\t]\n");
+		OUTPUT_WRITE("\t\t]\n");
 
 		if (!FindClose(finder_handle))
 		{
@@ -286,23 +350,28 @@ main(int argc, char** argv)
 		// Finish JSON.
 		//
 
-		TRY_WRITE("}\n");
+		OUTPUT_WRITE("}\n");
 
-		#undef TRY_WRITE
+		#undef OUTPUT_WRITE
 
-		if (fclose(output_json_file))
+		if (output_json_file && fclose(output_json_file))
 		{
 			error("`fclose` failed on \"%s\".", cli.output_json_file_path.cstr);
 		}
 	}
-	else // Failed to parse CLI arguments.
+	else // CLI fields were not fully parsed.
 	{
+		if (err)
+		{
+			printf("\n");
+		}
+
 		str exe_name = argc ? str_cstr(argv[0]) : CLI_EXE_NAME;
 
 		i64 margin_length = exe_name.length;
 		for (enum CLIField cli_field = {0}; cli_field < CLIField_COUNT; cli_field += 1)
 		{
-			margin_length = i64_max(margin_length, CLI_FIELD_METADATA[cli_field].name.length);
+			margin_length = i64_max(margin_length, CLI_FIELD_METADATA[cli_field].pattern.length + CLI_ARG_ADDITIONAL_MARGIN);
 		}
 
 		//
@@ -312,7 +381,8 @@ main(int argc, char** argv)
 		printf("%.*s", i32(exe_name.length), exe_name.data);
 		for (enum CLIField cli_field = {0}; cli_field < CLIField_COUNT; cli_field += 1)
 		{
-			printf(" [%.*s]", i32(CLI_FIELD_METADATA[cli_field].name.length), CLI_FIELD_METADATA[cli_field].name.data);
+			printf(" ");
+			print_cli_field(cli_field);
 		}
 		printf("\n");
 
@@ -329,11 +399,12 @@ main(int argc, char** argv)
 		);
 		for (enum CLIField cli_field = {0}; cli_field < CLIField_COUNT; cli_field += 1)
 		{
+			printf("\t");
+			i32 cli_field_length = print_cli_field(cli_field);
 			printf
 			(
-				"\t[%.*s]%*s | %.*s\n",
-				i32(CLI_FIELD_METADATA[cli_field].name.length), CLI_FIELD_METADATA[cli_field].name.data,
-				i32(margin_length - (CLI_FIELD_METADATA[cli_field].name.length + 2)), "",
+				"%*s | %.*s\n",
+				i32(margin_length - cli_field_length), "",
 				i32(CLI_FIELD_METADATA[cli_field].desc.length), CLI_FIELD_METADATA[cli_field].desc.data
 			);
 		}

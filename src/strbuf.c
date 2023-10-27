@@ -99,4 +99,24 @@ strbuf_i64(struct StrBuf* buf, i64 value) // Remaining space of at least 20 will
 	return result;
 }
 
+static str
+strbuf_pad_right_char(struct StrBuf* buf, i64 min_length, char padding)
+{
+	str result = {0};
+
+	if (min_length > buf->size)
+	{
+		error_capacity();
+	}
+	else if (min_length > buf->length)
+	{
+		result.data   = buf->data + buf->length;
+		result.length = min_length - buf->length;
+		memset(result.data, padding, result.length);
+		buf->length += result.length;
+	}
+
+	return result;
+}
+
 #undef error_capacity

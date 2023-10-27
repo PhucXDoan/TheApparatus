@@ -6,6 +6,13 @@ str_cstr(char* cstr)
 }
 
 static b32
+str_begins_with(str src, str starting)
+{
+	b32 result = src.length >= starting.length && !memcmp(src.data, starting.data, starting.length);
+	return result;
+}
+
+static b32
 str_ends_with_caseless(str src, str ending)
 {
 	b32 result = true;
