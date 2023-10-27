@@ -30,6 +30,17 @@ static i16 i16_mod(i16 x, i16 y) { return ((x % y) + y) % y; }
 static i32 i32_mod(i32 x, i32 y) { return ((x % y) + y) % y; }
 static i64 i64_mod(i64 x, i64 y) { return ((x % y) + y) % y; }
 
+#ifdef f64
+	static f32 f32_min(f32 x, f32 y) { return x <= y ? x : y; }
+	static f64 f64_min(f64 x, f64 y) { return x <= y ? x : y; }
+	static f32 f32_max(f32 x, f32 y) { return x >= y ? x : y; }
+	static f64 f64_max(f64 x, f64 y) { return x >= y ? x : y; }
+	static f32 f32_clamp(f32 value, f32 min, f32 max) { return value <= min ? min : value >= max ? max : value; }
+	static f64 f64_clamp(f64 value, f64 min, f64 max) { return value <= min ? min : value >= max ? max : value; }
+	static f32 f32_abs(f32 value) { return value < 0 ? -value : value; }
+	static f64 f64_abs(f64 value) { return value < 0 ? -value : value; }
+#endif
+
 static u8 // Amount written; will never exceed 255 since all serialized u64s will be 20 bytes or shorter.
 serialize_u64(char* dst, u16 dst_size, u64 value) // "dst_size" of at least 20 will handle all values.
 {

@@ -137,7 +137,10 @@ main(int argc, char** argv)
 		);
 		if (finder_handle != INVALID_HANDLE_VALUE)
 		{
-			i32 processed_amount = 0;
+			i32   processed_amount    = 0;
+			f64_3 overall_avg_rgb     = {0};
+			f64_3 overall_min_avg_rgb = {0};
+			f64_3 overall_max_avg_rgb = {0};
 
 			while (true)
 			{
@@ -166,17 +169,41 @@ main(int argc, char** argv)
 							avg_rgb.y += bmp.data[i].g;
 							avg_rgb.z += bmp.data[i].b;
 						}
-						avg_rgb.x /= 256.0 * bmp.dim_x * bmp.dim_y;
-						avg_rgb.y /= 256.0 * bmp.dim_x * bmp.dim_y;
-						avg_rgb.z /= 256.0 * bmp.dim_x * bmp.dim_y;
+						overall_avg_rgb.x += avg_rgb.x;
+						overall_avg_rgb.y += avg_rgb.y;
+						overall_avg_rgb.z += avg_rgb.z;
+						avg_rgb.x         /= 256.0 * bmp.dim_x * bmp.dim_y;
+						avg_rgb.y         /= 256.0 * bmp.dim_x * bmp.dim_y;
+						avg_rgb.z         /= 256.0 * bmp.dim_x * bmp.dim_y;
+
+						if (processed_amount)
+						{
+							overall_min_avg_rgb.x = f64_min(overall_min_avg_rgb.x, avg_rgb.x);
+							overall_min_avg_rgb.y = f64_min(overall_min_avg_rgb.y, avg_rgb.y);
+							overall_min_avg_rgb.z = f64_min(overall_min_avg_rgb.z, avg_rgb.z);
+
+							overall_max_avg_rgb.x = f64_max(overall_max_avg_rgb.x, avg_rgb.x);
+							overall_max_avg_rgb.y = f64_max(overall_max_avg_rgb.y, avg_rgb.y);
+							overall_max_avg_rgb.z = f64_max(overall_max_avg_rgb.z, avg_rgb.z);
+						}
+						else
+						{
+							overall_min_avg_rgb.x = avg_rgb.x;
+							overall_min_avg_rgb.y = avg_rgb.y;
+							overall_min_avg_rgb.z = avg_rgb.z;
+
+							overall_max_avg_rgb.x = avg_rgb.x;
+							overall_max_avg_rgb.y = avg_rgb.y;
+							overall_max_avg_rgb.z = avg_rgb.z;
+						}
 
 						printf
 						(
-							"%.*s : AvgRGB(%3d, %3d, %3d)\n",
+							"%.*s : AvgRGB(%.3f, %.3f, %.3f).\n",
 							i32(input_file_path.length), input_file_path.data,
-							i32(avg_rgb.x * 256.0),
-							i32(avg_rgb.y * 256.0),
-							i32(avg_rgb.z * 256.0)
+							avg_rgb.x * 256.0,
+							avg_rgb.y * 256.0,
+							avg_rgb.z * 256.0
 						);
 
 						if (processed_amount)
@@ -212,8 +239,6 @@ main(int argc, char** argv)
 							TRY_WRITE("\n");
 						}
 
-						printf("Processed %d images with \"%s\".\n", processed_amount, cli.input_wildcard_path.cstr);
-
 						break;
 					}
 					else
@@ -221,6 +246,33 @@ main(int argc, char** argv)
 						error("`FindNextFileA` failed.");
 					}
 				}
+			}
+
+			if (processed_amount)
+			{
+				overall_avg_rgb.x /= 256.0 * processed_amount * PHONE_DIM_X * PHONE_DIM_Y;
+				overall_avg_rgb.y /= 256.0 * processed_amount * PHONE_DIM_X * PHONE_DIM_Y;
+				overall_avg_rgb.z /= 256.0 * processed_amount * PHONE_DIM_X * PHONE_DIM_Y;
+				printf("\n");
+			}
+
+			printf("Processed %d images with \"%s\"; outputted to \"%s\".\n", processed_amount, cli.input_wildcard_path.cstr, cli.output_json_file_path.cstr);
+
+			if (processed_amount)
+			{
+				printf
+				(
+					"Overall maximum RGB : (%7.3f, %7.3f, %7.3f).\n"
+					"Overall average RGB : (%7.3f, %7.3f, %7.3f).\n"
+					"Overall minimum RGB : (%7.3f, %7.3f, %7.3f).\n"
+					"Minimum wiggle room : (%7.3f, %7.3f, %7.3f).\n",
+					overall_max_avg_rgb.x * 256.0, overall_max_avg_rgb.y * 256.0, overall_max_avg_rgb.z * 256.0,
+					overall_avg_rgb    .x * 256.0, overall_avg_rgb    .y * 256.0, overall_avg_rgb    .z * 256.0,
+					overall_min_avg_rgb.x * 256.0, overall_min_avg_rgb.y * 256.0, overall_min_avg_rgb.z * 256.0,
+					f64_max(f64_abs(overall_min_avg_rgb.x - overall_avg_rgb.x), f64_abs(overall_max_avg_rgb.x - overall_avg_rgb.x)) * 256.0,
+					f64_max(f64_abs(overall_min_avg_rgb.y - overall_avg_rgb.y), f64_abs(overall_max_avg_rgb.y - overall_avg_rgb.y)) * 256.0,
+					f64_max(f64_abs(overall_min_avg_rgb.z - overall_avg_rgb.z), f64_abs(overall_max_avg_rgb.z - overall_avg_rgb.z)) * 256.0
+				);
 			}
 		}
 		TRY_WRITE("\t\t]\n");
