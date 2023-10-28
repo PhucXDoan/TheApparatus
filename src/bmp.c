@@ -275,7 +275,8 @@ bmp_export(struct BMP src, str file_path)
 		error_f("Failed to write DIB header.");
 	}
 
-	if (fwrite(src.data, src.dim_x * src.dim_y * sizeof(*src.data), 1, file) != 1)
+	i64 write_size = src.dim_x * src.dim_y * sizeof(*src.data);
+	if (write_size && fwrite(src.data, write_size, 1, file) != 1)
 	{
 		error_f("Failed to write pixel data.");
 	}

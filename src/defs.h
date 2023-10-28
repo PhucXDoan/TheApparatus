@@ -41,9 +41,6 @@ typedef int64_t  b64;
 	#define f32(...) ((f32) (__VA_ARGS__))
 	#define f64(...) ((f64) (__VA_ARGS__))
 
-	typedef struct { f64 x; f64 y; f64 z; } f64_3;
-	#define f64_3(X, Y, Z) ((f64_3) { (X), (Y), (Z) })
-
 	typedef struct { char* data; i64 length; } str;
 	#define str(STRLIT) (str) { (STRLIT), sizeof(STRLIT) - 1 }
 	#define STR(STRLIT)       { (STRLIT), sizeof(STRLIT) - 1 }
@@ -1414,20 +1411,45 @@ struct USBConfig // This layout is defined uniquely for our device application.
 // "MicroServient.c".
 //
 
+#define PHONE_DIM_PX_X  1170
+#define PHONE_DIM_PX_Y  2532
+
+#define AVG_RGB_EPSILON 0.01
+#define WORDGAME_XMDT(X) \
+	X(anagrams , "Anagrams" , (126.008 / 256.0), (120.983 / 256.0), (144.925 / 256.0)) \
+	X(wordhunt , "WordHunt" , (123.651 / 256.0), (137.697 / 256.0), (105.877 / 256.0)) \
+	X(wordbites, "WordBites", ( 94.020 / 256.0), (116.980 / 256.0), (136.211 / 256.0)) \
+
+enum WordGame
+{
+	#define MAKE(ENUM_NAME, ...) WordGame_##ENUM_NAME,
+	WORDGAME_XMDT(MAKE)
+	#undef MAKE
+	WordGame_COUNT
+};
+
+#if PROGRAM_MICROSERVIENT
+	static const struct { str print_name; f64 avg_r; f64 avg_g; f64 avg_b; } WORDGAME_DT[] =
+		{
+			#define MAKE(ENUM_NAME, PRINT_NAME, AVG_R, AVG_G, AVG_B) \
+				{ \
+					.print_name = STR(PRINT_NAME), \
+					.avg_r = (AVG_R), \
+					.avg_g = (AVG_G), \
+					.avg_b = (AVG_B) \
+				},
+			WORDGAME_XMDT(MAKE)
+			#undef MAKE
+		};
+#endif
+
+#define WORDBITES_SLOT_DIM      140
+#define WORDBITES_BOARD_POS_X   25
+#define WORDBITES_BOARD_POS_Y   354
 #define WORDBITES_BOARD_SLOTS_X 8
 #define WORDBITES_BOARD_SLOTS_Y 9
-
-#define PHONE_DIM_X 1170
-#define PHONE_DIM_Y 2532
-
-#define WORDBITES_RAW_SLOT_PX_DIM    140
-#define WORDBITES_RAW_BOARD_PX_POS_X 25
-#define WORDBITES_RAW_BOARD_PX_POS_Y 354 // Bottom-up.
-#define WORDBITES_RAW_BOARD_PX_DIM_X (WORDBITES_BOARD_SLOTS_X * WORDBITES_RAW_SLOT_PX_DIM)
-#define WORDBITES_RAW_BOARD_PX_DIM_Y (WORDBITES_BOARD_SLOTS_Y * WORDBITES_RAW_SLOT_PX_DIM)
-
-static_assert(WORDBITES_RAW_BOARD_PX_POS_X + WORDBITES_RAW_BOARD_PX_DIM_X <= PHONE_DIM_X); // Should not obviously exceed phone screen boundries.
-static_assert(WORDBITES_RAW_BOARD_PX_POS_Y + WORDBITES_RAW_BOARD_PX_DIM_Y <= PHONE_DIM_Y); // Should not obviously exceed phone screen boundries.
+static_assert(WORDBITES_BOARD_POS_X + WORDBITES_BOARD_SLOTS_X * WORDBITES_SLOT_DIM <= PHONE_DIM_PX_X); // Should not obviously exceed phone screen boundries.
+static_assert(WORDBITES_BOARD_POS_Y + WORDBITES_BOARD_SLOTS_Y * WORDBITES_SLOT_DIM <= PHONE_DIM_PX_Y); // Should not obviously exceed phone screen boundries.
 
 #define CLI_TYPING_XMDT(X) \
 	X(string     , union { struct { char* data; i64 length; }; char* cstr; str str; }) \
@@ -1435,10 +1457,11 @@ static_assert(WORDBITES_RAW_BOARD_PX_POS_Y + WORDBITES_RAW_BOARD_PX_DIM_Y <= PHO
 
 #define CLI_ARG_ADDITIONAL_MARGIN 2
 #define CLI_EXE_NAME              str("MicroServient.exe")
-#define CLI_EXE_DESC              str("Calculates average RGB values in screenshots.")
+#define CLI_EXE_DESC              str("Analyzes screenshots of Game Pigeon word games.")
 #define CLI_XMDT(X) \
-	X(input_wildcard_paths , dary_string, "input...", "Wildcard paths that'll be filtered for screenshots.") \
-	X(output_json_file_path, string     , "-output=", "Save the results as a JSON file by providing a file path.")
+	X(input_wildcard_paths , dary_string, "input..."      , "Wildcard paths that'll be filtered for screenshots of the games.") \
+	X(output_json_file_path, string     , "-output-json=" , "Save the average RGB values as a JSON file.") \
+	X(output_slots_dir_path, string     , "-output-slots=", "Save each slot that would hold a letter as a BMP in this directory.")
 
 #if PROGRAM_MICROSERVIENT
 	enum CLIFieldTyping
