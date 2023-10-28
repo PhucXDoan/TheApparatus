@@ -34,35 +34,46 @@ print_cli_field(enum CLIField cli_field)
 }
 
 static void
-create_dir(str base_path, str opt_dir_name)
+create_dir(str dir_path)
 {
-	struct StrBuf dir_path = StrBuf(256);
-
-	for (i32 i = 0; i < base_path.length; i += 1)
+	struct StrBuf formatted_dir_path = StrBuf(256);
+	for (i32 i = 0; i < dir_path.length; i += 1)
 	{
-		if (base_path.data[i] == '/')
+		if (dir_path.data[i] == '/')
 		{
-			strbuf_char(&dir_path, '\\');
+			strbuf_char(&formatted_dir_path, '\\');
 		}
 		else
 		{
-			strbuf_char(&dir_path, base_path.data[i]);
+			strbuf_char(&formatted_dir_path, dir_path.data[i]);
 		}
 	}
+	strbuf_char(&formatted_dir_path, '\\');
+	strbuf_char(&formatted_dir_path, '\0');
 
-	strbuf_char(&dir_path, '\\');
-
-	if (opt_dir_name.data)
+	if (!MakeSureDirectoryPathExists(formatted_dir_path.data))
 	{
-		strbuf_str (&dir_path, opt_dir_name);
-		strbuf_char(&dir_path, '\\');
+		error("Failed create directory path \"%s\".", formatted_dir_path.data);
 	}
+}
 
-	strbuf_char(&dir_path, '\0');
-
-	if (!MakeSureDirectoryPathExists(dir_path.data))
+static void
+create_output_slot_dir(str dir_path, str slot_name)
+{
+	struct StrBuf formatted_path = StrBuf(256);
+	strbuf_str (&formatted_path, dir_path);
+	strbuf_char(&formatted_path, '\\');
+	strbuf_str (&formatted_path, slot_name);
+	strbuf_char(&formatted_path, '\\');
 	{
-		error("Failed create directory path \"%s\".", dir_path.data);
+		struct StrBuf scratch_path = formatted_path;
+		strbuf_cstr(&scratch_path, "raw\\");
+		create_dir(scratch_path.str);
+	}
+	{
+		struct StrBuf scratch_path = formatted_path;
+		strbuf_cstr(&scratch_path, "monochrome\\");
+		create_dir(scratch_path.str);
 	}
 }
 
@@ -216,50 +227,48 @@ main(int argc, char** argv)
 		// Handle output directory.
 		//
 
-		if (cli_field_filled[CLIField_output_dir_path])
+		create_dir(cli.output_dir_path.str); // Create the path if it doesn't already exist.
+
+		if (!PathIsDirectoryEmptyA(cli.output_dir_path.cstr)) // In the case that it already existed and it's nonempty.
 		{
-			create_dir(cli.output_dir_path.str, (str) {0}); // Create the path if it doesn't already exist.
-
-			if (!PathIsDirectoryEmptyA(cli.output_dir_path.cstr)) // In the case that it already existed and it's nonempty.
+			if (cli.clear_output_dir)
 			{
-				if (cli.clear_output_dir)
-				{
-					struct StrBuf double_nullterminated_output_dir_path = StrBuf(256);
-					strbuf_str (&double_nullterminated_output_dir_path, cli.output_dir_path.str);
-					strbuf_char(&double_nullterminated_output_dir_path, '\0');
-					strbuf_char(&double_nullterminated_output_dir_path, '\0');
+				struct StrBuf double_nullterminated_output_dir_path = StrBuf(256);
+				strbuf_str (&double_nullterminated_output_dir_path, cli.output_dir_path.str);
+				strbuf_char(&double_nullterminated_output_dir_path, '\0');
+				strbuf_char(&double_nullterminated_output_dir_path, '\0');
 
-					SHFILEOPSTRUCTA file_operation =
-						{
-							.wFunc             = FO_DELETE,
-							.pFrom             = double_nullterminated_output_dir_path.data,
-							.pTo               = "\0",
-							.fFlags            = FOF_NOCONFIRMATION,
-							.lpszProgressTitle = "",
-						};
-
-					printf("Clearing out \"%s\"...\n", cli.output_dir_path.cstr);
-					if (SHFileOperationA(&file_operation) || file_operation.fAnyOperationsAborted)
+				SHFILEOPSTRUCTA file_operation =
 					{
-						error("Clearing output directory \"%s\" failed.", cli.output_dir_path.cstr);
-					}
-				}
-				else
-				{
-					printf("Output directory \"%s\" is not empty. Use --clear-output-dir to empty the directory for processing.\n", cli.output_dir_path.cstr);
-					err = true;
-				}
-			}
+						.wFunc             = FO_DELETE,
+						.pFrom             = double_nullterminated_output_dir_path.data,
+						.pTo               = "\0",
+						.fFlags            = FOF_NOCONFIRMATION,
+						.lpszProgressTitle = "",
+					};
 
-			if (!err)
-			{
-				create_dir(cli.output_dir_path.str, (str) {0}); // Recreate the directory again.
-				for (char alphabet = 'A'; alphabet <= 'Z'; alphabet += 1)
+				printf("Clearing out \"%s\"...\n", cli.output_dir_path.cstr);
+				if (SHFileOperationA(&file_operation) || file_operation.fAnyOperationsAborted)
 				{
-					create_dir(cli.output_dir_path.str, (str) { &alphabet, 1 });
+					error("Clearing output directory \"%s\" failed.", cli.output_dir_path.cstr);
 				}
-				create_dir(cli.output_dir_path.str, str("_"));
 			}
+			else
+			{
+				printf("Output directory \"%s\" is not empty. Use --clear-output-dir to empty the directory for processing.\n", cli.output_dir_path.cstr);
+				err = true;
+			}
+		}
+
+		if (!err)
+		{
+			create_dir(cli.output_dir_path.str); // Recreate the directory again.
+
+			for (char alphabet = 'A'; alphabet <= 'Z'; alphabet += 1)
+			{
+				create_output_slot_dir(cli.output_dir_path.str, (str) { &alphabet, 1 });
+			}
+			create_output_slot_dir(cli.output_dir_path.str, str("_"));
 		}
 
 		//
@@ -449,18 +458,28 @@ main(int argc, char** argv)
 							}
 
 							//
-							// Analyze each slot.
+							// Parse each slot.
 							//
 
-							struct BMP slot_bmp =
+							struct BMP raw_slot_bmp =
 								{
-									.data  = malloc(slot_dim * slot_dim * sizeof(struct BMPPixel)),
+									.data  = malloc(slot_dim * slot_dim * sizeof(*raw_slot_bmp.data)),
 									.dim_x = slot_dim,
 									.dim_y = slot_dim,
 								};
-							if (!slot_bmp.data)
+							if (!raw_slot_bmp.data)
 							{
-								error("Failed to allocate memory for slot BMP.");
+								error("Failed to allocate memory for raw slot BMP.");
+							}
+							struct BMPMonochrome monochrome_slot_bmp =
+								{
+									.data  = calloc(calc_bmp_monochrome_size(slot_dim, slot_dim), sizeof(u8)),
+									.dim_x = slot_dim,
+									.dim_y = slot_dim,
+								};
+							if (!monochrome_slot_bmp.data)
+							{
+								error("Failed to allocate memory for monochrome slot BMP.");
 							}
 							for (i32 slot_index = 0; slot_index < slot_count; slot_index += 1)
 							{
@@ -470,49 +489,54 @@ main(int argc, char** argv)
 								{
 									for (i32 x = 0; x < slot_dim; x += 1)
 									{
-										slot_bmp.data[y * slot_dim + x] =
+										struct BMPPixel pixel =
 											input_bmp.data
 												[
 													(slot_origin_y + slot_buffer[slot_index].y * slot_dim + y) * input_bmp.dim_x
 														+ slot_origin_x + slot_buffer[slot_index].x * slot_dim + x
 												];
+
+										raw_slot_bmp.data[y * slot_dim + x] = pixel;
+
+										bmp_monochrome_set(&monochrome_slot_bmp, x, y, (pixel.r + pixel.g + pixel.b) / 3.0 < BLACK_THRESHOLD);
 									}
 								}
 
 								assert(wordgame != WordGame_COUNT);
-								if (cli_field_filled[CLIField_output_dir_path])
-								{
-									struct StrBuf output_slot_file_path = StrBuf(256);
-									strbuf_str (&output_slot_file_path, cli.output_dir_path.str);
-									strbuf_char(&output_slot_file_path, '\\');
-									strbuf_char(&output_slot_file_path, slot_index % 27 == 26 ? '_' : 'A' + slot_index % 27);
-									strbuf_char(&output_slot_file_path, '\\');
-									strbuf_str (&output_slot_file_path, WORDGAME_DT[wordgame].print_name);
-									strbuf_char(&output_slot_file_path, '_');
-									strbuf_str (&output_slot_file_path, input_file_name_extless);
-									strbuf_char(&output_slot_file_path, '_');
-									strbuf_i64 (&output_slot_file_path, slot_buffer[slot_index].x);
-									strbuf_char(&output_slot_file_path, '_');
-									strbuf_i64 (&output_slot_file_path, slot_buffer[slot_index].y);
-									strbuf_cstr(&output_slot_file_path, ".bmp");
-									bmp_export(slot_bmp, output_slot_file_path.str);
-								}
 
-								f64 slot_avg_r = 0.0;
-								f64 slot_avg_g = 0.0;
-								f64 slot_avg_b = 0.0;
-								for (i32 i = 0; i < slot_bmp.dim_x * slot_bmp.dim_y; i += 1)
+								char slot_name = 'A';
+
+								struct StrBuf output_file_name = StrBuf(256);
+								strbuf_str (&output_file_name, WORDGAME_DT[wordgame].print_name);
+								strbuf_char(&output_file_name, '_');
+								strbuf_str (&output_file_name, input_file_name_extless);
+								strbuf_char(&output_file_name, '_');
+								strbuf_i64 (&output_file_name, slot_buffer[slot_index].x);
+								strbuf_char(&output_file_name, '_');
+								strbuf_i64 (&output_file_name, slot_buffer[slot_index].y);
+								strbuf_cstr(&output_file_name, ".bmp");
+
+								struct StrBuf slot_dir_path = StrBuf(256);
+								strbuf_str (&slot_dir_path, cli.output_dir_path.str);
+								strbuf_char(&slot_dir_path, '\\');
+								strbuf_char(&slot_dir_path, slot_name);
+								strbuf_char(&slot_dir_path, '\\');
 								{
-									slot_avg_r += slot_bmp.data[i].r;
-									slot_avg_g += slot_bmp.data[i].g;
-									slot_avg_b += slot_bmp.data[i].b;
+									struct StrBuf scratch_path = slot_dir_path;
+									strbuf_cstr(&scratch_path, "raw\\");
+									strbuf_str (&scratch_path, output_file_name.str);
+									bmp_export(raw_slot_bmp, scratch_path.str);
 								}
-								slot_avg_r /= 256.0 * slot_bmp.dim_x * slot_bmp.dim_y;
-								slot_avg_g /= 256.0 * slot_bmp.dim_x * slot_bmp.dim_y;
-								slot_avg_b /= 256.0 * slot_bmp.dim_x * slot_bmp.dim_y;
+								{
+									struct StrBuf scratch_path = slot_dir_path;
+									strbuf_cstr(&scratch_path, "monochrome\\");
+									strbuf_str (&scratch_path, output_file_name.str);
+									bmp_monochrome_export(monochrome_slot_bmp, scratch_path.str);
+								}
 							}
 
-							free(slot_bmp.data);
+							free(monochrome_slot_bmp.data);
+							free(raw_slot_bmp.data);
 
 							//
 							// Wrap up this image.
@@ -642,7 +666,7 @@ main(int argc, char** argv)
 		}
 	}
 
-	debug_halt();
+	// debug_halt();
 
 	return err;
 }

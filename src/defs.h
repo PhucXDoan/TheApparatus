@@ -115,6 +115,14 @@ struct BMP // Left-right, bottom-up.
 	i32              dim_y;
 };
 
+#define calc_bmp_monochrome_size(DIM_X, DIM_Y) (((DIM_X) * (DIM_Y) + bitsof(*((struct BMPMonochrome*)0)->data) - 1) / bitsof(*((struct BMPMonochrome*)0)->data))
+struct BMPMonochrome // Left-right, bottom-up, LSb first pixel. No padding except at the end of pixel data.
+{
+	u8* data;
+	i32 dim_x; // Still in terms of pixels.
+	i32 dim_y; // Still in terms of pixels.
+};
+
 struct BMPCIEXYZTRIPLE // "CIEXYZTRIPLE" in Windows's "wingdi.h".
 {
 	struct
@@ -125,7 +133,7 @@ struct BMPCIEXYZTRIPLE // "CIEXYZTRIPLE" in Windows's "wingdi.h".
 	} ciexyzRed, ciexyzGreen, ciexyzBlue;
 };
 
-enum BMPCompression // See: Source(23) @ Section(2.1.1.7) @ Page(118).
+enum BMPCompression // See: Source(23) @ Section(2.1.1.7) @ Page(119).
 {
 	BMPCompression_BI_RGB       = 0x0,
 	BMPCompression_BI_RLE8      = 0x1,
@@ -160,6 +168,14 @@ struct BMPFileHeader // See: "BITMAPFILEHEADER" @ Source(22) @ Page(281).
 	u32 bfOffBits;   // Byte offset into the BMP file where the image's pixel data is stored.
 };
 #pragma pack(pop)
+
+struct BMPRGBQuad // See: "RGBQUAD" @ Source(22) @ Page(1344).
+{
+	u8 rgbBlue;
+	u8 rgbGreen;
+	u8 rgbRed;
+	u8 rgbReserved;
+};
 
 #pragma pack(push, 1)
 union BMPDIBHeader
@@ -1414,6 +1430,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 #define PHONE_DIM_PX_X  1170
 #define PHONE_DIM_PX_Y  2532
 
+#define BLACK_THRESHOLD 8.0
 #define AVG_RGB_EPSILON 0.01
 #define WORDGAME_XMDT(X) \
 	X(anagrams , "Anagrams" , (126.008 / 256.0), (120.983 / 256.0), (144.925 / 256.0)) \
@@ -1461,7 +1478,7 @@ static_assert(WORDBITES_BOARD_POS_Y + WORDBITES_BOARD_SLOTS_Y * WORDBITES_SLOT_D
 #define CLI_EXE_DESC              str("Extract slots from screenshots of Game Pigeon word games.")
 #define CLI_XMDT(X) \
 	X(input_wildcard_path, string, "input-path"        , "Wildcard path that'll be filtered for screenshots of the games.") \
-	X(output_dir_path    , string, "-output="          , "Save each slot that would hold a letter as a BMP in this directory.") \
+	X(output_dir_path    , string, "output-dir-path"   , "Destination directory to store processing results.") \
 	X(clear_output_dir   , b32   , "--clear-output-dir", "Delete all content within the output directory before processing.") \
 
 #if PROGRAM_MICROSERVIENT
@@ -1542,7 +1559,7 @@ static_assert(WORDBITES_BOARD_POS_Y + WORDBITES_BOARD_SLOTS_Y * WORDBITES_SLOT_D
 	Source(20) := "How to Use MMC/SDC" by Elm-Chan (Updated on: December 26, 2019).
 	Source(21) := "8-bit Atmel Microcontroller with 64/128Kbytes of ISP Flash and USB Controller" datasheet (Dated: 9/12).
 	Source(22) := Microsofts's "Windows GDI" PDF Article (Dated: 01/24/2023).
-	Source(23) := Microsoft's "Open Specifications" PDF Article (Dated: 08/01/2023).
+	Source(23) :=  PDF Article of Microsoft's "Open Specifications" for Protocols (Dated: 08/01/2023).
 
 	We are working within the environment of the ATmega32U4 and ATmega2560 microcontrollers,
 	which are 8-bit CPUs. This consequently means that there are no padding bytes to

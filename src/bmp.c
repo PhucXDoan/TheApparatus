@@ -1,3 +1,26 @@
+static b32
+bmp_monochrome_get(struct BMPMonochrome src, i32 x, i32 y)
+{
+	assert(0 <= x && x < src.dim_x);
+	assert(0 <= y && y < src.dim_y);
+	b32 result =
+		(
+			src.data[(y * src.dim_x + x) / bitsof(*src.data)]
+				>>  ((y * src.dim_x + x) % bitsof(*src.data))
+		) & 1;
+	return result;
+}
+
+static void
+bmp_monochrome_set(struct BMPMonochrome* src, i32 x, i32 y, b32 value)
+{
+	assert(0 <= x && x < src->dim_x);
+	assert(0 <= y && y < src->dim_y);
+
+	src->data[(y * src->dim_x + x) / bitsof(*src->data)] &=       ~(1 << ((y * src->dim_x + x) % bitsof(*src->data)));
+	src->data[(y * src->dim_x + x) / bitsof(*src->data)] |= (!!value) << ((y * src->dim_x + x) % bitsof(*src->data));
+}
+
 #define error_f(STRLIT, ...) error("(\"%.*s\") " STRLIT, i32(file_path.length), file_path.data,##__VA_ARGS__)
 static struct BMP
 bmp_malloc_read_file(str file_path)
@@ -36,7 +59,7 @@ bmp_malloc_read_file(str file_path)
 
 	if (file_content.length)
 	{
-		file_content.data = malloc(file_content.length);
+		file_content.data = malloc(file_content.length * sizeof(*file_content.data));
 		if (!file_content.data)
 		{
 			error_f("Failed to allocate enough memory");
@@ -141,7 +164,7 @@ bmp_malloc_read_file(str file_path)
 							{
 								.dim_x = dib_header->v5.bV5Width,
 								.dim_y = dib_header->v5.bV5Height,
-								.data  = malloc(dib_header->v5.bV5Width * dib_header->v5.bV5Height * sizeof(struct BMPPixel)),
+								.data  = malloc(dib_header->v5.bV5Width * dib_header->v5.bV5Height * sizeof(*result.data)),
 							};
 						if (!result.data)
 						{
@@ -279,6 +302,101 @@ bmp_export(struct BMP src, str file_path)
 	if (write_size && fwrite(src.data, write_size, 1, file) != 1)
 	{
 		error_f("Failed to write pixel data.");
+	}
+
+	if (fclose(file))
+	{
+		error_f("`fclose` failed.");
+	}
+}
+#undef error_f
+
+#define error_f(STRLIT, ...) error("(\"%.*s\") " STRLIT, i32(file_path.length), file_path.data,##__VA_ARGS__)
+static void
+bmp_monochrome_export(struct BMPMonochrome src, str file_path)
+{
+	char file_path_cstr[256] = {0};
+	if (file_path.length >= countof(file_path_cstr))
+	{
+		error_f("File path too long.");
+	}
+	memmove(file_path_cstr, file_path.data, file_path.length);
+
+	FILE* file = fopen(file_path_cstr, "wb");
+	if (!file)
+	{
+		error_f("`fopen` failed.");
+	}
+
+	struct BMPDIBHeaderInfo dib_header =
+		{
+			.biSize        = sizeof(dib_header),
+			.biWidth       = src.dim_x,
+			.biHeight      = src.dim_y,
+			.biPlanes      = 1,
+			.biBitCount    = 1,
+			.biCompression = BMPCompression_BI_RGB,
+		};
+	struct BMPRGBQuad bmi_colors[] = // See: "BITMAPINFO" @ Source(22) @ Page(284).
+		{
+			{ .rgbRed = 0,   .rgbGreen = 0,   .rgbBlue = 0,   },
+			{ .rgbRed = 255, .rgbGreen = 255, .rgbBlue = 255, },
+		};
+	struct BMPFileHeader file_header =
+		{
+			.bfType    = u16('B') | (u16('M') << 8),
+			.bfSize    = sizeof(file_header) + sizeof(dib_header) + sizeof(bmi_colors) + (src.dim_x + bitsof(u8) * 4 - 1) / (bitsof(u8) * 4) * src.dim_y,
+			.bfOffBits = sizeof(file_header) + sizeof(dib_header) + sizeof(bmi_colors),
+		};
+
+	if (fwrite(&file_header, sizeof(file_header), 1, file) != 1)
+	{
+		error_f("Failed to write BMP file header.");
+	}
+
+	if (fwrite(&dib_header, sizeof(dib_header), 1, file) != 1)
+	{
+		error_f("Failed to write DIB header.");
+	}
+
+	if (fwrite(&bmi_colors, sizeof(bmi_colors), 1, file) != 1)
+	{
+		error_f("Failed to write color table.");
+	}
+
+	for (i32 y = 0; y < src.dim_y; y += 1)
+	{
+		u8 byte = 0;
+
+		for
+		(
+			i32 x = 0;
+			x < src.dim_x;
+			x += bitsof(*src.data)
+		)
+		{
+			for (u8 i = 0; i < bitsof(*src.data); i += 1)
+			{
+				byte <<= 1;
+				if (x + i < src.dim_x)
+				{
+					byte |= bmp_monochrome_get(src, x + i, y);
+				}
+			}
+
+			if (fwrite(&byte, sizeof(byte), 1, file) != 1)
+			{
+				error_f("Failed to write pixel.");
+			}
+		}
+
+		for (i32 i = 0; i < 4 - i32((src.dim_x + bitsof(*src.data) - 1) / bitsof(*src.data) % 4); i += 1)
+		{
+			if (fwrite(&(u8) {0}, sizeof(u8), 1, file) != 1)
+			{
+				error_f("Failed to write row padding byte.");
+			}
+		}
 	}
 
 	if (fclose(file))
