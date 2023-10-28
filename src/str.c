@@ -42,3 +42,10 @@ str_ends_with_caseless(str src, str ending)
 
 	return result;
 }
+
+static b32
+str_eq(str lhs, str rhs)
+{
+	b32 result = lhs.length == rhs.length && !memcmp(lhs.data, rhs.data, lhs.length);
+	return result;
+}

@@ -1,5 +1,10 @@
+#pragma warning(push)
+#pragma warning(disable : 4255)
 #define _CRT_SECURE_NO_DEPRECATE 1
 #include <Windows.h>
+#include <shlwapi.h>
+#include <dbghelp.h>
+#pragma warning(pop)
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
@@ -28,6 +33,39 @@ print_cli_field(enum CLIField cli_field)
 	return result;
 }
 
+static void
+create_dir(str base_path, str opt_dir_name)
+{
+	struct StrBuf dir_path = StrBuf(256);
+
+	for (i32 i = 0; i < base_path.length; i += 1)
+	{
+		if (base_path.data[i] == '/')
+		{
+			strbuf_char(&dir_path, '\\');
+		}
+		else
+		{
+			strbuf_char(&dir_path, base_path.data[i]);
+		}
+	}
+
+	strbuf_char(&dir_path, '\\');
+
+	if (opt_dir_name.data)
+	{
+		strbuf_str (&dir_path, opt_dir_name);
+		strbuf_char(&dir_path, '\\');
+	}
+
+	strbuf_char(&dir_path, '\0');
+
+	if (!MakeSureDirectoryPathExists(dir_path.data))
+	{
+		error("Failed create directory path \"%s\".", dir_path.data);
+	}
+}
+
 int
 main(int argc, char** argv)
 {
@@ -44,7 +82,7 @@ main(int argc, char** argv)
 	if (argc >= 2)
 	{
 		//
-		// Parse arguments.
+		// Iterate through each argument.
 		//
 
 		i32 arg_index = 1;
@@ -63,8 +101,8 @@ main(int argc, char** argv)
 
 				if // Canidate field is optional with explicit parameter.
 				(
-					canidate_metadata.pattern.data[0] == '-' &&
-					canidate_metadata.pattern.data[canidate_metadata.pattern.length - 1] == '='
+					str_begins_with(canidate_metadata.pattern, str("-")) &&
+					str_ends_with(canidate_metadata.pattern, str("="))
 				)
 				{
 					if (str_begins_with(str_cstr(argv[arg_index]), canidate_metadata.pattern))
@@ -74,7 +112,18 @@ main(int argc, char** argv)
 						break;
 					}
 				}
-				else if // Canidate field that is required.
+				else if // Canidate field is an optional boolean switch.
+				(
+					str_begins_with(canidate_metadata.pattern, str("--"))
+				)
+				{
+					if (str_eq(str_cstr(argv[arg_index]), canidate_metadata.pattern))
+					{
+						cli_field = canidate_cli_field;
+						break;
+					}
+				}
+				else if // Otherwise, we consider this canidate field as required.
 				(
 					(!cli_field_filled[canidate_cli_field] || str_ends_with(canidate_metadata.pattern, str("..."))) &&
 					cli_field == CLIField_COUNT
@@ -113,6 +162,12 @@ main(int argc, char** argv)
 							(CLIFieldTyping_string_t[]) { { .str = str_cstr(cli_param) } }
 						);
 					} break;
+
+					case CLIFieldTyping_b32:
+					{
+						assert(!cli_param); // Boolean CLI fields right now are just simple switches.
+						*((b32*) cli_member) = true;
+					} break;
 				}
 
 				cli_field_filled[cli_field] = true;
@@ -132,7 +187,7 @@ main(int argc, char** argv)
 				struct CLIFieldMetaData metadata = CLI_FIELD_METADATA[cli_field];
 				if
 				(
-					!(metadata.pattern.data[0] == '-') && // Field is not optional.
+					metadata.pattern.data[0] != '-' && // Field is required.
 					!cli_field_filled[cli_field]
 				)
 				{
@@ -158,97 +213,84 @@ main(int argc, char** argv)
 	if (cli_parsed)
 	{
 		//
-		// Set up JSON.
+		// Handle output directory.
 		//
 
-		FILE* output_json_file = 0;
-
-		if (cli_field_filled[CLIField_output_json_file_path])
+		if (cli_field_filled[CLIField_output_dir_path])
 		{
-			output_json_file = fopen(cli.output_json_file_path.cstr, "wb");
-			if (!output_json_file)
+			create_dir(cli.output_dir_path.str, (str) {0}); // Create the path if it doesn't already exist.
+
+			if (!PathIsDirectoryEmptyA(cli.output_dir_path.cstr)) // In the case that it already existed and it's nonempty.
 			{
-				error("`fopen` failed on \"%s\".", cli.output_json_file_path.cstr);
-			}
-		}
-
-		#define OUTPUT_WRITE(STRLIT, ...) \
-			do \
-			{ \
-				if (output_json_file && fprintf(output_json_file, (STRLIT),##__VA_ARGS__) < 0) \
-				{ \
-					error("`fwrite` failed."); \
-				} \
-			} \
-			while (false)
-
-		OUTPUT_WRITE("{\n");
-
-		//
-		// Begin outputting data of average RGB values of the screenshots.
-		//
-
-		OUTPUT_WRITE
-		(
-			"\t\"screenshot_analysis\":\n"
-			"\t\t[\n"
-		);
-
-		for (i32 input_wildcard_path_index = 0; input_wildcard_path_index < cli.input_wildcard_paths.length; input_wildcard_path_index += 1)
-		{
-			CLIFieldTyping_string_t input_wildcard_path = cli.input_wildcard_paths.data[input_wildcard_path_index];
-
-			if (input_wildcard_path_index)
-			{
-				printf("\n");
-			}
-
-			printf("[%d/%lld] Processing \"%s\".\n", input_wildcard_path_index + 1, cli.input_wildcard_paths.length, input_wildcard_path.cstr);
-
-			OUTPUT_WRITE
-			(
-				"\t\t\t{\n"
-				"\t\t\t\t\"wildcard_path\": \""
-			);
-			for (i32 i = 0; i < input_wildcard_path.length; i += 1)
-			{
-				if (input_wildcard_path.data[i] == '\\')
+				if (cli.clear_output_dir)
 				{
-					OUTPUT_WRITE("\\\\");
+					struct StrBuf double_nullterminated_output_dir_path = StrBuf(256);
+					strbuf_str (&double_nullterminated_output_dir_path, cli.output_dir_path.str);
+					strbuf_char(&double_nullterminated_output_dir_path, '\0');
+					strbuf_char(&double_nullterminated_output_dir_path, '\0');
+
+					SHFILEOPSTRUCTA file_operation =
+						{
+							.wFunc             = FO_DELETE,
+							.pFrom             = double_nullterminated_output_dir_path.data,
+							.pTo               = "\0",
+							.fFlags            = FOF_NOCONFIRMATION,
+							.lpszProgressTitle = "",
+						};
+
+					printf("Clearing out \"%s\"...\n", cli.output_dir_path.cstr);
+					if (SHFileOperationA(&file_operation) || file_operation.fAnyOperationsAborted)
+					{
+						error("Clearing output directory \"%s\" failed.", cli.output_dir_path.cstr);
+					}
 				}
 				else
 				{
-					OUTPUT_WRITE("%c", input_wildcard_path.data[i]);
+					printf("Output directory \"%s\" is not empty. Use --clear-output-dir to empty the directory for processing.\n", cli.output_dir_path.cstr);
+					err = true;
 				}
 			}
-			OUTPUT_WRITE
-			(
-				"\",\n"
-				"\t\t\t\t\"samples\":\n"
-				"\t\t\t\t\t[\n"
-			);
+
+			if (!err)
+			{
+				create_dir(cli.output_dir_path.str, (str) {0}); // Recreate the directory again.
+				for (char alphabet = 'A'; alphabet <= 'Z'; alphabet += 1)
+				{
+					create_dir(cli.output_dir_path.str, (str) { &alphabet, 1 });
+				}
+				create_dir(cli.output_dir_path.str, str("_"));
+			}
+		}
+
+		//
+		// Begin processing.
+		//
+
+		if (!err)
+		{
+			printf("Processing \"%s\".\n", cli.input_wildcard_path.cstr);
 
 			//
 			// Set up iterator to go through the directory.
 			//
 
-			str input_dir_path = input_wildcard_path.str;
+			str input_dir_path = cli.input_wildcard_path.str;
 			while (input_dir_path.length && (input_dir_path.data[input_dir_path.length - 1] != '/' && input_dir_path.data[input_dir_path.length - 1] != '\\'))
 			{
 				input_dir_path.length -= 1;
 			}
 
 			WIN32_FIND_DATAA finder_data   = {0};
-			HANDLE           finder_handle = FindFirstFileA(input_wildcard_path.cstr, &finder_data);
+			HANDLE           finder_handle = FindFirstFileA(cli.input_wildcard_path.cstr, &finder_data);
 
 			if (finder_handle == INVALID_HANDLE_VALUE && GetLastError() != ERROR_FILE_NOT_FOUND)
 			{
-				error("`FindFirstFileA` failed on \"%s\".", input_wildcard_path.cstr);
+				error("`FindFirstFileA` failed on \"%s\".", cli.input_wildcard_path.cstr);
 			}
 
+			i32 processed_amount = 0;
 			if (finder_handle != INVALID_HANDLE_VALUE)
 			{
-				i32 processed_amount            = 0;
 				f64 overall_input_bmp_avg_r     = 0.0;
 				f64 overall_input_bmp_avg_g     = 0.0;
 				f64 overall_input_bmp_avg_b     = 0.0;
@@ -321,7 +363,6 @@ main(int argc, char** argv)
 								overall_min_input_bmp_avg_r = f64_min(overall_min_input_bmp_avg_r, input_bmp_avg_r);
 								overall_min_input_bmp_avg_g = f64_min(overall_min_input_bmp_avg_g, input_bmp_avg_g);
 								overall_min_input_bmp_avg_b = f64_min(overall_min_input_bmp_avg_b, input_bmp_avg_b);
-
 								overall_max_input_bmp_avg_r = f64_max(overall_max_input_bmp_avg_r, input_bmp_avg_r);
 								overall_max_input_bmp_avg_g = f64_max(overall_max_input_bmp_avg_g, input_bmp_avg_g);
 								overall_max_input_bmp_avg_b = f64_max(overall_max_input_bmp_avg_b, input_bmp_avg_b);
@@ -331,28 +372,10 @@ main(int argc, char** argv)
 								overall_min_input_bmp_avg_r = input_bmp_avg_r;
 								overall_min_input_bmp_avg_g = input_bmp_avg_g;
 								overall_min_input_bmp_avg_b = input_bmp_avg_b;
-
 								overall_max_input_bmp_avg_r = input_bmp_avg_r;
 								overall_max_input_bmp_avg_g = input_bmp_avg_g;
 								overall_max_input_bmp_avg_b = input_bmp_avg_b;
 							}
-
-							if (processed_amount)
-							{
-								OUTPUT_WRITE(",\n");
-							}
-
-							OUTPUT_WRITE
-							(
-								"\t\t\t\t\t\t{\n"
-								"\t\t\t\t\t\t\t\"name\": \"%s\",\n"
-								"\t\t\t\t\t\t\t\"avg_rgb\": { \"r\": %f, \"g\": %f, \"b\": %f },\n",
-								finder_data.cFileName,
-								input_bmp_avg_r,
-								input_bmp_avg_g,
-								input_bmp_avg_b
-							);
-
 
 							//
 							// Determine word game based on RGB.
@@ -429,12 +452,6 @@ main(int argc, char** argv)
 							// Analyze each slot.
 							//
 
-							OUTPUT_WRITE
-							(
-								"\t\t\t\t\t\t\t\"slots\":\n"
-								"\t\t\t\t\t\t\t\t[\n"
-							);
-
 							struct BMP slot_bmp =
 								{
 									.data  = malloc(slot_dim * slot_dim * sizeof(struct BMPPixel)),
@@ -453,16 +470,23 @@ main(int argc, char** argv)
 								{
 									for (i32 x = 0; x < slot_dim; x += 1)
 									{
-										slot_bmp.data[y * slot_dim + x] = input_bmp.data [(slot_origin_y + slot_buffer[slot_index].y * slot_dim + y) * input_bmp.dim_x + slot_origin_x + slot_buffer[slot_index].x * slot_dim + x];
+										slot_bmp.data[y * slot_dim + x] =
+											input_bmp.data
+												[
+													(slot_origin_y + slot_buffer[slot_index].y * slot_dim + y) * input_bmp.dim_x
+														+ slot_origin_x + slot_buffer[slot_index].x * slot_dim + x
+												];
 									}
 								}
 
 								assert(wordgame != WordGame_COUNT);
-								if (cli_field_filled[CLIField_output_slots_dir_path])
+								if (cli_field_filled[CLIField_output_dir_path])
 								{
 									struct StrBuf output_slot_file_path = StrBuf(256);
-									strbuf_str (&output_slot_file_path, cli.output_slots_dir_path.str);
-									strbuf_char(&output_slot_file_path, '/');
+									strbuf_str (&output_slot_file_path, cli.output_dir_path.str);
+									strbuf_char(&output_slot_file_path, '\\');
+									strbuf_char(&output_slot_file_path, slot_index % 27 == 26 ? '_' : 'A' + slot_index % 27);
+									strbuf_char(&output_slot_file_path, '\\');
 									strbuf_str (&output_slot_file_path, WORDGAME_DT[wordgame].print_name);
 									strbuf_char(&output_slot_file_path, '_');
 									strbuf_str (&output_slot_file_path, input_file_name_extless);
@@ -486,29 +510,9 @@ main(int argc, char** argv)
 								slot_avg_r /= 256.0 * slot_bmp.dim_x * slot_bmp.dim_y;
 								slot_avg_g /= 256.0 * slot_bmp.dim_x * slot_bmp.dim_y;
 								slot_avg_b /= 256.0 * slot_bmp.dim_x * slot_bmp.dim_y;
-
-								OUTPUT_WRITE
-								(
-									"\t\t\t\t\t\t\t\t\t{ \"x\": %d, \"y\": %d, \"avg_rgb\": { \"r\": %f, \"g\": %f, \"b\": %f } }",
-									slot_buffer[slot_index].x,
-									slot_buffer[slot_index].y,
-									slot_avg_r,
-									slot_avg_g,
-									slot_avg_b
-								);
-								if (slot_index != slot_count - 1)
-								{
-									OUTPUT_WRITE(",");
-								}
-								OUTPUT_WRITE("\n");
 							}
-							free(slot_bmp.data);
 
-							OUTPUT_WRITE
-							(
-								"\t\t\t\t\t\t\t\t]\n"
-								"\t\t\t\t\t\t}"
-							);
+							free(slot_bmp.data);
 
 							//
 							// Wrap up this image.
@@ -546,26 +550,6 @@ main(int argc, char** argv)
 					{
 						if (GetLastError() == ERROR_NO_MORE_FILES)
 						{
-							if (processed_amount)
-							{
-								OUTPUT_WRITE
-								(
-									"\n"
-									"\t\t\t\t\t]\n"
-									"\t\t\t}"
-								);
-
-								if (input_wildcard_path_index != cli.input_wildcard_paths.length - 1)
-								{
-									if (processed_amount)
-									{
-										OUTPUT_WRITE(",");
-									}
-								}
-
-								OUTPUT_WRITE("\n");
-							}
-
 							break;
 						}
 						else
@@ -598,42 +582,13 @@ main(int argc, char** argv)
 						f64_max(f64_abs(overall_min_input_bmp_avg_b - overall_input_bmp_avg_b), f64_abs(overall_max_input_bmp_avg_b - overall_input_bmp_avg_b)) * 256.0
 					);
 				}
+
+				if (!FindClose(finder_handle))
+				{
+					error("`FindClose` failed on \"%s\".", cli.input_wildcard_path.cstr);
+				}
 			}
-
-			if (!FindClose(finder_handle))
-			{
-				error("`FindClose` failed on \"%s\".", input_wildcard_path.cstr);
-			}
-		}
-
-		OUTPUT_WRITE("\t\t]\n");
-
-		//
-		// Finish JSON.
-		//
-
-		OUTPUT_WRITE("}\n");
-
-		#undef OUTPUT_WRITE
-
-		if (output_json_file && fclose(output_json_file))
-		{
-			error("`fclose` failed on \"%s\".", cli.output_json_file_path.cstr);
-		}
-
-		if (cli_field_filled[CLIField_output_json_file_path] || cli_field_filled[CLIField_output_slots_dir_path])
-		{
-			printf("\n");
-		}
-
-		if (cli_field_filled[CLIField_output_json_file_path])
-		{
-			printf("Outputted JSON data to \"%s\".\n", cli.output_json_file_path.cstr);
-		}
-
-		if (cli_field_filled[CLIField_output_slots_dir_path])
-		{
-			printf("Outputted extracted slots to \"%s\".\n", cli.output_slots_dir_path.cstr);
+			printf("Finished processing %d images.\n", processed_amount);
 		}
 	}
 	else // CLI fields were not fully parsed.

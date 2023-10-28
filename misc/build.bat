@@ -13,7 +13,7 @@ set MSVC_DEVELOPMENT_DISABLED_WARNINGS= ^
 set MSVC_FLAGS= ^
 	/nologo /Od /std:c17 /IW:\ /Zi /D DEBUG=1 /D LITTLE_ENDIAN=1 /D PROGRAM_MICROSERVIENT=1 ^
 	/Wall /WX !MSVC_PRACTICAL_DISABLED_WARNINGS! !MSVC_DEVELOPMENT_DISABLED_WARNINGS! ^
-	/link /incremental:no
+	/link Shlwapi.lib Shell32.lib Dbghelp.lib /incremental:no
 
 set AVR_GCC_PRACTICAL_DISABLED_WARNINGS= ^
 	-Wno-unused-function -Wno-implicit-fallthrough -Wno-missing-field-initializers

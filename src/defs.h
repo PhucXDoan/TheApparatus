@@ -1453,15 +1453,16 @@ static_assert(WORDBITES_BOARD_POS_Y + WORDBITES_BOARD_SLOTS_Y * WORDBITES_SLOT_D
 
 #define CLI_TYPING_XMDT(X) \
 	X(string     , union { struct { char* data; i64 length; }; char* cstr; str str; }) \
-	X(dary_string, struct Dary_CLIFieldTyping_string_t)
+	X(dary_string, struct Dary_CLIFieldTyping_string_t) \
+	X(b32        , b32) \
 
 #define CLI_ARG_ADDITIONAL_MARGIN 2
 #define CLI_EXE_NAME              str("MicroServient.exe")
-#define CLI_EXE_DESC              str("Analyzes screenshots of Game Pigeon word games.")
+#define CLI_EXE_DESC              str("Extract slots from screenshots of Game Pigeon word games.")
 #define CLI_XMDT(X) \
-	X(input_wildcard_paths , dary_string, "input..."      , "Wildcard paths that'll be filtered for screenshots of the games.") \
-	X(output_json_file_path, string     , "-output-json=" , "Save the average RGB values as a JSON file.") \
-	X(output_slots_dir_path, string     , "-output-slots=", "Save each slot that would hold a letter as a BMP in this directory.")
+	X(input_wildcard_path, string, "input-path"        , "Wildcard path that'll be filtered for screenshots of the games.") \
+	X(output_dir_path    , string, "-output="          , "Save each slot that would hold a letter as a BMP in this directory.") \
+	X(clear_output_dir   , b32   , "--clear-output-dir", "Delete all content within the output directory before processing.") \
 
 #if PROGRAM_MICROSERVIENT
 	enum CLIFieldTyping
