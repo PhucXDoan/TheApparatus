@@ -75,6 +75,11 @@ create_output_slot_dir(str dir_path, str slot_name)
 		strbuf_cstr(&scratch_path, "monochrome\\");
 		create_dir(scratch_path.str);
 	}
+	{
+		struct StrBuf scratch_path = formatted_path;
+		strbuf_cstr(&scratch_path, "compressed\\");
+		create_dir(scratch_path.str);
+	}
 }
 
 int
@@ -424,10 +429,46 @@ main(int argc, char** argv)
 							{
 								case WordGame_anagrams:
 								{
+									slot_dim      = ANAGRAMS_6_SLOT_DIM;
+									slot_origin_x = ANAGRAMS_6_BOARD_POS_X;
+									slot_origin_y = ANAGRAMS_6_BOARD_POS_Y;
+
+									for (i32 slot_y = 0; slot_y < ANAGRAMS_6_BOARD_SLOTS_Y; slot_y += 1)
+									{
+										for (i32 slot_x = 0; slot_x < ANAGRAMS_6_BOARD_SLOTS_X; slot_x += 1)
+										{
+											assert(slot_count < countof(slot_buffer));
+											slot_buffer[slot_count] =
+												(struct Slot)
+												{
+													.x = slot_x,
+													.y = slot_y,
+												};
+											slot_count += 1;
+										}
+									}
 								} break;
 
 								case WordGame_wordhunt:
 								{
+									slot_dim      = WORDHUNT_4x4_SLOT_DIM;
+									slot_origin_x = WORDHUNT_4x4_BOARD_POS_X;
+									slot_origin_y = WORDHUNT_4x4_BOARD_POS_Y;
+
+									for (i32 slot_y = 0; slot_y < WORDHUNT_4x4_BOARD_SLOTS_Y; slot_y += 1)
+									{
+										for (i32 slot_x = 0; slot_x < WORDHUNT_4x4_BOARD_SLOTS_X; slot_x += 1)
+										{
+											assert(slot_count < countof(slot_buffer));
+											slot_buffer[slot_count] =
+												(struct Slot)
+												{
+													.x = slot_x,
+													.y = slot_y,
+												};
+											slot_count += 1;
+										}
+									}
 								} break;
 
 								case WordGame_wordbites:
@@ -471,6 +512,7 @@ main(int argc, char** argv)
 							{
 								error("Failed to allocate memory for raw slot BMP.");
 							}
+
 							struct BMPMonochrome monochrome_slot_bmp =
 								{
 									.data  = calloc(calc_bmp_monochrome_size(slot_dim, slot_dim), sizeof(u8)),
@@ -481,6 +523,18 @@ main(int argc, char** argv)
 							{
 								error("Failed to allocate memory for monochrome slot BMP.");
 							}
+
+							struct BMPMonochrome compressed_monochrome_slot_bmp =
+								{
+									.data  = calloc(calc_bmp_monochrome_size(COMPRESSED_MONOCHROME_DIM, COMPRESSED_MONOCHROME_DIM), sizeof(u8)),
+									.dim_x = COMPRESSED_MONOCHROME_DIM,
+									.dim_y = COMPRESSED_MONOCHROME_DIM,
+								};
+							if (!compressed_monochrome_slot_bmp.data)
+							{
+								error("Failed to allocate memory for compressed monochrome slot BMP.");
+							}
+
 							for (i32 slot_index = 0; slot_index < slot_count; slot_index += 1)
 							{
 								assert(slot_origin_x + slot_buffer[slot_index].x * slot_dim <= input_bmp.dim_x);
@@ -499,6 +553,24 @@ main(int argc, char** argv)
 										raw_slot_bmp.data[y * slot_dim + x] = pixel;
 
 										bmp_monochrome_set(&monochrome_slot_bmp, x, y, (pixel.r + pixel.g + pixel.b) / 3.0 < BLACK_THRESHOLD);
+									}
+								}
+
+								for (i32 y = 0; y < COMPRESSED_MONOCHROME_DIM; y += 1)
+								{
+									for (i32 x = 0; x < COMPRESSED_MONOCHROME_DIM; x += 1)
+									{
+										bmp_monochrome_set
+										(
+											&compressed_monochrome_slot_bmp,
+											x, y,
+											bmp_monochrome_get
+											(
+												monochrome_slot_bmp,
+												i32(f64(x) / f64(COMPRESSED_MONOCHROME_DIM) * f64(monochrome_slot_bmp.dim_x)),
+												i32(f64(y) / f64(COMPRESSED_MONOCHROME_DIM) * f64(monochrome_slot_bmp.dim_y))
+											)
+										);
 									}
 								}
 
@@ -533,8 +605,15 @@ main(int argc, char** argv)
 									strbuf_str (&scratch_path, output_file_name.str);
 									bmp_monochrome_export(monochrome_slot_bmp, scratch_path.str);
 								}
+								{
+									struct StrBuf scratch_path = slot_dir_path;
+									strbuf_cstr(&scratch_path, "compressed\\");
+									strbuf_str (&scratch_path, output_file_name.str);
+									bmp_monochrome_export(compressed_monochrome_slot_bmp, scratch_path.str);
+								}
 							}
 
+							free(compressed_monochrome_slot_bmp.data);
 							free(monochrome_slot_bmp.data);
 							free(raw_slot_bmp.data);
 
@@ -666,7 +745,7 @@ main(int argc, char** argv)
 		}
 	}
 
-	// debug_halt();
+	debug_halt();
 
 	return err;
 }

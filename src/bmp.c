@@ -345,7 +345,7 @@ bmp_monochrome_export(struct BMPMonochrome src, str file_path)
 	struct BMPFileHeader file_header =
 		{
 			.bfType    = u16('B') | (u16('M') << 8),
-			.bfSize    = sizeof(file_header) + sizeof(dib_header) + sizeof(bmi_colors) + (src.dim_x + bitsof(u8) * 4 - 1) / (bitsof(u8) * 4) * src.dim_y,
+			.bfSize    = sizeof(file_header) + sizeof(dib_header) + sizeof(bmi_colors) + ((src.dim_x + bitsof(u8) - 1) / bitsof(u8) + 3) / 4 * 4 * src.dim_y,
 			.bfOffBits = sizeof(file_header) + sizeof(dib_header) + sizeof(bmi_colors),
 		};
 
@@ -390,7 +390,7 @@ bmp_monochrome_export(struct BMPMonochrome src, str file_path)
 			}
 		}
 
-		for (i32 i = 0; i < 4 - i32((src.dim_x + bitsof(*src.data) - 1) / bitsof(*src.data) % 4); i += 1)
+		for (i32 i = 0; i < (4 - i32((src.dim_x + bitsof(*src.data) - 1) / bitsof(*src.data) % 4)) % 4; i += 1)
 		{
 			if (fwrite(&(u8) {0}, sizeof(u8), 1, file) != 1)
 			{

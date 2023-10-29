@@ -1430,6 +1430,8 @@ struct USBConfig // This layout is defined uniquely for our device application.
 #define PHONE_DIM_PX_X  1170
 #define PHONE_DIM_PX_Y  2532
 
+#define COMPRESSED_MONOCHROME_DIM 32
+
 #define BLACK_THRESHOLD 8.0
 #define AVG_RGB_EPSILON 0.01
 #define WORDGAME_XMDT(X) \
@@ -1459,6 +1461,18 @@ enum WordGame
 			#undef MAKE
 		};
 #endif
+
+#define ANAGRAMS_6_SLOT_DIM      195
+#define ANAGRAMS_6_BOARD_POS_X   0
+#define ANAGRAMS_6_BOARD_POS_Y   311
+#define ANAGRAMS_6_BOARD_SLOTS_X 6
+#define ANAGRAMS_6_BOARD_SLOTS_Y 1
+
+#define WORDHUNT_4x4_SLOT_DIM      212
+#define WORDHUNT_4x4_BOARD_POS_X   161
+#define WORDHUNT_4x4_BOARD_POS_Y   494
+#define WORDHUNT_4x4_BOARD_SLOTS_X 4
+#define WORDHUNT_4x4_BOARD_SLOTS_Y 4
 
 #define WORDBITES_SLOT_DIM      140
 #define WORDBITES_BOARD_POS_X   25
