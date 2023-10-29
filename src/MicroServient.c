@@ -278,7 +278,7 @@ main(int argc, char** argv)
 						.wFunc             = FO_DELETE,
 						.pFrom             = double_nullterminated_output_dir_path.data,
 						.pTo               = "\0",
-						.fFlags            = FOF_NOCONFIRMATION,
+						.fFlags            = 0,
 						.lpszProgressTitle = "",
 					};
 
@@ -321,28 +321,34 @@ main(int argc, char** argv)
 				create_dir(scratch_path.str);
 			}
 		}
+		{
+			struct StrBuf formatted_path = StrBuf(256);
+			strbuf_str (&formatted_path, cli.output_dir_path.str);
+			strbuf_cstr(&formatted_path, "\\nextgen_exams");
+			create_dir(formatted_path.str);
+		}
 
 		//
 		// Set up iterator to go through the directory.
 		//
 
-		struct StrBuf wildcard_screenshot_dir_path = StrBuf(256);
-		strbuf_str (&wildcard_screenshot_dir_path, cli.screenshot_dir_path.str);
-		strbuf_cstr(&wildcard_screenshot_dir_path, "\\*");
-		strbuf_char(&wildcard_screenshot_dir_path, '\0');
+		struct StrBuf screenshot_wildcard_path = StrBuf(256);
+		strbuf_str (&screenshot_wildcard_path, cli.screenshot_dir_path.str);
+		strbuf_cstr(&screenshot_wildcard_path, "\\*");
+		strbuf_char(&screenshot_wildcard_path, '\0');
 
-		WIN32_FIND_DATAA finder_data   = {0};
-		HANDLE           finder_handle = FindFirstFileA(wildcard_screenshot_dir_path.data, &finder_data);
+		WIN32_FIND_DATAA screenshot_finder_data   = {0};
+		HANDLE           screenshot_finder_handle = FindFirstFileA(screenshot_wildcard_path.data, &screenshot_finder_data);
 
-		if (finder_handle == INVALID_HANDLE_VALUE && GetLastError() != ERROR_FILE_NOT_FOUND)
+		if (screenshot_finder_handle == INVALID_HANDLE_VALUE && GetLastError() != ERROR_FILE_NOT_FOUND)
 		{
-			error("`FindFirstFileA` failed on \"%s\".", wildcard_screenshot_dir_path.data);
+			error("`FindFirstFileA` failed on \"%s\".", screenshot_wildcard_path.data);
 		}
 
-		printf("Processing \"%s\".\n", wildcard_screenshot_dir_path.data);
+		printf("Processing \"%s\".\n", screenshot_wildcard_path.data);
 
 		i32 processed_amount = 0;
-		if (finder_handle != INVALID_HANDLE_VALUE)
+		if (screenshot_finder_handle != INVALID_HANDLE_VALUE)
 		{
 			f64 overall_screenshot_bmp_avg_r     = 0.0;
 			f64 overall_screenshot_bmp_avg_g     = 0.0;
@@ -360,7 +366,7 @@ main(int argc, char** argv)
 				// Analyze image.
 				//
 
-				str input_file_name         = str_cstr(finder_data.cFileName);
+				str input_file_name         = str_cstr(screenshot_finder_data.cFileName);
 				str input_file_name_extless = input_file_name;
 				for
 				(
@@ -378,7 +384,7 @@ main(int argc, char** argv)
 
 				if
 				(
-					!(finder_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
+					!(screenshot_finder_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
 					str_ends_with_caseless(input_file_name, str(".bmp"))
 				)
 				{
@@ -587,7 +593,7 @@ main(int argc, char** argv)
 
 									slot_bmp.data[slot_px_y * slot_dim + slot_px_x] = pixel;
 
-									bmp_monochrome_set(&monochrome_slot_bmp, slot_px_x, slot_px_y, (pixel.r + pixel.g + pixel.b) / 3 <= MONOCHROMIC_THRESHOLD);
+									bmp_monochrome_set(monochrome_slot_bmp, slot_px_x, slot_px_y, (pixel.r + pixel.g + pixel.b) / 3 <= MONOCHROMIC_THRESHOLD);
 								}
 							}
 
@@ -601,7 +607,7 @@ main(int argc, char** argv)
 								{
 									bmp_monochrome_set
 									(
-										&compressed_monochrome_slot_bmp,
+										compressed_monochrome_slot_bmp,
 										x, y,
 										bmp_monochrome_get
 										(
@@ -717,7 +723,7 @@ main(int argc, char** argv)
 				// Iterate to the next file.
 				//
 
-				if (!FindNextFileA(finder_handle, &finder_data))
+				if (!FindNextFileA(screenshot_finder_handle, &screenshot_finder_data))
 				{
 					if (GetLastError() == ERROR_NO_MORE_FILES)
 					{
@@ -730,6 +736,13 @@ main(int argc, char** argv)
 				}
 			}
 
+			if (!FindClose(screenshot_finder_handle))
+			{
+				error("`FindClose` failed on \"%s\".", screenshot_wildcard_path.data);
+			}
+
+			printf("Finished processing %d images.\n", processed_amount);
+
 			if (processed_amount)
 			{
 				overall_screenshot_bmp_avg_r /= 256.0 * processed_amount * PHONE_DIM_PX_X * PHONE_DIM_PX_Y;
@@ -738,6 +751,7 @@ main(int argc, char** argv)
 
 				printf
 				(
+					"\n"
 					"\tOverall maximum RGB : (%7.3f, %7.3f, %7.3f).\n"
 					"\tOverall average RGB : (%7.3f, %7.3f, %7.3f).\n"
 					"\tOverall minimum RGB : (%7.3f, %7.3f, %7.3f).\n"
@@ -749,15 +763,189 @@ main(int argc, char** argv)
 					f64_max(f64_abs(overall_min_screenshot_bmp_avg_g - overall_screenshot_bmp_avg_g), f64_abs(overall_max_screenshot_bmp_avg_g - overall_screenshot_bmp_avg_g)) * 256.0,
 					f64_max(f64_abs(overall_min_screenshot_bmp_avg_b - overall_screenshot_bmp_avg_b), f64_abs(overall_max_screenshot_bmp_avg_b - overall_screenshot_bmp_avg_b)) * 256.0
 				);
-			}
 
-			if (!FindClose(finder_handle))
-			{
-				error("`FindClose` failed on \"%s\".", wildcard_screenshot_dir_path.data);
+				printf
+				(
+					"\n"
+					"Verify all compressed images are intact and correct.\n"
+				);
+
+				b32 generate_next_gen_exams = false;
+				while (true)
+				{
+					printf("Continue onto generating next generation exams? (Y/N) : ");
+					char input_buffer[4] = {0};
+					if (!fgets(input_buffer, countof(input_buffer), stdin))
+					{
+						error("Failed to get input.");
+					}
+
+					if (!strcmp(input_buffer, "Y\n") || !strcmp(input_buffer, "y\n"))
+					{
+						generate_next_gen_exams = true;
+						break;
+					}
+					else if (!strcmp(input_buffer, "N\n") || !strcmp(input_buffer, "n\n"))
+					{
+						break;
+					}
+					else
+					{
+						while (!strchr(input_buffer, '\n'))
+						{
+							if (!fgets(input_buffer, countof(input_buffer), stdin))
+							{
+								error("Failed to get input.");
+							}
+						}
+					}
+				}
+
+				if (generate_next_gen_exams)
+				{
+					i32* heatmap = {0};
+					alloc(&heatmap, EXAM_DIM * EXAM_DIM);
+
+					struct BMPMonochrome nextgen_exam =
+						{
+							.dim_x = EXAM_DIM,
+							.dim_y = EXAM_DIM,
+						};
+					alloc(&nextgen_exam.data, nextgen_exam.dim_x * nextgen_exam.dim_y);
+
+					for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
+					{
+						struct StrBuf compressed_monochrome_bmp_dir_path = StrBuf(256);
+						strbuf_str (&compressed_monochrome_bmp_dir_path, cli.output_dir_path.str);
+						strbuf_char(&compressed_monochrome_bmp_dir_path, '\\');
+						strbuf_str (&compressed_monochrome_bmp_dir_path, LETTER_NAMES[letter]);
+						strbuf_cstr(&compressed_monochrome_bmp_dir_path, "\\compressed\\");
+
+						struct StrBuf compressed_monochrome_bmp_wildcard_path = StrBuf(256);
+						strbuf_str (&compressed_monochrome_bmp_wildcard_path, compressed_monochrome_bmp_dir_path.str);
+						strbuf_cstr(&compressed_monochrome_bmp_wildcard_path, "*.bmp");
+						strbuf_char(&compressed_monochrome_bmp_wildcard_path, '\0');
+
+						WIN32_FIND_DATAA compressed_monochrome_bmp_finder_data   = {0};
+						HANDLE           compressed_monochrome_bmp_finder_handle = FindFirstFileA(compressed_monochrome_bmp_wildcard_path.data, &compressed_monochrome_bmp_finder_data);
+
+						if (compressed_monochrome_bmp_finder_handle == INVALID_HANDLE_VALUE && GetLastError() != ERROR_FILE_NOT_FOUND)
+						{
+							error("`FindFirstFileA` failed on \"%s\".", compressed_monochrome_bmp_wildcard_path.data);
+						}
+
+						if (compressed_monochrome_bmp_finder_handle != INVALID_HANDLE_VALUE)
+						{
+							printf("Generating for \"%.*s\".\n", i32(compressed_monochrome_bmp_wildcard_path.length), compressed_monochrome_bmp_wildcard_path.data);
+							memset(heatmap, 0, sizeof(i32) * EXAM_DIM * EXAM_DIM);
+							i32 subexam_count = 0;
+
+							while (true)
+							{
+								str input_file_name         = str_cstr(compressed_monochrome_bmp_finder_data.cFileName);
+								str input_file_name_extless = input_file_name;
+								for
+								(
+									i64 i = input_file_name_extless.length - 1;
+									i >= 0;
+									i -= 1
+								)
+								{
+									if (input_file_name_extless.data[i] == '.')
+									{
+										input_file_name_extless.length = i;
+										break;
+									}
+								}
+
+								if (!(compressed_monochrome_bmp_finder_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+								{
+									struct StrBuf scratch_path = compressed_monochrome_bmp_dir_path;
+									strbuf_str(&scratch_path, input_file_name);
+									printf("\t\"%.*s\"\n", i32(scratch_path.length), scratch_path.data);
+
+									struct BMP compressed_monochrome_bmp = bmp_alloc_read_file(scratch_path.str);
+
+									if (compressed_monochrome_bmp.dim_x != EXAM_DIM || compressed_monochrome_bmp.dim_y != EXAM_DIM)
+									{
+										error
+										(
+											"Subexam \"%s\" is %dx%d, expected %dx%d.",
+											scratch_path.data,
+											compressed_monochrome_bmp.dim_x, compressed_monochrome_bmp.dim_y,
+											EXAM_DIM, EXAM_DIM
+										);
+									}
+
+									for (i32 i = 0; i < compressed_monochrome_bmp.dim_x * compressed_monochrome_bmp.dim_y; i += 1)
+									{
+										struct BMPPixel pixel = compressed_monochrome_bmp.data[i];
+										if (pixel.r == pixel.g && pixel.g == pixel.b && (pixel.b == 0 || pixel.b == 255) && pixel.a == 255)
+										{
+											heatmap[i] += !!pixel.r;
+										}
+										else
+										{
+											error("Subexam \"%s\" is not monochromatic.", scratch_path.data);
+										}
+									}
+
+									free(compressed_monochrome_bmp.data);
+									subexam_count += 1;
+								}
+
+								if (!FindNextFileA(compressed_monochrome_bmp_finder_handle, &compressed_monochrome_bmp_finder_data))
+								{
+									if (GetLastError() == ERROR_NO_MORE_FILES)
+									{
+										break;
+									}
+									else
+									{
+										error("`FindNextFileA` failed.");
+									}
+								}
+							}
+
+							if (subexam_count)
+							{
+								memset(nextgen_exam.data, 0, bmp_monochrome_calc_size(EXAM_DIM, EXAM_DIM));
+								for (i32 y = 0; y < EXAM_DIM; y += 1)
+								{
+									for (i32 x = 0; x < EXAM_DIM; x += 1)
+									{
+										bmp_monochrome_set(nextgen_exam, x, y, heatmap[y * EXAM_DIM + x] > subexam_count / 8);
+									}
+								}
+
+								struct StrBuf nextgen_exam_file_path = StrBuf(256);
+								strbuf_str (&nextgen_exam_file_path, cli.output_dir_path.str);
+								strbuf_cstr(&nextgen_exam_file_path, "\\nextgen_exams\\");
+								strbuf_str (&nextgen_exam_file_path, LETTER_NAMES[letter]);
+								strbuf_cstr(&nextgen_exam_file_path, ".bmp");
+								bmp_monochrome_export(nextgen_exam, nextgen_exam_file_path.str);
+							}
+							else
+							{
+								// TODO ??
+							}
+
+							if (!FindClose(compressed_monochrome_bmp_finder_handle))
+							{
+								error("`FindClose` failed on \"%s\".", compressed_monochrome_bmp_wildcard_path.data);
+							}
+						}
+					}
+
+					free(nextgen_exam.data);
+					free(heatmap);
+				}
 			}
 		}
-
-		printf("Finished processing %d images.\n", processed_amount);
+		else
+		{
+			printf("No images were processed.\n");
+		}
 	}
 
 	debug_halt();

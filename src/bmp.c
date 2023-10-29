@@ -11,14 +11,14 @@ bmp_monochrome_get(struct BMPMonochrome src, i32 x, i32 y)
 }
 
 static void
-bmp_monochrome_set(struct BMPMonochrome* src, i32 x, i32 y, b32 value)
+bmp_monochrome_set(struct BMPMonochrome src, i32 x, i32 y, b32 value)
 {
-	assert(0 <= x && x < src->dim_x);
-	assert(0 <= y && y < src->dim_y);
+	assert(0 <= x && x < src.dim_x);
+	assert(0 <= y && y < src.dim_y);
 
-	i32 bit_index = y * src->dim_x + x;
-	src->data[bit_index / 8] &=       ~(1 << (bit_index % 8));
-	src->data[bit_index / 8] |= (!!value) << (bit_index % 8);
+	i32 bit_index = y * src.dim_x + x;
+	src.data[bit_index / 8] &=       ~(1 << (bit_index % 8));
+	src.data[bit_index / 8] |= (!!value) << (bit_index % 8);
 }
 
 static struct BMP
@@ -384,7 +384,7 @@ bmp_monochrome_export(struct BMPMonochrome src, str file_path)
 
 	for (i32 y = 0; y < src.dim_y; y += 1)
 	{
-		for (i32 src_byte_index = 0; src_byte_index < src.dim_x / 8; src_byte_index += 1)
+		for (i32 src_byte_index = 0; src_byte_index < (src.dim_x + 7) / 8; src_byte_index += 1)
 		{
 			u8 byte = 0;
 
@@ -403,7 +403,7 @@ bmp_monochrome_export(struct BMPMonochrome src, str file_path)
 			}
 		}
 
-		u64 padding = (4 - i32((src.dim_x + 7) / 8 % 4)) % 4;
+		u64 padding = (4 - (src.dim_x + 7) / 8 % 4) % 4;
 		if (fwrite(&(u32) {0}, sizeof(u8), padding, file) != padding)
 		{
 			error("Failed to write row padding byte.");
