@@ -75,6 +75,8 @@ struct Dary_void
 	}
 #define Dary_def(TYPE) Dary_define(TYPE, TYPE)
 
+Dary_define(BMPMonochrome, struct BMPMonochrome);
+
 //
 // "strbuf.c"
 //
@@ -202,7 +204,7 @@ union BMPDIBHeader
 		u32 biSizeImage;     // Byte count of the image; can be zero for uncompressed RGB images.
 		i32 biXPelsPerMeter; // Irrelevant.
 		i32 biYPelsPerMeter; // Irrelevant.
-		u32 biClrUsed;       // Colors used in color table.
+		u32 biClrUsed;       // Colors used in color table; zero means the colors used is determined with 2^biBitCount.
 		u32 biClrImportant;  // Pretty much irrelevant.
 	} info;
 
@@ -1430,6 +1432,28 @@ struct USBConfig // This layout is defined uniquely for our device application.
 #define PHONE_DIM_PX_X  1170
 #define PHONE_DIM_PX_Y  2532
 
+#define LETTER_XMDT(_X) \
+	_X(space) \
+	_X(A) _X(B) _X(C) _X(D) _X(E) _X(F) _X(G) _X(H) _X(I) _X(J) _X(K) _X(L) _X(M) \
+	_X(N) _X(O) _X(P) _X(Q) _X(R) _X(S) _X(T) _X(U) _X(V) _X(W) _X(X) _X(Y) _X(Z) \
+
+enum Letter
+{
+	#define MAKE(NAME) Letter_##NAME,
+	LETTER_XMDT(MAKE)
+	#undef MAKE
+	Letter_COUNT
+};
+
+#if PROGRAM_MICROSERVIENT
+	static const str LETTER_DT[] =
+		{
+			#define MAKE(NAME) STR(#NAME),
+			LETTER_XMDT(MAKE)
+			#undef MAKE
+		};
+#endif
+
 #define COMPRESSED_MONOCHROME_DIM 32
 
 #define BLACK_THRESHOLD 8.0
@@ -1491,9 +1515,10 @@ static_assert(WORDBITES_BOARD_POS_Y + WORDBITES_BOARD_SLOTS_Y * WORDBITES_SLOT_D
 #define CLI_EXE_NAME              str("MicroServient.exe")
 #define CLI_EXE_DESC              str("Extract slots from screenshots of Game Pigeon word games.")
 #define CLI_XMDT(X) \
-	X(input_wildcard_path, string, "input-path"        , "Wildcard path that'll be filtered for screenshots of the games.") \
-	X(output_dir_path    , string, "output-dir-path"   , "Destination directory to store processing results.") \
-	X(clear_output_dir   , b32   , "--clear-output-dir", "Delete all content within the output directory before processing.") \
+	X(training_dir_path, string, "training-dir-path" , "Directory path that'll be filtered for screenshots of the games.") \
+	X(solution_dir_path, string, "solution-dir-path" , "Directory path of compressed monochrome BMPs to compare extracted slots against.") \
+	X(output_dir_path  , string, "output-dir-path"   , "Destination directory to store processing results.") \
+	X(clear_output_dir , b32   , "--clear-output-dir", "Delete all content within the output directory before processing.") \
 
 #if PROGRAM_MICROSERVIENT
 	enum CLIFieldTyping

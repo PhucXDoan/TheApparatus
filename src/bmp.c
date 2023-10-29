@@ -115,7 +115,124 @@ bmp_malloc_read_file(str file_path)
 
 		case sizeof(struct BMPDIBHeaderInfo):
 		{
-			error_f("BMPDIBHeaderInfo not supported... yet.");
+			if (!(dib_header->info.biPlanes == 1))
+			{
+				error_f("BMPDIBHeaderInfo with invalid field(s).");
+			}
+
+			switch (dib_header->info.biCompression)
+			{
+				case BMPCompression_BI_RGB:
+				{
+					if
+					(
+						!(
+							dib_header->info.biWidth > 0 &&
+							dib_header->info.biHeight != 0 &&
+							dib_header->info.biPlanes == 1
+						)
+					)
+					{
+						error_f("Bitmap DIB header (BMPDIBHeaderInfo) with an invalid field.");
+					}
+
+					if
+					(
+						dib_header->info.biBitCount == 1 &&
+						dib_header->info.biHeight > 0
+					)
+					{
+						u32 bytes_per_row = ((dib_header->info.biWidth + 7) / 8 + 3) / 4 * 4;
+						if (dib_header->info.biSizeImage && dib_header->info.biSizeImage != bytes_per_row * dib_header->info.biHeight)
+						{
+							error_f("Bitmap DIB header (BMPDIBHeaderInfo) configured with an invalid field.");
+						}
+
+						result =
+							(struct BMP)
+							{
+								.dim_x = dib_header->info.biWidth,
+								.dim_y = dib_header->info.biHeight,
+								.data  = malloc(dib_header->info.biWidth * dib_header->info.biHeight * sizeof(*result.data)),
+							};
+						if (!result.data)
+						{
+							error_f("Failed to allocate.");
+						}
+
+						for (i64 y = 0; y < dib_header->info.biHeight; y += 1)
+						{
+							for
+							(
+								i64 x_major = 0;
+								x_major < dib_header->info.biWidth;
+								x_major += bitsof(u8)
+							)
+							{
+								for (u8 x_minor = 0; x_minor < bitsof(u8); x_minor += 1)
+								{
+									if (x_major + x_minor < dib_header->info.biWidth)
+									{
+										result.data[y * result.dim_x + x_major + x_minor] =
+											(((((u8*) file_content.data) + file_header->bfOffBits)[y * bytes_per_row + x_major / bitsof(u8)] >> (bitsof(u8) - 1 - x_minor)) & 1)
+												? (struct BMPPixel) { .r = 255, .g = 255, .b = 255, .a = 255, }
+												: (struct BMPPixel) { .r = 0,   .g = 0,   .b = 0,   .a = 255, };
+									}
+								}
+							}
+						}
+					}
+					else
+					{
+						error_f("Bitmap with DIB header (BMPDIBHeaderInfo) configuration that's not yet supported.");
+					}
+				} break;
+
+				case BMPCompression_BI_RLE8:
+				{
+					error_f("BI_RLE8 not handled... yet.");
+				} break;
+
+				case BMPCompression_BI_RLE4:
+				{
+					error_f("BI_RLE4 not handled... yet.");
+				} break;
+
+				case BMPCompression_BI_BITFIELDS:
+				{
+					error_f("BI_BITFIELDS not handled... yet.");
+				} break;
+
+				case BMPCompression_BI_JPEG:
+				{
+					error_f("BI_JPEG not handled... yet.");
+				} break;
+
+				case BMPCompression_BI_PNG:
+				{
+					error_f("BI_PNG not handled... yet.");
+				} break;
+
+				case BMPCompression_BI_CMYK:
+				{
+					error_f("BI_CMYK not handled... yet.");
+				} break;
+
+				case BMPCompression_BI_CMYKRLE8:
+				{
+					error_f("BI_CMYKRLE8 not handled... yet.");
+				} break;
+
+				case BMPCompression_BI_CMYKRLE4:
+				{
+					error_f("BI_CMYKRLE4 not handled... yet.");
+				} break;
+
+				default:
+				{
+					error_f("Unknown compression method 0x%02X.", dib_header->info.biCompression);
+				} break;
+			}
 		} break;
 
 		case sizeof(struct BMPDIBHeaderV4):
@@ -149,7 +266,6 @@ bmp_malloc_read_file(str file_path)
 					if
 					(
 						dib_header->v5.bV5BitCount == 24 &&
-						dib_header->v5.bV5Compression == BMPCompression_BI_RGB &&
 						dib_header->v5.bV5Height > 0
 					)
 					{
