@@ -344,3 +344,16 @@ to_lower(char c)
 	}
 	return result;
 }
+
+#if PROGRAM_MICROSERVIENT
+	#define alloc(DST, COUNT) \
+		do \
+		{ \
+			*(DST) = calloc((COUNT),  sizeof(*(DST))); \
+			if (!*(DST)) \
+			{ \
+				error("Failed to allocate."); \
+			} \
+		} \
+		while (false)
+#endif

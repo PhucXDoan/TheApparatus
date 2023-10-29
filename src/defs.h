@@ -117,7 +117,6 @@ struct BMP // Left-right, bottom-up.
 	i32              dim_y;
 };
 
-#define calc_bmp_monochrome_size(DIM_X, DIM_Y) (((DIM_X) * (DIM_Y) + bitsof(*((struct BMPMonochrome*)0)->data) - 1) / bitsof(*((struct BMPMonochrome*)0)->data))
 struct BMPMonochrome // Left-right, bottom-up, LSb first pixel. No padding except at the end of pixel data.
 {
 	u8* data;
@@ -1429,39 +1428,83 @@ struct USBConfig // This layout is defined uniquely for our device application.
 // "MicroServient.c".
 //
 
-#define PHONE_DIM_PX_X  1170
-#define PHONE_DIM_PX_Y  2532
-
-#define LETTER_XMDT(_X) \
-	_X(space) \
-	_X(A) _X(B) _X(C) _X(D) _X(E) _X(F) _X(G) _X(H) _X(I) _X(J) _X(K) _X(L) _X(M) \
-	_X(N) _X(O) _X(P) _X(Q) _X(R) _X(S) _X(T) _X(U) _X(V) _X(W) _X(X) _X(Y) _X(Z) \
-
-enum Letter
-{
-	#define MAKE(NAME) Letter_##NAME,
-	LETTER_XMDT(MAKE)
-	#undef MAKE
-	Letter_COUNT
-};
+#define CLI_ARG_ADDITIONAL_MARGIN 2
+#define CLI_EXE_NAME              str("MicroServient.exe")
+#define CLI_EXE_DESC              str("Parse screenshots of Game Pigeon word games.")
+#define CLI_XMDT(X) \
+	X(screenshot_dir_path, string, "screenshot-dir-path", "Directory path that'll be filtered for screenshots of the games.") \
+	X(exam_dir_path      , string, "exam-dir-path"      , "Directory path of compressed monochrome BMPs to compare extracted slots against.") \
+	X(output_dir_path    , string, "output-dir-path"    , "Destination directory to store the processing results.") \
+	X(clear_output_dir   , b32   , "--clear-output-dir" , "Delete all content within the output directory before processing.")
+#define CLI_TYPING_XMDT(X) \
+	X(string     , union { struct { char* data; i64 length; }; char* cstr; str str; }) \
+	X(dary_string, struct Dary_CLIFieldTyping_string_t) \
+	X(b32        , b32)
 
 #if PROGRAM_MICROSERVIENT
-	static const str LETTER_DT[] =
+	enum CLIFieldTyping
+	{
+		#define MAKE(NAME, TYPE) CLIFieldTyping_##NAME,
+		CLI_TYPING_XMDT(MAKE)
+		#undef MAKE
+	};
+
+	#define MAKE(NAME, TYPE) typedef TYPE CLIFieldTyping_##NAME##_t;
+	CLI_TYPING_XMDT(MAKE)
+	#undef MAKE
+	Dary_def(CLIFieldTyping_string_t);
+
+	enum CLIField
+	{
+		#define MAKE(FIELD_NAME, TYPING_NAME, ...) CLIField_##FIELD_NAME,
+		CLI_XMDT(MAKE)
+		#undef MAKE
+		CLIField_COUNT
+	};
+
+	struct CLI
+	{
+		#define MAKE(FIELD_NAME, TYPING_NAME, ...) CLIFieldTyping_##TYPING_NAME##_t FIELD_NAME;
+		CLI_XMDT(MAKE)
+		#undef MAKE
+	};
+
+	struct CLIFieldMetaData
+	{
+		i64                 offset;
+		enum CLIFieldTyping typing;
+		str                 pattern;
+		str                 desc;
+	};
+
+	static const struct CLIFieldMetaData CLI_FIELD_INFO[] =
 		{
-			#define MAKE(NAME) STR(#NAME),
-			LETTER_XMDT(MAKE)
+			#define MAKE(FIELD_NAME, TYPING_NAME, PATTERN, DESC, ...) \
+				{ \
+					.offset  = offsetof(struct CLI, FIELD_NAME), \
+					.typing  = CLIFieldTyping_##TYPING_NAME, \
+					.pattern = STR(PATTERN), \
+					.desc    = STR(DESC), \
+				},
+			CLI_XMDT(MAKE)
 			#undef MAKE
 		};
 #endif
 
-#define COMPRESSED_MONOCHROME_DIM 32
 
-#define BLACK_THRESHOLD 8.0
-#define AVG_RGB_EPSILON 0.01
+
+
+
+
+
+#define PHONE_DIM_PX_X 1170
+#define PHONE_DIM_PX_Y 2532
+
+#define AVG_RGB_MATCHING_EPSILON 0.01
 #define WORDGAME_XMDT(X) \
-	X(anagrams , "Anagrams" , (126.008 / 256.0), (120.983 / 256.0), (144.925 / 256.0)) \
-	X(wordhunt , "WordHunt" , (123.651 / 256.0), (137.697 / 256.0), (105.877 / 256.0)) \
-	X(wordbites, "WordBites", ( 94.020 / 256.0), (116.980 / 256.0), (136.211 / 256.0)) \
+	X(anagrams , "Anagrams" , 0.49221875000, 0.47258984375, 0.56611328125) \
+	X(wordhunt , "WordHunt" , 0.48301171875, 0.53787890625, 0.41358203125) \
+	X(wordbites, "WordBites", 0.36726562500, 0.45695312500, 0.53207421875)
 
 enum WordGame
 {
@@ -1491,12 +1534,16 @@ enum WordGame
 #define ANAGRAMS_6_BOARD_POS_Y   311
 #define ANAGRAMS_6_BOARD_SLOTS_X 6
 #define ANAGRAMS_6_BOARD_SLOTS_Y 1
+static_assert(ANAGRAMS_6_BOARD_POS_X + ANAGRAMS_6_BOARD_SLOTS_X * ANAGRAMS_6_SLOT_DIM <= PHONE_DIM_PX_X); // Should not obviously exceed phone screen boundries.
+static_assert(ANAGRAMS_6_BOARD_POS_Y + ANAGRAMS_6_BOARD_SLOTS_Y * ANAGRAMS_6_SLOT_DIM <= PHONE_DIM_PX_Y); // Should not obviously exceed phone screen boundries.
 
 #define WORDHUNT_4x4_SLOT_DIM      212
 #define WORDHUNT_4x4_BOARD_POS_X   161
 #define WORDHUNT_4x4_BOARD_POS_Y   494
 #define WORDHUNT_4x4_BOARD_SLOTS_X 4
 #define WORDHUNT_4x4_BOARD_SLOTS_Y 4
+static_assert(WORDHUNT_4x4_BOARD_POS_X + WORDHUNT_4x4_BOARD_SLOTS_X * WORDHUNT_4x4_SLOT_DIM <= PHONE_DIM_PX_X); // Should not obviously exceed phone screen boundries.
+static_assert(WORDHUNT_4x4_BOARD_POS_Y + WORDHUNT_4x4_BOARD_SLOTS_Y * WORDHUNT_4x4_SLOT_DIM <= PHONE_DIM_PX_Y); // Should not obviously exceed phone screen boundries.
 
 #define WORDBITES_SLOT_DIM      140
 #define WORDBITES_BOARD_POS_X   25
@@ -1506,67 +1553,31 @@ enum WordGame
 static_assert(WORDBITES_BOARD_POS_X + WORDBITES_BOARD_SLOTS_X * WORDBITES_SLOT_DIM <= PHONE_DIM_PX_X); // Should not obviously exceed phone screen boundries.
 static_assert(WORDBITES_BOARD_POS_Y + WORDBITES_BOARD_SLOTS_Y * WORDBITES_SLOT_DIM <= PHONE_DIM_PX_Y); // Should not obviously exceed phone screen boundries.
 
-#define CLI_TYPING_XMDT(X) \
-	X(string     , union { struct { char* data; i64 length; }; char* cstr; str str; }) \
-	X(dary_string, struct Dary_CLIFieldTyping_string_t) \
-	X(b32        , b32) \
 
-#define CLI_ARG_ADDITIONAL_MARGIN 2
-#define CLI_EXE_NAME              str("MicroServient.exe")
-#define CLI_EXE_DESC              str("Extract slots from screenshots of Game Pigeon word games.")
-#define CLI_XMDT(X) \
-	X(training_dir_path, string, "training-dir-path" , "Directory path that'll be filtered for screenshots of the games.") \
-	X(solution_dir_path, string, "solution-dir-path" , "Directory path of compressed monochrome BMPs to compare extracted slots against.") \
-	X(output_dir_path  , string, "output-dir-path"   , "Destination directory to store processing results.") \
-	X(clear_output_dir , b32   , "--clear-output-dir", "Delete all content within the output directory before processing.") \
+
+
+
+#define EXAM_DIM              32
+#define MONOCHROMIC_THRESHOLD 8
+
+#define LETTER_XMDT(_X) \
+	_X(space) \
+	_X(A) _X(B) _X(C) _X(D) _X(E) _X(F) _X(G) _X(H) _X(I) _X(J) _X(K) _X(L) _X(M) \
+	_X(N) _X(O) _X(P) _X(Q) _X(R) _X(S) _X(T) _X(U) _X(V) _X(W) _X(X) _X(Y) _X(Z) \
+
+enum Letter
+{
+	#define MAKE(NAME) Letter_##NAME,
+	LETTER_XMDT(MAKE)
+	#undef MAKE
+	Letter_COUNT
+};
 
 #if PROGRAM_MICROSERVIENT
-	enum CLIFieldTyping
-	{
-		#define MAKE(NAME, TYPE) CLIFieldTyping_##NAME,
-		CLI_TYPING_XMDT(MAKE)
-		#undef MAKE
-	};
-
-	#define MAKE(NAME, TYPE) typedef TYPE CLIFieldTyping_##NAME##_t;
-	CLI_TYPING_XMDT(MAKE)
-	#undef MAKE
-
-	Dary_def(CLIFieldTyping_string_t);
-
-	struct CLI
-	{
-		#define MAKE(FIELD_NAME, TYPING_NAME, ...) CLIFieldTyping_##TYPING_NAME##_t FIELD_NAME;
-		CLI_XMDT(MAKE)
-		#undef MAKE
-	};
-
-	enum CLIField
-	{
-		#define MAKE(FIELD_NAME, TYPING_NAME, ...) CLIField_##FIELD_NAME,
-		CLI_XMDT(MAKE)
-		#undef MAKE
-		CLIField_COUNT
-	};
-
-	struct CLIFieldMetaData
-	{
-		i64                 offset;
-		enum CLIFieldTyping typing;
-		str                 pattern;
-		str                 desc;
-	};
-
-	static const struct CLIFieldMetaData CLI_FIELD_METADATA[] =
+	static const str LETTER_NAMES[] =
 		{
-			#define MAKE(FIELD_NAME, TYPING_NAME, PATTERN, DESC, ...) \
-				{ \
-					.offset  = offsetof(struct CLI, FIELD_NAME), \
-					.typing  = CLIFieldTyping_##TYPING_NAME, \
-					.pattern = STR(PATTERN), \
-					.desc    = STR(DESC), \
-				},
-			CLI_XMDT(MAKE)
+			#define MAKE(NAME) STR(#NAME),
+			LETTER_XMDT(MAKE)
 			#undef MAKE
 		};
 #endif
