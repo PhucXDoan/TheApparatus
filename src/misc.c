@@ -346,13 +346,17 @@ to_lower(char c)
 }
 
 #if PROGRAM_MICROSERVIENT
-	#define alloc(DST, COUNT) \
+	#define alloc(DST_PTR, COUNT) \
 		do \
 		{ \
-			*(DST) = calloc((COUNT),  sizeof(*(DST))); \
-			if (!*(DST)) \
+			i64 _alloc_COUNT = (COUNT); \
+			if (_alloc_COUNT) \
 			{ \
-				error("Failed to allocate."); \
+				*(DST_PTR) = calloc(_alloc_COUNT, sizeof(**(DST_PTR))); \
+				if (!*(DST_PTR)) \
+				{ \
+					error("Failed to allocate."); \
+				} \
 			} \
 		} \
 		while (false)

@@ -1433,7 +1433,6 @@ struct USBConfig // This layout is defined uniquely for our device application.
 #define CLI_EXE_DESC              str("Parse screenshots of Game Pigeon word games.")
 #define CLI_XMDT(X) \
 	X(screenshot_dir_path, string, "screenshot-dir-path", "Directory path that'll be filtered for screenshots of the games.") \
-	X(exam_dir_path      , string, "exam-dir-path"      , "Directory path of compressed monochrome BMPs to compare extracted slots against.") \
 	X(output_dir_path    , string, "output-dir-path"    , "Destination directory to store the processing results.") \
 	X(clear_output_dir   , b32   , "--clear-output-dir" , "Delete all content within the output directory before processing.")
 #define CLI_TYPING_XMDT(X) \
@@ -1557,13 +1556,14 @@ static_assert(WORDBITES_BOARD_POS_Y + WORDBITES_BOARD_SLOTS_Y * WORDBITES_SLOT_D
 
 
 
-#define EXAM_DIM              32
+#define REDUCED_SLOT_MAX_DIM  64
 #define MONOCHROMIC_THRESHOLD 8
 
 #define LETTER_XMDT(_X) \
 	_X(space) \
 	_X(A) _X(B) _X(C) _X(D) _X(E) _X(F) _X(G) _X(H) _X(I) _X(J) _X(K) _X(L) _X(M) \
 	_X(N) _X(O) _X(P) _X(Q) _X(R) _X(S) _X(T) _X(U) _X(V) _X(W) _X(X) _X(Y) _X(Z) \
+	_X(Ne)
 
 enum Letter
 {

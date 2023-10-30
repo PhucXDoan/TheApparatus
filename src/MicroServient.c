@@ -221,44 +221,6 @@ main(int argc, char** argv)
 		}
 
 		//
-		// Load in exams.
-		//
-
-		struct BMP exams[Letter_COUNT] = {0};
-
-		for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
-		{
-			struct StrBuf exam_file_path = StrBuf(256);
-			strbuf_str (&exam_file_path, cli.exam_dir_path.str);
-			strbuf_char(&exam_file_path, '\\');
-			strbuf_str (&exam_file_path, LETTER_NAMES[letter]);
-			strbuf_cstr(&exam_file_path, ".bmp");
-			strbuf_char(&exam_file_path, '\0');
-
-			exams[letter] = bmp_alloc_read_file(exam_file_path.str); // Leak.
-
-			if (exams[letter].dim_x != EXAM_DIM || exams[letter].dim_y != EXAM_DIM)
-			{
-				error
-				(
-					"Exam \"%s\" is %dx%d, expected %dx%d.",
-					exam_file_path.data,
-					exams[letter].dim_x, exams[letter].dim_y,
-					EXAM_DIM, EXAM_DIM
-				);
-			}
-
-			for (i32 i = 0; i < exams[letter].dim_x * exams[letter].dim_y; i += 1)
-			{
-				struct BMPPixel pixel = exams[letter].data[i];
-				if (!(pixel.r == pixel.g && pixel.g == pixel.b && (pixel.b == 0 || pixel.b == 255) && pixel.a == 255))
-				{
-					error("Exam \"%s\" is not monochromatic.", exam_file_path.data);
-				}
-			}
-		}
-
-		//
 		// Handle output directory.
 		//
 
@@ -300,36 +262,16 @@ main(int argc, char** argv)
 
 		for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
 		{
-			struct StrBuf formatted_path = StrBuf(256);
-			strbuf_str (&formatted_path, cli.output_dir_path.str);
-			strbuf_char(&formatted_path, '\\');
-			strbuf_str (&formatted_path, LETTER_NAMES[letter]);
-			strbuf_char(&formatted_path, '\\');
-			{
-				struct StrBuf scratch_path = formatted_path;
-				strbuf_cstr(&scratch_path, "raw");
-				create_dir(scratch_path.str);
-			}
-			{
-				struct StrBuf scratch_path = formatted_path;
-				strbuf_cstr(&scratch_path, "monochrome");
-				create_dir(scratch_path.str);
-			}
-			{
-				struct StrBuf scratch_path = formatted_path;
-				strbuf_cstr(&scratch_path, "compressed");
-				create_dir(scratch_path.str);
-			}
-		}
-		{
-			struct StrBuf formatted_path = StrBuf(256);
-			strbuf_str (&formatted_path, cli.output_dir_path.str);
-			strbuf_cstr(&formatted_path, "\\nextgen_exams");
-			create_dir(formatted_path.str);
+			struct StrBuf letter_dir_path = StrBuf(256);
+			strbuf_str (&letter_dir_path, cli.output_dir_path.str);
+			strbuf_char(&letter_dir_path, '\\');
+			strbuf_str (&letter_dir_path, LETTER_NAMES[letter]);
+			strbuf_char(&letter_dir_path, '\\');
+			create_dir(letter_dir_path.str);
 		}
 
 		//
-		// Set up iterator to go through the directory.
+		// Set up iterator to go through the screenshot directory.
 		//
 
 		struct StrBuf screenshot_wildcard_path = StrBuf(256);
@@ -350,15 +292,15 @@ main(int argc, char** argv)
 		i32 processed_amount = 0;
 		if (screenshot_finder_handle != INVALID_HANDLE_VALUE)
 		{
-			f64 overall_screenshot_bmp_avg_r     = 0.0;
-			f64 overall_screenshot_bmp_avg_g     = 0.0;
-			f64 overall_screenshot_bmp_avg_b     = 0.0;
-			f64 overall_min_screenshot_bmp_avg_r = 0.0;
-			f64 overall_min_screenshot_bmp_avg_g = 0.0;
-			f64 overall_min_screenshot_bmp_avg_b = 0.0;
-			f64 overall_max_screenshot_bmp_avg_r = 0.0;
-			f64 overall_max_screenshot_bmp_avg_g = 0.0;
-			f64 overall_max_screenshot_bmp_avg_b = 0.0;
+			f64 overall_screenshot_avg_r     = 0.0;
+			f64 overall_screenshot_avg_g     = 0.0;
+			f64 overall_screenshot_avg_b     = 0.0;
+			f64 overall_min_screenshot_avg_r = 0.0;
+			f64 overall_min_screenshot_avg_g = 0.0;
+			f64 overall_min_screenshot_avg_b = 0.0;
+			f64 overall_max_screenshot_avg_r = 0.0;
+			f64 overall_max_screenshot_avg_g = 0.0;
+			f64 overall_max_screenshot_avg_b = 0.0;
 
 			while (true)
 			{
@@ -393,48 +335,48 @@ main(int argc, char** argv)
 					strbuf_char(&input_file_path, '\\');
 					strbuf_str (&input_file_path, input_file_name);
 
-					struct BMP screenshot_bmp = bmp_alloc_read_file(input_file_path.str);
+					struct BMP screenshot = bmp_alloc_read_file(input_file_path.str);
 
-					if (screenshot_bmp.dim_x == PHONE_DIM_PX_X && screenshot_bmp.dim_y == PHONE_DIM_PX_Y)
+					if (screenshot.dim_x == PHONE_DIM_PX_X && screenshot.dim_y == PHONE_DIM_PX_Y)
 					{
 						//
 						// Analyze RGB in screenshot.
 						//
 
-						f64 screenshot_bmp_avg_r = 0.0;
-						f64 screenshot_bmp_avg_g = 0.0;
-						f64 screenshot_bmp_avg_b = 0.0;
+						f64 screenshot_avg_r = 0.0;
+						f64 screenshot_avg_g = 0.0;
+						f64 screenshot_avg_b = 0.0;
 
-						for (i32 i = 0; i < screenshot_bmp.dim_x * screenshot_bmp.dim_y; i += 1)
+						for (i32 i = 0; i < screenshot.dim_x * screenshot.dim_y; i += 1)
 						{
-							screenshot_bmp_avg_r += screenshot_bmp.data[i].r;
-							screenshot_bmp_avg_g += screenshot_bmp.data[i].g;
-							screenshot_bmp_avg_b += screenshot_bmp.data[i].b;
+							screenshot_avg_r += screenshot.data[i].r;
+							screenshot_avg_g += screenshot.data[i].g;
+							screenshot_avg_b += screenshot.data[i].b;
 						}
-						overall_screenshot_bmp_avg_r += screenshot_bmp_avg_r;
-						overall_screenshot_bmp_avg_g += screenshot_bmp_avg_g;
-						overall_screenshot_bmp_avg_b += screenshot_bmp_avg_b;
-						screenshot_bmp_avg_r         /= 256.0 * screenshot_bmp.dim_x * screenshot_bmp.dim_y;
-						screenshot_bmp_avg_g         /= 256.0 * screenshot_bmp.dim_x * screenshot_bmp.dim_y;
-						screenshot_bmp_avg_b         /= 256.0 * screenshot_bmp.dim_x * screenshot_bmp.dim_y;
+						overall_screenshot_avg_r += screenshot_avg_r;
+						overall_screenshot_avg_g += screenshot_avg_g;
+						overall_screenshot_avg_b += screenshot_avg_b;
+						screenshot_avg_r         /= 256.0 * screenshot.dim_x * screenshot.dim_y;
+						screenshot_avg_g         /= 256.0 * screenshot.dim_x * screenshot.dim_y;
+						screenshot_avg_b         /= 256.0 * screenshot.dim_x * screenshot.dim_y;
 
 						if (processed_amount)
 						{
-							overall_min_screenshot_bmp_avg_r = f64_min(overall_min_screenshot_bmp_avg_r, screenshot_bmp_avg_r);
-							overall_min_screenshot_bmp_avg_g = f64_min(overall_min_screenshot_bmp_avg_g, screenshot_bmp_avg_g);
-							overall_min_screenshot_bmp_avg_b = f64_min(overall_min_screenshot_bmp_avg_b, screenshot_bmp_avg_b);
-							overall_max_screenshot_bmp_avg_r = f64_max(overall_max_screenshot_bmp_avg_r, screenshot_bmp_avg_r);
-							overall_max_screenshot_bmp_avg_g = f64_max(overall_max_screenshot_bmp_avg_g, screenshot_bmp_avg_g);
-							overall_max_screenshot_bmp_avg_b = f64_max(overall_max_screenshot_bmp_avg_b, screenshot_bmp_avg_b);
+							overall_min_screenshot_avg_r = f64_min(overall_min_screenshot_avg_r, screenshot_avg_r);
+							overall_min_screenshot_avg_g = f64_min(overall_min_screenshot_avg_g, screenshot_avg_g);
+							overall_min_screenshot_avg_b = f64_min(overall_min_screenshot_avg_b, screenshot_avg_b);
+							overall_max_screenshot_avg_r = f64_max(overall_max_screenshot_avg_r, screenshot_avg_r);
+							overall_max_screenshot_avg_g = f64_max(overall_max_screenshot_avg_g, screenshot_avg_g);
+							overall_max_screenshot_avg_b = f64_max(overall_max_screenshot_avg_b, screenshot_avg_b);
 						}
 						else
 						{
-							overall_min_screenshot_bmp_avg_r = screenshot_bmp_avg_r;
-							overall_min_screenshot_bmp_avg_g = screenshot_bmp_avg_g;
-							overall_min_screenshot_bmp_avg_b = screenshot_bmp_avg_b;
-							overall_max_screenshot_bmp_avg_r = screenshot_bmp_avg_r;
-							overall_max_screenshot_bmp_avg_g = screenshot_bmp_avg_g;
-							overall_max_screenshot_bmp_avg_b = screenshot_bmp_avg_b;
+							overall_min_screenshot_avg_r = screenshot_avg_r;
+							overall_min_screenshot_avg_g = screenshot_avg_g;
+							overall_min_screenshot_avg_b = screenshot_avg_b;
+							overall_max_screenshot_avg_r = screenshot_avg_r;
+							overall_max_screenshot_avg_g = screenshot_avg_g;
+							overall_max_screenshot_avg_b = screenshot_avg_b;
 						}
 
 						//
@@ -446,9 +388,9 @@ main(int argc, char** argv)
 						{
 							if
 							(
-								f64_abs(screenshot_bmp_avg_r - WORDGAME_DT[canidate_wordgame].avg_r) <= AVG_RGB_MATCHING_EPSILON &&
-								f64_abs(screenshot_bmp_avg_g - WORDGAME_DT[canidate_wordgame].avg_g) <= AVG_RGB_MATCHING_EPSILON &&
-								f64_abs(screenshot_bmp_avg_b - WORDGAME_DT[canidate_wordgame].avg_b) <= AVG_RGB_MATCHING_EPSILON
+								f64_abs(screenshot_avg_r - WORDGAME_DT[canidate_wordgame].avg_r) <= AVG_RGB_MATCHING_EPSILON &&
+								f64_abs(screenshot_avg_g - WORDGAME_DT[canidate_wordgame].avg_g) <= AVG_RGB_MATCHING_EPSILON &&
+								f64_abs(screenshot_avg_b - WORDGAME_DT[canidate_wordgame].avg_b) <= AVG_RGB_MATCHING_EPSILON
 							)
 							{
 								wordgame = canidate_wordgame;
@@ -460,16 +402,11 @@ main(int argc, char** argv)
 						// Make note of where the slots will be.
 						//
 
-						struct Slot
-						{
-							i32 x;
-							i32 y;
-						};
-						struct Slot slot_buffer[128] = {0};
-						i32         slot_count       = 0;
-						i32         slot_dim         = 0;
-						i32         slot_origin_x    = 0;
-						i32         slot_origin_y    = 0;
+						struct { i32 x; i32 y; } slot_buffer[128] = {0};
+						i32                      slot_count       = 0;
+						i32                      slot_dim         = 0;
+						i32                      slot_origin_x    = 0;
+						i32                      slot_origin_y    = 0;
 
 						switch (wordgame)
 						{
@@ -484,12 +421,8 @@ main(int argc, char** argv)
 									for (i32 slot_x = 0; slot_x < ANAGRAMS_6_BOARD_SLOTS_X; slot_x += 1)
 									{
 										assert(slot_count < countof(slot_buffer));
-										slot_buffer[slot_count] =
-											(struct Slot)
-											{
-												.x = slot_x,
-												.y = slot_y,
-											};
+										slot_buffer[slot_count].x = slot_x;
+										slot_buffer[slot_count].y = slot_y;
 										slot_count += 1;
 									}
 								}
@@ -506,12 +439,8 @@ main(int argc, char** argv)
 									for (i32 slot_x = 0; slot_x < WORDHUNT_4x4_BOARD_SLOTS_X; slot_x += 1)
 									{
 										assert(slot_count < countof(slot_buffer));
-										slot_buffer[slot_count] =
-											(struct Slot)
-											{
-												.x = slot_x,
-												.y = slot_y,
-											};
+										slot_buffer[slot_count].x = slot_x;
+										slot_buffer[slot_count].y = slot_y;
 										slot_count += 1;
 									}
 								}
@@ -528,12 +457,8 @@ main(int argc, char** argv)
 									for (i32 slot_x = 0; slot_x < WORDBITES_BOARD_SLOTS_X; slot_x += 1)
 									{
 										assert(slot_count < countof(slot_buffer));
-										slot_buffer[slot_count] =
-											(struct Slot)
-											{
-												.x = slot_x,
-												.y = slot_y,
-											};
+										slot_buffer[slot_count].x = slot_x;
+										slot_buffer[slot_count].y = slot_y;
 										slot_count += 1;
 									}
 								}
@@ -546,153 +471,130 @@ main(int argc, char** argv)
 						}
 
 						//
-						// Parse each slot.
+						// Convert slots into reduced slots.
 						//
 
-						struct BMP slot_bmp =
-							{
-								.dim_x = slot_dim,
-								.dim_y = slot_dim,
-							};
-						alloc(&slot_bmp.data, slot_bmp.dim_x * slot_bmp.dim_y);
-
-						struct BMPMonochrome monochrome_slot_bmp =
-							{
-								.dim_x = slot_dim,
-								.dim_y = slot_dim,
-							};
-						alloc(&monochrome_slot_bmp.data, bmp_monochrome_calc_size(monochrome_slot_bmp.dim_x, monochrome_slot_bmp.dim_y));
-
-						struct BMPMonochrome compressed_monochrome_slot_bmp =
-							{
-								.dim_x = EXAM_DIM,
-								.dim_y = EXAM_DIM,
-							};
-						alloc(&compressed_monochrome_slot_bmp.data, bmp_monochrome_calc_size(compressed_monochrome_slot_bmp.dim_x, compressed_monochrome_slot_bmp.dim_y));
+						b8* max_reduced_slot = 0;
+						alloc(&max_reduced_slot, REDUCED_SLOT_MAX_DIM * REDUCED_SLOT_MAX_DIM);
 
 						for (i32 slot_index = 0; slot_index < slot_count; slot_index += 1)
 						{
 							assert(wordgame != WordGame_COUNT);
-							assert(slot_origin_x + slot_buffer[slot_index].x * slot_dim <= screenshot_bmp.dim_x);
-							assert(slot_origin_y + slot_buffer[slot_index].y * slot_dim <= screenshot_bmp.dim_y);
+							assert(slot_origin_x + slot_buffer[slot_index].x * slot_dim <= screenshot.dim_x);
+							assert(slot_origin_y + slot_buffer[slot_index].y * slot_dim <= screenshot.dim_y);
 
 							//
-							// Copy pixels.
+							// Process pixels.
 							//
 
-							for (i32 slot_px_y = 0; slot_px_y < slot_dim; slot_px_y += 1)
+							i32 rows_of_interest_beginning_index = 0;
+							i32 rows_of_interest_ending_index    = 0;
+
+							for (i32 max_reduced_slot_px_y = 0; max_reduced_slot_px_y < REDUCED_SLOT_MAX_DIM; max_reduced_slot_px_y += 1)
 							{
-								for (i32 slot_px_x = 0; slot_px_x < slot_dim; slot_px_x += 1)
+								for (i32 max_reduced_slot_px_x = 0; max_reduced_slot_px_x < REDUCED_SLOT_MAX_DIM; max_reduced_slot_px_x += 1)
 								{
-									struct BMPPixel pixel =
-										screenshot_bmp.data
-											[
-												(slot_origin_y + slot_buffer[slot_index].y * slot_dim + slot_px_y) * screenshot_bmp.dim_x
-													+ slot_origin_x + slot_buffer[slot_index].x * slot_dim + slot_px_x
-											];
+									i32             screenshot_x     = slot_origin_x + slot_buffer[slot_index].x * slot_dim + i32(f64(max_reduced_slot_px_x) / f64(REDUCED_SLOT_MAX_DIM) * f64(slot_dim));
+									i32             screenshot_y     = slot_origin_y + slot_buffer[slot_index].y * slot_dim + i32(f64(max_reduced_slot_px_y) / f64(REDUCED_SLOT_MAX_DIM) * f64(slot_dim));
+									struct BMPPixel slot_pixel       = screenshot.data[screenshot_y * screenshot.dim_x + screenshot_x];
 
-									slot_bmp.data[slot_px_y * slot_dim + slot_px_x] = pixel;
-
-									bmp_monochrome_set(monochrome_slot_bmp, slot_px_x, slot_px_y, (pixel.r + pixel.g + pixel.b) / 3 <= MONOCHROMIC_THRESHOLD);
-								}
-							}
-
-							//
-							// Scale monochromatic BMP down to exam size.
-							//
-
-							for (i32 y = 0; y < EXAM_DIM; y += 1)
-							{
-								for (i32 x = 0; x < EXAM_DIM; x += 1)
-								{
-									bmp_monochrome_set
-									(
-										compressed_monochrome_slot_bmp,
-										x, y,
-										bmp_monochrome_get
-										(
-											monochrome_slot_bmp,
-											i32(f64(x) / f64(EXAM_DIM) * f64(monochrome_slot_bmp.dim_x)),
-											i32(f64(y) / f64(EXAM_DIM) * f64(monochrome_slot_bmp.dim_y))
-										)
-									);
-								}
-							}
-
-							//
-							// Determine closest matching letter.
-							//
-
-							enum Letter best_exam_letter = Letter_COUNT;
-							i32         best_exam_score  = 0;
-							for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
-							{
-								i32 exam_score = 0;
-
-								for (i32 y = 0; y < EXAM_DIM; y += 1)
-								{
-									for (i32 x = 0; x < EXAM_DIM; x += 1)
+									if ((slot_pixel.r + slot_pixel.g + slot_pixel.b) / 3 <= MONOCHROMIC_THRESHOLD)
 									{
-										if (bmp_monochrome_get(compressed_monochrome_slot_bmp, x, y) == (exams[letter].data[y * exams[letter].dim_x + x].r & 1))
+										max_reduced_slot[max_reduced_slot_px_y * REDUCED_SLOT_MAX_DIM + max_reduced_slot_px_x] = true;
+
+										if (!rows_of_interest_ending_index)
 										{
-											exam_score += 1;
+											rows_of_interest_beginning_index = max_reduced_slot_px_y;
 										}
+										rows_of_interest_ending_index = max_reduced_slot_px_y + 1;
+									}
+									else
+									{
+										max_reduced_slot[max_reduced_slot_px_y * REDUCED_SLOT_MAX_DIM + max_reduced_slot_px_x] = false;
 									}
 								}
-
-								if (best_exam_score < exam_score)
-								{
-									best_exam_letter = letter;
-									best_exam_score  = exam_score;
-								}
 							}
+
+//							//
+//							// Determine closest matching letter.
+//							//
+//
+//							enum Letter best_exam_letter = Letter_COUNT;
+//							i32         best_exam_score  = 0;
+//							for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
+//							{
+//								i32 exam_score = 0;
+//
+//								for (i32 y = 0; y < EXAM_DIM; y += 1)
+//								{
+//									for (i32 x = 0; x < EXAM_DIM; x += 1)
+//									{
+//										if (bmp_monochrome_get(compressed_monochrome_slot_bmp, x, y) == (exams[letter].data[y * exams[letter].dim_x + x].r & 1))
+//										{
+//											exam_score += 1;
+//										}
+//									}
+//								}
+//
+//								if (best_exam_score < exam_score)
+//								{
+//									best_exam_letter = letter;
+//									best_exam_score  = exam_score;
+//								}
+//							}
 
 							//
 							// Export BMPs.
 							//
 
-							struct StrBuf output_file_name = StrBuf(256);
-							strbuf_str (&output_file_name, WORDGAME_DT[wordgame].print_name);
-							strbuf_char(&output_file_name, '_');
-							strbuf_str (&output_file_name, input_file_name_extless);
-							strbuf_char(&output_file_name, '_');
-							strbuf_i64 (&output_file_name, slot_buffer[slot_index].x);
-							strbuf_char(&output_file_name, '_');
-							strbuf_i64 (&output_file_name, slot_buffer[slot_index].y);
-							strbuf_cstr(&output_file_name, ".bmp");
+							struct BMPMonochrome reduced_slot =
+								{
+									.dim_x = REDUCED_SLOT_MAX_DIM,
+									.dim_y = rows_of_interest_ending_index - rows_of_interest_beginning_index,
+								};
+							alloc(&reduced_slot.data, bmp_monochrome_calc_size(reduced_slot.dim_x, reduced_slot.dim_y));
 
-							assert(best_exam_letter != Letter_COUNT);
-							struct StrBuf slot_dir_path = StrBuf(256);
-							strbuf_str (&slot_dir_path, cli.output_dir_path.str);
-							strbuf_char(&slot_dir_path, '\\');
-							strbuf_str (&slot_dir_path, LETTER_NAMES[best_exam_letter]);
-							strbuf_char(&slot_dir_path, '\\');
+							for (i32 reduced_slot_px_y = 0; reduced_slot_px_y < reduced_slot.dim_y; reduced_slot_px_y += 1)
 							{
-								struct StrBuf scratch_path = slot_dir_path;
-								strbuf_cstr(&scratch_path, "raw\\");
-								strbuf_str (&scratch_path, output_file_name.str);
-								bmp_export(slot_bmp, scratch_path.str);
+								for (i32 reduced_slot_px_x = 0; reduced_slot_px_x < reduced_slot.dim_x; reduced_slot_px_x += 1)
+								{
+									bmp_monochrome_set
+									(
+										reduced_slot,
+										reduced_slot_px_x,
+										reduced_slot_px_y,
+										max_reduced_slot
+										[
+											(rows_of_interest_beginning_index + reduced_slot_px_y) * REDUCED_SLOT_MAX_DIM
+												+ reduced_slot_px_x
+										]
+									);
+								}
 							}
-							{
-								struct StrBuf scratch_path = slot_dir_path;
-								strbuf_cstr(&scratch_path, "monochrome\\");
-								strbuf_str (&scratch_path, output_file_name.str);
-								bmp_monochrome_export(monochrome_slot_bmp, scratch_path.str);
-							}
-							{
-								struct StrBuf scratch_path = slot_dir_path;
-								strbuf_cstr(&scratch_path, "compressed\\");
-								strbuf_str (&scratch_path, output_file_name.str);
-								bmp_monochrome_export(compressed_monochrome_slot_bmp, scratch_path.str);
-							}
+
+//							assert(best_exam_letter != Letter_COUNT);
+							struct StrBuf reduced_slot_file_path = StrBuf(256);
+							strbuf_str (&reduced_slot_file_path, cli.output_dir_path.str);
+							strbuf_char(&reduced_slot_file_path, '\\');
+							strbuf_str (&reduced_slot_file_path, LETTER_NAMES[Letter_A]); // TEMP
+							strbuf_char(&reduced_slot_file_path, '_');
+							strbuf_str (&reduced_slot_file_path, WORDGAME_DT[wordgame].print_name);
+							strbuf_char(&reduced_slot_file_path, '_');
+							strbuf_i64 (&reduced_slot_file_path, slot_buffer[slot_index].x);
+							strbuf_char(&reduced_slot_file_path, '_');
+							strbuf_i64 (&reduced_slot_file_path, slot_buffer[slot_index].y);
+							strbuf_char(&reduced_slot_file_path, '_');
+							strbuf_str (&reduced_slot_file_path, input_file_name_extless);
+							strbuf_cstr(&reduced_slot_file_path, ".bmp");
+							bmp_monochrome_export(reduced_slot, reduced_slot_file_path.str);
+
+							free(reduced_slot.data);
 						}
 
-						free(compressed_monochrome_slot_bmp.data);
-						free(monochrome_slot_bmp.data);
-						free(slot_bmp.data);
+						free(max_reduced_slot);
 
 						//
-						// Wrap up this image.
+						// Finish processing the screenshot.
 						//
 
 						printf
@@ -700,9 +602,9 @@ main(int argc, char** argv)
 							"% 4d : %.*s : AvgRGB(%7.3f, %7.3f, %7.3f) : ",
 							processed_amount + 1,
 							i32(input_file_path.length), input_file_path.data,
-							screenshot_bmp_avg_r * 256.0,
-							screenshot_bmp_avg_g * 256.0,
-							screenshot_bmp_avg_b * 256.0
+							screenshot_avg_r * 256.0,
+							screenshot_avg_g * 256.0,
+							screenshot_avg_b * 256.0
 						);
 						if (wordgame == WordGame_COUNT)
 						{
@@ -716,7 +618,7 @@ main(int argc, char** argv)
 						processed_amount += 1;
 					}
 
-					free(screenshot_bmp.data);
+					free(screenshot.data);
 				}
 
 				//
@@ -745,9 +647,9 @@ main(int argc, char** argv)
 
 			if (processed_amount)
 			{
-				overall_screenshot_bmp_avg_r /= 256.0 * processed_amount * PHONE_DIM_PX_X * PHONE_DIM_PX_Y;
-				overall_screenshot_bmp_avg_g /= 256.0 * processed_amount * PHONE_DIM_PX_X * PHONE_DIM_PX_Y;
-				overall_screenshot_bmp_avg_b /= 256.0 * processed_amount * PHONE_DIM_PX_X * PHONE_DIM_PX_Y;
+				overall_screenshot_avg_r /= 256.0 * processed_amount * PHONE_DIM_PX_X * PHONE_DIM_PX_Y;
+				overall_screenshot_avg_g /= 256.0 * processed_amount * PHONE_DIM_PX_X * PHONE_DIM_PX_Y;
+				overall_screenshot_avg_b /= 256.0 * processed_amount * PHONE_DIM_PX_X * PHONE_DIM_PX_Y;
 
 				printf
 				(
@@ -756,190 +658,190 @@ main(int argc, char** argv)
 					"\tOverall average RGB : (%7.3f, %7.3f, %7.3f).\n"
 					"\tOverall minimum RGB : (%7.3f, %7.3f, %7.3f).\n"
 					"\tMinimum wiggle room : (%7.3f, %7.3f, %7.3f).\n",
-					overall_max_screenshot_bmp_avg_r * 256.0, overall_max_screenshot_bmp_avg_g * 256.0, overall_max_screenshot_bmp_avg_b * 256.0,
-					overall_screenshot_bmp_avg_r     * 256.0, overall_screenshot_bmp_avg_g     * 256.0, overall_screenshot_bmp_avg_b     * 256.0,
-					overall_min_screenshot_bmp_avg_r * 256.0, overall_min_screenshot_bmp_avg_g * 256.0, overall_min_screenshot_bmp_avg_b * 256.0,
-					f64_max(f64_abs(overall_min_screenshot_bmp_avg_r - overall_screenshot_bmp_avg_r), f64_abs(overall_max_screenshot_bmp_avg_r - overall_screenshot_bmp_avg_r)) * 256.0,
-					f64_max(f64_abs(overall_min_screenshot_bmp_avg_g - overall_screenshot_bmp_avg_g), f64_abs(overall_max_screenshot_bmp_avg_g - overall_screenshot_bmp_avg_g)) * 256.0,
-					f64_max(f64_abs(overall_min_screenshot_bmp_avg_b - overall_screenshot_bmp_avg_b), f64_abs(overall_max_screenshot_bmp_avg_b - overall_screenshot_bmp_avg_b)) * 256.0
+					overall_max_screenshot_avg_r * 256.0, overall_max_screenshot_avg_g * 256.0, overall_max_screenshot_avg_b * 256.0,
+					overall_screenshot_avg_r     * 256.0, overall_screenshot_avg_g     * 256.0, overall_screenshot_avg_b     * 256.0,
+					overall_min_screenshot_avg_r * 256.0, overall_min_screenshot_avg_g * 256.0, overall_min_screenshot_avg_b * 256.0,
+					f64_max(f64_abs(overall_min_screenshot_avg_r - overall_screenshot_avg_r), f64_abs(overall_max_screenshot_avg_r - overall_screenshot_avg_r)) * 256.0,
+					f64_max(f64_abs(overall_min_screenshot_avg_g - overall_screenshot_avg_g), f64_abs(overall_max_screenshot_avg_g - overall_screenshot_avg_g)) * 256.0,
+					f64_max(f64_abs(overall_min_screenshot_avg_b - overall_screenshot_avg_b), f64_abs(overall_max_screenshot_avg_b - overall_screenshot_avg_b)) * 256.0
 				);
 
-				printf
-				(
-					"\n"
-					"Verify all compressed images are intact and correct.\n"
-				);
-
-				b32 generate_next_gen_exams = false;
-				while (true)
-				{
-					printf("Continue onto generating next generation exams? (Y/N) : ");
-					char input_buffer[4] = {0};
-					if (!fgets(input_buffer, countof(input_buffer), stdin))
-					{
-						error("Failed to get input.");
-					}
-
-					if (!strcmp(input_buffer, "Y\n") || !strcmp(input_buffer, "y\n"))
-					{
-						generate_next_gen_exams = true;
-						break;
-					}
-					else if (!strcmp(input_buffer, "N\n") || !strcmp(input_buffer, "n\n"))
-					{
-						break;
-					}
-					else
-					{
-						while (!strchr(input_buffer, '\n'))
-						{
-							if (!fgets(input_buffer, countof(input_buffer), stdin))
-							{
-								error("Failed to get input.");
-							}
-						}
-					}
-				}
-
-				if (generate_next_gen_exams)
-				{
-					i32* heatmap = {0};
-					alloc(&heatmap, EXAM_DIM * EXAM_DIM);
-
-					struct BMPMonochrome nextgen_exam =
-						{
-							.dim_x = EXAM_DIM,
-							.dim_y = EXAM_DIM,
-						};
-					alloc(&nextgen_exam.data, nextgen_exam.dim_x * nextgen_exam.dim_y);
-
-					for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
-					{
-						struct StrBuf compressed_monochrome_bmp_dir_path = StrBuf(256);
-						strbuf_str (&compressed_monochrome_bmp_dir_path, cli.output_dir_path.str);
-						strbuf_char(&compressed_monochrome_bmp_dir_path, '\\');
-						strbuf_str (&compressed_monochrome_bmp_dir_path, LETTER_NAMES[letter]);
-						strbuf_cstr(&compressed_monochrome_bmp_dir_path, "\\compressed\\");
-
-						struct StrBuf compressed_monochrome_bmp_wildcard_path = StrBuf(256);
-						strbuf_str (&compressed_monochrome_bmp_wildcard_path, compressed_monochrome_bmp_dir_path.str);
-						strbuf_cstr(&compressed_monochrome_bmp_wildcard_path, "*.bmp");
-						strbuf_char(&compressed_monochrome_bmp_wildcard_path, '\0');
-
-						WIN32_FIND_DATAA compressed_monochrome_bmp_finder_data   = {0};
-						HANDLE           compressed_monochrome_bmp_finder_handle = FindFirstFileA(compressed_monochrome_bmp_wildcard_path.data, &compressed_monochrome_bmp_finder_data);
-
-						if (compressed_monochrome_bmp_finder_handle == INVALID_HANDLE_VALUE && GetLastError() != ERROR_FILE_NOT_FOUND)
-						{
-							error("`FindFirstFileA` failed on \"%s\".", compressed_monochrome_bmp_wildcard_path.data);
-						}
-
-						if (compressed_monochrome_bmp_finder_handle != INVALID_HANDLE_VALUE)
-						{
-							printf("Generating for \"%.*s\".\n", i32(compressed_monochrome_bmp_wildcard_path.length), compressed_monochrome_bmp_wildcard_path.data);
-							memset(heatmap, 0, sizeof(i32) * EXAM_DIM * EXAM_DIM);
-							i32 subexam_count = 0;
-
-							while (true)
-							{
-								str input_file_name         = str_cstr(compressed_monochrome_bmp_finder_data.cFileName);
-								str input_file_name_extless = input_file_name;
-								for
-								(
-									i64 i = input_file_name_extless.length - 1;
-									i >= 0;
-									i -= 1
-								)
-								{
-									if (input_file_name_extless.data[i] == '.')
-									{
-										input_file_name_extless.length = i;
-										break;
-									}
-								}
-
-								if (!(compressed_monochrome_bmp_finder_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-								{
-									struct StrBuf scratch_path = compressed_monochrome_bmp_dir_path;
-									strbuf_str(&scratch_path, input_file_name);
-									printf("\t\"%.*s\"\n", i32(scratch_path.length), scratch_path.data);
-
-									struct BMP compressed_monochrome_bmp = bmp_alloc_read_file(scratch_path.str);
-
-									if (compressed_monochrome_bmp.dim_x != EXAM_DIM || compressed_monochrome_bmp.dim_y != EXAM_DIM)
-									{
-										error
-										(
-											"Subexam \"%s\" is %dx%d, expected %dx%d.",
-											scratch_path.data,
-											compressed_monochrome_bmp.dim_x, compressed_monochrome_bmp.dim_y,
-											EXAM_DIM, EXAM_DIM
-										);
-									}
-
-									for (i32 i = 0; i < compressed_monochrome_bmp.dim_x * compressed_monochrome_bmp.dim_y; i += 1)
-									{
-										struct BMPPixel pixel = compressed_monochrome_bmp.data[i];
-										if (pixel.r == pixel.g && pixel.g == pixel.b && (pixel.b == 0 || pixel.b == 255) && pixel.a == 255)
-										{
-											heatmap[i] += !!pixel.r;
-										}
-										else
-										{
-											error("Subexam \"%s\" is not monochromatic.", scratch_path.data);
-										}
-									}
-
-									free(compressed_monochrome_bmp.data);
-									subexam_count += 1;
-								}
-
-								if (!FindNextFileA(compressed_monochrome_bmp_finder_handle, &compressed_monochrome_bmp_finder_data))
-								{
-									if (GetLastError() == ERROR_NO_MORE_FILES)
-									{
-										break;
-									}
-									else
-									{
-										error("`FindNextFileA` failed.");
-									}
-								}
-							}
-
-							if (subexam_count)
-							{
-								memset(nextgen_exam.data, 0, bmp_monochrome_calc_size(EXAM_DIM, EXAM_DIM));
-								for (i32 y = 0; y < EXAM_DIM; y += 1)
-								{
-									for (i32 x = 0; x < EXAM_DIM; x += 1)
-									{
-										bmp_monochrome_set(nextgen_exam, x, y, heatmap[y * EXAM_DIM + x] > subexam_count / 8);
-									}
-								}
-
-								struct StrBuf nextgen_exam_file_path = StrBuf(256);
-								strbuf_str (&nextgen_exam_file_path, cli.output_dir_path.str);
-								strbuf_cstr(&nextgen_exam_file_path, "\\nextgen_exams\\");
-								strbuf_str (&nextgen_exam_file_path, LETTER_NAMES[letter]);
-								strbuf_cstr(&nextgen_exam_file_path, ".bmp");
-								bmp_monochrome_export(nextgen_exam, nextgen_exam_file_path.str);
-							}
-							else
-							{
-								// TODO ??
-							}
-
-							if (!FindClose(compressed_monochrome_bmp_finder_handle))
-							{
-								error("`FindClose` failed on \"%s\".", compressed_monochrome_bmp_wildcard_path.data);
-							}
-						}
-					}
-
-					free(nextgen_exam.data);
-					free(heatmap);
-				}
+//				printf
+//				(
+//					"\n"
+//					"Verify all compressed images are intact and correct.\n"
+//				);
+//
+//				b32 generate_next_gen_exams = false;
+//				while (true)
+//				{
+//					printf("Continue onto generating next generation exams? (Y/N) : ");
+//					char input_buffer[4] = {0};
+//					if (!fgets(input_buffer, countof(input_buffer), stdin))
+//					{
+//						error("Failed to get input.");
+//					}
+//
+//					if (!strcmp(input_buffer, "Y\n") || !strcmp(input_buffer, "y\n"))
+//					{
+//						generate_next_gen_exams = true;
+//						break;
+//					}
+//					else if (!strcmp(input_buffer, "N\n") || !strcmp(input_buffer, "n\n"))
+//					{
+//						break;
+//					}
+//					else
+//					{
+//						while (!strchr(input_buffer, '\n'))
+//						{
+//							if (!fgets(input_buffer, countof(input_buffer), stdin))
+//							{
+//								error("Failed to get input.");
+//							}
+//						}
+//					}
+//				}
+//
+//				if (generate_next_gen_exams)
+//				{
+//					i32* heatmap = {0};
+//					alloc(&heatmap, EXAM_DIM * EXAM_DIM);
+//
+//					struct BMPMonochrome nextgen_exam =
+//						{
+//							.dim_x = EXAM_DIM,
+//							.dim_y = EXAM_DIM,
+//						};
+//					alloc(&nextgen_exam.data, nextgen_exam.dim_x * nextgen_exam.dim_y);
+//
+//					for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
+//					{
+//						struct StrBuf compressed_monochrome_bmp_dir_path = StrBuf(256);
+//						strbuf_str (&compressed_monochrome_bmp_dir_path, cli.output_dir_path.str);
+//						strbuf_char(&compressed_monochrome_bmp_dir_path, '\\');
+//						strbuf_str (&compressed_monochrome_bmp_dir_path, LETTER_NAMES[letter]);
+//						strbuf_cstr(&compressed_monochrome_bmp_dir_path, "\\compressed\\");
+//
+//						struct StrBuf compressed_monochrome_bmp_wildcard_path = StrBuf(256);
+//						strbuf_str (&compressed_monochrome_bmp_wildcard_path, compressed_monochrome_bmp_dir_path.str);
+//						strbuf_cstr(&compressed_monochrome_bmp_wildcard_path, "*.bmp");
+//						strbuf_char(&compressed_monochrome_bmp_wildcard_path, '\0');
+//
+//						WIN32_FIND_DATAA compressed_monochrome_bmp_finder_data   = {0};
+//						HANDLE           compressed_monochrome_bmp_finder_handle = FindFirstFileA(compressed_monochrome_bmp_wildcard_path.data, &compressed_monochrome_bmp_finder_data);
+//
+//						if (compressed_monochrome_bmp_finder_handle == INVALID_HANDLE_VALUE && GetLastError() != ERROR_FILE_NOT_FOUND)
+//						{
+//							error("`FindFirstFileA` failed on \"%s\".", compressed_monochrome_bmp_wildcard_path.data);
+//						}
+//
+//						if (compressed_monochrome_bmp_finder_handle != INVALID_HANDLE_VALUE)
+//						{
+//							printf("Generating for \"%.*s\".\n", i32(compressed_monochrome_bmp_wildcard_path.length), compressed_monochrome_bmp_wildcard_path.data);
+//							memset(heatmap, 0, sizeof(i32) * EXAM_DIM * EXAM_DIM);
+//							i32 subexam_count = 0;
+//
+//							while (true)
+//							{
+//								str input_file_name         = str_cstr(compressed_monochrome_bmp_finder_data.cFileName);
+//								str input_file_name_extless = input_file_name;
+//								for
+//								(
+//									i64 i = input_file_name_extless.length - 1;
+//									i >= 0;
+//									i -= 1
+//								)
+//								{
+//									if (input_file_name_extless.data[i] == '.')
+//									{
+//										input_file_name_extless.length = i;
+//										break;
+//									}
+//								}
+//
+//								if (!(compressed_monochrome_bmp_finder_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+//								{
+//									struct StrBuf scratch_path = compressed_monochrome_bmp_dir_path;
+//									strbuf_str(&scratch_path, input_file_name);
+//									printf("\t\"%.*s\"\n", i32(scratch_path.length), scratch_path.data);
+//
+//									struct BMP compressed_monochrome_bmp = bmp_alloc_read_file(scratch_path.str);
+//
+//									if (compressed_monochrome_bmp.dim_x != EXAM_DIM || compressed_monochrome_bmp.dim_y != EXAM_DIM)
+//									{
+//										error
+//										(
+//											"Subexam \"%s\" is %dx%d, expected %dx%d.",
+//											scratch_path.data,
+//											compressed_monochrome_bmp.dim_x, compressed_monochrome_bmp.dim_y,
+//											EXAM_DIM, EXAM_DIM
+//										);
+//									}
+//
+//									for (i32 i = 0; i < compressed_monochrome_bmp.dim_x * compressed_monochrome_bmp.dim_y; i += 1)
+//									{
+//										struct BMPPixel pixel = compressed_monochrome_bmp.data[i];
+//										if (pixel.r == pixel.g && pixel.g == pixel.b && (pixel.b == 0 || pixel.b == 255) && pixel.a == 255)
+//										{
+//											heatmap[i] += !!pixel.r;
+//										}
+//										else
+//										{
+//											error("Subexam \"%s\" is not monochromatic.", scratch_path.data);
+//										}
+//									}
+//
+//									free(compressed_monochrome_bmp.data);
+//									subexam_count += 1;
+//								}
+//
+//								if (!FindNextFileA(compressed_monochrome_bmp_finder_handle, &compressed_monochrome_bmp_finder_data))
+//								{
+//									if (GetLastError() == ERROR_NO_MORE_FILES)
+//									{
+//										break;
+//									}
+//									else
+//									{
+//										error("`FindNextFileA` failed.");
+//									}
+//								}
+//							}
+//
+//							if (subexam_count)
+//							{
+//								memset(nextgen_exam.data, 0, bmp_monochrome_calc_size(EXAM_DIM, EXAM_DIM));
+//								for (i32 y = 0; y < EXAM_DIM; y += 1)
+//								{
+//									for (i32 x = 0; x < EXAM_DIM; x += 1)
+//									{
+//										bmp_monochrome_set(nextgen_exam, x, y, heatmap[y * EXAM_DIM + x] > subexam_count / 8);
+//									}
+//								}
+//
+//								struct StrBuf nextgen_exam_file_path = StrBuf(256);
+//								strbuf_str (&nextgen_exam_file_path, cli.output_dir_path.str);
+//								strbuf_cstr(&nextgen_exam_file_path, "\\nextgen_exams\\");
+//								strbuf_str (&nextgen_exam_file_path, LETTER_NAMES[letter]);
+//								strbuf_cstr(&nextgen_exam_file_path, ".bmp");
+//								bmp_monochrome_export(nextgen_exam, nextgen_exam_file_path.str);
+//							}
+//							else
+//							{
+//								// TODO ??
+//							}
+//
+//							if (!FindClose(compressed_monochrome_bmp_finder_handle))
+//							{
+//								error("`FindClose` failed on \"%s\".", compressed_monochrome_bmp_wildcard_path.data);
+//							}
+//						}
+//					}
+//
+//					free(nextgen_exam.data);
+//					free(heatmap);
+//				}
 			}
 		}
 		else
