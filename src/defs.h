@@ -1428,13 +1428,28 @@ struct USBConfig // This layout is defined uniquely for our device application.
 // "MicroServient.c".
 //
 
-#define CLI_ARG_ADDITIONAL_MARGIN 2
-#define CLI_EXE_NAME              str("MicroServient.exe")
-#define CLI_EXE_DESC              str("Parse screenshots of Game Pigeon word games.")
-#define CLI_XMDT(X) \
-	X(screenshot_dir_path, string, "screenshot-dir-path", "Directory path that'll be filtered for screenshots of the games.") \
-	X(output_dir_path    , string, "output-dir-path"    , "Destination directory to store the processing results.") \
-	X(clear_output_dir   , b32   , "--clear-output-dir" , "Delete all content within the output directory before processing.")
+#define CLI_FIELD_ADDITIONAL_MARGIN 2
+#define CLI_EXE_NAME                str("MicroServient.exe")
+#define CLI_EXE_DESC                "Set of little programs to manipulate data."
+#define CLI_PROGRAM_XMDT(X) \
+	X(extractor   , "Create a BMP of each slot in screenshots of Game Pigeon word games.") \
+	X(monochromize, "Convert each BMP into a strictly black and white.") \
+	X(heatmap     , "Merge all monochrome BMPs into a grayscaled BMP.")
+
+#define CLI_PROGRAM_extractor_FIELD_XMDT(X, ...) \
+	X(screenshot_dir_path, string, "screenshot-dir-path", "Directory path that'll be filtered for screenshots of the games.",##__VA_ARGS__) \
+	X(output_dir_path    , string, "output-dir-path"    , "Destination directory to store the extracted BMPs.",##__VA_ARGS__) \
+	X(clear_output_dir   , b32   , "--clear-output-dir" , "Delete all content within the output directory before processing.",##__VA_ARGS__)
+
+#define CLI_PROGRAM_monochromize_FIELD_XMDT(X, ...) \
+	X(input_dir_path  , string, "input-dir-path"    , "Directory path of the BMPs.",##__VA_ARGS__) \
+	X(output_dir_path , string, "output-dir-path"   , "Destination directory to store the monochromized BMPs.",##__VA_ARGS__) \
+	X(clear_output_dir, b32   , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
+
+#define CLI_PROGRAM_heatmap_FIELD_XMDT(X, ...) \
+	X(input_dir_path  , string, "input-dir-path"  , "Directory path of the monochrome BMPs.",##__VA_ARGS__) \
+	X(output_file_path, string, "output-file-path", "File path of the result.",##__VA_ARGS__)
+
 #define CLI_TYPING_XMDT(X) \
 	X(string     , union { struct { char* data; i64 length; }; char* cstr; str str; }) \
 	X(dary_string, struct Dary_CLIFieldTyping_string_t) \
@@ -1443,32 +1458,51 @@ struct USBConfig // This layout is defined uniquely for our device application.
 #if PROGRAM_MICROSERVIENT
 	enum CLIFieldTyping
 	{
-		#define MAKE(NAME, TYPE) CLIFieldTyping_##NAME,
+		#define MAKE(TYPING_NAME, TYPING_TYPE) CLIFieldTyping_##TYPING_NAME,
 		CLI_TYPING_XMDT(MAKE)
 		#undef MAKE
 	};
 
-	#define MAKE(NAME, TYPE) typedef TYPE CLIFieldTyping_##NAME##_t;
+	#define MAKE(TYPING_NAME, TYPING_TYPE) typedef TYPING_TYPE CLIFieldTyping_##TYPING_NAME##_t;
 	CLI_TYPING_XMDT(MAKE)
 	#undef MAKE
 	Dary_def(CLIFieldTyping_string_t);
 
-	enum CLIField
+	enum CLIProgram
 	{
-		#define MAKE(FIELD_NAME, TYPING_NAME, ...) CLIField_##FIELD_NAME,
-		CLI_XMDT(MAKE)
+		#define MAKE(PROGRAM_NAME, PROGRAM_DESC) CLIProgram_##PROGRAM_NAME,
+		CLI_PROGRAM_XMDT(MAKE)
 		#undef MAKE
-		CLIField_COUNT
+		CLIProgram_COUNT
 	};
+
+	#define MAKE_CLI_FIELD(PROGRAM_NAME, PROGRAM_DESC) \
+		enum CLIField_##PROGRAM_NAME \
+		{ \
+			CLI_PROGRAM_##PROGRAM_NAME##_FIELD_XMDT(MAKE_CLI_FIELD_MEMBERS, PROGRAM_NAME) \
+			CLIField_##PROGRAM_NAME##_COUNT \
+		};
+	#define MAKE_CLI_FIELD_MEMBERS(FIELD_NAME, FIELD_TYPING_NAME, FIELD_PATTERN, FIELD_DESC, PROGRAM_NAME) \
+		CLIField_##PROGRAM_NAME##_##FIELD_NAME,
+	CLI_PROGRAM_XMDT(MAKE_CLI_FIELD)
+	#undef MAKE_CLI_FIELD_MEMBERS
+	#undef MAKE_CLI_FIELD
 
 	struct CLI
 	{
-		#define MAKE(FIELD_NAME, TYPING_NAME, ...) CLIFieldTyping_##TYPING_NAME##_t FIELD_NAME;
-		CLI_XMDT(MAKE)
-		#undef MAKE
+		#define MAKE_CLI_PROGRAM(PROGRAM_NAME, PROGRAM_DESC) \
+			struct CLIProgram_##PROGRAM_NAME##_t \
+			{ \
+				CLI_PROGRAM_##PROGRAM_NAME##_FIELD_XMDT(MAKE_CLI_PROGRAM_MEMBERS) \
+			} PROGRAM_NAME;
+		#define MAKE_CLI_PROGRAM_MEMBERS(FIELD_NAME, FIELD_TYPING_NAME, FIELD_PATTERN, FIELD_DESC) \
+			CLIFieldTyping_##FIELD_TYPING_NAME##_t FIELD_NAME;
+		CLI_PROGRAM_XMDT(MAKE_CLI_PROGRAM)
+		#undef MAKE_CLI_PROGRAM_MEMBERS
+		#undef MAKE_CLI_PROGRAM
 	};
 
-	struct CLIFieldMetaData
+	struct CLIFieldInfo
 	{
 		i64                 offset;
 		enum CLIFieldTyping typing;
@@ -1476,17 +1510,36 @@ struct USBConfig // This layout is defined uniquely for our device application.
 		str                 desc;
 	};
 
-	static const struct CLIFieldMetaData CLI_FIELD_INFO[] =
+	struct CLIProgramInfo
+	{
+		str                 name;
+		str                 desc;
+		struct CLIFieldInfo fields[8];
+		i32                 field_count;
+	};
+
+	static const struct CLIProgramInfo CLI_PROGRAM_INFO[] =
 		{
-			#define MAKE(FIELD_NAME, TYPING_NAME, PATTERN, DESC, ...) \
+			#define MAKE_PROGRAM_INFO(PROGRAM_NAME, PROGRAM_DESC) \
 				{ \
-					.offset  = offsetof(struct CLI, FIELD_NAME), \
-					.typing  = CLIFieldTyping_##TYPING_NAME, \
-					.pattern = STR(PATTERN), \
-					.desc    = STR(DESC), \
+					.name   = STR(#PROGRAM_NAME), \
+					.desc   = STR(PROGRAM_DESC), \
+					.fields = \
+						{ \
+							CLI_PROGRAM_##PROGRAM_NAME##_FIELD_XMDT(MAKE_FIELD_INFO, PROGRAM_NAME) \
+						}, \
+					.field_count = CLIField_##PROGRAM_NAME##_COUNT, \
 				},
-			CLI_XMDT(MAKE)
-			#undef MAKE
+			#define MAKE_FIELD_INFO(FIELD_NAME, FIELD_TYPING_NAME, FIELD_PATTERN, FIELD_DESC, PROGRAM_NAME) \
+				{ \
+					.offset  = offsetof(struct CLI, PROGRAM_NAME.FIELD_NAME), \
+					.typing  = CLIFieldTyping_##FIELD_TYPING_NAME, \
+					.pattern = STR(FIELD_PATTERN), \
+					.desc    = STR(FIELD_DESC), \
+				},
+			CLI_PROGRAM_XMDT(MAKE_PROGRAM_INFO)
+			#undef MAKE_FIELD_INFO
+			#undef MAKE_PROGRAM_INFO
 		};
 #endif
 
