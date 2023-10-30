@@ -369,6 +369,7 @@ main(int argc, char** argv)
 					if (str_eq(str_cstr(argv[arg_index]), canidate_info.pattern))
 					{
 						cli_field_index = canidate_index;
+						cli_param       = 0;
 						break;
 					}
 				}
@@ -661,7 +662,7 @@ main(int argc, char** argv)
 
 						printf
 						(
-							"% 4d : %s : AvgRGB(%7.3f, %7.3f, %7.3f) : ",
+							"% 4d : \"%s\" : AvgRGB(%7.3f, %7.3f, %7.3f) : ",
 							screenshots_processed + 1,
 							iterator_state.finder_data.cFileName,
 							screenshot_avg_r * 256.0,
@@ -692,7 +693,7 @@ main(int argc, char** argv)
 					printf
 					(
 						"\n"
-						"Processed %d screenshots.\n"
+						"Examined %d screenshots.\n"
 						"Extracted %d slots.\n"
 						"\tOverall maximum RGB : (%7.3f, %7.3f, %7.3f).\n"
 						"\tOverall average RGB : (%7.3f, %7.3f, %7.3f).\n"
@@ -750,19 +751,135 @@ main(int argc, char** argv)
 					strbuf_cstr(&file_path, iterator_state.finder_data.cFileName);
 					bmp_export(bmp, file_path.str);
 
-					printf("% 4d : %s\n", images_processed + 1, iterator_state.finder_data.cFileName);
+					printf("% 4d : \"%s\".\n", images_processed + 1, iterator_state.finder_data.cFileName);
 
 					images_processed += 1;
 
 					free(bmp.data);
 				}
 
-				printf("Processed %d images.\n", images_processed);
+				if (images_processed)
+				{
+					printf
+					(
+						"\n"
+						"Monochromized %d images.\n",
+						images_processed
+					);
+				}
+				else
+				{
+					printf("No images were monochromized.\n");
+				}
 			} break;
 
-			case CLIProgram_heatmap:
+			case CLIProgram_meltingpot:
 			{
-				debug_halt();
+				struct CLIProgram_meltingpot_t cli = cli_unknown.meltingpot;
+
+				i32        images_processed = 0;
+				i32        images_skipped   = 0;
+				struct BMP meltingpot       = {0};
+
+				struct { i32 r; i32 g; i32 b; i32 a; }* weights = 0;
+
+				struct DirBMPIteratorState iterator_state =
+					{
+						.dir_path = cli.input_dir_path.str
+					};
+				struct BMP sample_bmp = {0};
+				while (iterate_dir_bmp_alloc(&sample_bmp, &iterator_state))
+				{
+					if (!weights)
+					{
+						alloc(&weights, sample_bmp.dim_x * sample_bmp.dim_y);
+
+						meltingpot.dim_x = sample_bmp.dim_x;
+						meltingpot.dim_y = sample_bmp.dim_y;
+						alloc(&meltingpot.data, meltingpot.dim_x * meltingpot.dim_y);
+
+						printf
+						(
+							"Using \"%s\" for bounding dimensions %dx%d.\n",
+							iterator_state.finder_data.cFileName,
+							meltingpot.dim_x,
+							meltingpot.dim_y
+						);
+					}
+
+					if (sample_bmp.dim_x == meltingpot.dim_x && sample_bmp.dim_y == meltingpot.dim_y)
+					{
+						if (cli.or_filter)
+						{
+							for (i32 i = 0; i < sample_bmp.dim_x * sample_bmp.dim_y; i += 1)
+							{
+								meltingpot.data[i].r |= sample_bmp.data[i].r;
+								meltingpot.data[i].g |= sample_bmp.data[i].g;
+								meltingpot.data[i].b |= sample_bmp.data[i].b;
+								meltingpot.data[i].a |= sample_bmp.data[i].a;
+							}
+						}
+						else
+						{
+							for (i32 i = 0; i < sample_bmp.dim_x * sample_bmp.dim_y; i += 1)
+							{
+								weights[i].r += sample_bmp.data[i].r;
+								weights[i].g += sample_bmp.data[i].g;
+								weights[i].b += sample_bmp.data[i].b;
+								weights[i].a += sample_bmp.data[i].a;
+							}
+						}
+
+						printf("% 4d : \"%s\".\n", images_processed + 1, iterator_state.finder_data.cFileName);
+						images_processed += 1;
+					}
+					else
+					{
+						printf("\tSkipping \"%s\".\n", iterator_state.finder_data.cFileName);
+						images_skipped += 1;
+					}
+
+					free(sample_bmp.data);
+				}
+
+				if (images_processed)
+				{
+					if (!cli.or_filter)
+					{
+						for (i32 i = 0; i < meltingpot.dim_x * meltingpot.dim_y; i += 1)
+						{
+							meltingpot.data[i] =
+								(struct BMPPixel)
+								{
+									.r = u8(weights[i].r / images_processed),
+									.g = u8(weights[i].g / images_processed),
+									.b = u8(weights[i].b / images_processed),
+									.a = u8(weights[i].a / images_processed),
+								};
+						}
+					}
+
+					bmp_export(meltingpot, cli.output_file_path.str);
+
+					printf
+					(
+						"\n"
+						"Meltingpotted %d images.\n",
+						images_processed
+					);
+					if (images_skipped)
+					{
+						printf
+						(
+							"Skipped %d images.\n",
+							images_skipped
+						);
+					}
+				}
+				else
+				{
+					printf("No BMPs found.\n");
+				}
 			} break;
 
 			case CLIProgram_COUNT:

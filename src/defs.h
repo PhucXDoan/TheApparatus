@@ -1424,8 +1424,8 @@ struct USBConfig // This layout is defined uniquely for our device application.
 #define CLI_EXE_DESC                "Set of little programs to manipulate data."
 #define CLI_PROGRAM_XMDT(X) \
 	X(extractor   , "Create a BMP of each slot in screenshots of Game Pigeon word games.") \
-	X(monochromize, "Convert each BMP into a strictly black and white.") \
-	X(heatmap     , "Merge all monochrome BMPs into a grayscaled BMP.")
+	X(monochromize, "Convert each BMP into a strictly black and white image.") \
+	X(meltingpot  , "Average together BMPs.")
 
 #define CLI_PROGRAM_extractor_FIELD_XMDT(X, ...) \
 	X(input_dir_path  , string, "screenshot-dir-path", "Directory path that'll be filtered for screenshots of the games.",##__VA_ARGS__) \
@@ -1437,9 +1437,10 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	X(output_dir_path , string, "output-dir-path"   , "Destination directory to store the monochromized BMPs.",##__VA_ARGS__) \
 	X(clear_output_dir, b32   , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
 
-#define CLI_PROGRAM_heatmap_FIELD_XMDT(X, ...) \
+#define CLI_PROGRAM_meltingpot_FIELD_XMDT(X, ...) \
 	X(input_dir_path  , string, "input-dir-path"  , "Directory path of the monochrome BMPs.",##__VA_ARGS__) \
-	X(output_file_path, string, "output-file-path", "File path of the result.",##__VA_ARGS__)
+	X(output_file_path, string, "output-file-path", "File path of the result.",##__VA_ARGS__) \
+	X(or_filter       , b32   , "--or"            , "Logical OR each pixel instead of averaging.",##__VA_ARGS__)
 
 #define CLI_TYPING_XMDT(X) \
 	X(string     , union { struct { char* data; i64 length; }; char* cstr; str str; }) \
