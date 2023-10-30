@@ -75,8 +75,6 @@ struct Dary_void
 	}
 #define Dary_def(TYPE) Dary_define(TYPE, TYPE)
 
-Dary_define(BMPMonochrome, struct BMPMonochrome);
-
 //
 // "strbuf.c"
 //
@@ -115,13 +113,6 @@ struct BMP // Left-right, bottom-up.
 	struct BMPPixel* data;
 	i32              dim_x;
 	i32              dim_y;
-};
-
-struct BMPMonochrome // Left-right, bottom-up, LSb first pixel. No padding except at the end of pixel data.
-{
-	u8* data;
-	i32 dim_x; // Still in terms of pixels.
-	i32 dim_y; // Still in terms of pixels.
 };
 
 struct BMPCIEXYZTRIPLE // "CIEXYZTRIPLE" in Windows's "wingdi.h".
@@ -1437,9 +1428,9 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	X(heatmap     , "Merge all monochrome BMPs into a grayscaled BMP.")
 
 #define CLI_PROGRAM_extractor_FIELD_XMDT(X, ...) \
-	X(screenshot_dir_path, string, "screenshot-dir-path", "Directory path that'll be filtered for screenshots of the games.",##__VA_ARGS__) \
-	X(output_dir_path    , string, "output-dir-path"    , "Destination directory to store the extracted BMPs.",##__VA_ARGS__) \
-	X(clear_output_dir   , b32   , "--clear-output-dir" , "Delete all content within the output directory before processing.",##__VA_ARGS__)
+	X(input_dir_path  , string, "screenshot-dir-path", "Directory path that'll be filtered for screenshots of the games.",##__VA_ARGS__) \
+	X(output_dir_path , string, "output-dir-path"    , "Destination directory to store the extracted BMPs.",##__VA_ARGS__) \
+	X(clear_output_dir, b32   , "--clear-output-dir" , "Delete all content within the output directory before processing.",##__VA_ARGS__)
 
 #define CLI_PROGRAM_monochromize_FIELD_XMDT(X, ...) \
 	X(input_dir_path  , string, "input-dir-path"    , "Directory path of the BMPs.",##__VA_ARGS__) \
@@ -1610,7 +1601,7 @@ static_assert(WORDBITES_BOARD_POS_Y + WORDBITES_BOARD_SLOTS_Y * WORDBITES_SLOT_D
 
 
 #define REDUCED_SLOT_MAX_DIM  64
-#define MONOCHROMIC_THRESHOLD 8
+#define MONOCHROMIZE_THRESHOLD 8
 
 #define LETTER_XMDT(_X) \
 	_X(space) \
