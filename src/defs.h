@@ -35,7 +35,7 @@ typedef int64_t  b64;
 #define b32(...) ((b32) (__VA_ARGS__))
 #define b64(...) ((b64) (__VA_ARGS__))
 
-#if PROGRAM_MICROSERVIENT
+#if PROGRAM_MICROSERVICES
 	typedef float  f32;
 	typedef double f64;
 	#define f32(...) ((f32) (__VA_ARGS__))
@@ -79,7 +79,7 @@ struct Dary_void
 // "strbuf.c"
 //
 
-#if PROGRAM_MICROSERVIENT
+#if PROGRAM_MICROSERVICES
 	#define StrBuf(SIZE) ((struct StrBuf) { .data = (char[SIZE]) {0}, .size = (SIZE) })
 	struct StrBuf
 	{
@@ -1416,12 +1416,12 @@ struct USBConfig // This layout is defined uniquely for our device application.
 #endif
 
 //
-// "MicroServient.c".
+// "Microservices.c".
 //
 
 #define REDUCED_SLOT_MAX_DIM  64
 #define CLI_FIELD_ADDITIONAL_MARGIN 2
-#define CLI_EXE_NAME                str("MicroServient.exe")
+#define CLI_EXE_NAME                str("Microservices.exe")
 #define CLI_EXE_DESC                "Set of little programs to manipulate data."
 #define CLI_PROGRAM_XMDT(X) \
 	X(extractor   , "Create a BMP of each slot in screenshots of Game Pigeon word games.") \
@@ -1454,7 +1454,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	X(dary_string, struct Dary_CLIFieldTyping_string_t) \
 	X(b32        , b32)
 
-#if PROGRAM_MICROSERVIENT
+#if PROGRAM_MICROSERVICES
 	enum CLIFieldTyping
 	{
 		#define MAKE(TYPING_NAME, TYPING_TYPE) CLIFieldTyping_##TYPING_NAME,
@@ -1565,7 +1565,7 @@ enum WordGame
 	WordGame_COUNT
 };
 
-#if PROGRAM_MICROSERVIENT
+#if PROGRAM_MICROSERVICES
 	static const struct { str print_name; f64 avg_r; f64 avg_g; f64 avg_b; } WORDGAME_DT[] =
 		{
 			#define MAKE(ENUM_NAME, PRINT_NAME, AVG_R, AVG_G, AVG_B) \
@@ -1624,7 +1624,7 @@ enum Letter
 	Letter_COUNT
 };
 
-#if PROGRAM_MICROSERVIENT
+#if PROGRAM_MICROSERVICES
 	static const str LETTER_NAMES[] =
 		{
 			#define MAKE(NAME) STR(#NAME),

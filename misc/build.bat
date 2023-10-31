@@ -11,7 +11,7 @@ set MSVC_DEVELOPMENT_DISABLED_WARNINGS= ^
 	/wd4189 /wd4101 /wd4102 /wd4100 /wd4702
 
 set MSVC_FLAGS= ^
-	/nologo /Od /std:c17 /IW:\ /Zi /D DEBUG=1 /D LITTLE_ENDIAN=1 /D PROGRAM_MICROSERVIENT=1 ^
+	/nologo /Od /std:c17 /IW:\ /Zi /D DEBUG=1 /D LITTLE_ENDIAN=1 /D PROGRAM_MICROSERVICES=1 ^
 	/Wall /WX !MSVC_PRACTICAL_DISABLED_WARNINGS! !MSVC_DEVELOPMENT_DISABLED_WARNINGS! /fsanitize=address ^
 	/link Shlwapi.lib Shell32.lib Dbghelp.lib /incremental:no
 
@@ -62,10 +62,10 @@ pushd W:\build\
 	del *.s *.o *.elf *.hex > nul 2>&1
 
 	REM
-	REM Compile MicroServient.c.
+	REM Compile Microservices.c.
 	REM
 
-	cl W:\src\MicroServient.c /Fe:MicroServient.exe !MSVC_FLAGS!
+	cl W:\src\Microservices.c /Fe:Microservices.exe !MSVC_FLAGS!
 	if not !ERRORLEVEL! == 0 (
 		goto ABORT
 	)

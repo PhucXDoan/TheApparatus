@@ -211,7 +211,7 @@ serialize_i64(char* dst, u16 dst_size, i64 value) // "dst_size" of at least 20 w
 	}
 #endif
 
-#if DEBUG && !PROGRAM_MICROSERVIENT && implies(PROGRAM_DIPLOMAT, USB_CDC_ENABLE)
+#if DEBUG && !PROGRAM_MICROSERVICES && implies(PROGRAM_DIPLOMAT, USB_CDC_ENABLE)
 	static void
 	debug_tx_chars(char* value, u16 value_size);
 
@@ -313,7 +313,7 @@ serialize_i64(char* dst, u16 dst_size, i64 value) // "dst_size" of at least 20 w
 	}
 #endif
 
-#if PROGRAM_MICROSERVIENT
+#if PROGRAM_MICROSERVICES
 	#define error(...) \
 		do \
 		{ \
@@ -345,7 +345,7 @@ to_lower(char c)
 	return result;
 }
 
-#if PROGRAM_MICROSERVIENT
+#if PROGRAM_MICROSERVICES
 	#define alloc(DST_PTR, COUNT) \
 		do \
 		{ \
