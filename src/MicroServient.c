@@ -773,6 +773,11 @@ main(int argc, char** argv)
 				}
 			} break;
 
+			case CLIProgram_stretchie:
+			{
+				debug_halt(); // TODO
+			} break;
+
 			case CLIProgram_meltingpot:
 			{
 				struct CLIProgram_meltingpot_t cli = cli_unknown.meltingpot;

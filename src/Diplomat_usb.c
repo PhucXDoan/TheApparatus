@@ -6,7 +6,7 @@
 // "DEST_Y" : Must be within [0, 255].
 // See: [Mouse Commands].
 #if USB_HID_ENABLE
-#define usb_mouse_command(HELD, DEST_X, DEST_Y) usb_mouse_command_(((HELD) << 15) | ((DEST_X) << 8) | (DEST_Y))
+#define usb_mouse_command(HELD, DEST_X, DEST_Y) usb_mouse_command_((u16(HELD) << 15) | (u16(DEST_X) << 8) | u16(DEST_Y))
 static void
 usb_mouse_command_(u16 command)
 {
@@ -504,6 +504,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 			case USBSetupRequestKind_hid_set_idle:               // [Endpoint 0: HID-Specific SetIdle].
 			{
 				UECONX |= (1 << STALLRQ);
+				for(;;); // TEMP
 			} break;
 
 			default:

@@ -507,7 +507,7 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 #if DEBUG // Used to disable some USB functionalities for development purposes, but does not necessairly remove all data and control flow.
 	#define USB_CDC_ENABLE true
 	#define USB_HID_ENABLE true
-	#define USB_MS_ENABLE  true
+	#define USB_MS_ENABLE  false
 #else
 	#define USB_CDC_ENABLE false
 	#define USB_HID_ENABLE true
@@ -1419,12 +1419,14 @@ struct USBConfig // This layout is defined uniquely for our device application.
 // "MicroServient.c".
 //
 
+#define REDUCED_SLOT_MAX_DIM  64
 #define CLI_FIELD_ADDITIONAL_MARGIN 2
 #define CLI_EXE_NAME                str("MicroServient.exe")
 #define CLI_EXE_DESC                "Set of little programs to manipulate data."
 #define CLI_PROGRAM_XMDT(X) \
 	X(extractor   , "Create a BMP of each slot in screenshots of Game Pigeon word games.") \
 	X(monochromize, "Convert each BMP into a strictly black and white image.") \
+	X(stretchie   , "Resize BMPs into the standard size of 1 Stretchie(TM) unit.") \
 	X(meltingpot  , "Average together BMPs.")
 
 #define CLI_PROGRAM_extractor_FIELD_XMDT(X, ...) \
@@ -1437,8 +1439,13 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	X(output_dir_path , string, "output-dir-path"   , "Destination directory to store the monochromized BMPs.",##__VA_ARGS__) \
 	X(clear_output_dir, b32   , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
 
+#define CLI_PROGRAM_stretchie_FIELD_XMDT(X, ...) \
+	X(input_dir_path  , string, "input-dir-path"    , "Directory path of the BMPs.",##__VA_ARGS__) \
+	X(output_dir_path , string, "output-dir-path"   , "Destination directory to store the stretchie'd BMPs.",##__VA_ARGS__) \
+	X(clear_output_dir, b32   , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
+
 #define CLI_PROGRAM_meltingpot_FIELD_XMDT(X, ...) \
-	X(input_dir_path  , string, "input-dir-path"  , "Directory path of the monochrome BMPs.",##__VA_ARGS__) \
+	X(input_dir_path  , string, "input-dir-path"  , "Directory path of the BMPs.",##__VA_ARGS__) \
 	X(output_file_path, string, "output-file-path", "File path of the result.",##__VA_ARGS__) \
 	X(or_filter       , b32   , "--or"            , "Logical OR each pixel instead of averaging.",##__VA_ARGS__)
 
@@ -1601,7 +1608,6 @@ static_assert(WORDBITES_BOARD_POS_Y + WORDBITES_BOARD_SLOTS_Y * WORDBITES_SLOT_D
 
 
 
-#define REDUCED_SLOT_MAX_DIM  64
 #define MONOCHROMIZE_THRESHOLD 8
 
 #define LETTER_XMDT(_X) \
