@@ -87,24 +87,24 @@ main(void)
 				click(19, 255); // Languages.
 				click(22 + curr_anagrams_language_index * 17, 255);
 
-				if (curr_anagrams_language_index == 0)
-				{
-					if (anagrams_use_seven_letters)
-					{
-						click(103, 255);
-						curr_anagrams_language_index += 1;
-					}
-					else
-					{
-						click(67, 255);
-					}
+				//if (curr_anagrams_language_index == 0)
+				//{
+				//	if (anagrams_use_seven_letters)
+				//	{
+				//		click(103, 255);
+				//		curr_anagrams_language_index += 1;
+				//	}
+				//	else
+				//	{
+				//		click(67, 255);
+				//	}
 
-					anagrams_use_seven_letters = !anagrams_use_seven_letters;
-				}
-				else
-				{
-					curr_anagrams_language_index += 1;
-				}
+				//	anagrams_use_seven_letters = !anagrams_use_seven_letters;
+				//}
+				//else
+				//{
+				//	curr_anagrams_language_index += 1;
+				//}
 
 				curr_anagrams_language_index %= ANAGRAMS_LANGUAGE_COUNT;
 
@@ -143,8 +143,8 @@ main(void)
 
 		click(122, 25); // Close game.
 
-		wordgame += 1;
-		wordgame %= 3;
+//		wordgame += 1;
+//		wordgame %= 3;
 	}
 }
 //

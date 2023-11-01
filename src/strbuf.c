@@ -27,20 +27,19 @@ strbuf_char(struct StrBuf* buf, char value)
 static str
 strbuf_char_n(struct StrBuf* buf, char value, i64 count)
 {
-	i64 capped_count = i64_max(count, 0);
+	i64 capped_count = count >= 0 ? count : 0;
 	str result       =
 		{
 			.data   = buf->data + buf->length,
-			.length = i64_min(capped_count, buf->size - buf->length)
+			.length = buf->size - buf->length
 		};
-
-	memset(result.data, value, result.length);
-	buf->length += result.length;
-
-	if (result.length != capped_count)
+	if (result.length > capped_count)
 	{
 		error_capacity();
 	}
+
+	memset(result.data, value, result.length);
+	buf->length += result.length;
 
 	return result;
 }
@@ -49,20 +48,19 @@ strbuf_char_n(struct StrBuf* buf, char value, i64 count)
 static str
 strbuf_str(struct StrBuf* buf, str value)
 {
-	i64 copy_amount = i64_min(value.length, buf->size - buf->length);
+	if (value.length > buf->size - buf->length)
+	{
+		error_capacity();
+	}
+
 	str result      =
 		{
 			.data   = buf->data + buf->length,
-			.length = copy_amount
+			.length = value.length
 		};
 
 	memmove(result.data, value.data, result.length);
 	buf->length += result.length;
-
-	if (result.length != value.length)
-	{
-		error_capacity();
-	}
 
 	return result;
 }

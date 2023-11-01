@@ -8,6 +8,7 @@
 #define bitsof(...)      (sizeof(__VA_ARGS__) * 8)
 #define implies(P, Q)    (!(P) || (Q))
 #define static_assert(X) _Static_assert((X), #X)
+#define grp(...)         { __VA_ARGS__ }
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
@@ -21,7 +22,6 @@ typedef int8_t   b8;
 typedef int16_t  b16;
 typedef int32_t  b32;
 typedef int64_t  b64;
-
 #define u8(...)  ((u8)  (__VA_ARGS__))
 #define u16(...) ((u16) (__VA_ARGS__))
 #define u32(...) ((u32) (__VA_ARGS__))
@@ -35,11 +35,101 @@ typedef int64_t  b64;
 #define b32(...) ((b32) (__VA_ARGS__))
 #define b64(...) ((b64) (__VA_ARGS__))
 
+typedef struct { u8  x; u8  y; } u8_2;
+typedef struct { u16 x; u16 y; } u16_2;
+typedef struct { u32 x; u32 y; } u32_2;
+typedef struct { u64 x; u64 y; } u64_2;
+typedef struct { i8  x; i8  y; } i8_2;
+typedef struct { i16 x; i16 y; } i16_2;
+typedef struct { i32 x; i32 y; } i32_2;
+typedef struct { i64 x; i64 y; } i64_2;
+typedef struct { b8  x; b8  y; } b8_2;
+typedef struct { b16 x; b16 y; } b16_2;
+typedef struct { b32 x; b32 y; } b32_2;
+typedef struct { b64 x; b64 y; } b64_2;
+#define u8_2(...)  ((u8_2)  { __VA_ARGS__ })
+#define u16_2(...) ((u16_2) { __VA_ARGS__ })
+#define u32_2(...) ((u32_2) { __VA_ARGS__ })
+#define u64_2(...) ((u64_2) { __VA_ARGS__ })
+#define i8_2(...)  ((i8_2)  { __VA_ARGS__ })
+#define i16_2(...) ((i16_2) { __VA_ARGS__ })
+#define i32_2(...) ((i32_2) { __VA_ARGS__ })
+#define i64_2(...) ((i64_2) { __VA_ARGS__ })
+#define b8_2(...)  ((b8_2)  { __VA_ARGS__ })
+#define b16_2(...) ((b16_2) { __VA_ARGS__ })
+#define b32_2(...) ((b32_2) { __VA_ARGS__ })
+#define b64_2(...) ((b64_2) { __VA_ARGS__ })
+
+typedef struct { u8  x; u8  y; u8  z; } u8_3;
+typedef struct { u16 x; u16 y; u16 z; } u16_3;
+typedef struct { u32 x; u32 y; u32 z; } u32_3;
+typedef struct { u64 x; u64 y; u64 z; } u64_3;
+typedef struct { i8  x; i8  y; i8  z; } i8_3;
+typedef struct { i16 x; i16 y; i16 z; } i16_3;
+typedef struct { i32 x; i32 y; i32 z; } i32_3;
+typedef struct { i64 x; i64 y; i64 z; } i64_3;
+typedef struct { b8  x; b8  y; b8  z; } b8_3;
+typedef struct { b16 x; b16 y; b16 z; } b16_3;
+typedef struct { b32 x; b32 y; b32 z; } b32_3;
+typedef struct { b64 x; b64 y; b64 z; } b64_3;
+#define u8_3(...)  ((u8_3)  { __VA_ARGS__ })
+#define u16_3(...) ((u16_3) { __VA_ARGS__ })
+#define u32_3(...) ((u32_3) { __VA_ARGS__ })
+#define u64_3(...) ((u64_3) { __VA_ARGS__ })
+#define i8_3(...)  ((i8_3)  { __VA_ARGS__ })
+#define i16_3(...) ((i16_3) { __VA_ARGS__ })
+#define i32_3(...) ((i32_3) { __VA_ARGS__ })
+#define i64_3(...) ((i64_3) { __VA_ARGS__ })
+#define b8_3(...)  ((b8_3)  { __VA_ARGS__ })
+#define b16_3(...) ((b16_3) { __VA_ARGS__ })
+#define b32_3(...) ((b32_3) { __VA_ARGS__ })
+#define b64_3(...) ((b64_3) { __VA_ARGS__ })
+
+typedef struct { u8  x; u8  y; u8  z; u8  w; } u8_4;
+typedef struct { u16 x; u16 y; u16 z; u16 w; } u16_4;
+typedef struct { u32 x; u32 y; u32 z; u32 w; } u32_4;
+typedef struct { u64 x; u64 y; u64 z; u64 w; } u64_4;
+typedef struct { i8  x; i8  y; i8  z; i8  w; } i8_4;
+typedef struct { i16 x; i16 y; i16 z; i16 w; } i16_4;
+typedef struct { i32 x; i32 y; i32 z; i32 w; } i32_4;
+typedef struct { i64 x; i64 y; i64 z; i64 w; } i64_4;
+typedef struct { b8  x; b8  y; b8  z; b8  w; } b8_4;
+typedef struct { b16 x; b16 y; b16 z; b16 w; } b16_4;
+typedef struct { b32 x; b32 y; b32 z; b32 w; } b32_4;
+typedef struct { b64 x; b64 y; b64 z; b64 w; } b64_4;
+#define u8_4(...)  ((u8_4)  { __VA_ARGS__ })
+#define u16_4(...) ((u16_4) { __VA_ARGS__ })
+#define u32_4(...) ((u32_4) { __VA_ARGS__ })
+#define u64_4(...) ((u64_4) { __VA_ARGS__ })
+#define i8_4(...)  ((i8_4)  { __VA_ARGS__ })
+#define i16_4(...) ((i16_4) { __VA_ARGS__ })
+#define i32_4(...) ((i32_4) { __VA_ARGS__ })
+#define i64_4(...) ((i64_4) { __VA_ARGS__ })
+#define b8_4(...)  ((b8_4)  { __VA_ARGS__ })
+#define b16_4(...) ((b16_4) { __VA_ARGS__ })
+#define b32_4(...) ((b32_4) { __VA_ARGS__ })
+#define b64_4(...) ((b64_4) { __VA_ARGS__ })
+
 #if PROGRAM_MICROSERVICES
 	typedef float  f32;
 	typedef double f64;
-	#define f32(...) ((f32) (__VA_ARGS__))
-	#define f64(...) ((f64) (__VA_ARGS__))
+	#define f32(...) ((f32) (__VA_ARGS__ ))
+	#define f64(...) ((f64) (__VA_ARGS__ ))
+
+	typedef struct { f32 x; f32 y; } f32_2;
+	typedef struct { f64 x; f64 y; } f64_2;
+	#define f32_2(...) ((f32_2)  { __VA_ARGS__ })
+	#define f64_2(...) ((f64_2)  { __VA_ARGS__ })
+
+	typedef struct { f32 x; f32 y; f32 z; } f32_3;
+	typedef struct { f64 x; f64 y; f64 z; } f64_3;
+	#define f32_3(...) ((f32_3) { __VA_ARGS__ })
+	#define f64_3(...) ((f64_3) { __VA_ARGS__ })
+
+	typedef struct { f32 x; f32 y; f32 z; f32 w; } f32_4;
+	typedef struct { f64 x; f64 y; f64 z; f64 w; } f64_4;
+	#define f32_4(...) ((f32_4) { __VA_ARGS__ })
+	#define f64_4(...) ((f64_4) { __VA_ARGS__ })
 
 	typedef struct { char* data; i64 length; } str;
 	#define str(STRLIT) (str) { (STRLIT), sizeof(STRLIT) - 1 }
@@ -111,8 +201,7 @@ struct BMPPixel
 struct BMP // Left-right, bottom-up.
 {
 	struct BMPPixel* data;
-	i32              dim_x;
-	i32              dim_y;
+	i32_2            dim;
 };
 
 struct BMPCIEXYZTRIPLE // "CIEXYZTRIPLE" in Windows's "wingdi.h".
@@ -1419,10 +1508,8 @@ struct USBConfig // This layout is defined uniquely for our device application.
 // "Microservices.c".
 //
 
-#define REDUCED_SLOT_MAX_DIM  64
-#define CLI_FIELD_ADDITIONAL_MARGIN 2
-#define CLI_EXE_NAME                str("Microservices.exe")
-#define CLI_EXE_DESC                "Set of little programs to manipulate data."
+#define CLI_EXE_NAME "Microservices.exe"
+#define CLI_EXE_DESC "Microservices to help you bring change to the world."
 #define CLI_PROGRAM_XMDT(X) \
 	X(extractor   , "Create a BMP of each slot in screenshots of Game Pigeon word games.") \
 	X(monochromize, "Convert each BMP into a strictly black and white image.") \
@@ -1548,61 +1635,91 @@ struct USBConfig // This layout is defined uniquely for our device application.
 
 
 
-#define PHONE_DIM_PX_X 1170
-#define PHONE_DIM_PX_Y 2532
+#define EXTRACTOR_SCREENSHOT_DIM_X 1170
+#define EXTRACTOR_SCREENSHOT_DIM_Y 2532
+#define EXTRACTOR_RGB_EPSILON      0.01
 
-#define AVG_RGB_MATCHING_EPSILON 0.01
 #define WORDGAME_XMDT(X) \
-	X(anagrams , "Anagrams" , 0.49221875000, 0.47258984375, 0.56611328125) \
-	X(wordhunt , "WordHunt" , 0.48301171875, 0.53787890625, 0.41358203125) \
-	X(wordbites, "WordBites", 0.36726562500, 0.45695312500, 0.53207421875)
+	/*    Names                               | Board Position | Board Dimensions (slots) | Slot Dimensions | Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB              | Excluded Slot Coordinates */ \
+		X(anagrams_6, "Anagrams (6-Letters)",   grp(39, 354),    grp(6, 1),                 119,              195,          grp(32 , 656),         grp(256, 16 ),           grp(0.2645, 0.2409, 0.3358),   )
+
+// Comprehensive : X(anagrams_6, "Anagrams (6-Letters)",   grp(18, 329),    grp(6, 1),                 160,              195,          grp(32 , 656),         grp(256, 16 ),           grp(0.2645, 0.2409, 0.3358),   )
+// X(anagrams_7, "Anagrams (7-Letters)",   grp(13, 353),    grp(7, 1),                 138,              168,          grp(32 , 656),         grp(256, 16 ),           grp(0.5036, 0.4814, 0.6467),   ) \
+// X(wordbites , "Word Bites"          ,   grp(28, 367),    grp(8, 9),                 125,              140,          grp(256, 64 ),         grp(256, 128),           grp(0.2378, 0.3778, 0.4962),   )
 
 enum WordGame
 {
-	#define MAKE(ENUM_NAME, ...) WordGame_##ENUM_NAME,
+	#define MAKE(IDENTIFIER_NAME, ...) \
+		WordGame_##IDENTIFIER_NAME,
 	WORDGAME_XMDT(MAKE)
 	#undef MAKE
 	WordGame_COUNT
 };
 
 #if PROGRAM_MICROSERVICES
-	static const struct { str print_name; f64 avg_r; f64 avg_g; f64 avg_b; } WORDGAME_DT[] =
+	struct WordGameInfo
+	{
+		str   print_name;
+		i32_2 board_pos;
+		i32_2 board_dim_slots;
+		i32   slot_dim;
+		i32   slot_stride;
+		i32_2 test_region_pos;
+		i32_2 test_region_dim;
+		f64_3 test_region_rgb;
+		i32_2 excluded_slot_coords[8];
+		i32   excluded_slot_coords_count;
+	};
+	static const struct WordGameInfo WORDGAME_INFO[] =
 		{
-			#define MAKE(ENUM_NAME, PRINT_NAME, AVG_R, AVG_G, AVG_B) \
+			#define MAKE(IDENTIFIER_NAME, PRINT_NAME, BOARD_POS, BOARD_DIM_SLOTS, SLOT_DIM, SLOT_STRIDE, TEST_REGION_POS, TEST_REGION_DIM, TEST_REGION_RGB, ... ) \
 				{ \
-					.print_name = STR(PRINT_NAME), \
-					.avg_r = (AVG_R), \
-					.avg_g = (AVG_G), \
-					.avg_b = (AVG_B) \
+					.print_name                 = STR(PRINT_NAME), \
+					.board_pos                  = BOARD_POS, \
+					.board_dim_slots            = BOARD_DIM_SLOTS, \
+					.slot_dim                   = SLOT_DIM, \
+					.slot_stride                = SLOT_STRIDE, \
+					.test_region_pos            = TEST_REGION_POS, \
+					.test_region_dim            = TEST_REGION_DIM, \
+					.test_region_rgb            = TEST_REGION_RGB, \
+					.excluded_slot_coords       = { [0] = { 0, 0 }, __VA_ARGS__ }, \
+					.excluded_slot_coords_count = countof((u8[][2]) { { 0, 0 }, __VA_ARGS__ }) - 1, \
 				},
 			WORDGAME_XMDT(MAKE)
 			#undef MAKE
 		};
 #endif
 
-#define ANAGRAMS_6_SLOT_DIM      195
-#define ANAGRAMS_6_BOARD_POS_X   0
-#define ANAGRAMS_6_BOARD_POS_Y   311
-#define ANAGRAMS_6_BOARD_SLOTS_X 6
-#define ANAGRAMS_6_BOARD_SLOTS_Y 1
-static_assert(ANAGRAMS_6_BOARD_POS_X + ANAGRAMS_6_BOARD_SLOTS_X * ANAGRAMS_6_SLOT_DIM <= PHONE_DIM_PX_X); // Should not obviously exceed phone screen boundries.
-static_assert(ANAGRAMS_6_BOARD_POS_Y + ANAGRAMS_6_BOARD_SLOTS_Y * ANAGRAMS_6_SLOT_DIM <= PHONE_DIM_PX_Y); // Should not obviously exceed phone screen boundries.
 
-#define WORDHUNT_4x4_SLOT_DIM      212
-#define WORDHUNT_4x4_BOARD_POS_X   161
-#define WORDHUNT_4x4_BOARD_POS_Y   494
-#define WORDHUNT_4x4_BOARD_SLOTS_X 4
-#define WORDHUNT_4x4_BOARD_SLOTS_Y 4
-static_assert(WORDHUNT_4x4_BOARD_POS_X + WORDHUNT_4x4_BOARD_SLOTS_X * WORDHUNT_4x4_SLOT_DIM <= PHONE_DIM_PX_X); // Should not obviously exceed phone screen boundries.
-static_assert(WORDHUNT_4x4_BOARD_POS_Y + WORDHUNT_4x4_BOARD_SLOTS_Y * WORDHUNT_4x4_SLOT_DIM <= PHONE_DIM_PX_Y); // Should not obviously exceed phone screen boundries.
 
-#define WORDBITES_SLOT_DIM      140
-#define WORDBITES_BOARD_POS_X   25
-#define WORDBITES_BOARD_POS_Y   354
-#define WORDBITES_BOARD_SLOTS_X 8
-#define WORDBITES_BOARD_SLOTS_Y 9
-static_assert(WORDBITES_BOARD_POS_X + WORDBITES_BOARD_SLOTS_X * WORDBITES_SLOT_DIM <= PHONE_DIM_PX_X); // Should not obviously exceed phone screen boundries.
-static_assert(WORDBITES_BOARD_POS_Y + WORDBITES_BOARD_SLOTS_Y * WORDBITES_SLOT_DIM <= PHONE_DIM_PX_Y); // Should not obviously exceed phone screen boundries.
+
+
+
+
+#define REDUCED_SLOT_MAX_DIM 64
+// #define ANAGRAMS_6_SLOT_DIM      195
+// #define ANAGRAMS_6_BOARD_POS_X   0
+// #define ANAGRAMS_6_BOARD_POS_Y   311
+// #define ANAGRAMS_6_BOARD_SLOTS_X 6
+// #define ANAGRAMS_6_BOARD_SLOTS_Y 1
+// static_assert(ANAGRAMS_6_BOARD_POS_X + ANAGRAMS_6_BOARD_SLOTS_X * ANAGRAMS_6_SLOT_DIM <= PHONE_DIM_PX_X); // Should not obviously exceed phone screen boundries.
+// static_assert(ANAGRAMS_6_BOARD_POS_Y + ANAGRAMS_6_BOARD_SLOTS_Y * ANAGRAMS_6_SLOT_DIM <= PHONE_DIM_PX_Y); // Should not obviously exceed phone screen boundries.
+// 
+// #define WORDHUNT_4x4_SLOT_DIM      212
+// #define WORDHUNT_4x4_BOARD_POS_X   161
+// #define WORDHUNT_4x4_BOARD_POS_Y   494
+// #define WORDHUNT_4x4_BOARD_SLOTS_X 4
+// #define WORDHUNT_4x4_BOARD_SLOTS_Y 4
+// static_assert(WORDHUNT_4x4_BOARD_POS_X + WORDHUNT_4x4_BOARD_SLOTS_X * WORDHUNT_4x4_SLOT_DIM <= PHONE_DIM_PX_X); // Should not obviously exceed phone screen boundries.
+// static_assert(WORDHUNT_4x4_BOARD_POS_Y + WORDHUNT_4x4_BOARD_SLOTS_Y * WORDHUNT_4x4_SLOT_DIM <= PHONE_DIM_PX_Y); // Should not obviously exceed phone screen boundries.
+// 
+// #define WORDBITES_SLOT_DIM      140
+// #define WORDBITES_BOARD_POS_X   25
+// #define WORDBITES_BOARD_POS_Y   354
+// #define WORDBITES_BOARD_SLOTS_X 8
+// #define WORDBITES_BOARD_SLOTS_Y 9
+// static_assert(WORDBITES_BOARD_POS_X + WORDBITES_BOARD_SLOTS_X * WORDBITES_SLOT_DIM <= PHONE_DIM_PX_X); // Should not obviously exceed phone screen boundries.
+// static_assert(WORDBITES_BOARD_POS_Y + WORDBITES_BOARD_SLOTS_Y * WORDBITES_SLOT_DIM <= PHONE_DIM_PX_Y); // Should not obviously exceed phone screen boundries.
 
 
 

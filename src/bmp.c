@@ -1,3 +1,5 @@
+// TODO fopen complains when a directory does not exist.
+
 static struct BMP
 bmp_alloc_read_file(str file_path)
 {
@@ -109,8 +111,8 @@ bmp_alloc_read_file(str file_path)
 		result =
 			(struct BMP)
 			{
-				.dim_x = dib_header->info.biWidth,
-				.dim_y = dib_header->info.biHeight,
+				.dim.x = dib_header->info.biWidth,
+				.dim.y = dib_header->info.biHeight,
 			};
 		alloc(&result.data, dib_header->info.biWidth * dib_header->info.biHeight);
 
@@ -122,7 +124,7 @@ bmp_alloc_read_file(str file_path)
 				{
 					if (byte_index * 8 + bit_index < dib_header->info.biWidth)
 					{
-						result.data[y * result.dim_x + byte_index * 8 + bit_index] =
+						result.data[y * result.dim.x + byte_index * 8 + bit_index] =
 							(((file_content.data + file_header->bfOffBits)[y * bytes_per_row + byte_index] >> (7 - bit_index)) & 1)
 								? (struct BMPPixel) { .r = 255, .g = 255, .b = 255, .a = 255, }
 								: (struct BMPPixel) { .r = 0,   .g = 0,   .b = 0,   .a = 255, };
@@ -131,22 +133,9 @@ bmp_alloc_read_file(str file_path)
 			}
 		}
 	}
-	else if
-	(
-		dib_header->size == sizeof(struct BMPDIBHeaderV4) &&
-		(
-			dib_header->v4.bV4Compression == BMPCompression_BI_BITFIELDS &&
-			dib_header->v4.bV4BitCount == 32 &&
-			dib_header->v4.bV4Height > 0
-		) ||
-		dib_header->size == sizeof(struct BMPDIBHeaderV5) &&
-		(
-			dib_header->v5.bV5Compression == BMPCompression_BI_RGB &&
-			dib_header->v5.bV5BitCount == 24 &&
-			dib_header->v5.bV5Height > 0
-		)
-	)
+	else
 	{
+		b32 compatiable     = false;
 		i32 bytes_per_row   = {0};
 		i32 bytes_per_pixel = {0};
 		i32 r_index         = {0};
@@ -154,91 +143,141 @@ bmp_alloc_read_file(str file_path)
 		i32 b_index         = {0};
 		i32 a_index         = {0};
 
-		if (dib_header->size == sizeof(struct BMPDIBHeaderV4))
-		{
-			bytes_per_row   = (dib_header->v4.bV4Width * (dib_header->v4.bV4BitCount / 8) + 3) / 4 * 4;
-			bytes_per_pixel = dib_header->v4.bV4BitCount / 8;
-
-			#define DETERMINE(MASK) \
-				( \
-					(MASK) == (u32(0xFF) <<  0) ? 0 : \
-					(MASK) == (u32(0xFF) <<  8) ? 1 : \
-					(MASK) == (u32(0xFF) << 16) ? 2 : 3 \
-				)
-			r_index = DETERMINE(dib_header->v4.bV4RedMask);
-			g_index = DETERMINE(dib_header->v4.bV4GreenMask);
-			b_index = DETERMINE(dib_header->v4.bV4BlueMask);
-			a_index = DETERMINE(dib_header->v4.bV4AlphaMask);
-			#undef DETERMINE
-
-			result.dim_x    = dib_header->v4.bV4Width;
-			result.dim_y    = dib_header->v4.bV4Height;
-
-			if
-			(
-				!(
-					dib_header->v4.bV4Planes == 1 &&
-					dib_header->v4.bV4Width > 0 &&
-					dib_header->v4.bV4Height != 0 &&
-					!(dib_header->v4.bV4RedMask & dib_header->v4.bV4GreenMask & dib_header->v4.bV4BlueMask & dib_header->v4.bV4AlphaMask) &&
-					(dib_header->v4.bV4RedMask | dib_header->v4.bV4GreenMask | dib_header->v4.bV4BlueMask | dib_header->v4.bV4AlphaMask) == u32(-1) &&
-					(!dib_header->v4.bV4SizeImage || dib_header->v4.bV4SizeImage == u32(bytes_per_row * dib_header->v4.bV4Height))
-				)
+		#define DETERMINE_MASK(MASK) \
+			( \
+				(MASK) == (u32(0xFF) <<  0) ? 0 : \
+				(MASK) == (u32(0xFF) <<  8) ? 1 : \
+				(MASK) == (u32(0xFF) << 16) ? 2 : 3 \
 			)
-			{
-				error("DIB with invalid field.");
-			}
-		}
-		else if (dib_header->size == sizeof(struct BMPDIBHeaderV5))
-		{
-			bytes_per_row   = (dib_header->v5.bV5Width * (dib_header->v5.bV5BitCount / 8) + 3) / 4 * 4;
-			bytes_per_pixel = dib_header->v5.bV5BitCount / 8;
-			r_index         =  2;
-			g_index         =  1;
-			b_index         =  0;
-			a_index         = -1;
-			result.dim_x    = dib_header->v5.bV5Width;
-			result.dim_y    = dib_header->v5.bV5Height;
 
-			if
-			(
-				!(
-					dib_header->v5.bV5Planes == 1 &&
-					dib_header->v5.bV5Width > 0 &&
-					dib_header->v5.bV5Height != 0 &&
-					(!dib_header->v5.bV5SizeImage || dib_header->v5.bV5SizeImage == u32(bytes_per_row * dib_header->v5.bV5Height))
+		switch (dib_header->size)
+		{
+			case sizeof(struct BMPDIBHeaderV4):
+			{
+				if
+				(
+					dib_header->v4.bV4Compression == BMPCompression_BI_BITFIELDS &&
+					dib_header->v4.bV4BitCount == 32 &&
+					dib_header->v4.bV4Height > 0
 				)
-			)
-			{
-				error("DIB with invalid field.");
-			}
-		}
+				{
+					compatiable = true;
+					bytes_per_row   = (dib_header->v4.bV4Width * (dib_header->v4.bV4BitCount / 8) + 3) / 4 * 4;
+					bytes_per_pixel = dib_header->v4.bV4BitCount / 8;
+					r_index         = DETERMINE_MASK(dib_header->v4.bV4RedMask);
+					g_index         = DETERMINE_MASK(dib_header->v4.bV4GreenMask);
+					b_index         = DETERMINE_MASK(dib_header->v4.bV4BlueMask);
+					a_index         = DETERMINE_MASK(dib_header->v4.bV4AlphaMask);
+					result.dim.x    = dib_header->v5.bV5Width;
+					result.dim.y    = dib_header->v5.bV5Height;
 
-		alloc(&result.data, result.dim_x * result.dim_y);
-
-		for (i64 y = 0; y < result.dim_y; y += 1)
-		{
-			for (i64 x = 0; x < result.dim_x; x += 1)
-			{
-				u8* channels =
-					((u8*) file_content.data) + file_header->bfOffBits
-						+ y * bytes_per_row
-						+ x * bytes_per_pixel;
-
-				result.data[y * result.dim_x + x] =
-					(struct BMPPixel)
+					if
+					(
+						!(
+							dib_header->v4.bV4Planes == 1 &&
+							dib_header->v4.bV4Width > 0 &&
+							dib_header->v4.bV4Height != 0 &&
+							(!dib_header->v4.bV4SizeImage || dib_header->v4.bV4SizeImage == u32(bytes_per_row * dib_header->v4.bV4Height))
+						)
+					)
 					{
-						.r = r_index == -1 ? 0   : channels[r_index],
-						.g = g_index == -1 ? 0   : channels[g_index],
-						.b = b_index == -1 ? 0   : channels[b_index],
-						.a = a_index == -1 ? 255 : channels[a_index],
-					};
+						error("DIB with invalid field.");
+					}
+				}
+			} break;
+
+			case sizeof(struct BMPDIBHeaderV5):
+			{
+				bytes_per_row   = (dib_header->v5.bV5Width * (dib_header->v5.bV5BitCount / 8) + 3) / 4 * 4;
+				bytes_per_pixel = dib_header->v5.bV5BitCount / 8;
+				result.dim.x    = dib_header->v5.bV5Width;
+				result.dim.y    = dib_header->v5.bV5Height;
+
+				if
+				(
+					dib_header->v5.bV5Compression == BMPCompression_BI_BITFIELDS &&
+					dib_header->v5.bV5BitCount == 32 &&
+					dib_header->v5.bV5Height > 0
+				)
+				{
+					compatiable = true;
+					r_index     = DETERMINE_MASK(dib_header->v5.bV5RedMask);
+					g_index     = DETERMINE_MASK(dib_header->v5.bV5GreenMask);
+					b_index     = DETERMINE_MASK(dib_header->v5.bV5BlueMask);
+					a_index     = DETERMINE_MASK(dib_header->v5.bV5AlphaMask);
+
+					if
+					(
+						!(
+							dib_header->v5.bV5Planes == 1 &&
+							dib_header->v5.bV5Width > 0 &&
+							dib_header->v5.bV5Height != 0 &&
+							(!dib_header->v5.bV5SizeImage || dib_header->v5.bV5SizeImage == u32(bytes_per_row * dib_header->v5.bV5Height))
+						)
+					)
+					{
+						error("DIB with invalid field.");
+					}
+				}
+				else if
+				(
+					dib_header->v5.bV5Compression == BMPCompression_BI_RGB &&
+					dib_header->v5.bV5BitCount == 24 &&
+					dib_header->v5.bV5Height > 0
+				)
+				{
+					compatiable = true;
+					r_index     =  2;
+					g_index     =  1;
+					b_index     =  0;
+					a_index     = -1;
+
+					if
+					(
+						!(
+							dib_header->v5.bV5Planes == 1 &&
+							dib_header->v5.bV5Width > 0 &&
+							dib_header->v5.bV5Height != 0 &&
+							(!dib_header->v5.bV5SizeImage || dib_header->v5.bV5SizeImage == u32(bytes_per_row * dib_header->v5.bV5Height))
+						)
+					)
+					{
+						error("DIB with invalid field.");
+					}
+				}
+			} break;
+		}
+
+		#undef DETERMINE_MASK
+
+		if (compatiable)
+		{
+			alloc(&result.data, result.dim.x * result.dim.y);
+
+			for (i64 y = 0; y < result.dim.y; y += 1)
+			{
+				for (i64 x = 0; x < result.dim.x; x += 1)
+				{
+					u8* channels =
+						((u8*) file_content.data) + file_header->bfOffBits
+							+ y * bytes_per_row
+							+ x * bytes_per_pixel;
+
+					result.data[y * result.dim.x + x] =
+						(struct BMPPixel)
+						{
+							.r = r_index == -1 ? 0   : channels[r_index],
+							.g = g_index == -1 ? 0   : channels[g_index],
+							.b = b_index == -1 ? 0   : channels[b_index],
+							.a = a_index == -1 ? 255 : channels[a_index],
+						};
+				}
 			}
 		}
-	}
-	else
-	{
-		error("Unhandled BMP configuration.");
+		else
+		{
+			error("Unhandled BMP configuration.");
+		}
 	}
 
 	return result;
@@ -263,8 +302,8 @@ bmp_export(struct BMP src, str file_path)
 	struct BMPDIBHeaderV4 dib_header =
 		{
 			.bV4Size          = sizeof(dib_header),
-			.bV4Width         = src.dim_x,
-			.bV4Height        = src.dim_y,
+			.bV4Width         = src.dim.x,
+			.bV4Height        = src.dim.y,
 			.bV4Planes        = 1,
 			.bV4BitCount      = bitsof(struct BMPPixel),
 			.bV4Compression   = BMPCompression_BI_BITFIELDS,
@@ -277,7 +316,7 @@ bmp_export(struct BMP src, str file_path)
 	struct BMPFileHeader file_header =
 		{
 			.bfType    = u16('B') | (u16('M') << 8),
-			.bfSize    = sizeof(file_header) + sizeof(dib_header) + src.dim_x * src.dim_y * sizeof(struct BMPPixel),
+			.bfSize    = sizeof(file_header) + sizeof(dib_header) + src.dim.x * src.dim.y * sizeof(struct BMPPixel),
 			.bfOffBits = sizeof(file_header) + sizeof(dib_header),
 		};
 
@@ -291,7 +330,7 @@ bmp_export(struct BMP src, str file_path)
 		error("Failed to write DIB header.");
 	}
 
-	i64 write_size = src.dim_x * src.dim_y * sizeof(*src.data);
+	i64 write_size = src.dim.x * src.dim.y * sizeof(*src.data);
 	if (write_size && fwrite(src.data, write_size, 1, file) != 1)
 	{
 		error("Failed to write pixel data.");

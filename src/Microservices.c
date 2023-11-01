@@ -9,6 +9,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 #include "defs.h"
 #include "misc.c"
 #include "str.c"
@@ -52,7 +53,7 @@ create_dir(str dir_path, b32 delete_content)
 				.wFunc             = FO_DELETE,
 				.pFrom             = double_nullterminated_output_dir_path.data,
 				.pTo               = "\0",
-				.fFlags            = 0,
+				.fFlags            = FOF_NOCONFIRMATION,
 				.lpszProgressTitle = "",
 			};
 
@@ -92,12 +93,16 @@ print_cli_program_help(str exe_name, enum CLIProgram program)
 {
 	struct CLIProgramInfo program_info = CLI_PROGRAM_INFO[program];
 
-	i64 margin_length = program_info.name.length;
+	i64 margin = program_info.name.length;
 	for (i32 field_index = {0}; field_index < program_info.field_count; field_index += 1)
 	{
-		margin_length = i64_max(margin_length, program_info.fields[field_index].pattern.length + CLI_FIELD_ADDITIONAL_MARGIN);
+		i64 length = program_info.fields[field_index].pattern.length + 2;
+		if (margin < length)
+		{
+			margin = length;
+		}
 	}
-	margin_length += 1;
+	margin += 1;
 
 	//
 	// CLI program call structure.
@@ -124,7 +129,7 @@ print_cli_program_help(str exe_name, enum CLIProgram program)
 	(
 		"\t%.*s%*s| %.*s\n",
 		i32(program_info.name.length), program_info.name.data,
-		i32(margin_length - program_info.name.length), "",
+		i32(margin - program_info.name.length), "",
 		i32(program_info.desc.length), program_info.desc.data
 	);
 
@@ -141,7 +146,7 @@ print_cli_program_help(str exe_name, enum CLIProgram program)
 		printf
 		(
 			"%*s| %.*s\n",
-			i32(margin_length - cli_field_length), "",
+			i32(margin - cli_field_length), "",
 			i32(field_info.desc.length), field_info.desc.data
 		);
 	}
@@ -254,16 +259,19 @@ main(int argc, char** argv)
 
 	if (argc <= 2) // Provide CLI help if needed.
 	{
-		str exe_name = argc ? str_cstr(argv[0]) : CLI_EXE_NAME;
+		str exe_name = argc ? str_cstr(argv[0]) : str(CLI_EXE_NAME);
 
 		if (argc <= 1)
 		{
-			i64 margin_length = exe_name.length;
+			i64 margin = exe_name.length;
 			for (enum CLIProgram program = {0}; program < CLIProgram_COUNT; program += 1)
 			{
-				margin_length = i64_max(margin_length, CLI_PROGRAM_INFO[program].name.length);
+				if (margin < CLI_PROGRAM_INFO[program].name.length)
+				{
+					margin = CLI_PROGRAM_INFO[program].name.length;
+				}
 			}
-			margin_length += 1;
+			margin += 1;
 
 			//
 			// CLI call structure.
@@ -280,7 +288,7 @@ main(int argc, char** argv)
 			(
 				"\t%.*s%*s| %s\n",
 				i32(exe_name.length), exe_name.data,
-				i32(margin_length - exe_name.length), "",
+				i32(margin - exe_name.length), "",
 				CLI_EXE_DESC
 			);
 
@@ -297,7 +305,7 @@ main(int argc, char** argv)
 				(
 					"%.*s%*s| %.*s\n",
 					i32(program_info.name.length), program_info.name.data,
-					i32(margin_length - program_info.name.length), "",
+					i32(margin - program_info.name.length), "",
 					i32(program_info.desc.length), program_info.desc.data
 				);
 			}
@@ -319,7 +327,7 @@ main(int argc, char** argv)
 			printf("\n");
 		}
 	}
-	else // Move onto CLI program.
+	else
 	{
 		struct CLIProgramInfo cli_program_info = CLI_PROGRAM_INFO[cli_program];
 		b32                   cli_field_filled[countof(CLI_PROGRAM_INFO[0].fields)] = {0};
@@ -456,17 +464,10 @@ main(int argc, char** argv)
 
 				printf("Processing \"%s\".\n", cli.input_dir_path.cstr);
 
-				i32 screenshots_processed        = 0;
-				i32 slots_extracted              = 0;
-				f64 overall_screenshot_avg_r     = 0.0;
-				f64 overall_screenshot_avg_g     = 0.0;
-				f64 overall_screenshot_avg_b     = 0.0;
-				f64 overall_min_screenshot_avg_r = 0.0;
-				f64 overall_min_screenshot_avg_g = 0.0;
-				f64 overall_min_screenshot_avg_b = 0.0;
-				f64 overall_max_screenshot_avg_r = 0.0;
-				f64 overall_max_screenshot_avg_g = 0.0;
-				f64 overall_max_screenshot_avg_b = 0.0;
+				i32   screenshots_examined = 0;
+				i32   unknown_games        = 0;
+				i32   slots_extracted      = 0;
+				f64_3 accumulated_unknown_game_test_region_rgbs[WordGame_COUNT] = {0};
 
 				struct DirBMPIteratorState iterator_state =
 					{
@@ -475,243 +476,228 @@ main(int argc, char** argv)
 				struct BMP screenshot = {0};
 				while (iterate_dir_bmp_alloc(&screenshot, &iterator_state))
 				{
-					if (screenshot.dim_x == PHONE_DIM_PX_X && screenshot.dim_y == PHONE_DIM_PX_Y)
+					if (screenshot.dim.x == EXTRACTOR_SCREENSHOT_DIM_X && screenshot.dim.y == EXTRACTOR_SCREENSHOT_DIM_Y)
 					{
+						enum WordGame identified_wordgame = WordGame_COUNT;
+
 						//
-						// Analyze RGB in screenshot.
+						// Analyze screenshot.
 						//
 
-						f64 screenshot_avg_r = 0.0;
-						f64 screenshot_avg_g = 0.0;
-						f64 screenshot_avg_b = 0.0;
-
-						for (i32 i = 0; i < screenshot.dim_x * screenshot.dim_y; i += 1)
+						f64_3 unknown_game_test_region_rgbs[WordGame_COUNT] = {0};
+						for (enum WordGame wordgame = {0}; wordgame < WordGame_COUNT; wordgame += 1)
 						{
-							screenshot_avg_r += screenshot.data[i].r;
-							screenshot_avg_g += screenshot.data[i].g;
-							screenshot_avg_b += screenshot.data[i].b;
+							//
+							// Compute average RGB of test region.
+							//
+
+							f64_3 test_region_rgb = {0};
+							for
+							(
+								i32 y = WORDGAME_INFO[wordgame].test_region_pos.y;
+								y < WORDGAME_INFO[wordgame].test_region_pos.y + WORDGAME_INFO[wordgame].test_region_dim.y;
+								y += 1
+							)
+							{
+								for
+								(
+									i32 x = WORDGAME_INFO[wordgame].test_region_pos.x;
+									x < WORDGAME_INFO[wordgame].test_region_pos.x + WORDGAME_INFO[wordgame].test_region_dim.x;
+									x += 1
+								)
+								{
+									test_region_rgb.x += screenshot.data[y * screenshot.dim.x + x].r;
+									test_region_rgb.y += screenshot.data[y * screenshot.dim.x + x].g;
+									test_region_rgb.z += screenshot.data[y * screenshot.dim.x + x].b;
+								}
+							}
+							test_region_rgb.x /= 256.0 * WORDGAME_INFO[wordgame].test_region_dim.x * WORDGAME_INFO[wordgame].test_region_dim.y;
+							test_region_rgb.y /= 256.0 * WORDGAME_INFO[wordgame].test_region_dim.x * WORDGAME_INFO[wordgame].test_region_dim.y;
+							test_region_rgb.z /= 256.0 * WORDGAME_INFO[wordgame].test_region_dim.x * WORDGAME_INFO[wordgame].test_region_dim.y;
+
+							//
+							// Check average RGB of test region.
+							//
+
+							if
+							(
+								fabs(test_region_rgb.x - WORDGAME_INFO[wordgame].test_region_rgb.x) <= EXTRACTOR_RGB_EPSILON &&
+								fabs(test_region_rgb.y - WORDGAME_INFO[wordgame].test_region_rgb.y) <= EXTRACTOR_RGB_EPSILON &&
+								fabs(test_region_rgb.z - WORDGAME_INFO[wordgame].test_region_rgb.z) <= EXTRACTOR_RGB_EPSILON
+							)
+							{
+								struct BMP slot =
+									{
+										.dim.x = WORDGAME_INFO[wordgame].slot_dim,
+										.dim.y = WORDGAME_INFO[wordgame].slot_dim,
+									};
+								alloc(&slot.data, slot.dim.x * slot.dim.y);
+
+								for (i32 slot_coord_y = 0; slot_coord_y < WORDGAME_INFO[wordgame].board_dim_slots.y; slot_coord_y += 1)
+								{
+									for (i32 slot_coord_x = 0; slot_coord_x < WORDGAME_INFO[wordgame].board_dim_slots.x; slot_coord_x += 1)
+									{
+										b32 slot_coord_excluded = false;
+										for (i32 i = 0; i < WORDGAME_INFO[wordgame].excluded_slot_coords_count; i += 1)
+										{
+											if
+											(
+												WORDGAME_INFO[wordgame].excluded_slot_coords[i].x == slot_coord_x &&
+												WORDGAME_INFO[wordgame].excluded_slot_coords[i].y == slot_coord_y
+											)
+											{
+												slot_coord_excluded = true;
+												break;
+											}
+										}
+
+										if (!slot_coord_excluded)
+										{
+											for (i32 slot_px_y = 0; slot_px_y < WORDGAME_INFO[wordgame].slot_dim; slot_px_y += 1)
+											{
+												for (i32 slot_px_x = 0; slot_px_x < WORDGAME_INFO[wordgame].slot_dim; slot_px_x += 1)
+												{
+													struct BMPPixel pixel =
+														screenshot.data
+														[
+															(WORDGAME_INFO[wordgame].board_pos.y + slot_coord_y * WORDGAME_INFO[wordgame].slot_stride + slot_px_y) * screenshot.dim.x
+																+ (WORDGAME_INFO[wordgame].board_pos.x + slot_coord_x * WORDGAME_INFO[wordgame].slot_stride + slot_px_x)
+														];
+													slot.data[slot_px_y * slot.dim.x + slot_px_x] = pixel;
+												}
+											}
+
+											struct StrBuf slot_file_path = StrBuf(256);
+											strbuf_str (&slot_file_path, cli.output_dir_path.str);
+											strbuf_char(&slot_file_path, '\\');
+											strbuf_str (&slot_file_path, WORDGAME_INFO[wordgame].print_name);
+											strbuf_cstr(&slot_file_path, " (");
+											strbuf_i64 (&slot_file_path, slot_coord_x);
+											strbuf_cstr(&slot_file_path, ", ");
+											strbuf_i64 (&slot_file_path, slot_coord_y);
+											strbuf_cstr(&slot_file_path, ") (");
+											for (i32 i = 0; i < 4; i += 1)
+											{
+												static const char CHARACTERS[] =
+													{
+														'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+														'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+														'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+														'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+														'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+														'-', '_'
+													};
+												strbuf_char(&slot_file_path, CHARACTERS[__rdtsc() % countof(CHARACTERS)]);
+											}
+											strbuf_cstr(&slot_file_path, ") ");
+											strbuf_cstr(&slot_file_path, iterator_state.finder_data.cFileName);
+											bmp_export(slot, slot_file_path.str);
+										}
+									}
+								}
+
+
+								identified_wordgame  = wordgame;
+								slots_extracted     += WORDGAME_INFO[wordgame].board_dim_slots.x * WORDGAME_INFO[wordgame].board_dim_slots.y - WORDGAME_INFO[wordgame].excluded_slot_coords_count;
+
+								free(slot.data);
+								break;
+							}
+							else
+							{
+								unknown_game_test_region_rgbs[wordgame].x = test_region_rgb.x;
+								unknown_game_test_region_rgbs[wordgame].y = test_region_rgb.y;
+								unknown_game_test_region_rgbs[wordgame].z = test_region_rgb.z;
+							}
 						}
-						overall_screenshot_avg_r += screenshot_avg_r;
-						overall_screenshot_avg_g += screenshot_avg_g;
-						overall_screenshot_avg_b += screenshot_avg_b;
-						screenshot_avg_r         /= 256.0 * screenshot.dim_x * screenshot.dim_y;
-						screenshot_avg_g         /= 256.0 * screenshot.dim_x * screenshot.dim_y;
-						screenshot_avg_b         /= 256.0 * screenshot.dim_x * screenshot.dim_y;
 
-						if (screenshots_processed)
+						//
+						// Print details about the screenshot.
+						//
+
+						screenshots_examined += 1;
+						str game_name = {0};
+
+						if (identified_wordgame < WordGame_COUNT)
 						{
-							overall_min_screenshot_avg_r = f64_min(overall_min_screenshot_avg_r, screenshot_avg_r);
-							overall_min_screenshot_avg_g = f64_min(overall_min_screenshot_avg_g, screenshot_avg_g);
-							overall_min_screenshot_avg_b = f64_min(overall_min_screenshot_avg_b, screenshot_avg_b);
-							overall_max_screenshot_avg_r = f64_max(overall_max_screenshot_avg_r, screenshot_avg_r);
-							overall_max_screenshot_avg_g = f64_max(overall_max_screenshot_avg_g, screenshot_avg_g);
-							overall_max_screenshot_avg_b = f64_max(overall_max_screenshot_avg_b, screenshot_avg_b);
+							game_name = WORDGAME_INFO[identified_wordgame].print_name;
 						}
 						else
 						{
-							overall_min_screenshot_avg_r = screenshot_avg_r;
-							overall_min_screenshot_avg_g = screenshot_avg_g;
-							overall_min_screenshot_avg_b = screenshot_avg_b;
-							overall_max_screenshot_avg_r = screenshot_avg_r;
-							overall_max_screenshot_avg_g = screenshot_avg_g;
-							overall_max_screenshot_avg_b = screenshot_avg_b;
-						}
+							game_name      = str("Unknown game");
+							unknown_games += 1;
 
-						//
-						// Determine word game based on RGB.
-						//
-
-						enum WordGame wordgame = WordGame_COUNT;
-						for (enum WordGame canidate_wordgame = {0}; canidate_wordgame < WordGame_COUNT; canidate_wordgame += 1)
-						{
-							if
-							(
-								f64_abs(screenshot_avg_r - WORDGAME_DT[canidate_wordgame].avg_r) <= AVG_RGB_MATCHING_EPSILON &&
-								f64_abs(screenshot_avg_g - WORDGAME_DT[canidate_wordgame].avg_g) <= AVG_RGB_MATCHING_EPSILON &&
-								f64_abs(screenshot_avg_b - WORDGAME_DT[canidate_wordgame].avg_b) <= AVG_RGB_MATCHING_EPSILON
-							)
+							for (enum WordGame wordgame = {0}; wordgame < WordGame_COUNT; wordgame += 1)
 							{
-								wordgame = canidate_wordgame;
-								break;
+								accumulated_unknown_game_test_region_rgbs[wordgame].x += unknown_game_test_region_rgbs[wordgame].x;
+								accumulated_unknown_game_test_region_rgbs[wordgame].y += unknown_game_test_region_rgbs[wordgame].y;
+								accumulated_unknown_game_test_region_rgbs[wordgame].z += unknown_game_test_region_rgbs[wordgame].z;
 							}
 						}
-
-						//
-						// Make note of where the slots will be.
-						//
-
-						struct { i32 x; i32 y; } slot_buffer[128] = {0};
-						i32                      slot_count       = 0;
-						i32                      slot_origin_x    = 0;
-						i32                      slot_origin_y    = 0;
-						struct BMP               slot_bmp         = {0};
-
-						switch (wordgame)
-						{
-							case WordGame_anagrams:
-							{
-								slot_bmp.dim_x = ANAGRAMS_6_SLOT_DIM;
-								slot_bmp.dim_y = ANAGRAMS_6_SLOT_DIM;
-								slot_origin_x  = ANAGRAMS_6_BOARD_POS_X;
-								slot_origin_y  = ANAGRAMS_6_BOARD_POS_Y;
-
-								for (i32 slot_y = 0; slot_y < ANAGRAMS_6_BOARD_SLOTS_Y; slot_y += 1)
-								{
-									for (i32 slot_x = 0; slot_x < ANAGRAMS_6_BOARD_SLOTS_X; slot_x += 1)
-									{
-										assert(slot_count < countof(slot_buffer));
-										slot_buffer[slot_count].x = slot_x;
-										slot_buffer[slot_count].y = slot_y;
-										slot_count += 1;
-									}
-								}
-							} break;
-
-							case WordGame_wordhunt:
-							{
-								slot_bmp.dim_x = WORDHUNT_4x4_SLOT_DIM;
-								slot_bmp.dim_y = WORDHUNT_4x4_SLOT_DIM;
-								slot_origin_x  = WORDHUNT_4x4_BOARD_POS_X;
-								slot_origin_y  = WORDHUNT_4x4_BOARD_POS_Y;
-
-								for (i32 slot_y = 0; slot_y < WORDHUNT_4x4_BOARD_SLOTS_Y; slot_y += 1)
-								{
-									for (i32 slot_x = 0; slot_x < WORDHUNT_4x4_BOARD_SLOTS_X; slot_x += 1)
-									{
-										assert(slot_count < countof(slot_buffer));
-										slot_buffer[slot_count].x = slot_x;
-										slot_buffer[slot_count].y = slot_y;
-										slot_count += 1;
-									}
-								}
-							} break;
-
-							case WordGame_wordbites:
-							{
-								slot_bmp.dim_x = WORDBITES_SLOT_DIM;
-								slot_bmp.dim_y = WORDBITES_SLOT_DIM;
-								slot_origin_x  = WORDBITES_BOARD_POS_X;
-								slot_origin_y  = WORDBITES_BOARD_POS_Y;
-
-								for (i32 slot_y = 0; slot_y < WORDBITES_BOARD_SLOTS_Y; slot_y += 1)
-								{
-									for (i32 slot_x = 0; slot_x < WORDBITES_BOARD_SLOTS_X; slot_x += 1)
-									{
-										assert(slot_count < countof(slot_buffer));
-										slot_buffer[slot_count].x = slot_x;
-										slot_buffer[slot_count].y = slot_y;
-										slot_count += 1;
-									}
-								}
-							} break;
-
-							case WordGame_COUNT:
-							{
-								// Unknown game. No slots.
-							} break;
-						}
-
-						//
-						// Extract the slots.
-						//
-
-						alloc(&slot_bmp.data, slot_bmp.dim_x * slot_bmp.dim_y);
-
-						for (i32 slot_index = 0; slot_index < slot_count; slot_index += 1)
-						{
-							assert(wordgame != WordGame_COUNT);
-							assert(slot_origin_x + slot_buffer[slot_index].x * slot_bmp.dim_x <= screenshot.dim_x);
-							assert(slot_origin_y + slot_buffer[slot_index].y * slot_bmp.dim_y <= screenshot.dim_y);
-
-							//
-							// Process pixels.
-							//
-
-							for (i32 slot_bmp_px_y = 0; slot_bmp_px_y < slot_bmp.dim_y; slot_bmp_px_y += 1)
-							{
-								for (i32 slot_bmp_px_x = 0; slot_bmp_px_x < slot_bmp.dim_x; slot_bmp_px_x += 1)
-								{
-									i32 screenshot_x = slot_origin_x + slot_buffer[slot_index].x * slot_bmp.dim_x + slot_bmp_px_x;
-									i32 screenshot_y = slot_origin_y + slot_buffer[slot_index].y * slot_bmp.dim_y + slot_bmp_px_y;
-
-									slot_bmp.data[slot_bmp_px_y * slot_bmp.dim_x + slot_bmp_px_x] =
-										screenshot.data[screenshot_y * screenshot.dim_x + screenshot_x];
-								}
-							}
-
-							struct StrBuf slot_bmp_file_path = StrBuf(256);
-							strbuf_str (&slot_bmp_file_path, cli.output_dir_path.str);
-							strbuf_char(&slot_bmp_file_path, '\\');
-							strbuf_str (&slot_bmp_file_path, WORDGAME_DT[wordgame].print_name);
-							strbuf_char(&slot_bmp_file_path, '_');
-							strbuf_i64 (&slot_bmp_file_path, slot_buffer[slot_index].x);
-							strbuf_char(&slot_bmp_file_path, '_');
-							strbuf_i64 (&slot_bmp_file_path, slot_buffer[slot_index].y);
-							strbuf_char(&slot_bmp_file_path, '_');
-							strbuf_cstr(&slot_bmp_file_path, iterator_state.finder_data.cFileName);
-							bmp_export(slot_bmp, slot_bmp_file_path.str);
-						}
-
-						free(slot_bmp.data);
-
-						slots_extracted += slot_count;
-
-						//
-						// Finish processing the screenshot.
-						//
 
 						printf
 						(
-							"% 4d : \"%s\" : AvgRGB(%7.3f, %7.3f, %7.3f) : ",
-							screenshots_processed + 1,
-							iterator_state.finder_data.cFileName,
-							screenshot_avg_r * 256.0,
-							screenshot_avg_g * 256.0,
-							screenshot_avg_b * 256.0
+							"% 4d : %.*s : \"%s\".\n",
+							screenshots_examined,
+							i32(game_name.length), game_name.data,
+							iterator_state.finder_data.cFileName
 						);
-						if (wordgame == WordGame_COUNT)
-						{
-							printf("Unknown game.\n");
-						}
-						else
-						{
-							printf("%.*s.\n", i32(WORDGAME_DT[wordgame].print_name.length), WORDGAME_DT[wordgame].print_name.data);
-						}
-
-						screenshots_processed += 1;
 					}
 
 					free(screenshot.data);
 				}
 
-				if (screenshots_processed)
-				{
-					overall_screenshot_avg_r /= 256.0 * screenshots_processed * PHONE_DIM_PX_X * PHONE_DIM_PX_Y;
-					overall_screenshot_avg_g /= 256.0 * screenshots_processed * PHONE_DIM_PX_X * PHONE_DIM_PX_Y;
-					overall_screenshot_avg_b /= 256.0 * screenshots_processed * PHONE_DIM_PX_X * PHONE_DIM_PX_Y;
+				//
+				// Print final results.
+				//
 
+				if (screenshots_examined)
+				{
 					printf
 					(
 						"\n"
 						"Examined %d screenshots.\n"
 						"Extracted %d slots.\n"
-						"\tOverall maximum RGB : (%7.3f, %7.3f, %7.3f).\n"
-						"\tOverall average RGB : (%7.3f, %7.3f, %7.3f).\n"
-						"\tOverall minimum RGB : (%7.3f, %7.3f, %7.3f).\n"
-						"\tMinimum wiggle room : (%7.3f, %7.3f, %7.3f).\n",
-						screenshots_processed,
-						slots_extracted,
-						overall_max_screenshot_avg_r * 256.0, overall_max_screenshot_avg_g * 256.0, overall_max_screenshot_avg_b * 256.0,
-						overall_screenshot_avg_r     * 256.0, overall_screenshot_avg_g     * 256.0, overall_screenshot_avg_b     * 256.0,
-						overall_min_screenshot_avg_r * 256.0, overall_min_screenshot_avg_g * 256.0, overall_min_screenshot_avg_b * 256.0,
-						f64_max(f64_abs(overall_min_screenshot_avg_r - overall_screenshot_avg_r), f64_abs(overall_max_screenshot_avg_r - overall_screenshot_avg_r)) * 256.0,
-						f64_max(f64_abs(overall_min_screenshot_avg_g - overall_screenshot_avg_g), f64_abs(overall_max_screenshot_avg_g - overall_screenshot_avg_g)) * 256.0,
-						f64_max(f64_abs(overall_min_screenshot_avg_b - overall_screenshot_avg_b), f64_abs(overall_max_screenshot_avg_b - overall_screenshot_avg_b)) * 256.0
+						"\n",
+						screenshots_examined,
+						slots_extracted
 					);
+
+					if (unknown_games)
+					{
+						i64 margin = 0;
+						for (i32 wordgame = {0}; wordgame < WordGame_COUNT; wordgame += 1)
+						{
+							if (margin < WORDGAME_INFO[wordgame].print_name.length)
+							{
+								margin = WORDGAME_INFO[wordgame].print_name.length;
+							}
+						}
+						margin += 1;
+
+						printf("There were %d unknown games!\n", unknown_games);
+						for (enum WordGame wordgame = {0}; wordgame < WordGame_COUNT; wordgame += 1)
+						{
+							printf
+							(
+								"Average Test Region RGB of %.*s%*s: (%.17g, %.17g, %.17g)\n",
+								i32(WORDGAME_INFO[wordgame].print_name.length), WORDGAME_INFO[wordgame].print_name.data,
+								i32(margin - WORDGAME_INFO[wordgame].print_name.length), "",
+								accumulated_unknown_game_test_region_rgbs[wordgame].x / unknown_games,
+								accumulated_unknown_game_test_region_rgbs[wordgame].y / unknown_games,
+								accumulated_unknown_game_test_region_rgbs[wordgame].z / unknown_games
+							);
+						}
+						printf("\n");
+					}
 				}
 				else
 				{
-					printf("No screenshots found.\n");
+					printf
+					(
+						"No screenshots found.\n"
+						"\n"
+					);
 				}
 			} break;
 
@@ -726,6 +712,19 @@ main(int argc, char** argv)
 
 				i32 images_processed = 0;
 
+				enum Side
+				{
+					Side_left   = 2,
+					Side_right  = 0,
+					Side_top    = 1,
+					Side_bottom = 3,
+				};
+				struct
+				{
+					i32  pos;
+					char file_name_cstr[256];
+				} bounding_sides[4] = { { -1 }, { -1 }, { -1 }, { -1 } };
+
 				struct DirBMPIteratorState iterator_state =
 					{
 						.dir_path = cli.input_dir_path.str
@@ -733,15 +732,37 @@ main(int argc, char** argv)
 				struct BMP bmp = {0};
 				while (iterate_dir_bmp_alloc(&bmp, &iterator_state))
 				{
-					for (i32 i = 0; i < bmp.dim_x * bmp.dim_y; i += 1)
+					for (i32 y = 0; y < bmp.dim.y; y += 1)
 					{
-						if ((bmp.data[i].r + bmp.data[i].g + bmp.data[i].b) / 3 <= MONOCHROMIZE_THRESHOLD)
+						for (i32 x = 0; x < bmp.dim.x; x += 1)
 						{
-							bmp.data[i] = (struct BMPPixel) { .r = 255, .g = 255, .b = 255, .a = 255 };
-						}
-						else
-						{
-							bmp.data[i] = (struct BMPPixel) { .r = 0, .g = 0, .b = 0, .a = 255 };
+							struct BMPPixel* pixel = &bmp.data[y * bmp.dim.x + x];
+
+							if ((pixel->r + pixel->g + pixel->b) / 3 <= MONOCHROMIZE_THRESHOLD)
+							{
+								*pixel = (struct BMPPixel) { .r = 255, .g = 255, .b = 255, .a = 255 };
+
+								#define MAKE(SIDE, OP, COORDINATE) \
+									if (bounding_sides[SIDE].pos == -1 || bounding_sides[SIDE].pos OP COORDINATE) \
+									{ \
+										bounding_sides[SIDE].pos = COORDINATE; \
+										strncpy \
+										( \
+											bounding_sides[SIDE].file_name_cstr, \
+											iterator_state.finder_data.cFileName, \
+											countof(bounding_sides[SIDE].file_name_cstr) \
+										); \
+									}
+								MAKE(Side_left  , >, x);
+								MAKE(Side_right , <, x);
+								MAKE(Side_top   , <, y);
+								MAKE(Side_bottom, >, y);
+								#undef MAKE
+							}
+							else
+							{
+								*pixel = (struct BMPPixel) { .r = 0, .g = 0, .b = 0, .a = 255 };
+							}
 						}
 					}
 
@@ -763,13 +784,26 @@ main(int argc, char** argv)
 					printf
 					(
 						"\n"
-						"Monochromized %d images.\n",
-						images_processed
+						"Monochromized %d images.\n"
+						"Left-most   active pixel at x = %-4d : \"%s\".\n"
+						"Right-most  active pixel at x = %-4d : \"%s\".\n"
+						"Top-most    active pixel at y = %-4d : \"%s\".\n"
+						"Bottom-most active pixel at y = %-4d : \"%s\".\n"
+						"\n",
+						images_processed,
+						bounding_sides[Side_left  ].pos, bounding_sides[Side_left  ].file_name_cstr,
+						bounding_sides[Side_right ].pos, bounding_sides[Side_right ].file_name_cstr,
+						bounding_sides[Side_top   ].pos, bounding_sides[Side_top   ].file_name_cstr,
+						bounding_sides[Side_bottom].pos, bounding_sides[Side_bottom].file_name_cstr
 					);
 				}
 				else
 				{
-					printf("No images were monochromized.\n");
+					printf
+					(
+						"No images were monochromized.\n"
+						"\n"
+					);
 				}
 			} break;
 
@@ -785,8 +819,7 @@ main(int argc, char** argv)
 				i32        images_processed = 0;
 				i32        images_skipped   = 0;
 				struct BMP meltingpot       = {0};
-
-				struct { i32 r; i32 g; i32 b; i32 a; }* weights = 0;
+				i32_4*     weights          = 0;
 
 				struct DirBMPIteratorState iterator_state =
 					{
@@ -797,41 +830,38 @@ main(int argc, char** argv)
 				{
 					if (!weights)
 					{
-						alloc(&weights, sample_bmp.dim_x * sample_bmp.dim_y);
+						alloc(&weights, sample_bmp.dim.x * sample_bmp.dim.y);
 
-						meltingpot.dim_x = sample_bmp.dim_x;
-						meltingpot.dim_y = sample_bmp.dim_y;
-						alloc(&meltingpot.data, meltingpot.dim_x * meltingpot.dim_y);
+						meltingpot.dim.x = sample_bmp.dim.x;
+						meltingpot.dim.y = sample_bmp.dim.y;
+						alloc(&meltingpot.data, meltingpot.dim.x * meltingpot.dim.y);
 
 						printf
 						(
 							"Using \"%s\" for bounding dimensions %dx%d.\n",
 							iterator_state.finder_data.cFileName,
-							meltingpot.dim_x,
-							meltingpot.dim_y
+							meltingpot.dim.x,
+							meltingpot.dim.y
 						);
 					}
 
-					if (sample_bmp.dim_x == meltingpot.dim_x && sample_bmp.dim_y == meltingpot.dim_y)
+					if (sample_bmp.dim.x == meltingpot.dim.x && sample_bmp.dim.y == meltingpot.dim.y)
 					{
-						if (cli.or_filter)
+						for (i32 i = 0; i < sample_bmp.dim.x * sample_bmp.dim.y; i += 1)
 						{
-							for (i32 i = 0; i < sample_bmp.dim_x * sample_bmp.dim_y; i += 1)
+							if (cli.or_filter)
 							{
 								meltingpot.data[i].r |= sample_bmp.data[i].r;
 								meltingpot.data[i].g |= sample_bmp.data[i].g;
 								meltingpot.data[i].b |= sample_bmp.data[i].b;
 								meltingpot.data[i].a |= sample_bmp.data[i].a;
 							}
-						}
-						else
-						{
-							for (i32 i = 0; i < sample_bmp.dim_x * sample_bmp.dim_y; i += 1)
+							else
 							{
-								weights[i].r += sample_bmp.data[i].r;
-								weights[i].g += sample_bmp.data[i].g;
-								weights[i].b += sample_bmp.data[i].b;
-								weights[i].a += sample_bmp.data[i].a;
+								weights[i].x += sample_bmp.data[i].r;
+								weights[i].y += sample_bmp.data[i].g;
+								weights[i].z += sample_bmp.data[i].b;
+								weights[i].w += sample_bmp.data[i].a;
 							}
 						}
 
@@ -851,15 +881,15 @@ main(int argc, char** argv)
 				{
 					if (!cli.or_filter)
 					{
-						for (i32 i = 0; i < meltingpot.dim_x * meltingpot.dim_y; i += 1)
+						for (i32 i = 0; i < meltingpot.dim.x * meltingpot.dim.y; i += 1)
 						{
 							meltingpot.data[i] =
 								(struct BMPPixel)
 								{
-									.r = u8(weights[i].r / images_processed),
-									.g = u8(weights[i].g / images_processed),
-									.b = u8(weights[i].b / images_processed),
-									.a = u8(weights[i].a / images_processed),
+									.r = u8(weights[i].x / images_processed),
+									.g = u8(weights[i].y / images_processed),
+									.b = u8(weights[i].z / images_processed),
+									.a = u8(weights[i].w / images_processed),
 								};
 						}
 					}
@@ -869,14 +899,16 @@ main(int argc, char** argv)
 					printf
 					(
 						"\n"
-						"Meltingpotted %d images.\n",
+						"Meltingpotted %d images.\n"
+						"\n",
 						images_processed
 					);
 					if (images_skipped)
 					{
 						printf
 						(
-							"Skipped %d images.\n",
+							"... but skipped %d images!\n"
+							"\n",
 							images_skipped
 						);
 					}
@@ -896,7 +928,6 @@ main(int argc, char** argv)
 	}
 
 	debug_halt();
-
 	return 0;
 }
 
