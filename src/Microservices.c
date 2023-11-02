@@ -809,7 +809,206 @@ main(int argc, char** argv)
 
 			case CLIProgram_stretchie:
 			{
-				debug_halt(); // TODO
+				struct CLIProgram_stretchie_t cli = cli_unknown.stretchie;
+
+				if (!create_dir(cli.output_dir_path.str, cli.clear_output_dir) && !cli.clear_output_dir)
+				{
+					error("Output directory \"%s\" is not empty. Use (--clear-output-dir) to empty the directory for processing.\n", cli.output_dir_path.cstr);
+				}
+
+				i32 images_processed = 0;
+
+				struct BMP stretchied_bmp =
+					{
+						.dim.x = MASK_DIM,
+						.dim.y = MASK_DIM,
+					};
+				alloc(&stretchied_bmp.data, stretchied_bmp.dim.x * stretchied_bmp.dim.y);
+
+				struct DirBMPIteratorState iterator_state =
+					{
+						.dir_path = cli.input_dir_path.str
+					};
+				struct BMP orig_bmp = {0};
+				while (iterate_dir_bmp_alloc(&orig_bmp, &iterator_state))
+				{
+					for (i32 stretchied_y = 0; stretchied_y < stretchied_bmp.dim.y; stretchied_y += 1)
+					{
+						for (i32 stretchied_x = 0; stretchied_x < stretchied_bmp.dim.x; stretchied_x += 1)
+						{
+							stretchied_bmp.data[stretchied_y * stretchied_bmp.dim.x + stretchied_x] =
+								orig_bmp.data
+								[
+									i32(f64(stretchied_y) / f64(stretchied_bmp.dim.y) * f64(orig_bmp.dim.y)) * orig_bmp.dim.x
+										+ i32(f64(stretchied_x) / f64(stretchied_bmp.dim.x) * f64(orig_bmp.dim.x))
+								];
+						}
+					}
+
+					struct StrBuf file_path = StrBuf(256);
+					strbuf_str (&file_path, cli.output_dir_path.str);
+					strbuf_char(&file_path, '\\');
+					strbuf_cstr(&file_path, iterator_state.finder_data.cFileName);
+					bmp_export(stretchied_bmp, file_path.str);
+
+					printf("% 4d : \"%s\".\n", images_processed + 1, iterator_state.finder_data.cFileName);
+
+					images_processed += 1;
+
+					free(orig_bmp.data);
+				}
+
+				if (images_processed)
+				{
+					printf
+					(
+						"\n"
+						"Stretchie'd %d images.\n"
+						"\n",
+						images_processed
+					);
+				}
+				else
+				{
+					printf
+					(
+						"No images were stretchie'd.\n"
+						"\n"
+					);
+				}
+
+				free(stretchied_bmp.data);
+			} break;
+
+			case CLIProgram_collectune:
+			{
+				struct CLIProgram_collectune_t cli = cli_unknown.collectune;
+
+				if (!create_dir(cli.output_dir_path.str, cli.clear_output_dir) && !cli.clear_output_dir)
+				{
+					error("Output directory \"%s\" is not empty. Use (--clear-output-dir) to empty the directory for processing.\n", cli.output_dir_path.cstr);
+				}
+
+				struct BMP masks[Letter_COUNT] = {0};
+				for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
+				{
+					//
+					// Create folder to collect best matching letters into.
+					//
+
+					{
+						struct StrBuf letter_dir_path = StrBuf(256);
+						strbuf_str (&letter_dir_path, cli.output_dir_path.str);
+						strbuf_char(&letter_dir_path, '\\');
+						strbuf_str (&letter_dir_path, LETTER_NAMES[letter]);
+						create_dir(letter_dir_path.str, cli.clear_output_dir);
+					}
+
+					//
+					// Load mask of the letter.
+					//
+
+					{
+						struct StrBuf mask_file_path = StrBuf(256);
+						strbuf_str (&mask_file_path, cli.mask_dir_path.str);
+						strbuf_char(&mask_file_path, '\\');
+						strbuf_str (&mask_file_path, LETTER_NAMES[letter]);
+						strbuf_cstr(&mask_file_path, ".bmp");
+						masks[letter] = bmp_alloc_read_file(mask_file_path.str);
+						if (masks[letter].dim.x != MASK_DIM || masks[letter].dim.y != MASK_DIM)
+						{
+							error
+							(
+								"Mask \"%.*s\" does not have mask dimensions (%dx%d).\n",
+								i32(cli.mask_dir_path.str.length), cli.mask_dir_path.str.data,
+								MASK_DIM, MASK_DIM
+							);
+						}
+					}
+				}
+
+				i32 images_processed = 0;
+
+				struct DirBMPIteratorState iterator_state =
+					{
+						.dir_path = cli.unsorted_dir_path.str
+					};
+				struct BMP bmp = {0};
+				while (iterate_dir_bmp_alloc(&bmp, &iterator_state))
+				{
+					if (bmp.dim.x == MASK_DIM && bmp.dim.y == MASK_DIM)
+					{
+						enum Letter best_matching_letter = Letter_COUNT;
+						i32         best_matching_score  = 0;
+
+						for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
+						{
+							i32 score = 0;
+							for (i32 y = 0; y < bmp.dim.y; y += 1)
+							{
+								for (i32 x = 0; x < bmp.dim.x; x += 1)
+								{
+									if
+									(
+										bmp.data[y * bmp.dim.x + x].r == masks[letter].data[y * masks[letter].dim.x + x].r &&
+										bmp.data[y * bmp.dim.x + x].g == masks[letter].data[y * masks[letter].dim.x + x].g &&
+										bmp.data[y * bmp.dim.x + x].b == masks[letter].data[y * masks[letter].dim.x + x].b &&
+										bmp.data[y * bmp.dim.x + x].a == masks[letter].data[y * masks[letter].dim.x + x].a
+									)
+									{
+										score += 1;
+									}
+								}
+							}
+
+							if (best_matching_score < score)
+							{
+								best_matching_letter = letter;
+								best_matching_score  = score;
+							}
+						}
+
+						assert(best_matching_letter != Letter_COUNT);
+
+						struct StrBuf file_path = StrBuf(256);
+						strbuf_str (&file_path, cli.output_dir_path.str);
+						strbuf_char(&file_path, '\\');
+						strbuf_str (&file_path, LETTER_NAMES[best_matching_letter]);
+						strbuf_char(&file_path, '\\');
+						strbuf_cstr(&file_path, iterator_state.finder_data.cFileName);
+						bmp_export(bmp, file_path.str);
+
+						printf("% 4d : \"%s\".\n", images_processed + 1, iterator_state.finder_data.cFileName);
+
+						images_processed += 1;
+					}
+
+					free(bmp.data);
+				}
+
+				if (images_processed)
+				{
+					printf
+					(
+						"\n"
+						"Collectune'd %d images.\n"
+						"\n",
+						images_processed
+					);
+				}
+				else
+				{
+					printf
+					(
+						"No images were monochromized.\n"
+						"\n"
+					);
+				}
+
+				for (i32 i = 0; i < countof(masks); i += 1)
+				{
+					free(masks[i].data);
+				}
 			} break;
 
 			case CLIProgram_meltingpot:
@@ -927,7 +1126,6 @@ main(int argc, char** argv)
 		}
 	}
 
-	debug_halt();
 	return 0;
 }
 

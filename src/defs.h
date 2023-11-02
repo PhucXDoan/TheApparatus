@@ -204,27 +204,17 @@ struct BMP // Left-right, bottom-up.
 	i32_2            dim;
 };
 
-struct BMPCIEXYZTRIPLE // "CIEXYZTRIPLE" in Windows's "wingdi.h".
-{
-	struct
-	{
-		u32 ciexyzX;
-		u32 ciexyzY;
-		u32 ciexyzZ;
-	} ciexyzRed, ciexyzGreen, ciexyzBlue;
-};
-
 enum BMPCompression // See: Source(23) @ Section(2.1.1.7) @ Page(119).
 {
-	BMPCompression_BI_RGB       = 0x0,
-	BMPCompression_BI_RLE8      = 0x1,
-	BMPCompression_BI_RLE4      = 0x2,
-	BMPCompression_BI_BITFIELDS = 0x3,
-	BMPCompression_BI_JPEG      = 0x4,
-	BMPCompression_BI_PNG       = 0x5,
-	BMPCompression_BI_CMYK      = 0xB,
-	BMPCompression_BI_CMYKRLE8  = 0xC,
-	BMPCompression_BI_CMYKRLE4  = 0xD,
+	BMPCompression_RGB       = 0x0,
+	BMPCompression_RLE8      = 0x1,
+	BMPCompression_RLE4      = 0x2,
+	BMPCompression_BITFIELDS = 0x3,
+	BMPCompression_JPEG      = 0x4,
+	BMPCompression_PNG       = 0x5,
+	BMPCompression_CMYK      = 0xB,
+	BMPCompression_CMYKRLE8  = 0xC,
+	BMPCompression_CMYKRLE4  = 0xD,
 };
 
 enum BMPColorSpace
@@ -258,85 +248,61 @@ struct BMPRGBQuad // See: "RGBQUAD" @ Source(22) @ Page(1344).
 	u8 rgbReserved;
 };
 
+
 #pragma pack(push, 1)
-union BMPDIBHeader
+struct BMPDIBHeader // "BITMAPCOREHEADER" not supported.
 {
-	u32 size; // Helps determine which of the following headers below are used.
+	//
+	// Base fields of "BITMAPINFOHEADER". See: Source(22) @ Page(287).
+	//
 
-	struct BMPDIBHeaderCore // See: "BITMAPCOREHEADER" @ Source(22) @ Page(277).
-	{
-		u32 bcSize;    // Must be sizeof(struct BMPDIBHeaderCore).
-		u16 bcWidth;
-		u16 bcHeight;
-		u16 bcPlanes;
-		u16 bcBitCount;
-	} core;
+	u32 Size;          // Must be at least 40.
+	i32 Width;         // Width of image after decompression.
+	i32 Height;        // Generally, height of image where positive is bottom-up and negative is top-down, but check documentation.
+	u16 Planes;        // Must be 1.
+	u16 BitCount;      // Bits per pixel.
+	u32 Compression;   // Either BMPCompression_BI_RGB or BMPCompression_BI_BITFIELDS.
+	u32 SizeImage;     // Byte count of the image; can be zero for uncompressed RGB images.
+	i32 XPelsPerMeter;
+	i32 YPelsPerMeter;
+	u32 ClrUsed;       // Colors used in color table; zero means the colors used is determined with 2^biBitCount.
+	u32 ClrImportant;
 
-	struct BMPDIBHeaderInfo // See: "BITMAPINFOHEADER" @ Source(22) @ Page(287).
-	{
-		u32 biSize;          // Must be sizeof(struct BMPDIBHeaderInfo).
-		i32 biWidth;         // Width of image after decompression.
-		i32 biHeight;        // Generally, height of image where positive is bottom-up and negative is top-down, but check documentation.
-		u16 biPlanes;        // Must be 1.
-		u16 biBitCount;      // Bits per pixel.
-		u32 biCompression;   // Either BMPCompression_BI_RGB or BMPCompression_BI_BITFIELDS.
-		u32 biSizeImage;     // Byte count of the image; can be zero for uncompressed RGB images.
-		i32 biXPelsPerMeter; // Irrelevant.
-		i32 biYPelsPerMeter; // Irrelevant.
-		u32 biClrUsed;       // Colors used in color table; zero means the colors used is determined with 2^biBitCount.
-		u32 biClrImportant;  // Pretty much irrelevant.
-	} info;
+	//
+	// Later additions of the DIB header simply append new fields. See: Source(24).
+	//
 
-	struct BMPDIBHeaderV4 // See: "BITMAPV4HEADER" @ Source(22) @ Page(293).
+	#define BMPDIBHEADER_MIN_SIZE_V2 52
+	struct // See: "BITMAPV2INFOHEADER" @ Source(24).
 	{
-		u32                    bV4Size;          // Must be sizeof(struct BMPDIBHeaderV4).
-		i32                    bV4Width;         // Width of image after decompression.
-		i32                    bV4Height;        // Height of image where positive is bottom-up and negative is top-down. Must conform to bV5Compression's restrictions.
-		u16                    bV4Planes;        // Must be 1.
-		u16                    bV4BitCount;      // Bits per pixel.
-		u32                    bV4Compression;   // Aliasing enum BMPCompression.
-		u32                    bV4SizeImage;     // Meaning varies depending on the compression method used.
-		i32                    bV4XPelsPerMeter; // Irrelevant.
-		i32                    bV4YPelsPerMeter; // Irrelevant.
-		u32                    bV4ClrUsed;       // Colors used in color table.
-		u32                    bV4ClrImportant;  // Pretty much irrelevant.
-		u32                    bV4RedMask;       // When bV5Compression is CompressionMethod_BI_BITFIELDS, bit mask for the red channel.
-		u32                    bV4GreenMask;     // When bV5Compression is CompressionMethod_BI_BITFIELDS, bit mask for the green channel.
-		u32                    bV4BlueMask;      // When bV5Compression is CompressionMethod_BI_BITFIELDS, bit mask for the blue channel.
-		u32                    bV4AlphaMask;     // Bit mask for the alpha channel; doesn't say anything about bV5Compression though...
-		u32                    bV4CSType;        // Minor; if we want to be extremely color-correct, we should probably consider this, but nah...
-		struct BMPCIEXYZTRIPLE bV4Endpoints;     // Minor; stuff with color spaces.
-		u32                    bV4GammaRed;      // Minor.
-		u32                    bV4GammaGreen;    // Minor.
-		u32                    bV4GammaBlue;     // Minor.
+		u32 RedMask;
+		u32 GreenMask;
+		u32 BlueMask;
+	} v2;
+
+	#define BMPDIBHEADER_MIN_SIZE_V3 56
+	struct // See: "BITMAPV3INFOHEADER" @ Source(24).
+	{
+		u32 AlphaMask;
+	} v3;
+
+	#define BMPDIBHEADER_MIN_SIZE_V4 108
+	struct // See: "BITMAPV4HEADER" @ Source(22) @ Page(293).
+	{
+		u32 CSType;
+		u32 Endpoints[9];
+		u32 GammaRed;
+		u32 GammaGreen;
+		u32 GammaBlue;
 	} v4;
 
-	struct BMPDIBHeaderV5 // See: "BITMAPV5HEADER" @ Source(22) @ Page(300).
+	#define BMPDIBHEADER_MIN_SIZE_V5 124
+	struct // See: "BITMAPV5HEADER" @ Source(22) @ Page(300).
 	{
-		u32                    bV5Size;          // Must be sizeof(struct BMPDIBHeaderV5).
-		i32                    bV5Width;         // Width of image after decompression.
-		i32                    bV5Height;        // Height of image where positive is bottom-up and negative is top-down. Must conform to bV5Compression's restrictions.
-		u16                    bV5Planes;        // Must be 1.
-		u16                    bV5BitCount;      // Bits per pixel.
-		u32                    bV5Compression;   // Aliasing enum BMPCompression.
-		u32                    bV5SizeImage;     // Meaning varies depending on the compression method used.
-		i32                    bV5XPelsPerMeter; // Irrelevant.
-		i32                    bV5YPelsPerMeter; // Irrelevant.
-		u32                    bV5ClrUsed;       // Colors used in color table.
-		u32                    bV5ClrImportant;  // Pretty much irrelevant.
-		u32                    bV5RedMask;       // When bV5Compression is CompressionMethod_BI_BITFIELDS, bit mask for the red channel.
-		u32                    bV5GreenMask;     // When bV5Compression is CompressionMethod_BI_BITFIELDS, bit mask for the green channel.
-		u32                    bV5BlueMask;      // When bV5Compression is CompressionMethod_BI_BITFIELDS, bit mask for the blue channel.
-		u32                    bV5AlphaMask;     // Bit mask for the alpha channel; doesn't say anything about bV5Compression though...
-		u32                    bV5CSType;        // Minor; if we want to be extremely color-correct, we should probably consider this, but nah...
-		struct BMPCIEXYZTRIPLE bV5Endpoints;     // Minor; stuff with color spaces.
-		u32                    bV5GammaRed;      // Minor.
-		u32                    bV5GammaGreen;    // Minor.
-		u32                    bV5GammaBlue;     // Minor.
-		u32                    bV5Intent;        // Minor.
-		u32                    bV5ProfileData;   // Minor.
-		u32                    bV5ProfileSize;   // Minor.
-		u32                    bV5Reserved;
+		u32 Intent;
+		u32 ProfileData;
+		u32 ProfileSize;
+		u32 Reserved;
 	} v5;
 };
 #pragma pack(pop)
@@ -1513,7 +1479,8 @@ struct USBConfig // This layout is defined uniquely for our device application.
 #define CLI_PROGRAM_XMDT(X) \
 	X(extractor   , "Create a BMP of each slot in screenshots of Game Pigeon word games.") \
 	X(monochromize, "Convert each BMP into a strictly black and white image.") \
-	X(stretchie   , "Resize BMPs into the standard size of 1 Stretchie(TM) unit.") \
+	X(stretchie   , "Resize BMPs into the common square mask.") \
+	X(collectune  , "Copy BMPs into folder with the closest matching mask.") \
 	X(meltingpot  , "Average together BMPs.")
 
 #define CLI_PROGRAM_extractor_FIELD_XMDT(X, ...) \
@@ -1530,6 +1497,12 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	X(input_dir_path  , string, "input-dir-path"    , "Directory path of the BMPs.",##__VA_ARGS__) \
 	X(output_dir_path , string, "output-dir-path"   , "Destination directory to store the stretchie'd BMPs.",##__VA_ARGS__) \
 	X(clear_output_dir, b32   , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
+
+#define CLI_PROGRAM_collectune_FIELD_XMDT(X, ...) \
+	X(mask_dir_path    , string, "mask-dir-path"     , "Directory path of the masks.",##__VA_ARGS__) \
+	X(unsorted_dir_path, string, "unsorted-dir-path" , "Directory path of the BMPs to be sorted.",##__VA_ARGS__) \
+	X(output_dir_path  , string, "output-dir-path"   , "Destination directory to store the collections.",##__VA_ARGS__) \
+	X(clear_output_dir , b32   , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
 
 #define CLI_PROGRAM_meltingpot_FIELD_XMDT(X, ...) \
 	X(input_dir_path  , string, "input-dir-path"  , "Directory path of the BMPs.",##__VA_ARGS__) \
@@ -1696,42 +1669,16 @@ enum WordGame
 
 
 
-#define REDUCED_SLOT_MAX_DIM 64
-// #define ANAGRAMS_6_SLOT_DIM      195
-// #define ANAGRAMS_6_BOARD_POS_X   0
-// #define ANAGRAMS_6_BOARD_POS_Y   311
-// #define ANAGRAMS_6_BOARD_SLOTS_X 6
-// #define ANAGRAMS_6_BOARD_SLOTS_Y 1
-// static_assert(ANAGRAMS_6_BOARD_POS_X + ANAGRAMS_6_BOARD_SLOTS_X * ANAGRAMS_6_SLOT_DIM <= PHONE_DIM_PX_X); // Should not obviously exceed phone screen boundries.
-// static_assert(ANAGRAMS_6_BOARD_POS_Y + ANAGRAMS_6_BOARD_SLOTS_Y * ANAGRAMS_6_SLOT_DIM <= PHONE_DIM_PX_Y); // Should not obviously exceed phone screen boundries.
-// 
-// #define WORDHUNT_4x4_SLOT_DIM      212
-// #define WORDHUNT_4x4_BOARD_POS_X   161
-// #define WORDHUNT_4x4_BOARD_POS_Y   494
-// #define WORDHUNT_4x4_BOARD_SLOTS_X 4
-// #define WORDHUNT_4x4_BOARD_SLOTS_Y 4
-// static_assert(WORDHUNT_4x4_BOARD_POS_X + WORDHUNT_4x4_BOARD_SLOTS_X * WORDHUNT_4x4_SLOT_DIM <= PHONE_DIM_PX_X); // Should not obviously exceed phone screen boundries.
-// static_assert(WORDHUNT_4x4_BOARD_POS_Y + WORDHUNT_4x4_BOARD_SLOTS_Y * WORDHUNT_4x4_SLOT_DIM <= PHONE_DIM_PX_Y); // Should not obviously exceed phone screen boundries.
-// 
-// #define WORDBITES_SLOT_DIM      140
-// #define WORDBITES_BOARD_POS_X   25
-// #define WORDBITES_BOARD_POS_Y   354
-// #define WORDBITES_BOARD_SLOTS_X 8
-// #define WORDBITES_BOARD_SLOTS_Y 9
-// static_assert(WORDBITES_BOARD_POS_X + WORDBITES_BOARD_SLOTS_X * WORDBITES_SLOT_DIM <= PHONE_DIM_PX_X); // Should not obviously exceed phone screen boundries.
-// static_assert(WORDBITES_BOARD_POS_Y + WORDBITES_BOARD_SLOTS_Y * WORDBITES_SLOT_DIM <= PHONE_DIM_PX_Y); // Should not obviously exceed phone screen boundries.
-
-
-
-
-
 #define MONOCHROMIZE_THRESHOLD 8
+#define MASK_DIM               64
 
-#define LETTER_XMDT(_X) \
-	_X(space) \
-	_X(A) _X(B) _X(C) _X(D) _X(E) _X(F) _X(G) _X(H) _X(I) _X(J) _X(K) _X(L) _X(M) \
-	_X(N) _X(O) _X(P) _X(Q) _X(R) _X(S) _X(T) _X(U) _X(V) _X(W) _X(X) _X(Y) _X(Z) \
-	_X(Ne)
+#define LETTER_XMDT(X) \
+	X(space) \
+	X(a) X(b) X(c) X(d) X(e) X(f) X(g) X(h) X(i) X(j) X(k) X(l) X(m) \
+	X(n) X(o) X(p) X(q) X(r) X(s) X(t) X(u) X(v) X(w) X(x) X(y) X(z) \
+	X(boris) X(chelovek) X(dmitri) X(fyodor) X(gregory) X(ivan) X(ivan_kratkiy) X(leonid) X(myagkiy_znak) X(pavel) X(shura) X(ulyana) X(zhenya) X(zinaida) \
+	X(a_umlaut) X(o_umlaut) \
+	X(ene)
 
 enum Letter
 {
@@ -1777,7 +1724,8 @@ enum Letter
 	Source(20) := "How to Use MMC/SDC" by Elm-Chan (Updated on: December 26, 2019).
 	Source(21) := "8-bit Atmel Microcontroller with 64/128Kbytes of ISP Flash and USB Controller" datasheet (Dated: 9/12).
 	Source(22) := Microsofts's "Windows GDI" PDF Article (Dated: 01/24/2023).
-	Source(23) :=  PDF Article of Microsoft's "Open Specifications" for Protocols (Dated: 08/01/2023).
+	Source(23) := PDF Article of Microsoft's "Open Specifications" for Protocols (Dated: 08/01/2023).
+	Source(24) := Wikipedia's "BMP file format" Page (Last Edited: 23 October 2022, at 13:30 (UTC)).
 
 	We are working within the environment of the ATmega32U4 and ATmega2560 microcontrollers,
 	which are 8-bit CPUs. This consequently means that there are no padding bytes to

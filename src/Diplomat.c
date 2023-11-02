@@ -52,7 +52,7 @@ main(void)
 
 	#define ANAGRAMS_LANGUAGE_COUNT 6
 	u8 prev_anagrams_language_index = 0;
-	u8 curr_anagrams_language_index = 0;
+	u8 curr_anagrams_language_index = 3;
 	b8 anagrams_use_seven_letters   = false;
 
 	#define WORDHUNT_MAP_COUNT 4
