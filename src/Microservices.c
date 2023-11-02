@@ -12,7 +12,7 @@
 #include <math.h>
 #include "defs.h"
 #include "misc.c"
-#include "str.c"
+#include "string.c"
 #include "dary.c"
 #include "Microservices_fs.c"
 #include "Microservices_bmp.c"
@@ -101,15 +101,15 @@ print_cli_program_help(str exe_name, enum CLIProgram program)
 struct DirBMPIteratorState
 {
 	str              dir_path;
+	struct BMP       bmp;
 	HANDLE           finder_handle;
 	WIN32_FIND_DATAA finder_data;
 	b32              inited;
 };
 static b32 // Found BMP.
-iterate_dir_bmp_alloc(struct BMP* dst_bmp, struct DirBMPIteratorState* state) // TODO Maybe have BMP automatically freed?
+iterate_dir_bmp_alloc(struct DirBMPIteratorState* state)
 {
 	b32 found_bmp = false;
-	*dst_bmp  = (struct BMP) {0};
 
 	if (!state->inited)
 	{
@@ -127,6 +127,8 @@ iterate_dir_bmp_alloc(struct BMP* dst_bmp, struct DirBMPIteratorState* state) //
 
 	if (state->finder_handle != INVALID_HANDLE_VALUE)
 	{
+		free(state->bmp.data);
+
 		while (true)
 		{
 			if (state->inited)
@@ -162,7 +164,7 @@ iterate_dir_bmp_alloc(struct BMP* dst_bmp, struct DirBMPIteratorState* state) //
 				strbuf_char(&file_path, '\\');
 				strbuf_cstr(&file_path, state->finder_data.cFileName);
 
-				*dst_bmp  = bmp_alloc_read_file(file_path.str);
+				state->bmp = bmp_alloc_read_file(file_path.str);
 
 				found_bmp = true;
 				break;
@@ -410,10 +412,9 @@ main(int argc, char** argv)
 					{
 						.dir_path = cli.input_dir_path.str
 					};
-				struct BMP screenshot = {0};
-				while (iterate_dir_bmp_alloc(&screenshot, &iterator_state))
+				while (iterate_dir_bmp_alloc(&iterator_state))
 				{
-					if (screenshot.dim.x == EXTRACTOR_SCREENSHOT_DIM_X && screenshot.dim.y == EXTRACTOR_SCREENSHOT_DIM_Y)
+					if (iterator_state.bmp.dim.x == EXTRACTOR_SCREENSHOT_DIM_X && iterator_state.bmp.dim.y == EXTRACTOR_SCREENSHOT_DIM_Y)
 					{
 						enum WordGame identified_wordgame = WordGame_COUNT;
 
@@ -443,9 +444,9 @@ main(int argc, char** argv)
 									x += 1
 								)
 								{
-									test_region_rgb.x += screenshot.data[y * screenshot.dim.x + x].r;
-									test_region_rgb.y += screenshot.data[y * screenshot.dim.x + x].g;
-									test_region_rgb.z += screenshot.data[y * screenshot.dim.x + x].b;
+									test_region_rgb.x += iterator_state.bmp.data[y * iterator_state.bmp.dim.x + x].r;
+									test_region_rgb.y += iterator_state.bmp.data[y * iterator_state.bmp.dim.x + x].g;
+									test_region_rgb.z += iterator_state.bmp.data[y * iterator_state.bmp.dim.x + x].b;
 								}
 							}
 							test_region_rgb.x /= 256.0 * WORDGAME_INFO[wordgame].test_region_dim.x * WORDGAME_INFO[wordgame].test_region_dim.y;
@@ -495,9 +496,9 @@ main(int argc, char** argv)
 												for (i32 slot_px_x = 0; slot_px_x < WORDGAME_INFO[wordgame].slot_dim; slot_px_x += 1)
 												{
 													struct BMPPixel pixel =
-														screenshot.data
+														iterator_state.bmp.data
 														[
-															(WORDGAME_INFO[wordgame].board_pos.y + slot_coord_y * WORDGAME_INFO[wordgame].slot_stride + slot_px_y) * screenshot.dim.x
+															(WORDGAME_INFO[wordgame].board_pos.y + slot_coord_y * WORDGAME_INFO[wordgame].slot_stride + slot_px_y) * iterator_state.bmp.dim.x
 																+ (WORDGAME_INFO[wordgame].board_pos.x + slot_coord_x * WORDGAME_INFO[wordgame].slot_stride + slot_px_x)
 														];
 													slot.data[slot_px_y * slot.dim.x + slot_px_x] = pixel;
@@ -580,8 +581,6 @@ main(int argc, char** argv)
 							iterator_state.finder_data.cFileName
 						);
 					}
-
-					free(screenshot.data);
 				}
 
 				//
@@ -652,14 +651,13 @@ main(int argc, char** argv)
 					{
 						.dir_path = cli.input_dir_path.str
 					};
-				struct BMP bmp = {0};
-				while (iterate_dir_bmp_alloc(&bmp, &iterator_state))
+				while (iterate_dir_bmp_alloc(&iterator_state))
 				{
-					for (i32 y = 0; y < bmp.dim.y; y += 1)
+					for (i32 y = 0; y < iterator_state.bmp.dim.y; y += 1)
 					{
-						for (i32 x = 0; x < bmp.dim.x; x += 1)
+						for (i32 x = 0; x < iterator_state.bmp.dim.x; x += 1)
 						{
-							struct BMPPixel* pixel = &bmp.data[y * bmp.dim.x + x];
+							struct BMPPixel* pixel = &iterator_state.bmp.data[y * iterator_state.bmp.dim.x + x];
 
 							if ((pixel->r + pixel->g + pixel->b) / 3 <= MONOCHROMIZE_THRESHOLD)
 							{
@@ -678,11 +676,9 @@ main(int argc, char** argv)
 					strbuf_str (&file_path, cli.output_dir_path.str);
 					strbuf_char(&file_path, '\\');
 					strbuf_cstr(&file_path, iterator_state.finder_data.cFileName);
-					bmp_export(bmp, file_path.str);
+					bmp_export(iterator_state.bmp, file_path.str);
 
 					printf("[MONOCHROMIZE] %4d : \"%s\".\n", images_processed, iterator_state.finder_data.cFileName);
-
-					free(bmp.data);
 				}
 
 				if (images_processed)
@@ -728,18 +724,17 @@ main(int argc, char** argv)
 					{
 						.dir_path = cli.input_dir_path.str
 					};
-				struct BMP orig_bmp = {0};
-				while (iterate_dir_bmp_alloc(&orig_bmp, &iterator_state))
+				while (iterate_dir_bmp_alloc(&iterator_state))
 				{
 					for (i32 stretchied_y = 0; stretchied_y < stretchied_bmp.dim.y; stretchied_y += 1)
 					{
 						for (i32 stretchied_x = 0; stretchied_x < stretchied_bmp.dim.x; stretchied_x += 1)
 						{
 							stretchied_bmp.data[stretchied_y * stretchied_bmp.dim.x + stretchied_x] =
-								orig_bmp.data
+								iterator_state.bmp.data
 								[
-									i32(f64(stretchied_y) / f64(stretchied_bmp.dim.y) * f64(orig_bmp.dim.y)) * orig_bmp.dim.x
-										+ i32(f64(stretchied_x) / f64(stretchied_bmp.dim.x) * f64(orig_bmp.dim.x))
+									i32(f64(stretchied_y) / f64(stretchied_bmp.dim.y) * f64(iterator_state.bmp.dim.y)) * iterator_state.bmp.dim.x
+										+ i32(f64(stretchied_x) / f64(stretchied_bmp.dim.x) * f64(iterator_state.bmp.dim.x))
 								];
 						}
 					}
@@ -753,8 +748,6 @@ main(int argc, char** argv)
 					printf("[STRETCHIE] % 4d : \"%s\".\n", images_processed + 1, iterator_state.finder_data.cFileName);
 
 					images_processed += 1;
-
-					free(orig_bmp.data);
 				}
 
 				if (images_processed)
@@ -831,10 +824,9 @@ main(int argc, char** argv)
 					{
 						.dir_path = cli.unsorted_dir_path.str
 					};
-				struct BMP bmp = {0};
-				while (iterate_dir_bmp_alloc(&bmp, &iterator_state))
+				while (iterate_dir_bmp_alloc(&iterator_state))
 				{
-					if (bmp.dim.x == MASK_DIM && bmp.dim.y == MASK_DIM)
+					if (iterator_state.bmp.dim.x == MASK_DIM && iterator_state.bmp.dim.y == MASK_DIM)
 					{
 						enum Letter best_matching_letter = Letter_COUNT;
 						i32         best_matching_score  = 0;
@@ -842,16 +834,16 @@ main(int argc, char** argv)
 						for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
 						{
 							i32 score = 0;
-							for (i32 y = 0; y < bmp.dim.y; y += 1)
+							for (i32 y = 0; y < iterator_state.bmp.dim.y; y += 1)
 							{
-								for (i32 x = 0; x < bmp.dim.x; x += 1)
+								for (i32 x = 0; x < iterator_state.bmp.dim.x; x += 1)
 								{
 									if
 									(
-										bmp.data[y * bmp.dim.x + x].r == masks[letter].data[y * masks[letter].dim.x + x].r &&
-										bmp.data[y * bmp.dim.x + x].g == masks[letter].data[y * masks[letter].dim.x + x].g &&
-										bmp.data[y * bmp.dim.x + x].b == masks[letter].data[y * masks[letter].dim.x + x].b &&
-										bmp.data[y * bmp.dim.x + x].a == masks[letter].data[y * masks[letter].dim.x + x].a
+										iterator_state.bmp.data[y * iterator_state.bmp.dim.x + x].r == masks[letter].data[y * masks[letter].dim.x + x].r &&
+										iterator_state.bmp.data[y * iterator_state.bmp.dim.x + x].g == masks[letter].data[y * masks[letter].dim.x + x].g &&
+										iterator_state.bmp.data[y * iterator_state.bmp.dim.x + x].b == masks[letter].data[y * masks[letter].dim.x + x].b &&
+										iterator_state.bmp.data[y * iterator_state.bmp.dim.x + x].a == masks[letter].data[y * masks[letter].dim.x + x].a
 									)
 									{
 										score += 1;
@@ -874,14 +866,12 @@ main(int argc, char** argv)
 						strbuf_str (&file_path, LETTER_NAMES[best_matching_letter]);
 						strbuf_char(&file_path, '\\');
 						strbuf_cstr(&file_path, iterator_state.finder_data.cFileName);
-						bmp_export(bmp, file_path.str);
+						bmp_export(iterator_state.bmp, file_path.str);
 
-						printf("% 4d : \"%s\".\n", images_processed + 1, iterator_state.finder_data.cFileName);
+						printf("[CollecTune(TM)] % 4d : \"%s\".\n", images_processed + 1, iterator_state.finder_data.cFileName);
 
 						images_processed += 1;
 					}
-
-					free(bmp.data);
 				}
 
 				if (images_processed)
@@ -921,8 +911,7 @@ main(int argc, char** argv)
 					{
 						.dir_path = cli.input_dir_path.str
 					};
-				struct BMP sample_bmp = {0};
-				while (iterate_dir_bmp_alloc(&sample_bmp, &iterator_state))
+				while (iterate_dir_bmp_alloc(&iterator_state))
 				{
 					//
 					// Initialize meltingpotted BMP based on first found BMP.
@@ -932,11 +921,11 @@ main(int argc, char** argv)
 					{
 						if (!cli.or_filter)
 						{
-							alloc(&weights, sample_bmp.dim.x * sample_bmp.dim.y);
+							alloc(&weights, iterator_state.bmp.dim.x * iterator_state.bmp.dim.y);
 						}
 
-						meltingpot.dim.x = sample_bmp.dim.x;
-						meltingpot.dim.y = sample_bmp.dim.y;
+						meltingpot.dim.x = iterator_state.bmp.dim.x;
+						meltingpot.dim.y = iterator_state.bmp.dim.y;
 						alloc(&meltingpot.data, meltingpot.dim.x * meltingpot.dim.y);
 
 						printf
@@ -952,23 +941,23 @@ main(int argc, char** argv)
 					// Add some diversity.
 					//
 
-					if (sample_bmp.dim.x == meltingpot.dim.x && sample_bmp.dim.y == meltingpot.dim.y)
+					if (iterator_state.bmp.dim.x == meltingpot.dim.x && iterator_state.bmp.dim.y == meltingpot.dim.y)
 					{
-						for (i32 i = 0; i < sample_bmp.dim.x * sample_bmp.dim.y; i += 1)
+						for (i32 i = 0; i < iterator_state.bmp.dim.x * iterator_state.bmp.dim.y; i += 1)
 						{
 							if (cli.or_filter)
 							{
-								meltingpot.data[i].r |= sample_bmp.data[i].r;
-								meltingpot.data[i].g |= sample_bmp.data[i].g;
-								meltingpot.data[i].b |= sample_bmp.data[i].b;
-								meltingpot.data[i].a |= sample_bmp.data[i].a;
+								meltingpot.data[i].r |= iterator_state.bmp.data[i].r;
+								meltingpot.data[i].g |= iterator_state.bmp.data[i].g;
+								meltingpot.data[i].b |= iterator_state.bmp.data[i].b;
+								meltingpot.data[i].a |= iterator_state.bmp.data[i].a;
 							}
 							else
 							{
-								weights[i].x += sample_bmp.data[i].r;
-								weights[i].y += sample_bmp.data[i].g;
-								weights[i].z += sample_bmp.data[i].b;
-								weights[i].w += sample_bmp.data[i].a;
+								weights[i].x += iterator_state.bmp.data[i].r;
+								weights[i].y += iterator_state.bmp.data[i].g;
+								weights[i].z += iterator_state.bmp.data[i].b;
+								weights[i].w += iterator_state.bmp.data[i].a;
 							}
 						}
 
@@ -980,8 +969,6 @@ main(int argc, char** argv)
 						printf("\t[MELTINGPOT] Deporting \"%s\".\n", iterator_state.finder_data.cFileName);
 						images_skipped += 1;
 					}
-
-					free(sample_bmp.data);
 				}
 
 				if (images_processed)
@@ -1030,87 +1017,187 @@ main(int argc, char** argv)
 			{
 				struct CLIProgram_maskiverse_t cli = cli_unknown.maskiverse;
 
-				struct BMP masks[Letter_COUNT] = {0};
+				printf("[MASKIVERSE PHASE 1] Analyzing masks...\n");
+
+				i64                             longest_letter_name_length = 0;
+				struct BMP                      masks[Letter_COUNT]        = {0};
+				struct { i32 bottom; i32 top; } empty_rows[Letter_COUNT]   = {0};
 				for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
 				{
+					if (longest_letter_name_length < LETTER_NAMES[letter].length)
+					{
+						longest_letter_name_length = LETTER_NAMES[letter].length;
+					}
+
+					struct StrBuf mask_file_path = StrBuf(256);
+					strbuf_str (&mask_file_path, cli.dir_path.str);
+					strbuf_char(&mask_file_path, '\\');
+					strbuf_str (&mask_file_path, LETTER_NAMES[letter]);
+					strbuf_cstr(&mask_file_path, ".bmp");
+					masks[letter] = bmp_alloc_read_file(mask_file_path.str);
+					if (masks[letter].dim.x != MASK_DIM || masks[letter].dim.y != MASK_DIM)
+					{
+						error
+						(
+							"Mask \"%.*s\" does not have mask dimensions (%dx%d).\n",
+							i32(cli.dir_path.str.length), cli.dir_path.str.data,
+							MASK_DIM, MASK_DIM
+						);
+					}
+
 					//
-					// Load mask of the letter.
+					// Count amount of empty bottom rows.
 					//
 
+					static_assert(MASK_DIM >= 16);
+					for (i32 i = 0; i < 16; i += 1)
 					{
-						struct StrBuf mask_file_path = StrBuf(256);
-						strbuf_str (&mask_file_path, cli.dir_path.str);
-						strbuf_char(&mask_file_path, '\\');
-						strbuf_str (&mask_file_path, LETTER_NAMES[letter]);
-						strbuf_cstr(&mask_file_path, ".bmp");
-						masks[letter] = bmp_alloc_read_file(mask_file_path.str);
-						if (masks[letter].dim.x != MASK_DIM || masks[letter].dim.y != MASK_DIM)
+						b32 row_empty = true;
+						for (i32 x = 0; x < masks[letter].dim.x; x += 1)
 						{
-							error
-							(
-								"Mask \"%.*s\" does not have mask dimensions (%dx%d).\n",
-								i32(cli.dir_path.str.length), cli.dir_path.str.data,
-								MASK_DIM, MASK_DIM
-							);
+							if (masks[letter].data[i * masks[letter].dim.x + x].r)
+							{
+								row_empty = false;
+								break;
+							}
+						}
+
+						if (row_empty)
+						{
+							empty_rows[letter].bottom += 1;
+							if (empty_rows[letter].bottom >= 16)
+							{
+								error("Too many empty bottom rows in \"%.*s\" for row-reduction!", i32(cli.dir_path.str.length), cli.dir_path.str.data);
+							}
+						}
+						else
+						{
+							break;
+						}
+					}
+
+					//
+					// Count amount of top bottom rows.
+					//
+
+					static_assert(MASK_DIM >= 16);
+					for (i32 i = 0; i < 16; i += 1)
+					{
+						b32 row_empty = true;
+						for (i32 x = 0; x < masks[letter].dim.x; x += 1)
+						{
+							if (masks[letter].data[(masks[letter].dim.y - 1 - i) * masks[letter].dim.x + x].r)
+							{
+								row_empty = false;
+								break;
+							}
+						}
+
+						if (row_empty)
+						{
+							empty_rows[letter].top += 1;
+							if (empty_rows[letter].top >= 16)
+							{
+								error("Too many empty top rows in \"%.*s\" for row-reduction!", i32(cli.dir_path.str.length), cli.dir_path.str.data);
+							}
+						}
+						else
+						{
+							break;
 						}
 					}
 				}
 
-				HANDLE c_source_handle = {0};
-				{
-					struct StrBuf file_path = StrBuf(256);
-					strbuf_str (&file_path, cli.dir_path.str);
-					strbuf_cstr(&file_path, "\\masks.h");
-					c_source_handle = create_file_writing_handle(file_path.str);
-				}
+				printf("[MASKIVERSE PHASE 2] Generating row-reduced masks...\n");
 
-				struct StrBuf output_buf = StrBuf(1024);
+				struct StrBuf c_source_file_path = StrBuf(256);
+				strbuf_str (&c_source_file_path, cli.dir_path.str);
+				strbuf_cstr(&c_source_file_path, "\\masks.h");
+				HANDLE c_source_handle = create_file_writing_handle(c_source_file_path.str);
+
+				struct StrBuf output_buf = StrBuf(256);
 
 				for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
 				{
-					strbuf_cstr(&output_buf, "{ // [");
-					strbuf_i64 (&output_buf, letter);
-					strbuf_cstr(&output_buf, "] \"");
+					strbuf_cstr(&output_buf, "static const u8 ROW_REDUCED_MASK_");
 					strbuf_str (&output_buf, LETTER_NAMES[letter]);
-					strbuf_cstr(&output_buf, "\".\n");
-					for (i32 y = 0; y < masks[letter].dim.y; y += 1)
+					strbuf_cstr(&output_buf, "[][MASK_DIM / 8] PROGMEM =\n");
+					strbuf_cstr(&output_buf, "\t{\n");
+					for
+					(
+						i32 y = empty_rows[letter].bottom;
+						y < masks[letter].dim.y - empty_rows[letter].top;
+						y += 1
+					)
 					{
-						static_assert(MASK_DIM == 64);
+						static_assert(MASK_DIM % 8 == 0);
 						for
 						(
 							i32 x_major = 0;
 							x_major < masks[letter].dim.x;
-							x_major += 64
+							x_major += 8
 						)
 						{
-							if (x_major)
+							if (!x_major)
 							{
-								strbuf_char(&output_buf, ' ');
-							}
-							else
-							{
-								strbuf_cstr(&output_buf, "\t");
+								strbuf_cstr(&output_buf, "\t\t{");
 							}
 
-							u64 literal = 0;
+							u8 literal = 0;
 							for
 							(
 								i32 x_minor = 0;
-								x_minor < 64 && x_major + x_minor < masks[letter].dim.x;
+								x_minor < 8 && x_major + x_minor < masks[letter].dim.x;
 								x_minor += 1
 							)
 							{
-								literal |= u64(!!masks[letter].data[y * masks[letter].dim.x + x_major + x_minor].r) << x_minor;
+								literal |= u8(!!masks[letter].data[y * masks[letter].dim.x + x_major + x_minor].r) << x_minor;
 							}
 
-							strbuf_cstr(&output_buf, "0x");
-							strbuf_64H (&output_buf, literal);
-							strbuf_cstr(&output_buf, ",\n");
+							strbuf_cstr(&output_buf, " 0b");
+							strbuf_8b  (&output_buf, literal);
+							strbuf_char(&output_buf, ',');
 						}
+						strbuf_cstr(&output_buf, " },\n");
 						write_flush_strbuf(c_source_handle, &output_buf);
 					}
-					strbuf_cstr(&output_buf, "},\n");
+					strbuf_cstr(&output_buf, "\t};\n");
+					write_flush_strbuf(c_source_handle, &output_buf);
 				}
+
+				printf("[MASKIVERSE PHASE 3] Generating entries...\n");
+
+				strbuf_cstr(&output_buf, "const struct RowReducedMaskEntry ROW_REDUCED_MASK_ENTRIES[] PROGMEM =\n");
+				strbuf_cstr(&output_buf, "\t{\n");
+				for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
+				{
+					strbuf_cstr  (&output_buf, "\t\t[Letter_");
+					strbuf_str   (&output_buf, LETTER_NAMES[letter]);
+					strbuf_char_n(&output_buf, ' ', longest_letter_name_length - LETTER_NAMES[letter].length);
+					strbuf_cstr  (&output_buf, "] = { .data = (const u8*) ROW_REDUCED_MASK_");
+
+					strbuf_str   (&output_buf, LETTER_NAMES[letter]);
+					strbuf_char_n(&output_buf, ' ', longest_letter_name_length - LETTER_NAMES[letter].length);
+					strbuf_cstr  (&output_buf, ", .empty_rows = 0b");
+
+					for (i32 i = 0; i < 4; i += 1)
+					{
+						strbuf_char(&output_buf, '0' + ((empty_rows[letter].top >> (3 - i) & 1)));
+					}
+					strbuf_char(&output_buf, '\'');
+					for (i32 i = 0; i < 4; i += 1)
+					{
+						strbuf_char(&output_buf, '0' + ((empty_rows[letter].bottom >> (3 - i) & 1)));
+					}
+
+					strbuf_cstr(&output_buf, " },\n");
+
+					write_flush_strbuf(c_source_handle, &output_buf);
+				}
+				strbuf_cstr(&output_buf, "\t};\n");
+				write_flush_strbuf(c_source_handle, &output_buf);
+
+				printf("[MASKIVERSE: ENDGAME] Complete!\n");
 
 				close_file_writing_handle(c_source_handle);
 				for (i32 i = 0; i < countof(masks); i += 1)

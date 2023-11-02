@@ -21,11 +21,6 @@
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE HaltSource_diplomat
 
-static const u64 MASKS[Letter_COUNT][64] PROGMEM =
-	{
-		#include "dummy_masks.h"
-	};
-
 static void
 click(u8 x, u8 y)
 {

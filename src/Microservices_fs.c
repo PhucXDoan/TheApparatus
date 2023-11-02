@@ -89,10 +89,10 @@ close_file_writing_handle(HANDLE file_writing_handle)
 }
 
 static void
-write_raw_data(HANDLE file_writing_handle, void* data, u32 size)
+write_raw_data(HANDLE file_writing_handle, void* data, i64 size)
 {
 	DWORD bytes_written = {0};
-	if (!WriteFile(file_writing_handle, data, size, &bytes_written, 0) || bytes_written != size)
+	if (!WriteFile(file_writing_handle, data, u32(size), &bytes_written, 0) || bytes_written != u32(size))
 	{
 		error("Failed to write.");
 	}
@@ -101,6 +101,6 @@ write_raw_data(HANDLE file_writing_handle, void* data, u32 size)
 static void
 write_flush_strbuf(HANDLE file_writing_handle, struct StrBuf* buf)
 {
-	write_raw_data(file_writing_handle, buf->data, u32(buf->length));
+	write_raw_data(file_writing_handle, buf->data, buf->length);
 	buf->length = 0;
 }

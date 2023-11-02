@@ -139,6 +139,27 @@ typedef struct { b64 x; b64 y; b64 z; b64 w; } b64_4;
 static_assert(LITTLE_ENDIAN);
 
 //
+// "string.c"
+//
+
+#if PROGRAM_MICROSERVICES
+	#define StrBuf(SIZE) ((struct StrBuf) { .data = (char[SIZE]) {0}, .size = (SIZE) })
+	struct StrBuf
+	{
+		union
+		{
+			struct
+			{
+				char* data;
+				i64   length;
+				i64   size;
+			};
+			str str;
+		};
+	};
+#endif
+
+//
 // "dary.c"
 //
 
@@ -164,27 +185,6 @@ struct Dary_void
 		}; \
 	}
 #define Dary_def(TYPE) Dary_define(TYPE, TYPE)
-
-//
-// "str.c"
-//
-
-#if PROGRAM_MICROSERVICES
-	#define StrBuf(SIZE) ((struct StrBuf) { .data = (char[SIZE]) {0}, .size = (SIZE) })
-	struct StrBuf
-	{
-		union
-		{
-			struct
-			{
-				char* data;
-				i64   length;
-				i64   size;
-			};
-			str str;
-		};
-	};
-#endif
 
 //
 // "Microservices_bmp.c"
@@ -217,16 +217,12 @@ enum BMPCompression // See: Source(23) @ Section(2.1.1.7) @ Page(119).
 	BMPCompression_CMYKRLE4  = 0xD,
 };
 
-enum BMPColorSpace
+struct BMPRGBQuad // See: "RGBQUAD" @ Source(22) @ Page(1344).
 {
-	// See: "LogicalColorSpace" @ Source(23) @ Section(2.1.1.14) @ Page(127).
-	BMPColorSpace_LCS_CALIBRATED_RGB      = 0x00000000,
-	BMPColorSpace_LCS_sRGB                = 0x73524742,
-	BMPColorSpace_LCS_WINDOWS_COLOR_SPACE = 0x57696E20,
-
-	// See: "LogicalColorSpaceV5" @ Source(23) @ Section(2.1.1.15) @ Page(128).
-	BMPColorSpace_LCS_PROFILE_LINKED   = 0x4C494E4B,
-	BMPColorSpace_LCS_PROFILE_EMBEDDED = 0x4D424544,
+	u8 rgbBlue;
+	u8 rgbGreen;
+	u8 rgbRed;
+	u8 rgbReserved;
 };
 
 #pragma pack(push, 1)
@@ -239,14 +235,6 @@ struct BMPFileHeader // See: "BITMAPFILEHEADER" @ Source(22) @ Page(281).
 	u32 bfOffBits;   // Byte offset into the BMP file where the image's pixel data is stored.
 };
 #pragma pack(pop)
-
-struct BMPRGBQuad // See: "RGBQUAD" @ Source(22) @ Page(1344).
-{
-	u8 rgbBlue;
-	u8 rgbGreen;
-	u8 rgbRed;
-	u8 rgbReserved;
-};
 
 #pragma pack(push, 1)
 struct BMPDIBHeader // "BITMAPCOREHEADER" not supported.
@@ -1676,11 +1664,11 @@ enum WordGame
 #define MASK_DIM               64
 
 #define LETTER_XMDT(X) \
-	X(space) \
 	X(a) X(b) X(c) X(d) X(e) X(f) X(g) X(h) X(i) X(j) X(k) X(l) X(m) \
 	X(n) X(o) X(p) X(q) X(r) X(s) X(t) X(u) X(v) X(w) X(x) X(y) X(z) \
-	X(boris) X(chelovek) X(dmitri) X(echo) X(fyodor) X(gregory) X(ivan) X(ivan_kratkiy) \
-	X(leonid) X(myagkiy_znak) X(pavel) X(tsaplya) X(shura) X(ulyana) X(yery) X(zhenya) X(zinaida) \
+	X(boris  ) X(chelovek    ) X(dmitri) X(echo   ) X(fyodor) X(gregory) X(ivan) X(ivan_kratkiy) \
+	X(leonid ) X(myagkiy_znak) X(pavel ) X(tsaplya) X(shura ) X(ulyana ) X(yery) X(zhenya      ) \
+	X(zinaida) \
 	X(a_umlaut) X(o_umlaut) X(u_umlaut) X(eszett) \
 	X(ene)
 
@@ -1700,6 +1688,12 @@ enum Letter
 			#undef MAKE
 		};
 #endif
+
+struct RowReducedMaskEntry
+{
+	const u8* data;
+	u8        empty_rows; // Least significant nibble stores amount of empty rows from bottom, most significant nibble stores aount of empty rows on top.
+};
 
 //
 // Documentation.
