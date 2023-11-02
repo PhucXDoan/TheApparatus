@@ -13,63 +13,8 @@
 #include "defs.h"
 #include "misc.c"
 #include "str.c"
-#include "strbuf.c"
 #include "dary.c"
-
-static b32 // Directory is empty.
-create_dir(str dir_path, b32 delete_content)
-{
-	struct StrBuf formatted_dir_path = StrBuf(256);
-	for (i32 i = 0; i < dir_path.length; i += 1)
-	{
-		if (dir_path.data[i] == '/')
-		{
-			strbuf_char(&formatted_dir_path, '\\');
-		}
-		else
-		{
-			strbuf_char(&formatted_dir_path, dir_path.data[i]);
-		}
-	}
-	strbuf_char(&formatted_dir_path, '\\');
-	strbuf_char(&formatted_dir_path, '\0');
-
-	if (!MakeSureDirectoryPathExists(formatted_dir_path.data))
-	{
-		error("Failed create directory path \"%s\".", formatted_dir_path.data);
-	}
-
-	b32 empty = PathIsDirectoryEmptyA(formatted_dir_path.data);
-	if (!empty && delete_content)
-	{
-		struct StrBuf double_nullterminated_output_dir_path = StrBuf(256);
-		strbuf_str (&double_nullterminated_output_dir_path, dir_path);
-		strbuf_char(&double_nullterminated_output_dir_path, '\0');
-		strbuf_char(&double_nullterminated_output_dir_path, '\0');
-
-		SHFILEOPSTRUCTA file_operation =
-			{
-				.wFunc             = FO_DELETE,
-				.pFrom             = double_nullterminated_output_dir_path.data,
-				.pTo               = "\0",
-				.fFlags            = FOF_NOCONFIRMATION,
-				.lpszProgressTitle = "",
-			};
-
-		if (SHFileOperationA(&file_operation) || file_operation.fAnyOperationsAborted)
-		{
-			error("Clearing directory \"%s\" failed.", formatted_dir_path.data);
-		}
-
-		if (!MakeSureDirectoryPathExists(formatted_dir_path.data)) // Create the directory since emptying it will delete it too.
-		{
-			error("Failed create directory path \"%s\".", formatted_dir_path.data);
-		}
-	}
-
-	return empty;
-}
-
+#include "Microservices_fs.c"
 #include "Microservices_bmp.c"
 
 static i32 // Amount of characters printed.
@@ -735,7 +680,7 @@ main(int argc, char** argv)
 					strbuf_cstr(&file_path, iterator_state.finder_data.cFileName);
 					bmp_export(bmp, file_path.str);
 
-					printf("%[MONOCHROMIZE] 4d : \"%s\".\n", images_processed, iterator_state.finder_data.cFileName);
+					printf("[MONOCHROMIZE] %4d : \"%s\".\n", images_processed, iterator_state.finder_data.cFileName);
 
 					free(bmp.data);
 				}
@@ -1078,6 +1023,99 @@ main(int argc, char** argv)
 				else
 				{
 					printf("No BMPs found.\n");
+				}
+			} break;
+
+			case CLIProgram_maskiverse:
+			{
+				struct CLIProgram_maskiverse_t cli = cli_unknown.maskiverse;
+
+				struct BMP masks[Letter_COUNT] = {0};
+				for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
+				{
+					//
+					// Load mask of the letter.
+					//
+
+					{
+						struct StrBuf mask_file_path = StrBuf(256);
+						strbuf_str (&mask_file_path, cli.dir_path.str);
+						strbuf_char(&mask_file_path, '\\');
+						strbuf_str (&mask_file_path, LETTER_NAMES[letter]);
+						strbuf_cstr(&mask_file_path, ".bmp");
+						masks[letter] = bmp_alloc_read_file(mask_file_path.str);
+						if (masks[letter].dim.x != MASK_DIM || masks[letter].dim.y != MASK_DIM)
+						{
+							error
+							(
+								"Mask \"%.*s\" does not have mask dimensions (%dx%d).\n",
+								i32(cli.dir_path.str.length), cli.dir_path.str.data,
+								MASK_DIM, MASK_DIM
+							);
+						}
+					}
+				}
+
+				HANDLE c_source_handle = {0};
+				{
+					struct StrBuf file_path = StrBuf(256);
+					strbuf_str (&file_path, cli.dir_path.str);
+					strbuf_cstr(&file_path, "\\masks.h");
+					c_source_handle = create_file_writing_handle(file_path.str);
+				}
+
+				struct StrBuf output_buf = StrBuf(1024);
+
+				for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
+				{
+					strbuf_cstr(&output_buf, "{ // [");
+					strbuf_i64 (&output_buf, letter);
+					strbuf_cstr(&output_buf, "] \"");
+					strbuf_str (&output_buf, LETTER_NAMES[letter]);
+					strbuf_cstr(&output_buf, "\".\n");
+					for (i32 y = 0; y < masks[letter].dim.y; y += 1)
+					{
+						static_assert(MASK_DIM == 64);
+						for
+						(
+							i32 x_major = 0;
+							x_major < masks[letter].dim.x;
+							x_major += 64
+						)
+						{
+							if (x_major)
+							{
+								strbuf_char(&output_buf, ' ');
+							}
+							else
+							{
+								strbuf_cstr(&output_buf, "\t");
+							}
+
+							u64 literal = 0;
+							for
+							(
+								i32 x_minor = 0;
+								x_minor < 64 && x_major + x_minor < masks[letter].dim.x;
+								x_minor += 1
+							)
+							{
+								literal |= u64(!!masks[letter].data[y * masks[letter].dim.x + x_major + x_minor].r) << x_minor;
+							}
+
+							strbuf_cstr(&output_buf, "0x");
+							strbuf_64H (&output_buf, literal);
+							strbuf_cstr(&output_buf, ",\n");
+						}
+						write_flush_strbuf(c_source_handle, &output_buf);
+					}
+					strbuf_cstr(&output_buf, "},\n");
+				}
+
+				close_file_writing_handle(c_source_handle);
+				for (i32 i = 0; i < countof(masks); i += 1)
+				{
+					free(masks[i].data);
 				}
 			} break;
 

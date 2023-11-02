@@ -213,26 +213,7 @@ bmp_alloc_read_file(str file_path)
 static void
 bmp_export(struct BMP src, str file_path)
 {
-	str file_dir = file_path;
-	while (file_dir.length && file_dir.data[file_dir.length - 1] != '/' && file_dir.data[file_dir.length - 1] != '\\')
-	{
-		file_dir.length -= 1;
-	}
-
-	create_dir(file_dir, false);
-
-	char file_path_cstr[256] = {0};
-	if (file_path.length >= countof(file_path_cstr))
-	{
-		error("File path too long.");
-	}
-	memmove(file_path_cstr, file_path.data, file_path.length);
-
-	HANDLE file_handle = CreateFileA(file_path_cstr, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
-	if (file_handle == INVALID_HANDLE_VALUE)
-	{
-		error("Failed to write \"%s\".", file_path_cstr);
-	}
+	HANDLE file_handle = create_file_writing_handle(file_path);
 
 	struct BMPDIBHeader dib_header =
 		{
@@ -254,23 +235,9 @@ bmp_export(struct BMP src, str file_path)
 			.bfOffBits = sizeof(file_header) + dib_header.Size,
 		};
 
-	#define WRITE(SRC_PTR, SRC_SIZE) \
-		do \
-		{ \
-			DWORD bytes_written = {0}; \
-			if (!WriteFile(file_handle, (SRC_PTR), (SRC_SIZE), &bytes_written, 0) || bytes_written != (SRC_SIZE)) \
-			{ \
-				error("Failed to write to \"%s\".", file_path_cstr); \
-			} \
-		} \
-		while (false)
+	write_raw_data(file_handle, &file_header, sizeof(file_header));
+	write_raw_data(file_handle, &dib_header, dib_header.Size);
+	write_raw_data(file_handle, src.data, src.dim.x * src.dim.y * sizeof(struct BMPPixel));
 
-	WRITE(&file_header, sizeof(file_header));
-	WRITE(&dib_header, dib_header.Size);
-	WRITE(src.data, src.dim.x * src.dim.y * sizeof(struct BMPPixel));
-
-	if (!CloseHandle(file_handle))
-	{
-		error("Failed to close \"%s\".", file_path_cstr);
-	}
+	close_file_writing_handle(file_handle);
 }

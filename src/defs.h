@@ -166,7 +166,7 @@ struct Dary_void
 #define Dary_def(TYPE) Dary_define(TYPE, TYPE)
 
 //
-// "strbuf.c"
+// "str.c"
 //
 
 #if PROGRAM_MICROSERVICES
@@ -1480,7 +1480,8 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	X(monochromize, "Convert each BMP into a strictly black and white image.") \
 	X(stretchie   , "Resize BMPs into the common square mask.") \
 	X(collectune  , "Copy BMPs into folder with the closest matching mask.") \
-	X(meltingpot  , "Average together BMPs.")
+	X(meltingpot  , "Average together BMPs.") \
+	X(maskiverse  , "Format masks into data formatted for C to be included into compilation.")
 
 #define CLI_PROGRAM_extractor_FIELD_XMDT(X, ...) \
 	X(input_dir_path  , string, "screenshot-dir-path", "Directory path that'll be filtered for screenshots of the games.",##__VA_ARGS__) \
@@ -1507,6 +1508,9 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	X(input_dir_path  , string, "input-dir-path"  , "Directory path of the BMPs.",##__VA_ARGS__) \
 	X(output_file_path, string, "output-file-path", "File path of the result.",##__VA_ARGS__) \
 	X(or_filter       , b32   , "--or"            , "Logical OR each pixel instead of averaging.",##__VA_ARGS__)
+
+#define CLI_PROGRAM_maskiverse_FIELD_XMDT(X, ...) \
+	X(dir_path, string, "dir-path" , "Directory path of the mask BMPs. Output will be dumped here.",##__VA_ARGS__) \
 
 #define CLI_TYPING_XMDT(X) \
 	X(string     , union { struct { char* data; i64 length; }; char* cstr; str str; }) \
@@ -1675,8 +1679,9 @@ enum WordGame
 	X(space) \
 	X(a) X(b) X(c) X(d) X(e) X(f) X(g) X(h) X(i) X(j) X(k) X(l) X(m) \
 	X(n) X(o) X(p) X(q) X(r) X(s) X(t) X(u) X(v) X(w) X(x) X(y) X(z) \
-	X(boris) X(chelovek) X(dmitri) X(fyodor) X(gregory) X(ivan) X(ivan_kratkiy) X(leonid) X(myagkiy_znak) X(pavel) X(shura) X(ulyana) X(zhenya) X(zinaida) \
-	X(a_umlaut) X(o_umlaut) \
+	X(boris) X(chelovek) X(dmitri) X(echo) X(fyodor) X(gregory) X(ivan) X(ivan_kratkiy) \
+	X(leonid) X(myagkiy_znak) X(pavel) X(tsaplya) X(shura) X(ulyana) X(yery) X(zhenya) X(zinaida) \
+	X(a_umlaut) X(o_umlaut) X(u_umlaut) X(eszett) \
 	X(ene)
 
 enum Letter

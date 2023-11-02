@@ -3,7 +3,7 @@ setlocal EnableDelayedExpansion
 
 cls
 
-set FOLDER=anagrams_6
+set FOLDER=temp
 
 W:\build\Microservices.exe extractor    W:\data\screenshots\!FOLDER!\ W:\data\extractor\!FOLDER!\ --clear-output-dir
 W:\build\Microservices.exe monochromize W:\data\extractor\!FOLDER!\ W:\data\monochromize\!FOLDER!\ --clear-output-dir
@@ -15,3 +15,5 @@ for /D %%i in (W:\data\collectune\!FOLDER!\*) do (
 )
 
 REM W:\build\Microservices.exe meltingpot W:\data\monochromize\!FOLDER!\ W:\data\meltingpot\!FOLDER!.bmp --or
+
+REM W:\build\Microservices.exe maskiverse W:\data\masks\
