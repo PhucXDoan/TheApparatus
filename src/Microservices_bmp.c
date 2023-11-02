@@ -1,5 +1,3 @@
-// TODO fopen complains when a directory does not exist.
-
 static struct BMP
 bmp_alloc_read_file(str file_path)
 {
@@ -215,6 +213,14 @@ bmp_alloc_read_file(str file_path)
 static void
 bmp_export(struct BMP src, str file_path)
 {
+	str file_dir = file_path;
+	while (file_dir.length && file_dir.data[file_dir.length - 1] != '/' && file_dir.data[file_dir.length - 1] != '\\')
+	{
+		file_dir.length -= 1;
+	}
+
+	create_dir(file_dir, false);
+
 	char file_path_cstr[256] = {0};
 	if (file_path.length >= countof(file_path_cstr))
 	{
@@ -222,10 +228,10 @@ bmp_export(struct BMP src, str file_path)
 	}
 	memmove(file_path_cstr, file_path.data, file_path.length);
 
-	FILE* file = fopen(file_path_cstr, "wb");
-	if (!file)
+	HANDLE file_handle = CreateFileA(file_path_cstr, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+	if (file_handle == INVALID_HANDLE_VALUE)
 	{
-		error("`fopen` failed.");
+		error("Failed to write \"%s\".", file_path_cstr);
 	}
 
 	struct BMPDIBHeader dib_header =
@@ -248,24 +254,23 @@ bmp_export(struct BMP src, str file_path)
 			.bfOffBits = sizeof(file_header) + dib_header.Size,
 		};
 
-	if (fwrite(&file_header, sizeof(file_header), 1, file) != 1)
-	{
-		error("Failed to write BMP file header.");
-	}
+	#define WRITE(SRC_PTR, SRC_SIZE) \
+		do \
+		{ \
+			DWORD bytes_written = {0}; \
+			if (!WriteFile(file_handle, (SRC_PTR), (SRC_SIZE), &bytes_written, 0) || bytes_written != (SRC_SIZE)) \
+			{ \
+				error("Failed to write to \"%s\".", file_path_cstr); \
+			} \
+		} \
+		while (false)
 
-	if (fwrite(&dib_header, dib_header.Size, 1, file) != 1)
-	{
-		error("Failed to write DIB header.");
-	}
+	WRITE(&file_header, sizeof(file_header));
+	WRITE(&dib_header, dib_header.Size);
+	WRITE(src.data, src.dim.x * src.dim.y * sizeof(struct BMPPixel));
 
-	i64 write_size = src.dim.x * src.dim.y * sizeof(*src.data);
-	if (write_size && fwrite(src.data, write_size, 1, file) != 1)
+	if (!CloseHandle(file_handle))
 	{
-		error("Failed to write pixel data.");
-	}
-
-	if (fclose(file))
-	{
-		error("`fclose` failed.");
+		error("Failed to close \"%s\".", file_path_cstr);
 	}
 }

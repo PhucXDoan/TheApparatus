@@ -187,7 +187,7 @@ struct Dary_void
 #endif
 
 //
-// "bmp.c"
+// "Microservices_bmp.c"
 //
 
 struct BMPPixel
@@ -247,7 +247,6 @@ struct BMPRGBQuad // See: "RGBQUAD" @ Source(22) @ Page(1344).
 	u8 rgbRed;
 	u8 rgbReserved;
 };
-
 
 #pragma pack(push, 1)
 struct BMPDIBHeader // "BITMAPCOREHEADER" not supported.

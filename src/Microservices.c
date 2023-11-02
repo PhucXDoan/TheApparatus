@@ -14,7 +14,6 @@
 #include "misc.c"
 #include "str.c"
 #include "strbuf.c"
-#include "bmp.c"
 #include "dary.c"
 
 static b32 // Directory is empty.
@@ -70,6 +69,8 @@ create_dir(str dir_path, b32 delete_content)
 
 	return empty;
 }
+
+#include "Microservices_bmp.c"
 
 static i32 // Amount of characters printed.
 print_cli_field_pattern(str pattern)
@@ -160,7 +161,7 @@ struct DirBMPIteratorState
 	b32              inited;
 };
 static b32 // Found BMP.
-iterate_dir_bmp_alloc(struct BMP* dst_bmp, struct DirBMPIteratorState* state)
+iterate_dir_bmp_alloc(struct BMP* dst_bmp, struct DirBMPIteratorState* state) // TODO Maybe have BMP automatically freed?
 {
 	b32 found_bmp = false;
 	*dst_bmp  = (struct BMP) {0};
@@ -230,13 +231,9 @@ iterate_dir_bmp_alloc(struct BMP* dst_bmp, struct DirBMPIteratorState* state)
 int
 main(int argc, char** argv)
 {
-	//
-	// Determine CLI program.
-	//
-
 	enum CLIProgram cli_program = CLIProgram_COUNT;
 
-	if (argc >= 2)
+	if (argc >= 2) // Determine CLI program.
 	{
 		for (enum CLIProgram program = {0}; program < CLIProgram_COUNT; program += 1)
 		{
@@ -253,11 +250,7 @@ main(int argc, char** argv)
 		}
 	}
 
-	//
-	//
-	//
-
-	if (argc <= 2) // Provide CLI help if needed.
+	if (argc <= 2) // Provide CLI help.
 	{
 		str exe_name = argc ? str_cstr(argv[0]) : str(CLI_EXE_NAME);
 
@@ -455,19 +448,18 @@ main(int argc, char** argv)
 		{
 			case CLIProgram_extractor:
 			{
-				struct CLIProgram_extractor_t cli = cli_unknown.extractor;
+				struct CLIProgram_extractor_t cli                  = cli_unknown.extractor;
+				i32                           screenshots_examined = 0;
+				i32                           unknown_games        = 0;
+				i32                           slots_extracted      = 0;
+				f64_3                         accumulated_unknown_game_test_region_rgbs[WordGame_COUNT] = {0};
 
 				if (!create_dir(cli.output_dir_path.str, cli.clear_output_dir) && !cli.clear_output_dir)
 				{
 					error("Output directory \"%s\" is not empty. Use (--clear-output-dir) to empty the directory for processing.\n", cli.output_dir_path.cstr);
 				}
 
-				printf("Processing \"%s\".\n", cli.input_dir_path.cstr);
-
-				i32   screenshots_examined = 0;
-				i32   unknown_games        = 0;
-				i32   slots_extracted      = 0;
-				f64_3 accumulated_unknown_game_test_region_rgbs[WordGame_COUNT] = {0};
+				printf("EXTRACTOR EXTRACTIN' FROM \"%s\"!!\n", cli.input_dir_path.cstr);
 
 				struct DirBMPIteratorState iterator_state =
 					{
@@ -516,7 +508,7 @@ main(int argc, char** argv)
 							test_region_rgb.z /= 256.0 * WORDGAME_INFO[wordgame].test_region_dim.x * WORDGAME_INFO[wordgame].test_region_dim.y;
 
 							//
-							// Check average RGB of test region.
+							// Extract slots.
 							//
 
 							if
@@ -615,9 +607,7 @@ main(int argc, char** argv)
 						// Print details about the screenshot.
 						//
 
-						screenshots_examined += 1;
 						str game_name = {0};
-
 						if (identified_wordgame < WordGame_COUNT)
 						{
 							game_name = WORDGAME_INFO[identified_wordgame].print_name;
@@ -635,9 +625,11 @@ main(int argc, char** argv)
 							}
 						}
 
+						screenshots_examined += 1;
+
 						printf
 						(
-							"% 4d : %.*s : \"%s\".\n",
+							"[extractor] % 4d : %.*s : \"%s\".\n",
 							screenshots_examined,
 							i32(game_name.length), game_name.data,
 							iterator_state.finder_data.cFileName
@@ -656,8 +648,8 @@ main(int argc, char** argv)
 					printf
 					(
 						"\n"
-						"Examined %d screenshots.\n"
-						"Extracted %d slots.\n"
+						"EXTRACTOR EXTRACTED FROM %d SCREENSHOTS!\n"
+						"EXTRACTOR EXTRACTED %d SLOTS!!\n"
 						"\n",
 						screenshots_examined,
 						slots_extracted
@@ -695,7 +687,7 @@ main(int argc, char** argv)
 				{
 					printf
 					(
-						"No screenshots found.\n"
+						"EXTRACTOR AIN'T EXTRACTED NO SCREENSHOTS!!\n"
 						"\n"
 					);
 				}
@@ -703,27 +695,13 @@ main(int argc, char** argv)
 
 			case CLIProgram_monochromize:
 			{
-				struct CLIProgram_monochromize_t cli = cli_unknown.monochromize;
+				struct CLIProgram_monochromize_t cli              = cli_unknown.monochromize;
+				i32                              images_processed = 0;
 
 				if (!create_dir(cli.output_dir_path.str, cli.clear_output_dir) && !cli.clear_output_dir)
 				{
 					error("Output directory \"%s\" is not empty. Use (--clear-output-dir) to empty the directory for processing.\n", cli.output_dir_path.cstr);
 				}
-
-				i32 images_processed = 0;
-
-				enum Side
-				{
-					Side_left   = 2,
-					Side_right  = 0,
-					Side_top    = 1,
-					Side_bottom = 3,
-				};
-				struct
-				{
-					i32  pos;
-					char file_name_cstr[256];
-				} bounding_sides[4] = { { -1 }, { -1 }, { -1 }, { -1 } };
 
 				struct DirBMPIteratorState iterator_state =
 					{
@@ -741,23 +719,6 @@ main(int argc, char** argv)
 							if ((pixel->r + pixel->g + pixel->b) / 3 <= MONOCHROMIZE_THRESHOLD)
 							{
 								*pixel = (struct BMPPixel) { .r = 255, .g = 255, .b = 255, .a = 255 };
-
-								#define MAKE(SIDE, OP, COORDINATE) \
-									if (bounding_sides[SIDE].pos == -1 || bounding_sides[SIDE].pos OP COORDINATE) \
-									{ \
-										bounding_sides[SIDE].pos = COORDINATE; \
-										strncpy \
-										( \
-											bounding_sides[SIDE].file_name_cstr, \
-											iterator_state.finder_data.cFileName, \
-											countof(bounding_sides[SIDE].file_name_cstr) \
-										); \
-									}
-								MAKE(Side_left  , >, x);
-								MAKE(Side_right , <, x);
-								MAKE(Side_top   , <, y);
-								MAKE(Side_bottom, >, y);
-								#undef MAKE
 							}
 							else
 							{
@@ -766,15 +727,15 @@ main(int argc, char** argv)
 						}
 					}
 
+					images_processed += 1;
+
 					struct StrBuf file_path = StrBuf(256);
 					strbuf_str (&file_path, cli.output_dir_path.str);
 					strbuf_char(&file_path, '\\');
 					strbuf_cstr(&file_path, iterator_state.finder_data.cFileName);
 					bmp_export(bmp, file_path.str);
 
-					printf("% 4d : \"%s\".\n", images_processed + 1, iterator_state.finder_data.cFileName);
-
-					images_processed += 1;
+					printf("%[MONOCHROMIZE] 4d : \"%s\".\n", images_processed, iterator_state.finder_data.cFileName);
 
 					free(bmp.data);
 				}
@@ -785,16 +746,9 @@ main(int argc, char** argv)
 					(
 						"\n"
 						"Monochromized %d images.\n"
-						"Left-most   active pixel at x = %-4d : \"%s\".\n"
-						"Right-most  active pixel at x = %-4d : \"%s\".\n"
-						"Top-most    active pixel at y = %-4d : \"%s\".\n"
-						"Bottom-most active pixel at y = %-4d : \"%s\".\n"
+						"Thank you.\n"
 						"\n",
-						images_processed,
-						bounding_sides[Side_left  ].pos, bounding_sides[Side_left  ].file_name_cstr,
-						bounding_sides[Side_right ].pos, bounding_sides[Side_right ].file_name_cstr,
-						bounding_sides[Side_top   ].pos, bounding_sides[Side_top   ].file_name_cstr,
-						bounding_sides[Side_bottom].pos, bounding_sides[Side_bottom].file_name_cstr
+						images_processed
 					);
 				}
 				else
@@ -802,6 +756,7 @@ main(int argc, char** argv)
 					printf
 					(
 						"No images were monochromized.\n"
+						"Screw you.\n"
 						"\n"
 					);
 				}
@@ -809,14 +764,8 @@ main(int argc, char** argv)
 
 			case CLIProgram_stretchie:
 			{
-				struct CLIProgram_stretchie_t cli = cli_unknown.stretchie;
-
-				if (!create_dir(cli.output_dir_path.str, cli.clear_output_dir) && !cli.clear_output_dir)
-				{
-					error("Output directory \"%s\" is not empty. Use (--clear-output-dir) to empty the directory for processing.\n", cli.output_dir_path.cstr);
-				}
-
-				i32 images_processed = 0;
+				struct CLIProgram_stretchie_t cli              = cli_unknown.stretchie;
+				i32                           images_processed = 0;
 
 				struct BMP stretchied_bmp =
 					{
@@ -824,6 +773,11 @@ main(int argc, char** argv)
 						.dim.y = MASK_DIM,
 					};
 				alloc(&stretchied_bmp.data, stretchied_bmp.dim.x * stretchied_bmp.dim.y);
+
+				if (!create_dir(cli.output_dir_path.str, cli.clear_output_dir) && !cli.clear_output_dir)
+				{
+					error("Output directory \"%s\" is not empty. Use (--clear-output-dir) to empty the directory for processing.\n", cli.output_dir_path.cstr);
+				}
 
 				struct DirBMPIteratorState iterator_state =
 					{
@@ -851,7 +805,7 @@ main(int argc, char** argv)
 					strbuf_cstr(&file_path, iterator_state.finder_data.cFileName);
 					bmp_export(stretchied_bmp, file_path.str);
 
-					printf("% 4d : \"%s\".\n", images_processed + 1, iterator_state.finder_data.cFileName);
+					printf("[STRETCHIE] % 4d : \"%s\".\n", images_processed + 1, iterator_state.finder_data.cFileName);
 
 					images_processed += 1;
 
@@ -863,7 +817,7 @@ main(int argc, char** argv)
 					printf
 					(
 						"\n"
-						"Stretchie'd %d images.\n"
+						"Stretchie'd %d images!\n"
 						"\n",
 						images_processed
 					);
@@ -872,7 +826,7 @@ main(int argc, char** argv)
 				{
 					printf
 					(
-						"No images were stretchie'd.\n"
+						"No images were stretchie'd!\n"
 						"\n"
 					);
 				}
@@ -882,12 +836,8 @@ main(int argc, char** argv)
 
 			case CLIProgram_collectune:
 			{
-				struct CLIProgram_collectune_t cli = cli_unknown.collectune;
-
-				if (!create_dir(cli.output_dir_path.str, cli.clear_output_dir) && !cli.clear_output_dir)
-				{
-					error("Output directory \"%s\" is not empty. Use (--clear-output-dir) to empty the directory for processing.\n", cli.output_dir_path.cstr);
-				}
+				struct CLIProgram_collectune_t cli              = cli_unknown.collectune;
+				i32                            images_processed = 0;
 
 				struct BMP masks[Letter_COUNT] = {0};
 				for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
@@ -927,7 +877,10 @@ main(int argc, char** argv)
 					}
 				}
 
-				i32 images_processed = 0;
+				if (!create_dir(cli.output_dir_path.str, cli.clear_output_dir) && !cli.clear_output_dir)
+				{
+					error("Output directory \"%s\" is not empty. Use (--clear-output-dir) to empty the directory for processing.\n", cli.output_dir_path.cstr);
+				}
 
 				struct DirBMPIteratorState iterator_state =
 					{
@@ -991,7 +944,7 @@ main(int argc, char** argv)
 					printf
 					(
 						"\n"
-						"Collectune'd %d images.\n"
+						"Collectune'd %d images~~ :D\n"
 						"\n",
 						images_processed
 					);
@@ -1000,7 +953,7 @@ main(int argc, char** argv)
 				{
 					printf
 					(
-						"No images were monochromized.\n"
+						"No images were monochromized! :(\n"
 						"\n"
 					);
 				}
@@ -1013,12 +966,11 @@ main(int argc, char** argv)
 
 			case CLIProgram_meltingpot:
 			{
-				struct CLIProgram_meltingpot_t cli = cli_unknown.meltingpot;
-
-				i32        images_processed = 0;
-				i32        images_skipped   = 0;
-				struct BMP meltingpot       = {0};
-				i32_4*     weights          = 0;
+				struct CLIProgram_meltingpot_t cli              = cli_unknown.meltingpot;
+				i32                            images_processed = 0;
+				i32                            images_skipped   = 0;
+				struct BMP                     meltingpot       = {0};
+				i32_4*                         weights          = 0;
 
 				struct DirBMPIteratorState iterator_state =
 					{
@@ -1027,9 +979,16 @@ main(int argc, char** argv)
 				struct BMP sample_bmp = {0};
 				while (iterate_dir_bmp_alloc(&sample_bmp, &iterator_state))
 				{
-					if (!weights)
+					//
+					// Initialize meltingpotted BMP based on first found BMP.
+					//
+
+					if (!meltingpot.data)
 					{
-						alloc(&weights, sample_bmp.dim.x * sample_bmp.dim.y);
+						if (!cli.or_filter)
+						{
+							alloc(&weights, sample_bmp.dim.x * sample_bmp.dim.y);
+						}
 
 						meltingpot.dim.x = sample_bmp.dim.x;
 						meltingpot.dim.y = sample_bmp.dim.y;
@@ -1043,6 +1002,10 @@ main(int argc, char** argv)
 							meltingpot.dim.y
 						);
 					}
+
+					//
+					// Add some diversity.
+					//
 
 					if (sample_bmp.dim.x == meltingpot.dim.x && sample_bmp.dim.y == meltingpot.dim.y)
 					{
@@ -1064,12 +1027,12 @@ main(int argc, char** argv)
 							}
 						}
 
-						printf("% 4d : \"%s\".\n", images_processed + 1, iterator_state.finder_data.cFileName);
+						printf("[MELTINGPOT] % 4d : \"%s\".\n", images_processed + 1, iterator_state.finder_data.cFileName);
 						images_processed += 1;
 					}
 					else
 					{
-						printf("\tSkipping \"%s\".\n", iterator_state.finder_data.cFileName);
+						printf("\t[MELTINGPOT] Deporting \"%s\".\n", iterator_state.finder_data.cFileName);
 						images_skipped += 1;
 					}
 

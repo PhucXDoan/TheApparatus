@@ -78,14 +78,14 @@ main(void)
 			{
 				click(30, 238);
 
-				if (prev_anagrams_language_index)
-				{
-					click(22, 255);
-				}
-				prev_anagrams_language_index = curr_anagrams_language_index;
+				//if (prev_anagrams_language_index)
+				//{
+				//	click(22, 255);
+				//}
+				//prev_anagrams_language_index = curr_anagrams_language_index;
 
-				click(19, 255); // Languages.
-				click(22 + curr_anagrams_language_index * 17, 255);
+				//click(19, 255); // Languages.
+				//click(22 + curr_anagrams_language_index * 17, 255);
 
 				//if (curr_anagrams_language_index == 0)
 				//{
@@ -106,7 +106,7 @@ main(void)
 				//	curr_anagrams_language_index += 1;
 				//}
 
-				curr_anagrams_language_index %= ANAGRAMS_LANGUAGE_COUNT;
+				//curr_anagrams_language_index %= ANAGRAMS_LANGUAGE_COUNT;
 
 				play_y = 200;
 			} break;
