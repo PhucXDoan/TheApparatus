@@ -539,64 +539,77 @@ main(int argc, char** argv)
 				f64_3                         accumulated_unknown_game_test_region_rgbs[WordGame_COUNT] = {0};
 				i32                           wordgame_count[WordGame_COUNT] = {0};
 
-				printf("Hello. My name is Eagle Peek. You want me to go through \"%s\"? Sure thing bud!\n", cli.dir_path.cstr);
+				printf("Hello. My name is Eagle Peek. How can I help you?\n");
 
 				//
-				// Iterate each screenshot.
+				// Iterate through each directory,
 				//
 
-				struct DirBMPIteratorState iterator_state =
-					{
-						.dir_path = cli.dir_path.str
-					};
-				while (iterate_dir_bmp_alloc(&iterator_state))
+				for (i32 input_dir_path_index = 0; input_dir_path_index < cli.input_dir_paths.length; input_dir_path_index += 1)
 				{
-					if (iterator_state.bmp.dim.x == SCREENSHOT_DIM_X && iterator_state.bmp.dim.y == SCREENSHOT_DIM_Y)
+					CLIFieldTyping_string_t input_dir_path = cli.input_dir_paths.data[input_dir_path_index];
+
+					printf("You want me to go through \"%s\"? Sure thing bud!\n", input_dir_path.cstr);
+
+					//
+					// Iterate each screenshot.
+					//
+
+					struct DirBMPIteratorState iterator_state =
+						{
+							.dir_path = input_dir_path.str
+						};
+					while (iterate_dir_bmp_alloc(&iterator_state))
 					{
-						//
-						// Identify game.
-						//
-
-						f64_3         unknown_game_test_region_rgbs[WordGame_COUNT] = {0};
-						enum WordGame identified_wordgame = identify_wordgame(iterator_state.bmp, unknown_game_test_region_rgbs);
-
-						//
-						// Respond to identification result.
-						//
-
-						str game_name = {0};
-						if (identified_wordgame < WordGame_COUNT)
+						if (iterator_state.bmp.dim.x == SCREENSHOT_DIM_X && iterator_state.bmp.dim.y == SCREENSHOT_DIM_Y)
 						{
-							game_name                            = WORDGAME_INFO[identified_wordgame].name;
-							wordgame_count[identified_wordgame] += 1;
-						}
-						else
-						{
-							game_name      = str("Unknown game");
-							unknown_games += 1;
+							//
+							// Identify game.
+							//
 
-							for (enum WordGame wordgame = {0}; wordgame < WordGame_COUNT; wordgame += 1)
+							f64_3         unknown_game_test_region_rgbs[WordGame_COUNT] = {0};
+							enum WordGame identified_wordgame = identify_wordgame(iterator_state.bmp, unknown_game_test_region_rgbs);
+
+							//
+							// Respond to identification result.
+							//
+
+							str game_name = {0};
+							if (identified_wordgame < WordGame_COUNT)
 							{
-								accumulated_unknown_game_test_region_rgbs[wordgame].x += unknown_game_test_region_rgbs[wordgame].x;
-								accumulated_unknown_game_test_region_rgbs[wordgame].y += unknown_game_test_region_rgbs[wordgame].y;
-								accumulated_unknown_game_test_region_rgbs[wordgame].z += unknown_game_test_region_rgbs[wordgame].z;
+								game_name                            = WORDGAME_INFO[identified_wordgame].name;
+								wordgame_count[identified_wordgame] += 1;
 							}
+							else
+							{
+								game_name      = str("Unknown game");
+								unknown_games += 1;
+
+								for (enum WordGame wordgame = {0}; wordgame < WordGame_COUNT; wordgame += 1)
+								{
+									accumulated_unknown_game_test_region_rgbs[wordgame].x += unknown_game_test_region_rgbs[wordgame].x;
+									accumulated_unknown_game_test_region_rgbs[wordgame].y += unknown_game_test_region_rgbs[wordgame].y;
+									accumulated_unknown_game_test_region_rgbs[wordgame].z += unknown_game_test_region_rgbs[wordgame].z;
+								}
+							}
+
+							//
+							// Output this screenshot's identification result.
+							//
+
+							screenshots_examined += 1;
+
+							printf
+							(
+								"[EaglePeek] % 4d : %.*s : \"%s\".\n",
+								screenshots_examined,
+								i32(game_name.length), game_name.data,
+								iterator_state.finder_data.cFileName
+							);
 						}
-
-						//
-						// Output this screenshot's identification result.
-						//
-
-						screenshots_examined += 1;
-
-						printf
-						(
-							"[EaglePeek] % 4d : %.*s : \"%s\".\n",
-							screenshots_examined,
-							i32(game_name.length), game_name.data,
-							iterator_state.finder_data.cFileName
-						);
 					}
+
+					printf("\n");
 				}
 
 				//
@@ -613,7 +626,6 @@ main(int argc, char** argv)
 				}
 				margin += 1;
 
-				printf("\n");
 				for (enum WordGame wordgame = {0}; wordgame < WordGame_COUNT; wordgame += 1)
 				{
 					printf
@@ -641,9 +653,12 @@ main(int argc, char** argv)
 					{
 						printf
 						(
-							"Average Test Region RGB of %.*s%*s: (%.15g, %.15g, %.15g) @ (%d, %d) (%dx%d).\n",
+							"Average Test Region RGB of %.*s%*s: Delta(%.4f, %.4f, %.4f) : Expected(%.4f, %.4f, %.4f) @ (%d, %d) (%dx%d).\n",
 							i32(WORDGAME_INFO[wordgame].name.length), WORDGAME_INFO[wordgame].name.data,
 							i32(margin - WORDGAME_INFO[wordgame].name.length), "",
+							fabs(accumulated_unknown_game_test_region_rgbs[wordgame].x / unknown_games - WORDGAME_INFO[wordgame].test_region_rgb.x),
+							fabs(accumulated_unknown_game_test_region_rgbs[wordgame].y / unknown_games - WORDGAME_INFO[wordgame].test_region_rgb.y),
+							fabs(accumulated_unknown_game_test_region_rgbs[wordgame].z / unknown_games - WORDGAME_INFO[wordgame].test_region_rgb.z),
 							accumulated_unknown_game_test_region_rgbs[wordgame].x / unknown_games,
 							accumulated_unknown_game_test_region_rgbs[wordgame].y / unknown_games,
 							accumulated_unknown_game_test_region_rgbs[wordgame].z / unknown_games,
@@ -683,118 +698,131 @@ main(int argc, char** argv)
 				}
 
 				//
-				// Iterate directory of screenshots to extract slots from.
+				// Iterate directories of screenshots to extract slots from.
 				//
 
-				printf("EXTRACTOR EXTRACTIN' FROM \"%s\"!!\n", cli.input_dir_path.cstr);
-
-				struct DirBMPIteratorState iterator_state =
-					{
-						.dir_path = cli.input_dir_path.str
-					};
-				while (iterate_dir_bmp_alloc(&iterator_state))
+				for (i32 input_dir_path_index = 0; input_dir_path_index < cli.input_dir_paths.length; input_dir_path_index += 1)
 				{
-					if (iterator_state.bmp.dim.x == SCREENSHOT_DIM_X && iterator_state.bmp.dim.y == SCREENSHOT_DIM_Y)
-					{
-						//
-						// Determine game.
-						//
+					CLIFieldTyping_string_t input_dir_path = cli.input_dir_paths.data[input_dir_path_index];
 
-						enum WordGame wordgame = identify_wordgame(iterator_state.bmp, 0);
-						if (wordgame != WordGame_COUNT)
+					printf
+					(
+						"(%d/%lld) EXTRACTOR EXTRACTIN' FROM \"%s\"!!\n",
+						input_dir_path_index + 1,
+						cli.input_dir_paths.length,
+						input_dir_path.cstr
+					);
+
+					struct DirBMPIteratorState iterator_state =
 						{
-							struct BMP slot =
-								{
-									.dim.x = WORDGAME_INFO[wordgame].slot_dim,
-									.dim.y = WORDGAME_INFO[wordgame].slot_dim,
-								};
-							alloc(&slot.data, slot.dim.x * slot.dim.y);
-
+							.dir_path = input_dir_path.str
+						};
+					while (iterate_dir_bmp_alloc(&iterator_state))
+					{
+						if (iterator_state.bmp.dim.x == SCREENSHOT_DIM_X && iterator_state.bmp.dim.y == SCREENSHOT_DIM_Y)
+						{
 							//
-							// Create a BMP of each slot.
+							// Determine game.
 							//
 
-							for (i32 slot_coord_y = 0; slot_coord_y < WORDGAME_INFO[wordgame].board_dim_slots.y; slot_coord_y += 1)
+							enum WordGame wordgame = identify_wordgame(iterator_state.bmp, 0);
+							if (wordgame != WordGame_COUNT)
 							{
-								for (i32 slot_coord_x = 0; slot_coord_x < WORDGAME_INFO[wordgame].board_dim_slots.x; slot_coord_x += 1)
-								{
-									if (!slot_coord_excluded(wordgame, slot_coord_x, slot_coord_y))
+								struct BMP slot =
 									{
-										for (i32 slot_px_y = 0; slot_px_y < WORDGAME_INFO[wordgame].slot_dim; slot_px_y += 1)
-										{
-											for (i32 slot_px_x = 0; slot_px_x < WORDGAME_INFO[wordgame].slot_dim; slot_px_x += 1)
-											{
-												struct BMPPixel pixel =
-													iterator_state.bmp.data
-													[
-														(WORDGAME_INFO[wordgame].board_pos.y + slot_coord_y * WORDGAME_INFO[wordgame].slot_stride + slot_px_y) * iterator_state.bmp.dim.x
-															+ (WORDGAME_INFO[wordgame].board_pos.x + slot_coord_x * WORDGAME_INFO[wordgame].slot_stride + slot_px_x)
-													];
-												slot.data[slot_px_y * slot.dim.x + slot_px_x] = pixel;
-											}
-										}
+										.dim.x = WORDGAME_INFO[wordgame].slot_dim,
+										.dim.y = WORDGAME_INFO[wordgame].slot_dim,
+									};
+								alloc(&slot.data, slot.dim.x * slot.dim.y);
 
-										struct StrBuf slot_file_path = StrBuf(256);
-										strbuf_str (&slot_file_path, cli.output_dir_path.str);
-										strbuf_char(&slot_file_path, '\\');
-										strbuf_str (&slot_file_path, WORDGAME_INFO[wordgame].name);
-										strbuf_cstr(&slot_file_path, " (");
-										strbuf_i64 (&slot_file_path, slot_coord_x);
-										strbuf_cstr(&slot_file_path, ", ");
-										strbuf_i64 (&slot_file_path, slot_coord_y);
-										strbuf_cstr(&slot_file_path, ") (");
-										for (i32 i = 0; i < 4; i += 1)
+								//
+								// Create a BMP of each slot.
+								//
+
+								for (i32 slot_coord_y = 0; slot_coord_y < WORDGAME_INFO[wordgame].board_dim_slots.y; slot_coord_y += 1)
+								{
+									for (i32 slot_coord_x = 0; slot_coord_x < WORDGAME_INFO[wordgame].board_dim_slots.x; slot_coord_x += 1)
+									{
+										if (!slot_coord_excluded(wordgame, slot_coord_x, slot_coord_y))
 										{
-											static const char CHARACTERS[] =
+											for (i32 slot_px_y = 0; slot_px_y < WORDGAME_INFO[wordgame].slot_dim; slot_px_y += 1)
+											{
+												for (i32 slot_px_x = 0; slot_px_x < WORDGAME_INFO[wordgame].slot_dim; slot_px_x += 1)
 												{
-													'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-													'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
-													'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-													'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
-													'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-													'-', '_'
-												};
-											strbuf_char(&slot_file_path, CHARACTERS[__rdtsc() % countof(CHARACTERS)]);
+													struct BMPPixel pixel =
+														iterator_state.bmp.data
+														[
+															(WORDGAME_INFO[wordgame].board_pos.y + slot_coord_y * WORDGAME_INFO[wordgame].slot_stride + slot_px_y) * iterator_state.bmp.dim.x
+																+ (WORDGAME_INFO[wordgame].board_pos.x + slot_coord_x * WORDGAME_INFO[wordgame].slot_stride + slot_px_x)
+														];
+													slot.data[slot_px_y * slot.dim.x + slot_px_x] = pixel;
+												}
+											}
+
+											struct StrBuf slot_file_path = StrBuf(256);
+											strbuf_str (&slot_file_path, cli.output_dir_path.str);
+											strbuf_char(&slot_file_path, '\\');
+											strbuf_str (&slot_file_path, WORDGAME_INFO[wordgame].name);
+											strbuf_cstr(&slot_file_path, " (");
+											strbuf_i64 (&slot_file_path, slot_coord_x);
+											strbuf_cstr(&slot_file_path, ", ");
+											strbuf_i64 (&slot_file_path, slot_coord_y);
+											strbuf_cstr(&slot_file_path, ") (");
+											for (i32 i = 0; i < 4; i += 1)
+											{
+												static const char CHARACTERS[] =
+													{
+														'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+														'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+														'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+														'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+														'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+														'-', '_'
+													};
+												strbuf_char(&slot_file_path, CHARACTERS[__rdtsc() % countof(CHARACTERS)]);
+											}
+											strbuf_cstr(&slot_file_path, ") ");
+											strbuf_cstr(&slot_file_path, iterator_state.finder_data.cFileName);
+											bmp_export(slot, slot_file_path.str);
 										}
-										strbuf_cstr(&slot_file_path, ") ");
-										strbuf_cstr(&slot_file_path, iterator_state.finder_data.cFileName);
-										bmp_export(slot, slot_file_path.str);
 									}
 								}
+
+								slots_extracted +=
+									WORDGAME_INFO[wordgame].board_dim_slots.x * WORDGAME_INFO[wordgame].board_dim_slots.y
+										- WORDGAME_INFO[wordgame].excluded_slot_coords_count;
+
+								free(slot.data);
 							}
 
-							slots_extracted +=
-								WORDGAME_INFO[wordgame].board_dim_slots.x * WORDGAME_INFO[wordgame].board_dim_slots.y
-									- WORDGAME_INFO[wordgame].excluded_slot_coords_count;
+							//
+							// Print details about the screenshot.
+							//
 
-							free(slot.data);
+							str wordgame_name = {0};
+							if (wordgame < WordGame_COUNT)
+							{
+								wordgame_name = WORDGAME_INFO[wordgame].name;
+							}
+							else
+							{
+								wordgame_name  = str("Unknown game");
+								unknown_games += 1;
+							}
+
+							screenshots_examined += 1;
+
+							printf
+							(
+								"[extractor] % 4d : %.*s : \"%s\".\n",
+								screenshots_examined,
+								i32(wordgame_name.length), wordgame_name.data,
+								iterator_state.finder_data.cFileName
+							);
 						}
-
-						//
-						// Print details about the screenshot.
-						//
-
-						str wordgame_name = {0};
-						if (wordgame < WordGame_COUNT)
-						{
-							wordgame_name = WORDGAME_INFO[wordgame].name;
-						}
-						else
-						{
-							wordgame_name  = str("Unknown game");
-							unknown_games += 1;
-						}
-
-						screenshots_examined += 1;
-
-						printf
-						(
-							"[extractor] % 4d : %.*s : \"%s\".\n",
-							screenshots_examined,
-							i32(wordgame_name.length), wordgame_name.data,
-							iterator_state.finder_data.cFileName
-						);
 					}
+
+					printf("\n");
 				}
 
 				//
@@ -805,10 +833,11 @@ main(int argc, char** argv)
 				{
 					printf
 					(
-						"\n"
+						"EXTRACTOR EXTRACTED FROM %lld DIRECTORIES!\n"
 						"EXTRACTOR EXTRACTED FROM %d SCREENSHOTS!\n"
 						"EXTRACTOR EXTRACTED %d SLOTS!!\n"
 						"\n",
+						cli.input_dir_paths.length,
 						screenshots_examined,
 						slots_extracted
 					);
@@ -1482,7 +1511,7 @@ main(int argc, char** argv)
 
 				printf
 				(
-					"[MASKIVERSE: ENDGAME] Complete! %d bytes out of %d bytes of flash will be used.\n",
+					"[MASKIVERSE: ENDGAME] Complete! Row-reduced to %d bytes out of %d bytes.\n",
 					bytes_of_flash_used,
 					bytes_of_flash_used + total_bytes_saved
 				);

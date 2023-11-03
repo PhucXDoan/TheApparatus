@@ -19,7 +19,7 @@ bmp_alloc_read_file(str file_path)
 	FILE* file = fopen(file_path_cstr, "rb");
 	if (!file)
 	{
-		error("`fopen` failed. Does the file exist?");
+		error("`fopen` failed. Does the file \"%s\" exist?", file_path_cstr);
 	}
 
 	if (fseek(file, 0, SEEK_END))

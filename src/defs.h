@@ -1474,32 +1474,32 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	X(catchya     , "Identify letters and their positions within a screenshot of a Game Pigeon word game.")
 
 #define CLI_PROGRAM_eaglepeek_FIELD_XMDT(X, ...) \
-	X(dir_path, string, "screenshot-dir-path", "Directory path of the screenshots to identify.",##__VA_ARGS__) \
+	X(input_dir_paths, dary_string, "screenshot-dir-path...", "Directory path of the screenshots to identify.",##__VA_ARGS__) \
 
 #define CLI_PROGRAM_extractor_FIELD_XMDT(X, ...) \
-	X(input_dir_path  , string, "screenshot-dir-path", "Directory path that'll be filtered for screenshots of the games.",##__VA_ARGS__) \
-	X(output_dir_path , string, "output-dir-path"    , "Destination directory to store the extracted BMPs.",##__VA_ARGS__) \
-	X(clear_output_dir, b32   , "--clear-output-dir" , "Delete all content within the output directory before processing.",##__VA_ARGS__)
+	X(output_dir_path , string     , "output-dir-path"       , "Destination directory to store the extracted BMPs.",##__VA_ARGS__) \
+	X(input_dir_paths , dary_string, "screenshot-dir-path...", "Directory paths that'll be filtered for screenshots of the games.",##__VA_ARGS__) \
+	X(clear_output_dir, b32        , "--clear-output-dir"    , "Delete all content within the output directory before processing.",##__VA_ARGS__)
 
 #define CLI_PROGRAM_monochromize_FIELD_XMDT(X, ...) \
-	X(input_dir_path  , string, "input-dir-path"    , "Directory path of the BMPs.",##__VA_ARGS__) \
 	X(output_dir_path , string, "output-dir-path"   , "Destination directory to store the monochromized BMPs.",##__VA_ARGS__) \
+	X(input_dir_path  , string, "input-dir-path"    , "Directory path of the BMPs.",##__VA_ARGS__) \
 	X(clear_output_dir, b32   , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
 
 #define CLI_PROGRAM_stretchie_FIELD_XMDT(X, ...) \
-	X(input_dir_path  , string, "input-dir-path"    , "Directory path of the BMPs.",##__VA_ARGS__) \
 	X(output_dir_path , string, "output-dir-path"   , "Destination directory to store the stretchie'd BMPs.",##__VA_ARGS__) \
+	X(input_dir_path  , string, "input-dir-path"    , "Directory path of the BMPs.",##__VA_ARGS__) \
 	X(clear_output_dir, b32   , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
 
 #define CLI_PROGRAM_collectune_FIELD_XMDT(X, ...) \
+	X(output_dir_path  , string, "output-dir-path"   , "Destination directory to store the collections.",##__VA_ARGS__) \
 	X(mask_dir_path    , string, "mask-dir-path"     , "Directory path of the masks.",##__VA_ARGS__) \
 	X(unsorted_dir_path, string, "unsorted-dir-path" , "Directory path of the BMPs to be sorted.",##__VA_ARGS__) \
-	X(output_dir_path  , string, "output-dir-path"   , "Destination directory to store the collections.",##__VA_ARGS__) \
 	X(clear_output_dir , b32   , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
 
 #define CLI_PROGRAM_meltingpot_FIELD_XMDT(X, ...) \
-	X(input_dir_path  , string, "input-dir-path"  , "Directory path of the BMPs.",##__VA_ARGS__) \
 	X(output_file_path, string, "output-file-path", "File path of the result.",##__VA_ARGS__) \
+	X(input_dir_path  , string, "input-dir-path"  , "Directory path of the BMPs.",##__VA_ARGS__) \
 	X(or_filter       , b32   , "--or"            , "Logical OR each pixel instead of averaging.",##__VA_ARGS__)
 
 #define CLI_PROGRAM_maskiverse_FIELD_XMDT(X, ...) \
@@ -1611,14 +1611,14 @@ struct USBConfig // This layout is defined uniquely for our device application.
 #define SCREENSHOT_DIM_X 1170
 #define SCREENSHOT_DIM_Y 2532
 
-#define EXTRACTOR_RGB_EPSILON 0.01
+#define EXTRACTOR_RGB_EPSILON 0.015
 
 #define WORDGAME_XMDT(X) \
 	/*    Names                               | Board Position | Board Dimensions (slots) | Slot Dimensions | Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB              | Excluded Slot Coordinates */ \
 		X(anagrams_6, "Anagrams (6-Letters)",   grp(39, 354),    grp(6, 1),                 119,              195,          grp(32 , 656),         grp(256, 16 ),           grp(0.2645, 0.2409, 0.3358),   ) \
+		X(anagrams_7, "Anagrams (7-Letters)",   grp(31, 375),    grp(7, 1),                 102,              168,          grp(32 , 656),         grp(256, 16 ),           grp(0.5036, 0.4814, 0.6467),   ) \
 
 // Comprehensive : X(anagrams_6, "Anagrams (6-Letters)",   grp(18, 329),    grp(6, 1),                 160,              195,          grp(32 , 656),         grp(256, 16 ),           grp(0.2645, 0.2409, 0.3358),   )
-// X(anagrams_7, "Anagrams (7-Letters)",   grp(13, 353),    grp(7, 1),                 138,              168,          grp(32 , 656),         grp(256, 16 ),           grp(0.5036, 0.4814, 0.6467),   ) \
 // X(wordbites , "Word Bites"          ,   grp(28, 367),    grp(8, 9),                 125,              140,          grp(256, 64 ),         grp(256, 128),           grp(0.2378, 0.3778, 0.4962),   )
 
 enum WordGame
@@ -1676,10 +1676,10 @@ enum WordGame
 #define LETTER_XMDT(X) \
 	X(a) X(b) X(c) X(d) X(e) X(f) X(g) X(h) X(i) X(j) X(k) X(l) X(m) \
 	X(n) X(o) X(p) X(q) X(r) X(s) X(t) X(u) X(v) X(w) X(x) X(y) X(z) \
-	X(boris  ) X(chelovek    ) X(dmitri) X(echo   ) X(fyodor) X(gregory) X(ivan) X(ivan_kratkiy) \
-	X(leonid ) X(myagkiy_znak) X(pavel ) X(tsaplya) X(shura ) X(ulyana ) X(yery) X(zhenya      ) \
+	X(boris  ) X(chelovek    ) X(dmitri) X(fyodor) X(gregory) X(ivan) X(ivan_kratkiy) \
+	X(leonid ) X(myagkiy_znak) X(pavel ) X(shura ) X(ulyana ) X(yery) X(zhenya      ) \
 	X(zinaida) \
-	X(a_umlaut) X(o_umlaut) X(u_umlaut) X(eszett) \
+	X(a_umlaut) X(o_umlaut) \
 	X(ene)
 
 enum Letter
