@@ -166,6 +166,13 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 				u8  command_dest_x = (command >>  8) & 0b0111'1111;
 				u8  command_dest_y =  command        & 0b1111'1111;
 
+				#if DEBUG
+				if (debug_usb_is_on_host_machine)
+				{
+					// Ignore commands to make programming on host machine not be a hassle.
+				}
+				else
+				#endif
 				if (_usb_mouse_held != command_held)
 				{
 					_usb_mouse_held = command_held;
@@ -406,8 +413,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 						case BOOTLOADER_BAUD_SIGNAL:
 						{
 							*(volatile u16*) 0x0800 = 0x7777; // Magic!
-							wdt_enable(WDTO_15MS);
-							for(;;);
+							restart();
 						} break;
 
 						#if DEBUG
@@ -504,7 +510,10 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 			case USBSetupRequestKind_hid_set_idle:               // [Endpoint 0: HID-Specific SetIdle].
 			{
 				UECONX |= (1 << STALLRQ);
-				for(;;); // TEMP
+
+				#if DEBUG
+				debug_usb_is_on_host_machine = true;
+				#endif
 			} break;
 
 			default:

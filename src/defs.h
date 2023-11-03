@@ -549,7 +549,7 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 #if DEBUG // Used to disable some USB functionalities for development purposes, but does not necessairly remove all data and control flow.
 	#define USB_CDC_ENABLE true
 	#define USB_HID_ENABLE true
-	#define USB_MS_ENABLE  false
+	#define USB_MS_ENABLE  true
 #else
 	#define USB_CDC_ENABLE false
 	#define USB_HID_ENABLE true
@@ -1453,6 +1453,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 			static_assert(countof(debug_usb_cdc_out_buffer) && !(countof(debug_usb_cdc_out_buffer) & (countof(debug_usb_cdc_out_buffer) - 1)));
 
 			static volatile b8 debug_usb_diagnostic_signal_received = false;
+			static          b8 debug_usb_is_on_host_machine         = false;
 		#endif
 	#endif
 #endif
@@ -1614,12 +1615,9 @@ struct USBConfig // This layout is defined uniquely for our device application.
 #define EXTRACTOR_RGB_EPSILON 0.015
 
 #define WORDGAME_XMDT(X) \
-	/*    Names                               | Board Position | Board Dimensions (slots) | Slot Dimensions | Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB              | Excluded Slot Coordinates */ \
-		X(anagrams_6, "Anagrams (6-Letters)",   grp(39, 354),    grp(6, 1),                 119,              195,          grp(32 , 656),         grp(256, 16 ),           grp(0.2645, 0.2409, 0.3358),   ) \
-		X(anagrams_7, "Anagrams (7-Letters)",   grp(31, 375),    grp(7, 1),                 102,              168,          grp(32 , 656),         grp(256, 16 ),           grp(0.5036, 0.4814, 0.6467),   ) \
-
-// Comprehensive : X(anagrams_6, "Anagrams (6-Letters)",   grp(18, 329),    grp(6, 1),                 160,              195,          grp(32 , 656),         grp(256, 16 ),           grp(0.2645, 0.2409, 0.3358),   )
-// X(wordbites , "Word Bites"          ,   grp(28, 367),    grp(8, 9),                 125,              140,          grp(256, 64 ),         grp(256, 128),           grp(0.2378, 0.3778, 0.4962),   )
+	/*    Names                               | Board Position | Board Dimensions (slots) | Slot Dimensions | Uncompressed Slot Stride | Compressed Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB              | Excluded Slot Coordinates */ \
+		X(anagrams_6, "Anagrams (6 Letters)",   grp(39, 354),    grp(6, 1),                 119,              195,                       105,                     grp(32 , 656),         grp(256, 16 ),           grp(0.2645, 0.2409, 0.3358),   ) \
+		X(anagrams_7, "Anagrams (7 Letters)",   grp(31, 375),    grp(7, 1),                 102,              168,                       0,                       grp(32 , 656),         grp(256, 16 ),           grp(0.5036, 0.4814, 0.6467),   ) \
 
 enum WordGame
 {
@@ -1637,7 +1635,7 @@ enum WordGame
 		i32_2 board_pos;
 		i32_2 board_dim_slots;
 		i32   slot_dim;
-		i32   slot_stride;
+		i32   uncompressed_slot_stride;
 		i32_2 test_region_pos;
 		i32_2 test_region_dim;
 		f64_3 test_region_rgb;
@@ -1646,13 +1644,13 @@ enum WordGame
 	};
 	static const struct WordGameInfo WORDGAME_INFO[] =
 		{
-			#define MAKE(IDENTIFIER_NAME, PRINT_NAME, BOARD_POS, BOARD_DIM_SLOTS, SLOT_DIM, SLOT_STRIDE, TEST_REGION_POS, TEST_REGION_DIM, TEST_REGION_RGB, ... ) \
+			#define MAKE(IDENTIFIER_NAME, PRINT_NAME, BOARD_POS, BOARD_DIM_SLOTS, SLOT_DIM, UNCOMPRESSED_SLOT_STRIDE, COMPRESSED_SLOT_STRIDE, TEST_REGION_POS, TEST_REGION_DIM, TEST_REGION_RGB, ... ) \
 				{ \
 					.name                       = STR(PRINT_NAME), \
 					.board_pos                  = BOARD_POS, \
 					.board_dim_slots            = BOARD_DIM_SLOTS, \
 					.slot_dim                   = SLOT_DIM, \
-					.slot_stride                = SLOT_STRIDE, \
+					.uncompressed_slot_stride   = UNCOMPRESSED_SLOT_STRIDE, \
 					.test_region_pos            = TEST_REGION_POS, \
 					.test_region_dim            = TEST_REGION_DIM, \
 					.test_region_rgb            = TEST_REGION_RGB, \

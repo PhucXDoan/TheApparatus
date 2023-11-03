@@ -752,8 +752,8 @@ main(int argc, char** argv)
 													struct BMPPixel pixel =
 														iterator_state.bmp.data
 														[
-															(WORDGAME_INFO[wordgame].board_pos.y + slot_coord_y * WORDGAME_INFO[wordgame].slot_stride + slot_px_y) * iterator_state.bmp.dim.x
-																+ (WORDGAME_INFO[wordgame].board_pos.x + slot_coord_x * WORDGAME_INFO[wordgame].slot_stride + slot_px_x)
+															(WORDGAME_INFO[wordgame].board_pos.y + slot_coord_y * WORDGAME_INFO[wordgame].uncompressed_slot_stride + slot_px_y) * iterator_state.bmp.dim.x
+																+ (WORDGAME_INFO[wordgame].board_pos.x + slot_coord_x * WORDGAME_INFO[wordgame].uncompressed_slot_stride + slot_px_x)
 														];
 													slot.data[slot_px_y * slot.dim.x + slot_px_x] = pixel;
 												}
@@ -1618,8 +1618,8 @@ main(int argc, char** argv)
 									{
 										i32_2 base_offset =
 											{
-												WORDGAME_INFO[wordgame].board_pos.x + slot_coord_x * WORDGAME_INFO[wordgame].slot_stride,
-												WORDGAME_INFO[wordgame].board_pos.y + slot_coord_y * WORDGAME_INFO[wordgame].slot_stride,
+												WORDGAME_INFO[wordgame].board_pos.x + slot_coord_x * WORDGAME_INFO[wordgame].uncompressed_slot_stride,
+												WORDGAME_INFO[wordgame].board_pos.y + slot_coord_y * WORDGAME_INFO[wordgame].uncompressed_slot_stride,
 											};
 										i32_2 slot_pixel_delta =
 											{

@@ -44,6 +44,16 @@ serialize_i64(char* dst, u16 dst_size, i64 value) // "dst_size" of at least 20 w
 	return result;
 }
 
+#if !PROGRAM_MICROSERVICES
+	__attribute__((noreturn))
+	static void
+	restart(void)
+	{
+		wdt_enable(WDTO_15MS);
+		for(;;);
+	}
+#endif
+
 #if PROGRAM_DIPLOMAT
 	#if DEBUG
 		// Long pulse followed by pairs of flashes.
