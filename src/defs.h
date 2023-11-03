@@ -1699,7 +1699,7 @@ enum Letter
 		};
 #endif
 
-struct RowReducedMaskEntry
+struct RowReducedMaskEntry // Note: changing size of this means changing the calculation for the maskiverse microservice.
 {
 	const u8* data;
 	u8        empty_rows; // Least significant nibble stores amount of empty rows from bottom, most significant nibble stores aount of empty rows on top.

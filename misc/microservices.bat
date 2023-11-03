@@ -22,4 +22,4 @@ REM W:\build\Microservices.exe catchya W:\data\masks\ "W:\data\screenshots\anagr
 
 REM W:\build\Microservices.exe meltingpot W:\data\monochromize\!FOLDER!\ W:\data\meltingpot\!FOLDER!.bmp --or
 
-REM W:\build\Microservices.exe maskiverse W:\data\masks\
+W:\build\Microservices.exe maskiverse W:\data\masks\
