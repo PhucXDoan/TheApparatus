@@ -1464,12 +1464,17 @@ struct USBConfig // This layout is defined uniquely for our device application.
 #define CLI_EXE_NAME "Microservices.exe"
 #define CLI_EXE_DESC "Microservices to help you bring change to the world."
 #define CLI_PROGRAM_XMDT(X) \
+	X(eaglepeek   , "Identify the Game Pigeon word game shown in a screenshot.") \
 	X(extractor   , "Create a BMP of each slot in screenshots of Game Pigeon word games.") \
 	X(monochromize, "Convert each BMP into a strictly black and white image.") \
 	X(stretchie   , "Resize BMPs into the common square mask.") \
 	X(collectune  , "Copy BMPs into folder with the closest matching mask.") \
 	X(meltingpot  , "Average together BMPs.") \
-	X(maskiverse  , "Format masks into data formatted for C to be included into compilation.")
+	X(maskiverse  , "Format masks into data formatted for C to be included into compilation.") \
+	X(catchya     , "Identify letters and their positions within a screenshot of a Game Pigeon word game.")
+
+#define CLI_PROGRAM_eaglepeek_FIELD_XMDT(X, ...) \
+	X(dir_path, string, "screenshot-dir-path", "Directory path of the screenshots to identify.",##__VA_ARGS__) \
 
 #define CLI_PROGRAM_extractor_FIELD_XMDT(X, ...) \
 	X(input_dir_path  , string, "screenshot-dir-path", "Directory path that'll be filtered for screenshots of the games.",##__VA_ARGS__) \
@@ -1498,7 +1503,11 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	X(or_filter       , b32   , "--or"            , "Logical OR each pixel instead of averaging.",##__VA_ARGS__)
 
 #define CLI_PROGRAM_maskiverse_FIELD_XMDT(X, ...) \
-	X(dir_path, string, "dir-path" , "Directory path of the mask BMPs. Output will be dumped here.",##__VA_ARGS__) \
+	X(dir_path, string, "mask-dir-path", "Directory path of the mask BMPs. Output will be dumped here.",##__VA_ARGS__) \
+
+#define CLI_PROGRAM_catchya_FIELD_XMDT(X, ...) \
+	X(mask_dir_path       , string, "mask-dir-path"        , "Directory path of the masks.",##__VA_ARGS__) \
+	X(screenshot_file_path, string, "screenshot-file-path" , "File path to the screenshot.",##__VA_ARGS__) \
 
 #define CLI_TYPING_XMDT(X) \
 	X(string     , union { struct { char* data; i64 length; }; char* cstr; str str; }) \
@@ -1599,13 +1608,14 @@ struct USBConfig // This layout is defined uniquely for our device application.
 
 
 
-#define EXTRACTOR_SCREENSHOT_DIM_X 1170
-#define EXTRACTOR_SCREENSHOT_DIM_Y 2532
-#define EXTRACTOR_RGB_EPSILON      0.01
+#define SCREENSHOT_DIM_X 1170
+#define SCREENSHOT_DIM_Y 2532
+
+#define EXTRACTOR_RGB_EPSILON 0.01
 
 #define WORDGAME_XMDT(X) \
 	/*    Names                               | Board Position | Board Dimensions (slots) | Slot Dimensions | Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB              | Excluded Slot Coordinates */ \
-		X(anagrams_6, "Anagrams (6-Letters)",   grp(39, 354),    grp(6, 1),                 119,              195,          grp(32 , 656),         grp(256, 16 ),           grp(0.2645, 0.2409, 0.3358),   )
+		X(anagrams_6, "Anagrams (6-Letters)",   grp(39, 354),    grp(6, 1),                 119,              195,          grp(32 , 656),         grp(256, 16 ),           grp(0.2645, 0.2409, 0.3358),   ) \
 
 // Comprehensive : X(anagrams_6, "Anagrams (6-Letters)",   grp(18, 329),    grp(6, 1),                 160,              195,          grp(32 , 656),         grp(256, 16 ),           grp(0.2645, 0.2409, 0.3358),   )
 // X(anagrams_7, "Anagrams (7-Letters)",   grp(13, 353),    grp(7, 1),                 138,              168,          grp(32 , 656),         grp(256, 16 ),           grp(0.5036, 0.4814, 0.6467),   ) \
@@ -1623,7 +1633,7 @@ enum WordGame
 #if PROGRAM_MICROSERVICES
 	struct WordGameInfo
 	{
-		str   print_name;
+		str   name;
 		i32_2 board_pos;
 		i32_2 board_dim_slots;
 		i32   slot_dim;
@@ -1638,7 +1648,7 @@ enum WordGame
 		{
 			#define MAKE(IDENTIFIER_NAME, PRINT_NAME, BOARD_POS, BOARD_DIM_SLOTS, SLOT_DIM, SLOT_STRIDE, TEST_REGION_POS, TEST_REGION_DIM, TEST_REGION_RGB, ... ) \
 				{ \
-					.print_name                 = STR(PRINT_NAME), \
+					.name                       = STR(PRINT_NAME), \
 					.board_pos                  = BOARD_POS, \
 					.board_dim_slots            = BOARD_DIM_SLOTS, \
 					.slot_dim                   = SLOT_DIM, \
@@ -1660,8 +1670,8 @@ enum WordGame
 
 
 
-#define MONOCHROMIZE_THRESHOLD 8
-#define MASK_DIM               64
+#define MASK_ACTIVATION_THRESHOLD 8
+#define MASK_DIM                  64
 
 #define LETTER_XMDT(X) \
 	X(a) X(b) X(c) X(d) X(e) X(f) X(g) X(h) X(i) X(j) X(k) X(l) X(m) \
