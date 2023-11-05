@@ -185,15 +185,9 @@ static const u8 ZERO_BIT_COUNT_DT[] PROGMEM =
 // "lcd.c"
 //
 
-#if PROGRAM_DIPLOMAT
-	#define PIN_LCD_ENABLE          4
-	#define PIN_LCD_REGISTER_SELECT 5
-	#define PIN_LCD_DATA_4          6
-	#define PIN_LCD_DATA_5          7
-	#define PIN_LCD_DATA_6          8
-	#define PIN_LCD_DATA_7          9
-	#define LCD_DIM_X               20
-	#define LCD_DIM_Y               4
+#ifdef PIN_LCD_ENABLE
+	#define LCD_DIM_X 20
+	#define LCD_DIM_Y 4
 
 	static char _lcd_cache [LCD_DIM_Y][LCD_DIM_X] = {0};
 	static char lcd_display[LCD_DIM_Y][LCD_DIM_X] = {0};
@@ -907,7 +901,7 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 	SDR1ResponseFlag_parameter_error      = 1 << 6,
 };
 
-#if PROGRAM_DIPLOMAT
+#ifdef PIN_SD_SS
 	static u8 sd_sector[FAT32_SECTOR_SIZE] = {0};
 #endif
 
@@ -918,7 +912,7 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 #if DEBUG // Used to disable some USB functionalities for development purposes, but does not necessairly remove all data and control flow.
 	#define USB_CDC_ENABLE true
 	#define USB_HID_ENABLE false
-	#define USB_MS_ENABLE  false
+	#define USB_MS_ENABLE  true
 #else
 	#define USB_CDC_ENABLE false
 	#define USB_HID_ENABLE true

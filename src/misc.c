@@ -109,29 +109,31 @@ serialize_i64(char* dst, u16 dst_size, i64 value) // "dst_size" of at least 20 w
 			}
 		}
 
+		#ifdef PIN_DEBUG_U16_CLK
 		static void
 		debug_u16(u16 value)
 		{
-			pin_output(PIN_U16_CLK);
-			pin_output(PIN_U16_DATA);
-			pin_low(PIN_U16_CLK);
-			pin_low(PIN_U16_DATA);
+			pin_output(PIN_DEBUG_U16_CLK);
+			pin_output(PIN_DEBUG_U16_DATA);
+			pin_low(PIN_DEBUG_U16_CLK);
+			pin_low(PIN_DEBUG_U16_DATA);
 
 			for (u8 i = 0; i < sizeof(value) * 8; i += 1)
 			{
 				if ((value >> i) & 1)
 				{
-					pin_high(PIN_U16_DATA);
+					pin_high(PIN_DEBUG_U16_DATA);
 				}
 				else
 				{
-					pin_low(PIN_U16_DATA);
+					pin_low(PIN_DEBUG_U16_DATA);
 				}
 
-				pin_high(PIN_U16_CLK);
-				pin_low(PIN_U16_CLK);
+				pin_high(PIN_DEBUG_U16_CLK);
+				pin_low(PIN_DEBUG_U16_CLK);
 			}
 		}
+		#endif
 
 		#define debug_unhandled() debug_unhandled_(__LINE__, PIN_HALT_SOURCE)
 		__attribute__((noreturn))
@@ -139,7 +141,9 @@ serialize_i64(char* dst, u16 dst_size, i64 value) // "dst_size" of at least 20 w
 		debug_unhandled_(u16 line_number, enum HaltSource source)
 		{
 			cli();
+			#ifdef PIN_DEBUG_U16_CLK
 			debug_u16(line_number);
+			#endif
 			debug_halt(source);
 		}
 
@@ -157,7 +161,9 @@ serialize_i64(char* dst, u16 dst_size, i64 value) // "dst_size" of at least 20 w
 		cli();
 
 		#if DEBUG
+		#ifdef PIN_DEBUG_U16_CLK
 		debug_u16(line_number);
+		#endif
 		#endif
 
 		pin_output(HALT);

@@ -10,11 +10,17 @@
 static void
 usb_mouse_command_(u16 command)
 {
+	#ifdef PIN_USB_BUSY
 	pin_high(PIN_USB_BUSY);
+	#endif
+
 	while (_usb_mouse_command_writer_masked(1) == _usb_mouse_command_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
 	_usb_mouse_command_buffer[_usb_mouse_command_writer_masked(0)] = command;
 	_usb_mouse_command_writer += 1;
+
+	#ifdef PIN_USB_BUSY
 	pin_low(PIN_USB_BUSY);
+	#endif
 }
 #endif
 
@@ -22,7 +28,9 @@ static void
 usb_init(void)
 { // [USB Initialization Process].
 
+	#ifdef PIN_USB_BUSY
 	pin_output(PIN_USB_BUSY);
+	#endif
 
 	// 1. "Power on USB pads regulator".
 	UHWCON = (1 << UVREGE);
@@ -45,7 +53,9 @@ usb_init(void)
 	// i.e. wait momentairly for the diagnostic signal.
 
 	#if DEBUG && USB_CDC_ENABLE
+	#ifdef PIN_USB_BUSY
 	pin_high(PIN_USB_BUSY);
+	#endif
 	for (u8 i = 0; i < 255; i += 1)
 	{
 		if (debug_usb_diagnostic_signal_received)
@@ -57,7 +67,9 @@ usb_init(void)
 			_delay_ms(8.0);
 		}
 	}
+	#ifdef PIN_USB_BUSY
 	pin_low(PIN_USB_BUSY);
+	#endif
 	#endif
 }
 
@@ -542,7 +554,9 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 				UECONX |= (1 << STALLRQ);
 
 				#if DEBUG
+				#if PIN_DEBUG_U16_CLK
 				debug_u16(request.kind);
+				#endif
 				debug_halt(-1);
 				#endif
 			} break;
@@ -1200,14 +1214,18 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 	{
 		if (debug_usb_diagnostic_signal_received)
 		{
+			#ifdef PIN_USB_BUSY
 			pin_high(PIN_USB_BUSY);
+			#endif
 			for (u16 i = 0; i < value_size; i += 1)
 			{
 				while (debug_usb_cdc_in_writer_masked(1) == debug_usb_cdc_in_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
 				debug_usb_cdc_in_buffer[debug_usb_cdc_in_writer_masked(0)] = value[i];
 				debug_usb_cdc_in_writer += 1;
 			}
+			#ifdef PIN_USB_BUSY
 			pin_low(PIN_USB_BUSY);
+			#endif
 		}
 	}
 

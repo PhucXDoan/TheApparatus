@@ -1,10 +1,19 @@
-#define F_CPU            16'000'000
-#define PROGRAM_DIPLOMAT true
-#define BOARD_PRO_MICRO  true
-#define PIN_USB_BUSY     2
-#define PIN_U16_CLK      4
-#define PIN_U16_DATA     5
-#define PIN_SD_SS        7
+#define F_CPU                   16'000'000
+#define PROGRAM_DIPLOMAT        true
+#define BOARD_PRO_MICRO         true
+#define PIN_DEBUG_U16_DATA      2
+#define PIN_DEBUG_U16_CLK       3
+#define PIN_LCD_ENABLE          4
+#define PIN_LCD_REGISTER_SELECT 5
+#define PIN_LCD_DATA_4          6
+#define PIN_LCD_DATA_5          7
+#define PIN_LCD_DATA_6          8
+#define PIN_LCD_DATA_7          9
+#define PIN_ROTARY_BTN          10
+#define PIN_ROTARY_CLK          A1
+#define PIN_ROTARY_DAT          A3
+#define PIN_USB_BUSY            A2
+#define PIN_SD_SS               A0
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
@@ -46,18 +55,76 @@ main(void)
 	debug_u16(0);
 
 	sei();
-//	spi_init();
-//	sd_init();
+	spi_init();
+	sd_init();
 	usb_init();
 	lcd_init();
 
-	u64 counter = 0;
-	for (;;)
+	pin_input(PIN_ROTARY_BTN);
+	pin_input(PIN_ROTARY_CLK);
+	pin_input(PIN_ROTARY_DAT);
+
+	b8 rotary_prev_clk  = pin_read(PIN_ROTARY_CLK);
+	b8 rotary_btn       = false;
+	u8 rotary_btn_delay = 0;
+
+	i64 counter = 0;
+	while (true)
 	{
+		b8 rotary_curr_clk = pin_read(PIN_ROTARY_CLK);
+
+			debug_u16(0x00'00);
+
+		if (rotary_curr_clk && !rotary_prev_clk)
+		{
+			if (pin_read(PIN_ROTARY_DAT))
+			{
+				counter -= 1;
+			}
+			else
+			{
+				counter += 1;
+			}
+		}
+
+		if (pin_read(PIN_ROTARY_BTN)) // We read that the rotary button is released?
+		{
+			if (rotary_btn && rotary_btn_delay) // We currently think the rotary should still be pressed?
+			{
+				rotary_btn_delay -= 1;
+				if (!rotary_btn_delay) // We're confident that the rotary is truly released now.
+				{
+					rotary_btn = false;
+					counter -= 1;
+				}
+			}
+			else
+			{
+				rotary_btn_delay = -1;
+			}
+		}
+		else // We read that the rotary button is pressed?
+		{
+			if (!rotary_btn && rotary_btn_delay) // We currently think that the rotary should still released?
+			{
+				rotary_btn_delay -= 1;
+				if (!rotary_btn_delay) // We're confident that the rotary is truly pressed now.
+				{
+					rotary_btn = true;
+					counter += 1;
+				}
+			}
+			else
+			{
+				rotary_btn_delay = -1;
+			}
+		}
+
+		rotary_prev_clk = rotary_curr_clk;
+
 		lcd_reset();
-		lcd_u64(counter);
+		lcd_i64(counter);
 		lcd_refresh();
-		counter += 1;
 	}
 
 //	while (true)
