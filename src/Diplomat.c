@@ -1,6 +1,6 @@
 #define F_CPU            16'000'000
 #define PROGRAM_DIPLOMAT true
-#define BOARD_LEONARDO   true
+#define BOARD_PRO_MICRO  true
 #define PIN_USB_BUSY     2
 #define PIN_U16_CLK      4
 #define PIN_U16_DATA     5
@@ -19,7 +19,8 @@
 #include "misc.c"
 #include "spi.c"
 #include "sd.c"
-#include "Diplomat_usb.c"
+#include "usb.c"
+#include "lcd.c"
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE HaltSource_diplomat
 
@@ -45,82 +46,91 @@ main(void)
 	debug_u16(0);
 
 	sei();
-	spi_init();
-	sd_init();
-
+//	spi_init();
+//	sd_init();
 	usb_init();
+	lcd_init();
 
-	while (true)
+	u64 counter = 0;
+	for (;;)
 	{
-		char input = {0};
-		if (debug_rx(&input, 1))
-		{
-			switch (input)
-			{
-				case 'W':
-				{
-					cli();
-
-					USBCON &= ~(1 << USBE);
-
-					memset(sd_sector, 0, sizeof(sd_sector));
-					for (u32 i = 0; i < FAT32_WIPE_SECTOR_COUNT; i += 1)
-					{
-						debug_u16(i);
-						sd_write(i);
-					}
-
-					#define MAKE(SECTOR_DATA, SECTOR_ADDRESS) \
-						{ \
-							static_assert(sizeof(sd_sector) == sizeof(SECTOR_DATA)); \
-							memcpy_P(sd_sector, &(SECTOR_DATA), sizeof(SECTOR_DATA)); \
-							sd_write(SECTOR_ADDRESS); \
-						}
-					FAT32_SECTOR_XMDT(MAKE);
-					#undef MAKE
-
-					restart();
-				} break;
-
-				case ' ':
-				{
-					for (u8 y = 0; y < pgm_read_byte(&WORDGAME_INFO[usb_ms_ocr_wordgame].board_dim_slots.y); y += 1)
-					{
-						for (u8 x = 0; x < pgm_read_byte(&WORDGAME_INFO[usb_ms_ocr_wordgame].board_dim_slots.x); x += 1)
-						{
-							switch (usb_ms_ocr_grid[y][x])
-							{
-								#define MAKE(NAME) case Letter_##NAME: debug_tx_cstr(#NAME); break;
-								LETTER_XMDT(MAKE)
-								#undef MAKE
-								case Letter_COUNT: debug_tx_cstr("Letter_COUNT"); break;
-							}
-
-							if (x == pgm_read_byte(&WORDGAME_INFO[usb_ms_ocr_wordgame].board_dim_slots.x) - 1)
-							{
-								debug_tx_cstr("\n");
-							}
-							else
-							{
-								debug_tx_cstr(" ");
-							}
-						}
-					}
-				} break;
-			}
-		}
-
-	//	click(0, 0);
-
-	//	click(10, 12);
-	//	_delay_ms(1500.0);
-
-	//	click(64, 46);
-
-	//	click(0, 0);
-
-	//	_delay_ms(4000.0);
+		lcd_reset();
+		lcd_u64(counter);
+		lcd_refresh();
+		counter += 1;
 	}
+
+//	while (true)
+//	{
+//		char input = {0};
+//		if (debug_rx(&input, 1))
+//		{
+//			switch (input)
+//			{
+//				case 'W':
+//				{
+//					cli();
+//
+//					USBCON &= ~(1 << USBE);
+//
+//					memset(sd_sector, 0, sizeof(sd_sector));
+//					for (u32 i = 0; i < FAT32_WIPE_SECTOR_COUNT; i += 1)
+//					{
+//						debug_u16(i);
+//						sd_write(i);
+//					}
+//
+//					#define MAKE(SECTOR_DATA, SECTOR_ADDRESS) \
+//						{ \
+//							static_assert(sizeof(sd_sector) == sizeof(SECTOR_DATA)); \
+//							memcpy_P(sd_sector, &(SECTOR_DATA), sizeof(SECTOR_DATA)); \
+//							sd_write(SECTOR_ADDRESS); \
+//						}
+//					FAT32_SECTOR_XMDT(MAKE);
+//					#undef MAKE
+//
+//					restart();
+//				} break;
+//
+//				case ' ':
+//				{
+//					for (u8 y = 0; y < pgm_read_byte(&WORDGAME_INFO[usb_ms_ocr_wordgame].board_dim_slots.y); y += 1)
+//					{
+//						for (u8 x = 0; x < pgm_read_byte(&WORDGAME_INFO[usb_ms_ocr_wordgame].board_dim_slots.x); x += 1)
+//						{
+//							switch (usb_ms_ocr_grid[y][x])
+//							{
+//								#define MAKE(NAME) case Letter_##NAME: debug_tx_cstr(#NAME); break;
+//								LETTER_XMDT(MAKE)
+//								#undef MAKE
+//								case Letter_COUNT: debug_tx_cstr("Letter_COUNT"); break;
+//							}
+//
+//							if (x == pgm_read_byte(&WORDGAME_INFO[usb_ms_ocr_wordgame].board_dim_slots.x) - 1)
+//							{
+//								debug_tx_cstr("\n");
+//							}
+//							else
+//							{
+//								debug_tx_cstr(" ");
+//							}
+//						}
+//					}
+//				} break;
+//			}
+//		}
+//
+//	//	click(0, 0);
+//
+//	//	click(10, 12);
+//	//	_delay_ms(1500.0);
+//
+//	//	click(64, 46);
+//
+//	//	click(0, 0);
+//
+//	//	_delay_ms(4000.0);
+//	}
 }
 //
 // Documentation.

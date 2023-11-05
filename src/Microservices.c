@@ -1479,7 +1479,7 @@ main(int argc, char** argv)
 
 				printf("[MASKIVERSE PHASE 3] Generating entries...\n");
 
-				strbuf_cstr(&output_buf, "const struct RowReducedMaskEntry ROW_REDUCED_MASK_ENTRIES[] PROGMEM =\n");
+				strbuf_cstr(&output_buf, "static const struct RowReducedMaskEntry ROW_REDUCED_MASK_ENTRIES[] PROGMEM =\n");
 				strbuf_cstr(&output_buf, "\t{\n");
 				for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
 				{

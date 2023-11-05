@@ -2250,7 +2250,7 @@ static const u8 ROW_REDUCED_MASK_ene[][MASK_DIM / 8] PROGMEM =
 		{ 0b00000000, 0b00000000, 0b00000000, 0b11111111, 0b10000001, 0b00001111, 0b00000000, 0b00000000, },
 		{ 0b00000000, 0b00000000, 0b00000000, 0b11111110, 0b00000000, 0b00001111, 0b00000000, 0b00000000, },
 	};
-const struct RowReducedMaskEntry ROW_REDUCED_MASK_ENTRIES[] PROGMEM =
+static const struct RowReducedMaskEntry ROW_REDUCED_MASK_ENTRIES[] PROGMEM =
 	{
 		[Letter_a           ] = { .data = (const u8*) ROW_REDUCED_MASK_a           , .empty_rows = 0b1011'0111 },
 		[Letter_b           ] = { .data = (const u8*) ROW_REDUCED_MASK_b           , .empty_rows = 0b1011'0111 },

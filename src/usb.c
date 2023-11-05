@@ -1,5 +1,5 @@
 #undef  PIN_HALT_SOURCE
-#define PIN_HALT_SOURCE HaltSource_diplomat_usb
+#define PIN_HALT_SOURCE HaltSource_usb
 
 // "HELD"   : Must evaluate to 0 or 1.
 // "DEST_X" : Must be within [0, 127].
@@ -226,6 +226,7 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 	UDINT = 0; // Clear interrupt flags to prevent this routine from executing again.
 }
 
+#if USB_MS_ENABLE
 static b8
 _usb_ms_ocr_slot_excluded(u8_2 coords)
 {
@@ -244,6 +245,7 @@ _usb_ms_ocr_slot_excluded(u8_2 coords)
 	}
 	return slot_excluded;
 }
+#endif
 
 ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 {

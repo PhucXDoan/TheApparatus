@@ -182,6 +182,25 @@ static const u8 ZERO_BIT_COUNT_DT[] PROGMEM =
 #endif
 
 //
+// "lcd.c"
+//
+
+#if PROGRAM_DIPLOMAT
+	#define PIN_LCD_ENABLE          4
+	#define PIN_LCD_REGISTER_SELECT 5
+	#define PIN_LCD_DATA_4          6
+	#define PIN_LCD_DATA_5          7
+	#define PIN_LCD_DATA_6          8
+	#define PIN_LCD_DATA_7          9
+	#define LCD_DIM_X               20
+	#define LCD_DIM_Y               4
+
+	static char _lcd_cache [LCD_DIM_Y][LCD_DIM_X] = {0};
+	static char lcd_display[LCD_DIM_Y][LCD_DIM_X] = {0};
+	static u8_2 lcd_cursor_pos                    = {0};
+#endif
+
+//
 // "string.c"
 //
 
@@ -650,10 +669,10 @@ struct RowReducedMaskEntry // Note: changing size of this means changing the cal
 
 enum HaltSource
 {
-	HaltSource_diplomat     = 0,
-	HaltSource_diplomat_usb = 1,
-	HaltSource_nerd         = 2,
-	HaltSource_sd           = 3,
+	HaltSource_diplomat = 0,
+	HaltSource_usb      = 1,
+	HaltSource_nerd     = 2,
+	HaltSource_sd       = 3,
 };
 
 #if __AVR_ATmega32U4__
@@ -893,13 +912,13 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 #endif
 
 //
-// "Diplomat_usb.c"
+// "usb.c"
 //
 
 #if DEBUG // Used to disable some USB functionalities for development purposes, but does not necessairly remove all data and control flow.
 	#define USB_CDC_ENABLE true
 	#define USB_HID_ENABLE false
-	#define USB_MS_ENABLE  true
+	#define USB_MS_ENABLE  false
 #else
 	#define USB_CDC_ENABLE false
 	#define USB_HID_ENABLE true
@@ -912,10 +931,10 @@ enum USBEndpointSizeCode // See: Source(1) @ Section(22.18.2) @ Page(287).
 	USBEndpointSizeCode_16  = 0b001,
 	USBEndpointSizeCode_32  = 0b010,
 	USBEndpointSizeCode_64  = 0b011,
-	USBEndpointSizeCode_128 = 0b100, // See: [Endpoint Sizes] @ "Diplomat_usb.c".
-	USBEndpointSizeCode_256 = 0b101, // See: [Endpoint Sizes] @ "Diplomat_usb.c".
+	USBEndpointSizeCode_128 = 0b100, // See: [Endpoint Sizes] @ "usb.c".
+	USBEndpointSizeCode_256 = 0b101, // See: [Endpoint Sizes] @ "usb.c".
 
-	// See: [Endpoint Sizes] @ "Diplomat_usb.c".
+	// See: [Endpoint Sizes] @ "usb.c".
 	// USBEndpointSizeCode_512 = 0b110,
 };
 
@@ -1752,7 +1771,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	static u8 _usb_mouse_curr_y       = 0; // Origin is top-left.
 	static b8 _usb_mouse_held         = false;
 
-	static volatile u16 _usb_mouse_command_buffer[8] = {0}; // See: [Mouse Commands] @ "Diplomat_usb.c".
+	static volatile u16 _usb_mouse_command_buffer[8] = {0}; // See: [Mouse Commands] @ "usb.c".
 	static volatile u8  _usb_mouse_command_writer    = 0;   // Main program writes.
 	static volatile u8  _usb_mouse_command_reader    = 0;   // Interrupt reads.
 
@@ -1845,6 +1864,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	Source(22) := Microsofts's "Windows GDI" PDF Article (Dated: 01/24/2023).
 	Source(23) := PDF Article of Microsoft's "Open Specifications" for Protocols (Dated: 08/01/2023).
 	Source(24) := Wikipedia's "BMP file format" Page (Last Edited: 23 October 2022, at 13:30 (UTC)).
+	Source(25) := HD44780U (LCD-II) (Dot Matrix Liquid Crystal Display Controller/Driver) by HITACHI (Dated: 1998).
 
 	We are working within the environment of the ATmega32U4 and ATmega2560 microcontrollers,
 	which are 8-bit CPUs. This consequently means that there are no padding bytes to
