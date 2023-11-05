@@ -1,3 +1,27 @@
+#if PROGRAM_MICROSERVICES
+static u16
+_crc16_update(u16 crc, u8 byte) // From avr-gcc's utils.
+{
+	crc ^= byte;
+
+	for (u8 i = 0; i < 8; i += 1)
+	{
+		if (crc & 1)
+		{
+			crc >>= 1;
+			crc  ^= 0b1010'0000'0000'0001;
+		}
+		else
+		{
+			crc >>= 1;
+		}
+	}
+
+	return crc;
+}
+#endif
+
+
 static u8 // Amount written; will never exceed 255 since all serialized u64s will be 20 bytes or shorter.
 serialize_u64(char* dst, u16 dst_size, u64 value) // "dst_size" of at least 20 will handle all values.
 {

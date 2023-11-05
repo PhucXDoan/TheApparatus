@@ -63,7 +63,7 @@ bmp_alloc_read_file(str file_path)
 	}
 	struct BMPFileHeader* file_header = (struct BMPFileHeader*) file_content.data;
 
-	if (!(file_header->bfType == (u16('B') | (u16('M') << 8)) && file_header->bfSize == file_content.length))
+	if (!(file_header->bfType == BMP_FILE_HEADER_SIGNATURE && file_header->bfSize == file_content.length))
 	{
 		error("Invalid BMP file header.");
 	}
@@ -136,8 +136,7 @@ bmp_alloc_read_file(str file_path)
 			dib_header->Compression == BMPCompression_RGB ||
 			dib_header->Compression == BMPCompression_BITFIELDS
 		) &&
-		dib_header->Height > 0 &&
-		dib_header->Size >= BMPDIBHEADER_MIN_SIZE_V3
+		dib_header->Height > 0
 	)
 	{
 		i32 bytes_per_row   = (dib_header->Width * (dib_header->BitCount / 8) + 3) / 4 * 4;
@@ -154,7 +153,7 @@ bmp_alloc_read_file(str file_path)
 			index_b =  0;
 			index_a = -1;
 		}
-		else
+		else if (dib_header->Size >= BMPDIBHEADER_MIN_SIZE_V3)
 		{
 			#define DETERMINE_MASK(MASK) \
 				( \
@@ -169,6 +168,10 @@ bmp_alloc_read_file(str file_path)
 			index_a = DETERMINE_MASK(dib_header->v3.AlphaMask);
 
 			#undef DETERMINE_MASK
+		}
+		else
+		{
+			error("Unhandled BMP configuration.");
 		}
 
 		result.dim.x = dib_header->Width;
@@ -230,7 +233,7 @@ bmp_export(struct BMP src, str file_path)
 		};
 	struct BMPFileHeader file_header =
 		{
-			.bfType    = u16('B') | (u16('M') << 8),
+			.bfType    = BMP_FILE_HEADER_SIGNATURE,
 			.bfSize    = sizeof(file_header) + dib_header.Size + src.dim.x * src.dim.y * sizeof(struct BMPPixel),
 			.bfOffBits = sizeof(file_header) + dib_header.Size,
 		};

@@ -85,6 +85,7 @@ pushd W:\build\
 	if not !ERRORLEVEL! == 0 (
 		goto ABORT
 	)
+	avr-size W:\build\Diplomat.elf W:\build\Nerd.elf
 
 	REM
 	REM Convert ELF into HEX.

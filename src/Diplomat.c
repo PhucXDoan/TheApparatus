@@ -10,9 +10,11 @@
 #include <avr/wdt.h>
 #include <avr/pgmspace.h>
 #include <util/delay.h>
+#include <util/crc16.h>
 #include <stdint.h>
 #include <string.h>
 #include "defs.h"
+#include "Diplomat_masks.h"
 #include "pin.c"
 #include "misc.c"
 #include "spi.c"
@@ -21,16 +23,16 @@
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE HaltSource_diplomat
 
-static void
-click(u8 x, u8 y)
-{
-	usb_mouse_command(false, x, y);
-	_delay_ms(500.0);
-	usb_mouse_command(true , x, y);
-	_delay_ms(50.0);
-	usb_mouse_command(false, x, y);
-	_delay_ms(450.0);
-}
+//static void
+//click(u8 x, u8 y)
+//{
+//	usb_mouse_command(false, x, y);
+//	_delay_ms(500.0);
+//	usb_mouse_command(true , x, y);
+//	_delay_ms(50.0);
+//	usb_mouse_command(false, x, y);
+//	_delay_ms(450.0);
+//}
 
 int
 main(void)
@@ -45,32 +47,67 @@ main(void)
 	sei();
 	spi_init();
 	sd_init();
+
 	usb_init();
 
 	while (true)
 	{
 		char input = {0};
-		if (debug_rx(&input, 1) && input == 'W')
+		if (debug_rx(&input, 1))
 		{
-			USBCON &= ~(1 << USBE);
-
-			memset(sd_sector, 0, sizeof(sd_sector));
-			for (u32 i = 0; i < FAT32_WIPE_SECTOR_COUNT; i += 1)
+			switch (input)
 			{
-				debug_u16(i);
-				sd_write(i);
+				case 'W':
+				{
+					cli();
+
+					USBCON &= ~(1 << USBE);
+
+					memset(sd_sector, 0, sizeof(sd_sector));
+					for (u32 i = 0; i < FAT32_WIPE_SECTOR_COUNT; i += 1)
+					{
+						debug_u16(i);
+						sd_write(i);
+					}
+
+					#define MAKE(SECTOR_DATA, SECTOR_ADDRESS) \
+						{ \
+							static_assert(sizeof(sd_sector) == sizeof(SECTOR_DATA)); \
+							memcpy_P(sd_sector, &(SECTOR_DATA), sizeof(SECTOR_DATA)); \
+							sd_write(SECTOR_ADDRESS); \
+						}
+					FAT32_SECTOR_XMDT(MAKE);
+					#undef MAKE
+
+					restart();
+				} break;
+
+				case ' ':
+				{
+					for (u8 y = 0; y < pgm_read_byte(&WORDGAME_INFO[usb_ms_ocr_wordgame].board_dim_slots.y); y += 1)
+					{
+						for (u8 x = 0; x < pgm_read_byte(&WORDGAME_INFO[usb_ms_ocr_wordgame].board_dim_slots.x); x += 1)
+						{
+							switch (usb_ms_ocr_grid[y][x])
+							{
+								#define MAKE(NAME) case Letter_##NAME: debug_tx_cstr(#NAME); break;
+								LETTER_XMDT(MAKE)
+								#undef MAKE
+								case Letter_COUNT: debug_tx_cstr("Letter_COUNT"); break;
+							}
+
+							if (x == pgm_read_byte(&WORDGAME_INFO[usb_ms_ocr_wordgame].board_dim_slots.x) - 1)
+							{
+								debug_tx_cstr("\n");
+							}
+							else
+							{
+								debug_tx_cstr(" ");
+							}
+						}
+					}
+				} break;
 			}
-
-			#define MAKE(SECTOR_DATA, SECTOR_ADDRESS) \
-				{ \
-					static_assert(sizeof(sd_sector) == sizeof(SECTOR_DATA)); \
-					memcpy_P(sd_sector, &(SECTOR_DATA), sizeof(SECTOR_DATA)); \
-					sd_write(SECTOR_ADDRESS); \
-				}
-			FAT32_SECTOR_XMDT(MAKE);
-			#undef MAKE
-
-			restart();
 		}
 
 	//	click(0, 0);

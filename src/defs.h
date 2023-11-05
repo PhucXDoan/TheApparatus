@@ -7,8 +7,8 @@
 #define countof(...)     (sizeof(__VA_ARGS__) / sizeof((__VA_ARGS__)[0]))
 #define bitsof(...)      (sizeof(__VA_ARGS__) * 8)
 #define implies(P, Q)    (!(P) || (Q))
-#define static_assert(X) _Static_assert((X), #X)
 #define grp(...)         { __VA_ARGS__ }
+#define static_assert(X) _Static_assert((X), #X)
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
@@ -139,6 +139,49 @@ typedef struct { b64 x; b64 y; b64 z; b64 w; } b64_4;
 static_assert(LITTLE_ENDIAN);
 
 //
+// Miscellaneous.
+//
+
+#if PROGRAM_DIPLOMAT
+#define count_cleared_bits(...) pgm_read_byte(&ZERO_BIT_COUNT_DT[(u8) { __VA_ARGS__ }])
+static const u8 ZERO_BIT_COUNT_DT[] PROGMEM =
+	{
+		[0b00000000] = 8, [0b00000001] = 7, [0b00000010] = 7, [0b00000011] = 6, [0b00000100] = 7, [0b00000101] = 6, [0b00000110] = 6, [0b00000111] = 5,
+		[0b00001000] = 7, [0b00001001] = 6, [0b00001010] = 6, [0b00001011] = 5, [0b00001100] = 6, [0b00001101] = 5, [0b00001110] = 5, [0b00001111] = 4,
+		[0b00010000] = 7, [0b00010001] = 6, [0b00010010] = 6, [0b00010011] = 5, [0b00010100] = 6, [0b00010101] = 5, [0b00010110] = 5, [0b00010111] = 4,
+		[0b00011000] = 6, [0b00011001] = 5, [0b00011010] = 5, [0b00011011] = 4, [0b00011100] = 5, [0b00011101] = 4, [0b00011110] = 4, [0b00011111] = 3,
+		[0b00100000] = 7, [0b00100001] = 6, [0b00100010] = 6, [0b00100011] = 5, [0b00100100] = 6, [0b00100101] = 5, [0b00100110] = 5, [0b00100111] = 4,
+		[0b00101000] = 6, [0b00101001] = 5, [0b00101010] = 5, [0b00101011] = 4, [0b00101100] = 5, [0b00101101] = 4, [0b00101110] = 4, [0b00101111] = 3,
+		[0b00110000] = 6, [0b00110001] = 5, [0b00110010] = 5, [0b00110011] = 4, [0b00110100] = 5, [0b00110101] = 4, [0b00110110] = 4, [0b00110111] = 3,
+		[0b00111000] = 5, [0b00111001] = 4, [0b00111010] = 4, [0b00111011] = 3, [0b00111100] = 4, [0b00111101] = 3, [0b00111110] = 3, [0b00111111] = 2,
+		[0b01000000] = 7, [0b01000001] = 6, [0b01000010] = 6, [0b01000011] = 5, [0b01000100] = 6, [0b01000101] = 5, [0b01000110] = 5, [0b01000111] = 4,
+		[0b01001000] = 6, [0b01001001] = 5, [0b01001010] = 5, [0b01001011] = 4, [0b01001100] = 5, [0b01001101] = 4, [0b01001110] = 4, [0b01001111] = 3,
+		[0b01010000] = 6, [0b01010001] = 5, [0b01010010] = 5, [0b01010011] = 4, [0b01010100] = 5, [0b01010101] = 4, [0b01010110] = 4, [0b01010111] = 3,
+		[0b01011000] = 5, [0b01011001] = 4, [0b01011010] = 4, [0b01011011] = 3, [0b01011100] = 4, [0b01011101] = 3, [0b01011110] = 3, [0b01011111] = 2,
+		[0b01100000] = 6, [0b01100001] = 5, [0b01100010] = 5, [0b01100011] = 4, [0b01100100] = 5, [0b01100101] = 4, [0b01100110] = 4, [0b01100111] = 3,
+		[0b01101000] = 5, [0b01101001] = 4, [0b01101010] = 4, [0b01101011] = 3, [0b01101100] = 4, [0b01101101] = 3, [0b01101110] = 3, [0b01101111] = 2,
+		[0b01110000] = 5, [0b01110001] = 4, [0b01110010] = 4, [0b01110011] = 3, [0b01110100] = 4, [0b01110101] = 3, [0b01110110] = 3, [0b01110111] = 2,
+		[0b01111000] = 4, [0b01111001] = 3, [0b01111010] = 3, [0b01111011] = 2, [0b01111100] = 3, [0b01111101] = 2, [0b01111110] = 2, [0b01111111] = 1,
+		[0b10000000] = 7, [0b10000001] = 6, [0b10000010] = 6, [0b10000011] = 5, [0b10000100] = 6, [0b10000101] = 5, [0b10000110] = 5, [0b10000111] = 4,
+		[0b10001000] = 6, [0b10001001] = 5, [0b10001010] = 5, [0b10001011] = 4, [0b10001100] = 5, [0b10001101] = 4, [0b10001110] = 4, [0b10001111] = 3,
+		[0b10010000] = 6, [0b10010001] = 5, [0b10010010] = 5, [0b10010011] = 4, [0b10010100] = 5, [0b10010101] = 4, [0b10010110] = 4, [0b10010111] = 3,
+		[0b10011000] = 5, [0b10011001] = 4, [0b10011010] = 4, [0b10011011] = 3, [0b10011100] = 4, [0b10011101] = 3, [0b10011110] = 3, [0b10011111] = 2,
+		[0b10100000] = 6, [0b10100001] = 5, [0b10100010] = 5, [0b10100011] = 4, [0b10100100] = 5, [0b10100101] = 4, [0b10100110] = 4, [0b10100111] = 3,
+		[0b10101000] = 5, [0b10101001] = 4, [0b10101010] = 4, [0b10101011] = 3, [0b10101100] = 4, [0b10101101] = 3, [0b10101110] = 3, [0b10101111] = 2,
+		[0b10110000] = 5, [0b10110001] = 4, [0b10110010] = 4, [0b10110011] = 3, [0b10110100] = 4, [0b10110101] = 3, [0b10110110] = 3, [0b10110111] = 2,
+		[0b10111000] = 4, [0b10111001] = 3, [0b10111010] = 3, [0b10111011] = 2, [0b10111100] = 3, [0b10111101] = 2, [0b10111110] = 2, [0b10111111] = 1,
+		[0b11000000] = 6, [0b11000001] = 5, [0b11000010] = 5, [0b11000011] = 4, [0b11000100] = 5, [0b11000101] = 4, [0b11000110] = 4, [0b11000111] = 3,
+		[0b11001000] = 5, [0b11001001] = 4, [0b11001010] = 4, [0b11001011] = 3, [0b11001100] = 4, [0b11001101] = 3, [0b11001110] = 3, [0b11001111] = 2,
+		[0b11010000] = 5, [0b11010001] = 4, [0b11010010] = 4, [0b11010011] = 3, [0b11010100] = 4, [0b11010101] = 3, [0b11010110] = 3, [0b11010111] = 2,
+		[0b11011000] = 4, [0b11011001] = 3, [0b11011010] = 3, [0b11011011] = 2, [0b11011100] = 3, [0b11011101] = 2, [0b11011110] = 2, [0b11011111] = 1,
+		[0b11100000] = 5, [0b11100001] = 4, [0b11100010] = 4, [0b11100011] = 3, [0b11100100] = 4, [0b11100101] = 3, [0b11100110] = 3, [0b11100111] = 2,
+		[0b11101000] = 4, [0b11101001] = 3, [0b11101010] = 3, [0b11101011] = 2, [0b11101100] = 3, [0b11101101] = 2, [0b11101110] = 2, [0b11101111] = 1,
+		[0b11110000] = 4, [0b11110001] = 3, [0b11110010] = 3, [0b11110011] = 2, [0b11110100] = 3, [0b11110101] = 2, [0b11110110] = 2, [0b11110111] = 1,
+		[0b11111000] = 3, [0b11111001] = 2, [0b11111010] = 2, [0b11111011] = 1, [0b11111100] = 2, [0b11111101] = 1, [0b11111110] = 1, [0b11111111] = 0,
+	};
+#endif
+
+//
 // "string.c"
 //
 
@@ -228,7 +271,8 @@ struct BMPRGBQuad // See: "RGBQUAD" @ Source(22) @ Page(1344).
 #pragma pack(push, 1)
 struct BMPFileHeader // See: "BITMAPFILEHEADER" @ Source(22) @ Page(281).
 {
-	u16 bfType;      // Must be 'B' followed by 'M', i.e. 0x4D42.
+	#define BMP_FILE_HEADER_SIGNATURE (u16('B') | (u16('M') << 8))
+	u16 bfType;      // Must be BMP_FILE_HEADER_SIGNATURE.
 	u32 bfSize;      // Size of the entire BMP file in bytes.
 	u16 bfReserved1;
 	u16 bfReserved2;
@@ -248,7 +292,7 @@ struct BMPDIBHeader // "BITMAPCOREHEADER" not supported.
 	i32 Height;        // Generally, height of image where positive is bottom-up and negative is top-down, but check documentation.
 	u16 Planes;        // Must be 1.
 	u16 BitCount;      // Bits per pixel.
-	u32 Compression;   // Either BMPCompression_BI_RGB or BMPCompression_BI_BITFIELDS.
+	u32 Compression;
 	u32 SizeImage;     // Byte count of the image; can be zero for uncompressed RGB images.
 	i32 XPelsPerMeter;
 	i32 YPelsPerMeter;
@@ -293,6 +337,312 @@ struct BMPDIBHeader // "BITMAPCOREHEADER" not supported.
 	} v5;
 };
 #pragma pack(pop)
+
+//
+// "Microservices.c".
+//
+
+#define CLI_EXE_NAME "Microservices.exe"
+#define CLI_EXE_DESC "Microservices to help you bring change to the world."
+#define CLI_PROGRAM_XMDT(X) \
+	X(eaglepeek   , "Identify the Game Pigeon word game shown in a screenshot.") \
+	X(extractor   , "Create a BMP of each slot in screenshots of Game Pigeon word games.") \
+	X(monochromize, "Convert each BMP into a strictly black and white image based on the red channel.") \
+	X(stretchie   , "Resize BMPs into the common square mask.") \
+	X(collectune  , "Copy BMPs into folder with the closest matching mask.") \
+	X(meltingpot  , "Average together BMPs.") \
+	X(maskiverse  , "Format masks into data formatted for C to be included into compilation.") \
+	X(catchya     , "Identify letters and their positions within a screenshot of a Game Pigeon word game.") \
+	X(intelliteck , "Perform CRC-16 on an image's pixels that'd pass monochromize's threshold.")
+
+#define CLI_PROGRAM_eaglepeek_FIELD_XMDT(X, ...) \
+	X(input_dir_paths, dary_string, "screenshot-dir-path...", "Directory path of the screenshots to identify.",##__VA_ARGS__) \
+
+#define CLI_PROGRAM_extractor_FIELD_XMDT(X, ...) \
+	X(output_dir_path , string     , "output-dir-path"       , "Destination directory to store the extracted BMPs.",##__VA_ARGS__) \
+	X(input_dir_paths , dary_string, "screenshot-dir-path...", "Directory paths that'll be filtered for screenshots of the games.",##__VA_ARGS__) \
+	X(clear_output_dir, b32        , "--clear-output-dir"    , "Delete all content within the output directory before processing.",##__VA_ARGS__)
+
+#define CLI_PROGRAM_monochromize_FIELD_XMDT(X, ...) \
+	X(output_dir_path , string, "output-dir-path"   , "Destination directory to store the monochromized BMPs.",##__VA_ARGS__) \
+	X(input_dir_path  , string, "input-dir-path"    , "Directory path of the BMPs.",##__VA_ARGS__) \
+	X(clear_output_dir, b32   , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
+
+#define CLI_PROGRAM_stretchie_FIELD_XMDT(X, ...) \
+	X(output_dir_path , string, "output-dir-path"   , "Destination directory to store the stretchie'd BMPs.",##__VA_ARGS__) \
+	X(input_dir_path  , string, "input-dir-path"    , "Directory path of the BMPs.",##__VA_ARGS__) \
+	X(clear_output_dir, b32   , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
+
+#define CLI_PROGRAM_collectune_FIELD_XMDT(X, ...) \
+	X(output_dir_path  , string, "output-dir-path"   , "Destination directory to store the collections.",##__VA_ARGS__) \
+	X(mask_dir_path    , string, "mask-dir-path"     , "Directory path of the masks.",##__VA_ARGS__) \
+	X(unsorted_dir_path, string, "unsorted-dir-path" , "Directory path of the BMPs to be sorted.",##__VA_ARGS__) \
+	X(clear_output_dir , b32   , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
+
+#define CLI_PROGRAM_meltingpot_FIELD_XMDT(X, ...) \
+	X(output_file_path, string, "output-file-path", "File path of the result.",##__VA_ARGS__) \
+	X(input_dir_path  , string, "input-dir-path"  , "Directory path of the BMPs.",##__VA_ARGS__) \
+	X(or_filter       , b32   , "--or"            , "Logical OR each pixel instead of averaging.",##__VA_ARGS__)
+
+#define CLI_PROGRAM_maskiverse_FIELD_XMDT(X, ...) \
+	X(dir_path, string, "mask-dir-path", "Directory path of the mask BMPs. Output will be dumped here.",##__VA_ARGS__) \
+
+#define CLI_PROGRAM_catchya_FIELD_XMDT(X, ...) \
+	X(mask_dir_path       , string, "mask-dir-path"        , "Directory path of the masks.",##__VA_ARGS__) \
+	X(screenshot_file_path, string, "screenshot-file-path" , "File path to the screenshot.",##__VA_ARGS__) \
+
+#define CLI_PROGRAM_intelliteck_FIELD_XMDT(X, ...) \
+	X(input_file_path, string, "file-path", "File path to the image.",##__VA_ARGS__) \
+
+#define CLI_TYPING_XMDT(X) \
+	X(string     , union { struct { char* data; i64 length; }; char* cstr; str str; }) \
+	X(dary_string, struct Dary_CLIFieldTyping_string_t) \
+	X(b32        , b32)
+
+#if PROGRAM_MICROSERVICES
+	enum CLIFieldTyping
+	{
+		#define MAKE(TYPING_NAME, TYPING_TYPE) CLIFieldTyping_##TYPING_NAME,
+		CLI_TYPING_XMDT(MAKE)
+		#undef MAKE
+	};
+
+	#define MAKE(TYPING_NAME, TYPING_TYPE) typedef TYPING_TYPE CLIFieldTyping_##TYPING_NAME##_t;
+	CLI_TYPING_XMDT(MAKE)
+	#undef MAKE
+	Dary_def(CLIFieldTyping_string_t);
+
+	enum CLIProgram
+	{
+		#define MAKE(PROGRAM_NAME, PROGRAM_DESC) CLIProgram_##PROGRAM_NAME,
+		CLI_PROGRAM_XMDT(MAKE)
+		#undef MAKE
+		CLIProgram_COUNT
+	};
+
+	#define MAKE_CLI_FIELD(PROGRAM_NAME, PROGRAM_DESC) \
+		enum CLIField_##PROGRAM_NAME \
+		{ \
+			CLI_PROGRAM_##PROGRAM_NAME##_FIELD_XMDT(MAKE_CLI_FIELD_MEMBERS, PROGRAM_NAME) \
+			CLIField_##PROGRAM_NAME##_COUNT \
+		};
+	#define MAKE_CLI_FIELD_MEMBERS(FIELD_NAME, FIELD_TYPING_NAME, FIELD_PATTERN, FIELD_DESC, PROGRAM_NAME) \
+		CLIField_##PROGRAM_NAME##_##FIELD_NAME,
+	CLI_PROGRAM_XMDT(MAKE_CLI_FIELD)
+	#undef MAKE_CLI_FIELD_MEMBERS
+	#undef MAKE_CLI_FIELD
+
+	struct CLI
+	{
+		#define MAKE_CLI_PROGRAM(PROGRAM_NAME, PROGRAM_DESC) \
+			struct CLIProgram_##PROGRAM_NAME##_t \
+			{ \
+				CLI_PROGRAM_##PROGRAM_NAME##_FIELD_XMDT(MAKE_CLI_PROGRAM_MEMBERS) \
+			} PROGRAM_NAME;
+		#define MAKE_CLI_PROGRAM_MEMBERS(FIELD_NAME, FIELD_TYPING_NAME, FIELD_PATTERN, FIELD_DESC) \
+			CLIFieldTyping_##FIELD_TYPING_NAME##_t FIELD_NAME;
+		CLI_PROGRAM_XMDT(MAKE_CLI_PROGRAM)
+		#undef MAKE_CLI_PROGRAM_MEMBERS
+		#undef MAKE_CLI_PROGRAM
+	};
+
+	struct CLIFieldInfo
+	{
+		i64                 offset;
+		enum CLIFieldTyping typing;
+		str                 pattern;
+		str                 desc;
+	};
+
+	struct CLIProgramInfo
+	{
+		str                 name;
+		str                 desc;
+		struct CLIFieldInfo fields[8];
+		i32                 field_count;
+	};
+
+	static const struct CLIProgramInfo CLI_PROGRAM_INFO[] =
+		{
+			#define MAKE_PROGRAM_INFO(PROGRAM_NAME, PROGRAM_DESC) \
+				{ \
+					.name   = STR(#PROGRAM_NAME), \
+					.desc   = STR(PROGRAM_DESC), \
+					.fields = \
+						{ \
+							CLI_PROGRAM_##PROGRAM_NAME##_FIELD_XMDT(MAKE_FIELD_INFO, PROGRAM_NAME) \
+						}, \
+					.field_count = CLIField_##PROGRAM_NAME##_COUNT, \
+				},
+			#define MAKE_FIELD_INFO(FIELD_NAME, FIELD_TYPING_NAME, FIELD_PATTERN, FIELD_DESC, PROGRAM_NAME) \
+				{ \
+					.offset  = offsetof(struct CLI, PROGRAM_NAME.FIELD_NAME), \
+					.typing  = CLIFieldTyping_##FIELD_TYPING_NAME, \
+					.pattern = STR(FIELD_PATTERN), \
+					.desc    = STR(FIELD_DESC), \
+				},
+			CLI_PROGRAM_XMDT(MAKE_PROGRAM_INFO)
+			#undef MAKE_FIELD_INFO
+			#undef MAKE_PROGRAM_INFO
+		};
+#endif
+
+
+
+
+
+
+
+#define SCREENSHOT_DIM_X 1170
+#define SCREENSHOT_DIM_Y 2532
+
+#define EXTRACTOR_RGB_EPSILON 0.015
+
+#define WORDGAME_XMDT(X) \
+	/*    Names                               | Board Position | Board Dimensions (slots) | Slot Dimensions | Uncompressed Slot Stride | Compressed Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB          | Excluded Slot Coordinates */ \
+		X(anagrams_6, "Anagrams (6 Letters)",   39, 354,         6, 1,                      119,              195,                       105,                     32 , 656,              256, 16,                 0.2645, 0.2409, 0.3358, ) \
+		X(anagrams_7, "Anagrams (7 Letters)",   31, 375,         7, 1,                      102,              168,                       0,                       32 , 656,              256, 16,                 0.5036, 0.4814, 0.6467, )
+
+#define WORDGAME_BOARD_MAX_DIM_X_(IDENTIFIER_NAME, PRINT_NAME, BOARD_POS_X, BOARD_POS_Y, BOARD_DIM_SLOTS_X, BOARD_DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[BOARD_DIM_SLOTS_X];
+#define WORDGAME_BOARD_MAX_DIM_Y_(IDENTIFIER_NAME, PRINT_NAME, BOARD_POS_X, BOARD_POS_Y, BOARD_DIM_SLOTS_X, BOARD_DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[BOARD_DIM_SLOTS_Y];
+#define WORDGAME_BOARD_MAX_DIM_X sizeof(union { WORDGAME_XMDT(WORDGAME_BOARD_MAX_DIM_X_) })
+#define WORDGAME_BOARD_MAX_DIM_Y sizeof(union { WORDGAME_XMDT(WORDGAME_BOARD_MAX_DIM_Y_) })
+
+enum WordGame
+{
+	#define MAKE(IDENTIFIER_NAME, ...) \
+		WordGame_##IDENTIFIER_NAME,
+	WORDGAME_XMDT(MAKE)
+	#undef MAKE
+	WordGame_COUNT
+};
+
+#if PROGRAM_MICROSERVICES || PROGRAM_DIPLOMAT
+	struct WordGameInfo
+	{
+		u8_2 board_dim_slots;
+		u8_2 excluded_slot_coords[5];
+		u8   excluded_slot_coords_count;
+		u8   compressed_slot_stride;
+
+		#if PROGRAM_MICROSERVICES
+			str   name;
+			i32_2 board_pos;
+			i32   slot_dim;
+			i32   uncompressed_slot_stride;
+			i32_2 test_region_pos;
+			i32_2 test_region_dim;
+			f64_3 test_region_rgb;
+		#endif
+	};
+
+	#if PROGRAM_DIPLOMAT
+		static const struct WordGameInfo WORDGAME_INFO[] PROGMEM =
+			{
+				#define MAKE( \
+					IDENTIFIER_NAME, \
+					PRINT_NAME, \
+					BOARD_POS_X, BOARD_POS_Y, \
+					BOARD_DIM_SLOTS_X, BOARD_DIM_SLOTS_Y, \
+					SLOT_DIM, \
+					UNCOMPRESSED_SLOT_STRIDE, \
+					COMPRESSED_SLOT_STRIDE, \
+					TEST_REGION_POS_X, TEST_REGION_POS_Y, \
+					TEST_REGION_DIM_X, TEST_REGION_DIM_Y, \
+					TEST_REGION_R, TEST_REGION_G, TEST_REGION_B, \
+					... \
+				) \
+					{ \
+						.board_dim_slots.x          = BOARD_DIM_SLOTS_X, \
+						.board_dim_slots.y          = BOARD_DIM_SLOTS_Y, \
+						.excluded_slot_coords       = { [0] = { 0, 0 }, __VA_ARGS__ }, \
+						.excluded_slot_coords_count = countof((u8[][2]) { { 0, 0 }, __VA_ARGS__ }) - 1, \
+						.compressed_slot_stride     = COMPRESSED_SLOT_STRIDE, \
+					},
+				WORDGAME_XMDT(MAKE)
+				#undef MAKE
+			};
+	#else
+		static const struct WordGameInfo WORDGAME_INFO[] =
+			{
+				#define MAKE( \
+					IDENTIFIER_NAME, \
+					PRINT_NAME, \
+					BOARD_POS_X, BOARD_POS_Y, \
+					BOARD_DIM_SLOTS_X, BOARD_DIM_SLOTS_Y, \
+					SLOT_DIM, \
+					UNCOMPRESSED_SLOT_STRIDE, \
+					COMPRESSED_SLOT_STRIDE, \
+					TEST_REGION_POS_X, TEST_REGION_POS_Y, \
+					TEST_REGION_DIM_X, TEST_REGION_DIM_Y, \
+					TEST_REGION_R, TEST_REGION_G, TEST_REGION_B, \
+					... \
+				) \
+					{ \
+						.name                       = STR(PRINT_NAME), \
+						.board_pos.x                = BOARD_POS_X, \
+						.board_pos.y                = BOARD_POS_Y, \
+						.board_dim_slots.x          = BOARD_DIM_SLOTS_X, \
+						.board_dim_slots.y          = BOARD_DIM_SLOTS_Y, \
+						.slot_dim                   = SLOT_DIM, \
+						.uncompressed_slot_stride   = UNCOMPRESSED_SLOT_STRIDE, \
+						.compressed_slot_stride     = COMPRESSED_SLOT_STRIDE, \
+						.test_region_pos.x          = TEST_REGION_POS_X, \
+						.test_region_pos.y          = TEST_REGION_POS_Y, \
+						.test_region_dim.x          = TEST_REGION_DIM_X, \
+						.test_region_dim.y          = TEST_REGION_DIM_Y, \
+						.test_region_rgb.x          = TEST_REGION_R, \
+						.test_region_rgb.y          = TEST_REGION_G, \
+						.test_region_rgb.z          = TEST_REGION_B, \
+						.excluded_slot_coords       = { [0] = { 0, 0 }, __VA_ARGS__ }, \
+						.excluded_slot_coords_count = countof((u8_2[]) { { 0, 0 }, __VA_ARGS__ }) - 1, \
+					},
+				WORDGAME_XMDT(MAKE)
+				#undef MAKE
+			};
+	#endif
+#endif
+
+
+
+
+
+
+
+#define MASK_ACTIVATION_THRESHOLD 8
+#define MASK_DIM                  64
+
+#define LETTER_XMDT(X) \
+	X(a) X(b) X(c) X(d) X(e) X(f) X(g) X(h) X(i) X(j) X(k) X(l) X(m) \
+	X(n) X(o) X(p) X(q) X(r) X(s) X(t) X(u) X(v) X(w) X(x) X(y) X(z) \
+	X(boris  ) X(chelovek    ) X(dmitri) X(fyodor) X(gregory) X(ivan) X(ivan_kratkiy) \
+	X(leonid ) X(myagkiy_znak) X(pavel ) X(shura ) X(ulyana ) X(yery) X(zhenya      ) \
+	X(zinaida) \
+	X(a_umlaut) X(o_umlaut) \
+	X(ene)
+
+enum Letter
+{
+	#define MAKE(NAME) Letter_##NAME,
+	LETTER_XMDT(MAKE)
+	#undef MAKE
+	Letter_COUNT
+};
+
+#if PROGRAM_MICROSERVICES
+	static const str LETTER_NAMES[] =
+		{
+			#define MAKE(NAME) STR(#NAME),
+			LETTER_XMDT(MAKE)
+			#undef MAKE
+		};
+#endif
+
+struct RowReducedMaskEntry // Note: changing size of this means changing the calculation for the maskiverse microservice.
+{
+	const u8* data;
+	u8        empty_rows; // Least significant nibble stores amount of empty rows from bottom, most significant nibble stores aount of empty rows on top.
+};
 
 //
 // "pin.c"
@@ -548,7 +898,7 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 
 #if DEBUG // Used to disable some USB functionalities for development purposes, but does not necessairly remove all data and control flow.
 	#define USB_CDC_ENABLE true
-	#define USB_HID_ENABLE true
+	#define USB_HID_ENABLE false
 	#define USB_MS_ENABLE  true
 #else
 	#define USB_CDC_ENABLE false
@@ -1422,10 +1772,18 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	#if USB_MS_ENABLE
 		static struct USBMSCommandStatusWrapper _usb_ms_status      = { .dCSWSignature = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE };
 		static b8                               _usb_ms_send_status = false;
+
+		static volatile b8            usb_ms_ocr_processing = false;
+		static volatile enum WordGame usb_ms_ocr_wordgame   = {0};
+		static volatile enum Letter   usb_ms_ocr_grid[WORDGAME_BOARD_MAX_DIM_Y][WORDGAME_BOARD_MAX_DIM_X] = {0};
+
+		static u32 _usb_ms_ocr_pixels_processed                                        = 0;
+		static u8  _usb_ms_ocr_slot_bits[MASK_DIM / 8]                                 = {0};
+		static u16 _usb_ms_ocr_slot_scores[WORDGAME_BOARD_MAX_DIM_X + 1][Letter_COUNT] = {0};
 	#endif
 
-	#if DEBUG
-		#if USB_CDC_ENABLE
+	#if USB_CDC_ENABLE
+		#if DEBUG
 			static volatile u8 debug_usb_cdc_in_buffer [USB_ENDPOINT_CDC_IN_SIZE ] = {0};
 			static volatile u8 debug_usb_cdc_out_buffer[USB_ENDPOINT_CDC_OUT_SIZE] = {0};
 
@@ -1457,251 +1815,6 @@ struct USBConfig // This layout is defined uniquely for our device application.
 		#endif
 	#endif
 #endif
-
-//
-// "Microservices.c".
-//
-
-#define CLI_EXE_NAME "Microservices.exe"
-#define CLI_EXE_DESC "Microservices to help you bring change to the world."
-#define CLI_PROGRAM_XMDT(X) \
-	X(eaglepeek   , "Identify the Game Pigeon word game shown in a screenshot.") \
-	X(extractor   , "Create a BMP of each slot in screenshots of Game Pigeon word games.") \
-	X(monochromize, "Convert each BMP into a strictly black and white image.") \
-	X(stretchie   , "Resize BMPs into the common square mask.") \
-	X(collectune  , "Copy BMPs into folder with the closest matching mask.") \
-	X(meltingpot  , "Average together BMPs.") \
-	X(maskiverse  , "Format masks into data formatted for C to be included into compilation.") \
-	X(catchya     , "Identify letters and their positions within a screenshot of a Game Pigeon word game.")
-
-#define CLI_PROGRAM_eaglepeek_FIELD_XMDT(X, ...) \
-	X(input_dir_paths, dary_string, "screenshot-dir-path...", "Directory path of the screenshots to identify.",##__VA_ARGS__) \
-
-#define CLI_PROGRAM_extractor_FIELD_XMDT(X, ...) \
-	X(output_dir_path , string     , "output-dir-path"       , "Destination directory to store the extracted BMPs.",##__VA_ARGS__) \
-	X(input_dir_paths , dary_string, "screenshot-dir-path...", "Directory paths that'll be filtered for screenshots of the games.",##__VA_ARGS__) \
-	X(clear_output_dir, b32        , "--clear-output-dir"    , "Delete all content within the output directory before processing.",##__VA_ARGS__)
-
-#define CLI_PROGRAM_monochromize_FIELD_XMDT(X, ...) \
-	X(output_dir_path , string, "output-dir-path"   , "Destination directory to store the monochromized BMPs.",##__VA_ARGS__) \
-	X(input_dir_path  , string, "input-dir-path"    , "Directory path of the BMPs.",##__VA_ARGS__) \
-	X(clear_output_dir, b32   , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
-
-#define CLI_PROGRAM_stretchie_FIELD_XMDT(X, ...) \
-	X(output_dir_path , string, "output-dir-path"   , "Destination directory to store the stretchie'd BMPs.",##__VA_ARGS__) \
-	X(input_dir_path  , string, "input-dir-path"    , "Directory path of the BMPs.",##__VA_ARGS__) \
-	X(clear_output_dir, b32   , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
-
-#define CLI_PROGRAM_collectune_FIELD_XMDT(X, ...) \
-	X(output_dir_path  , string, "output-dir-path"   , "Destination directory to store the collections.",##__VA_ARGS__) \
-	X(mask_dir_path    , string, "mask-dir-path"     , "Directory path of the masks.",##__VA_ARGS__) \
-	X(unsorted_dir_path, string, "unsorted-dir-path" , "Directory path of the BMPs to be sorted.",##__VA_ARGS__) \
-	X(clear_output_dir , b32   , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
-
-#define CLI_PROGRAM_meltingpot_FIELD_XMDT(X, ...) \
-	X(output_file_path, string, "output-file-path", "File path of the result.",##__VA_ARGS__) \
-	X(input_dir_path  , string, "input-dir-path"  , "Directory path of the BMPs.",##__VA_ARGS__) \
-	X(or_filter       , b32   , "--or"            , "Logical OR each pixel instead of averaging.",##__VA_ARGS__)
-
-#define CLI_PROGRAM_maskiverse_FIELD_XMDT(X, ...) \
-	X(dir_path, string, "mask-dir-path", "Directory path of the mask BMPs. Output will be dumped here.",##__VA_ARGS__) \
-
-#define CLI_PROGRAM_catchya_FIELD_XMDT(X, ...) \
-	X(mask_dir_path       , string, "mask-dir-path"        , "Directory path of the masks.",##__VA_ARGS__) \
-	X(screenshot_file_path, string, "screenshot-file-path" , "File path to the screenshot.",##__VA_ARGS__) \
-
-#define CLI_TYPING_XMDT(X) \
-	X(string     , union { struct { char* data; i64 length; }; char* cstr; str str; }) \
-	X(dary_string, struct Dary_CLIFieldTyping_string_t) \
-	X(b32        , b32)
-
-#if PROGRAM_MICROSERVICES
-	enum CLIFieldTyping
-	{
-		#define MAKE(TYPING_NAME, TYPING_TYPE) CLIFieldTyping_##TYPING_NAME,
-		CLI_TYPING_XMDT(MAKE)
-		#undef MAKE
-	};
-
-	#define MAKE(TYPING_NAME, TYPING_TYPE) typedef TYPING_TYPE CLIFieldTyping_##TYPING_NAME##_t;
-	CLI_TYPING_XMDT(MAKE)
-	#undef MAKE
-	Dary_def(CLIFieldTyping_string_t);
-
-	enum CLIProgram
-	{
-		#define MAKE(PROGRAM_NAME, PROGRAM_DESC) CLIProgram_##PROGRAM_NAME,
-		CLI_PROGRAM_XMDT(MAKE)
-		#undef MAKE
-		CLIProgram_COUNT
-	};
-
-	#define MAKE_CLI_FIELD(PROGRAM_NAME, PROGRAM_DESC) \
-		enum CLIField_##PROGRAM_NAME \
-		{ \
-			CLI_PROGRAM_##PROGRAM_NAME##_FIELD_XMDT(MAKE_CLI_FIELD_MEMBERS, PROGRAM_NAME) \
-			CLIField_##PROGRAM_NAME##_COUNT \
-		};
-	#define MAKE_CLI_FIELD_MEMBERS(FIELD_NAME, FIELD_TYPING_NAME, FIELD_PATTERN, FIELD_DESC, PROGRAM_NAME) \
-		CLIField_##PROGRAM_NAME##_##FIELD_NAME,
-	CLI_PROGRAM_XMDT(MAKE_CLI_FIELD)
-	#undef MAKE_CLI_FIELD_MEMBERS
-	#undef MAKE_CLI_FIELD
-
-	struct CLI
-	{
-		#define MAKE_CLI_PROGRAM(PROGRAM_NAME, PROGRAM_DESC) \
-			struct CLIProgram_##PROGRAM_NAME##_t \
-			{ \
-				CLI_PROGRAM_##PROGRAM_NAME##_FIELD_XMDT(MAKE_CLI_PROGRAM_MEMBERS) \
-			} PROGRAM_NAME;
-		#define MAKE_CLI_PROGRAM_MEMBERS(FIELD_NAME, FIELD_TYPING_NAME, FIELD_PATTERN, FIELD_DESC) \
-			CLIFieldTyping_##FIELD_TYPING_NAME##_t FIELD_NAME;
-		CLI_PROGRAM_XMDT(MAKE_CLI_PROGRAM)
-		#undef MAKE_CLI_PROGRAM_MEMBERS
-		#undef MAKE_CLI_PROGRAM
-	};
-
-	struct CLIFieldInfo
-	{
-		i64                 offset;
-		enum CLIFieldTyping typing;
-		str                 pattern;
-		str                 desc;
-	};
-
-	struct CLIProgramInfo
-	{
-		str                 name;
-		str                 desc;
-		struct CLIFieldInfo fields[8];
-		i32                 field_count;
-	};
-
-	static const struct CLIProgramInfo CLI_PROGRAM_INFO[] =
-		{
-			#define MAKE_PROGRAM_INFO(PROGRAM_NAME, PROGRAM_DESC) \
-				{ \
-					.name   = STR(#PROGRAM_NAME), \
-					.desc   = STR(PROGRAM_DESC), \
-					.fields = \
-						{ \
-							CLI_PROGRAM_##PROGRAM_NAME##_FIELD_XMDT(MAKE_FIELD_INFO, PROGRAM_NAME) \
-						}, \
-					.field_count = CLIField_##PROGRAM_NAME##_COUNT, \
-				},
-			#define MAKE_FIELD_INFO(FIELD_NAME, FIELD_TYPING_NAME, FIELD_PATTERN, FIELD_DESC, PROGRAM_NAME) \
-				{ \
-					.offset  = offsetof(struct CLI, PROGRAM_NAME.FIELD_NAME), \
-					.typing  = CLIFieldTyping_##FIELD_TYPING_NAME, \
-					.pattern = STR(FIELD_PATTERN), \
-					.desc    = STR(FIELD_DESC), \
-				},
-			CLI_PROGRAM_XMDT(MAKE_PROGRAM_INFO)
-			#undef MAKE_FIELD_INFO
-			#undef MAKE_PROGRAM_INFO
-		};
-#endif
-
-
-
-
-
-
-
-#define SCREENSHOT_DIM_X 1170
-#define SCREENSHOT_DIM_Y 2532
-
-#define EXTRACTOR_RGB_EPSILON 0.015
-
-#define WORDGAME_XMDT(X) \
-	/*    Names                               | Board Position | Board Dimensions (slots) | Slot Dimensions | Uncompressed Slot Stride | Compressed Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB              | Excluded Slot Coordinates */ \
-		X(anagrams_6, "Anagrams (6 Letters)",   grp(39, 354),    grp(6, 1),                 119,              195,                       105,                     grp(32 , 656),         grp(256, 16 ),           grp(0.2645, 0.2409, 0.3358),   ) \
-		X(anagrams_7, "Anagrams (7 Letters)",   grp(31, 375),    grp(7, 1),                 102,              168,                       0,                       grp(32 , 656),         grp(256, 16 ),           grp(0.5036, 0.4814, 0.6467),   ) \
-
-enum WordGame
-{
-	#define MAKE(IDENTIFIER_NAME, ...) \
-		WordGame_##IDENTIFIER_NAME,
-	WORDGAME_XMDT(MAKE)
-	#undef MAKE
-	WordGame_COUNT
-};
-
-#if PROGRAM_MICROSERVICES
-	struct WordGameInfo
-	{
-		str   name;
-		i32_2 board_pos;
-		i32_2 board_dim_slots;
-		i32   slot_dim;
-		i32   uncompressed_slot_stride;
-		i32_2 test_region_pos;
-		i32_2 test_region_dim;
-		f64_3 test_region_rgb;
-		i32_2 excluded_slot_coords[8];
-		i32   excluded_slot_coords_count;
-	};
-	static const struct WordGameInfo WORDGAME_INFO[] =
-		{
-			#define MAKE(IDENTIFIER_NAME, PRINT_NAME, BOARD_POS, BOARD_DIM_SLOTS, SLOT_DIM, UNCOMPRESSED_SLOT_STRIDE, COMPRESSED_SLOT_STRIDE, TEST_REGION_POS, TEST_REGION_DIM, TEST_REGION_RGB, ... ) \
-				{ \
-					.name                       = STR(PRINT_NAME), \
-					.board_pos                  = BOARD_POS, \
-					.board_dim_slots            = BOARD_DIM_SLOTS, \
-					.slot_dim                   = SLOT_DIM, \
-					.uncompressed_slot_stride   = UNCOMPRESSED_SLOT_STRIDE, \
-					.test_region_pos            = TEST_REGION_POS, \
-					.test_region_dim            = TEST_REGION_DIM, \
-					.test_region_rgb            = TEST_REGION_RGB, \
-					.excluded_slot_coords       = { [0] = { 0, 0 }, __VA_ARGS__ }, \
-					.excluded_slot_coords_count = countof((u8[][2]) { { 0, 0 }, __VA_ARGS__ }) - 1, \
-				},
-			WORDGAME_XMDT(MAKE)
-			#undef MAKE
-		};
-#endif
-
-
-
-
-
-
-
-#define MASK_ACTIVATION_THRESHOLD 8
-#define MASK_DIM                  64
-
-#define LETTER_XMDT(X) \
-	X(a) X(b) X(c) X(d) X(e) X(f) X(g) X(h) X(i) X(j) X(k) X(l) X(m) \
-	X(n) X(o) X(p) X(q) X(r) X(s) X(t) X(u) X(v) X(w) X(x) X(y) X(z) \
-	X(boris  ) X(chelovek    ) X(dmitri) X(fyodor) X(gregory) X(ivan) X(ivan_kratkiy) \
-	X(leonid ) X(myagkiy_znak) X(pavel ) X(shura ) X(ulyana ) X(yery) X(zhenya      ) \
-	X(zinaida) \
-	X(a_umlaut) X(o_umlaut) \
-	X(ene)
-
-enum Letter
-{
-	#define MAKE(NAME) Letter_##NAME,
-	LETTER_XMDT(MAKE)
-	#undef MAKE
-	Letter_COUNT
-};
-
-#if PROGRAM_MICROSERVICES
-	static const str LETTER_NAMES[] =
-		{
-			#define MAKE(NAME) STR(#NAME),
-			LETTER_XMDT(MAKE)
-			#undef MAKE
-		};
-#endif
-
-struct RowReducedMaskEntry // Note: changing size of this means changing the calculation for the maskiverse microservice.
-{
-	const u8* data;
-	u8        empty_rows; // Least significant nibble stores amount of empty rows from bottom, most significant nibble stores aount of empty rows on top.
-};
 
 //
 // Documentation.

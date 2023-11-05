@@ -896,7 +896,7 @@ main(int argc, char** argv)
 						{
 							struct BMPPixel* pixel = &iterator_state.bmp.data[y * iterator_state.bmp.dim.x + x];
 
-							if ((pixel->r + pixel->g + pixel->b) / 3 <= MASK_ACTIVATION_THRESHOLD)
+							if (pixel->r <= MASK_ACTIVATION_THRESHOLD)
 							{
 								*pixel = (struct BMPPixel) { .r = 255, .g = 255, .b = 255, .a = 255 };
 							}
@@ -1696,6 +1696,49 @@ main(int argc, char** argv)
 				{
 					free(masks[i].data);
 				}
+			} break;
+
+			case CLIProgram_intelliteck:
+			{
+				struct CLIProgram_intelliteck_t cli = cli_unknown.intelliteck;
+				u16                             crc = 0;
+
+				//
+				// Iterate pixels.
+				//
+
+				struct BMP bmp = bmp_alloc_read_file(cli.input_file_path.str);
+
+				for
+				(
+					i32 y = bmp.dim.y - 1;
+					y >= 0;
+					y -= 1
+				)
+				{
+					for (i32 x = 0; x < bmp.dim.x; x += 1)
+					{
+						if (bmp.data[y * bmp.dim.x + x].r <= MASK_ACTIVATION_THRESHOLD)
+						{
+							crc = _crc16_update(crc, (x >> 0) & 0xFF);
+							crc = _crc16_update(crc, (x >> 8) & 0xFF);
+							crc = _crc16_update(crc, (y >> 0) & 0xFF);
+							crc = _crc16_update(crc, (y >> 8) & 0xFF);
+						}
+					}
+				}
+
+				//
+				// Output.
+				//
+
+				printf("intelliTeck : 0x%4X.\n", u32(crc));
+
+				//
+				// Clean up.
+				//
+
+				free(bmp.data);
 			} break;
 
 			case CLIProgram_COUNT:

@@ -1,6 +1,6 @@
 #define SD_CMD8_ARGUMENT                0x00000'1'AA // See: Source(19) @ Table(7-5) @ AbsPage(119).
 #define SD_CMD8_CRC7                    0x43         // See: [CRC7 Calculation].
-#define SD_MAX_COMMAND_RETRIES          8192
+#define SD_MAX_COMMAND_RETRIES          16384
 #define SD_MAX_COMMAND_RESPONSE_LATENCY (u16(1) << 15)
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE HaltSource_sd
