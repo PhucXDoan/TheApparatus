@@ -142,13 +142,106 @@ static_assert(LITTLE_ENDIAN);
 // "lcd.c"
 //
 
-#ifdef PIN_LCD_ENABLE
+#ifdef PROGRAM_DIPLOMAT
 	#define LCD_DIM_X 20
 	#define LCD_DIM_Y 4
 
 	static char _lcd_cache [LCD_DIM_Y][LCD_DIM_X] = {0};
 	static char lcd_display[LCD_DIM_Y][LCD_DIM_X] = {0};
 	static u8_2 lcd_cursor_pos                    = {0};
+
+	static const u8 LCD_CUSTOM_CHAR_PATTERNS[][8] PROGMEM = // Restricted to 8 rows and 5 columns. See: Source(25) @ Table(5) @ Page(19).
+		{
+			[0b000] = // Empty space.
+				{
+					0b00000,
+					0b00000,
+					0b00000,
+					0b00000,
+					0b00000,
+					0b00000,
+					0b00000,
+					0b00000,
+				},
+			[0b001] = // Letter_boris.
+				{
+					0b00000,
+					0b11111,
+					0b10001,
+					0b10000,
+					0b11110,
+					0b10001,
+					0b10001,
+					0b11110,
+				},
+			[0b010] = // Letter_chelovek.
+				{
+					0b00000,
+					0b10001,
+					0b10001,
+					0b10001,
+					0b01111,
+					0b00001,
+					0b00001,
+					0b00001,
+				},
+			[0b011] = // Letter_ivan.
+				{
+					0b00000,
+					0b10001,
+					0b10001,
+					0b10011,
+					0b10101,
+					0b11001,
+					0b10001,
+					0b10001,
+				},
+			[0b100] = // Letter_ivan_kratkiy.
+				{
+					0b01010,
+					0b00100,
+					0b10001,
+					0b10001,
+					0b10011,
+					0b10101,
+					0b11001,
+					0b10001,
+				},
+			[0b101] = // Letter_shura.
+				{
+					0b00000,
+					0b00000,
+					0b10101,
+					0b10101,
+					0b10101,
+					0b10101,
+					0b10101,
+					0b11111,
+				},
+			[0b110] = // Letter_yery.
+				{
+					0b00000,
+					0b10001,
+					0b10001,
+					0b10001,
+					0b11001,
+					0b10101,
+					0b10101,
+					0b11001,
+				},
+			[0b111] = // Letter_zhenya.
+				{
+					0b00000,
+					0b10101,
+					0b10101,
+					0b10101,
+					0b01110,
+					0b10101,
+					0b10101,
+					0b10101,
+				},
+		};
+	static_assert(countof(LCD_CUSTOM_CHAR_PATTERNS) <= 8);
 #endif
 
 //
@@ -200,18 +293,18 @@ static const u8 ZERO_BIT_COUNT_DT[] PROGMEM =
 		X(anagrams_7, "Anagrams (7 Letters)",   31, 375,         7, 1,                      102,              168,                       0,                       32 , 656,              256, 16,                 0.5036, 0.4814, 0.6467, )
 
 #define WORDGAME_MAP_XMDT(X) \
-	X(anagrams_english_6, "Anagrams (EN, 6)") \
-	X(anagrams_english_7, "Anagrams (EN, 7)") \
-	X(anagrams_russian  , "Anagrams (RU)"   ) \
-	X(anagrams_french   , "Anagrams (FR)"   ) \
-	X(anagrams_german   , "Anagrams (DE)"   ) \
-	X(anagrams_spanish  , "Anagrams (ES)"   ) \
-	X(anagrams_italian  , "Anagrams (IT)"   ) \
-	X(wordhunt_4x4      , "WordHunt (4x4)"  ) \
-	X(wordhunt_o        , "WordHunt (O)"    ) \
-	X(wordhunt_x        , "WordHunt (X)"    ) \
-	X(wordhunt_5x5      , "WordHunt (5x5)"  ) \
-	X(wordbites         , "WordBites"       )
+	X(anagrams_english_6, "Anagrams (EN, 6)", anagrams_6) \
+	X(anagrams_english_7, "Anagrams (EN, 7)", anagrams_7) \
+	X(anagrams_russian  , "Anagrams (RU)"   , anagrams_6) \
+	X(anagrams_french   , "Anagrams (FR)"   , anagrams_6) \
+	X(anagrams_german   , "Anagrams (DE)"   , anagrams_6) \
+	X(anagrams_spanish  , "Anagrams (ES)"   , anagrams_6) \
+	X(anagrams_italian  , "Anagrams (IT)"   , anagrams_6) \
+	X(wordhunt_4x4      , "WordHunt (4x4)"  , COUNT) /* TEMP!!! */ \
+	X(wordhunt_o        , "WordHunt (O)"    , COUNT) /* TEMP!!! */ \
+	X(wordhunt_x        , "WordHunt (X)"    , COUNT) /* TEMP!!! */ \
+	X(wordhunt_5x5      , "WordHunt (5x5)"  , COUNT) /* TEMP!!! */ \
+	X(wordbites         , "WordBites"       , COUNT) /* TEMP!!! */
 
 #define WORDGAME_MAP_MAX_PRINT_NAME_SIZE_(IDENTIFIER_NAME, PRINT_NAME, ...) u8 IDENTIFIER_NAME[sizeof(PRINT_NAME)];
 #define WORDGAME_BOARD_MAX_DIM_X_(IDENTIFIER_NAME, PRINT_NAME, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[DIM_SLOTS_X];
@@ -238,9 +331,19 @@ enum WordGameMap
 };
 
 #if PROGRAM_DIPLOMAT
-	static const char WORDGAME_MAP_PRINT_NAME_CSTR[][WORDGAME_MAP_MAX_PRINT_NAME_SIZE] PROGMEM =
+	struct WordGameMapInfo
+	{
+		char               print_name_cstr[WORDGAME_MAP_MAX_PRINT_NAME_SIZE];
+		enum WordGameBoard board;
+	};
+
+	static const struct WordGameMapInfo WORDGAME_MAP_INFO[] PROGMEM =
 		{
-			#define MAKE(IDENTIFIER_NAME, PRINT_NAME) PRINT_NAME,
+			#define MAKE(IDENTIFIER_NAME, PRINT_NAME, BOARD) \
+				{ \
+					.print_name_cstr = PRINT_NAME, \
+					.board           = WordGameBoard_##BOARD, \
+				},
 			WORDGAME_MAP_XMDT(MAKE)
 			#undef MAKE
 		};
@@ -336,26 +439,48 @@ enum WordGameMap
 #define MASK_DIM                  64
 
 #define LETTER_XMDT(X) \
-	X(a) X(b) X(c) X(d) X(e) X(f) X(g) X(h) X(i) X(j) X(k) X(l) X(m) \
-	X(n) X(o) X(p) X(q) X(r) X(s) X(t) X(u) X(v) X(w) X(x) X(y) X(z) \
-	X(boris  ) X(chelovek    ) X(dmitri) X(fyodor) X(gregory) X(ivan) X(ivan_kratkiy) \
-	X(leonid ) X(myagkiy_znak) X(pavel ) X(shura ) X(ulyana ) X(yery) X(zhenya      ) \
-	X(zinaida) \
-	X(a_umlaut) X(o_umlaut) \
-	X(ene)
+	X(a, 'A') X(b, 'B') X(c, 'C') X(d, 'D') X(e, 'E') X(f, 'F') X(g, 'G') X(h, 'H') X(i, 'I') X(j, 'J') X(k, 'K') X(l, 'L') X(m, 'M') \
+	X(n, 'N') X(o, 'O') X(p, 'P') X(q, 'Q') X(r, 'R') X(s, 'S') X(t, 'T') X(u, 'U') X(v, 'V') X(w, 'W') X(x, 'X') X(y, 'Y') X(z, 'Z') \
+	X(boris       , 0b001      ) \
+	X(chelovek    , 0b010      ) \
+	X(dmitri      , 0b1101'1011) \
+	X(fyodor      , '0'        ) \
+	X(gregory     , 'r'        ) \
+	X(ivan        , 0b011      ) \
+	X(ivan_kratkiy, 0b100      ) \
+	X(leonid      , 0b1011'0110) \
+	X(myagkiy_znak, 'b'        ) \
+	X(pavel       , 0b1111'0111) \
+	X(shura       , 0b101      ) \
+	X(ulyana      , 'y'        ) \
+	X(yery        , 0b110      ) \
+	X(zhenya      , 0b111      ) \
+	X(zinaida     , '3'        ) \
+	X(a_umlaut    , 0b1110'0001) \
+	X(o_umlaut    , 0b1110'1111) \
+	X(ene         , 0b1110'1110)
 
 enum Letter
 {
-	#define MAKE(NAME) Letter_##NAME,
+	#define MAKE(NAME, ...) Letter_##NAME,
 	LETTER_XMDT(MAKE)
 	#undef MAKE
 	Letter_COUNT,
 };
 
+#if PROGRAM_DIPLOMAT
+	static const u8 LETTER_LCD_CODES[] PROGMEM =
+		{
+			#define MAKE(NAME, LCD_CODE) LCD_CODE,
+			LETTER_XMDT(MAKE)
+			#undef MAKE
+		};
+#endif
+
 #if PROGRAM_MICROSERVICES
 	static const str LETTER_NAMES[] =
 		{
-			#define MAKE(NAME) STR(#NAME),
+			#define MAKE(NAME, ...) STR(#NAME),
 			LETTER_XMDT(MAKE)
 			#undef MAKE
 		};
@@ -939,6 +1064,13 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 	#define USB_HID_ENABLE true
 	#define USB_MS_ENABLE  true
 #endif
+
+enum USBMSOCRState
+{
+	USBMSOCRState_ready,      // Main program can set the OCR state.
+	USBMSOCRState_set,        // Main program has finished setting the OCR state and OCR now waits for BMP.
+	USBMSOCRState_processing, // OCR is currently processing BMP.
+};
 
 enum USBEndpointSizeCode // See: Source(1) @ Section(22.18.2) @ Page(287).
 {
@@ -1803,13 +1935,15 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	// Buffer sizes must be a power of two for the "_usb_mouse_X_masked" macros.
 	static_assert(countof(_usb_mouse_command_buffer) && !(countof(_usb_mouse_command_buffer) & (countof(_usb_mouse_command_buffer) - 1)));
 
+	static volatile enum USBMSOCRState usb_ms_ocr_state          = {0};
+	static volatile enum WordGameBoard usb_ms_ocr_wordgame_board = {0};
+
+	static volatile b8                 usb_ms_ocr_processing     = false; // TEMP
+	static volatile enum Letter        usb_ms_ocr_grid[WORDGAME_BOARD_MAX_DIM_Y][WORDGAME_BOARD_MAX_DIM_X] = {0};
+
 	#if USB_MS_ENABLE
 		static struct USBMSCommandStatusWrapper _usb_ms_status      = { .dCSWSignature = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE };
 		static b8                               _usb_ms_send_status = false;
-
-		static volatile b8                 usb_ms_ocr_processing     = false;
-		static volatile enum WordGameBoard usb_ms_ocr_wordgame_board = {0};
-		static volatile enum Letter        usb_ms_ocr_grid[WORDGAME_BOARD_MAX_DIM_Y][WORDGAME_BOARD_MAX_DIM_X] = {0};
 
 		static u32 _usb_ms_ocr_pixels_processed                                        = 0;
 		static u8  _usb_ms_ocr_slot_bits[MASK_DIM / 8]                                 = {0};

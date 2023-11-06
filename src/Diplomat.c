@@ -52,6 +52,20 @@ main(void)
 	spi_init();
 	sd_init();
 	usb_init();
+
+	lcd_reset();
+	for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
+	{
+		lcd_char(pgm_read_byte(&LETTER_LCD_CODES[letter]));
+		if (lcd_cursor_pos.x == LCD_DIM_X)
+		{
+			lcd_char('\n');
+		}
+	}
+	lcd_refresh();
+
+	for(;;);
+
 	pin_input(PIN_ROTARY_BTN);
 	pin_input(PIN_ROTARY_CLK);
 	pin_input(PIN_ROTARY_DAT);
@@ -141,11 +155,7 @@ main(void)
 		selected_map += WordGameMap_COUNT + rotary_rotation;
 		selected_map %= WordGameMap_COUNT;
 
-		if
-		(
-			(first_displayed_map + LCD_DIM_Y) % WordGameMap_COUNT == selected_map ||
-			(selected_map + 1               ) % WordGameMap_COUNT == first_displayed_map
-		)
+		if ((selected_map - first_displayed_map + WordGameMap_COUNT) % WordGameMap_COUNT >= LCD_DIM_Y)
 		{
 			first_displayed_map += WordGameMap_COUNT + rotary_rotation;
 			first_displayed_map %= WordGameMap_COUNT;
@@ -153,73 +163,11 @@ main(void)
 
 		if (rotary_transition == -1)
 		{
-			switch (selected_map)
-			{
-				case WordGameMap_anagrams_english_6:
-				{
-					debug_unhandled();
-				} break;
+			static_assert(sizeof(WORDGAME_MAP_INFO[selected_map].board) == 1);
 
-				case WordGameMap_anagrams_english_7:
-				{
-					debug_unhandled();
-				} break;
+			assert(usb_ms_ocr_state == USBMSOCRState_ready);
 
-				case WordGameMap_anagrams_russian:
-				{
-					debug_unhandled();
-				} break;
-
-				case WordGameMap_anagrams_french:
-				{
-					debug_unhandled();
-				} break;
-
-				case WordGameMap_anagrams_german:
-				{
-					debug_unhandled();
-				} break;
-
-				case WordGameMap_anagrams_spanish:
-				{
-					debug_unhandled();
-				} break;
-
-				case WordGameMap_anagrams_italian:
-				{
-					debug_unhandled();
-				} break;
-
-				case WordGameMap_wordhunt_4x4:
-				{
-					debug_unhandled();
-				} break;
-
-				case WordGameMap_wordhunt_o:
-				{
-					debug_unhandled();
-				} break;
-
-				case WordGameMap_wordhunt_x:
-				{
-					debug_unhandled();
-				} break;
-
-				case WordGameMap_wordhunt_5x5:
-				{
-					debug_unhandled();
-				} break;
-
-				case WordGameMap_wordbites:
-				{
-					debug_unhandled();
-				} break;
-
-				case WordGameMap_COUNT:
-				{
-					debug_unhandled();
-				} break;
-			}
+			usb_ms_ocr_wordgame_board = pgm_read_byte(&WORDGAME_MAP_INFO[selected_map].board);
 		}
 
 		//
@@ -228,7 +176,12 @@ main(void)
 
 		lcd_reset();
 
-		for (u8 row = 0; row < LCD_DIM_Y; row += 1)
+		for
+		(
+			u8 row = 0;
+			row < (LCD_DIM_Y < WordGameMap_COUNT ? LCD_DIM_Y : WordGameMap_COUNT);
+			row += 1
+		)
 		{
 			enum WordGameMap map = (first_displayed_map + row) % WordGameMap_COUNT;
 
@@ -237,9 +190,11 @@ main(void)
 				lcd_pstr("> ");
 			}
 
-			lcd_pgm_cstr(WORDGAME_MAP_PRINT_NAME_CSTR[map]);
+			static_assert(2 + (sizeof(WORDGAME_MAP_INFO[map].print_name_cstr) - 1) <= LCD_DIM_X);
+			lcd_pgm_cstr(WORDGAME_MAP_INFO[map].print_name_cstr);
 			lcd_char('\n');
 		}
+
 
 		lcd_refresh();
 

@@ -81,6 +81,16 @@ lcd_init(void)
 	_lcd_raw_u8(0b0000'0001); // Clear-Display command. See: "Clear display" @ Source(25) @ Table(6) @ Page(24).
 	_delay_ms(2.0);           // Clearing display apparently takes a while to fully take into effect.
 	_lcd_raw_u8(0b0000'0110); // Entry-Mode-Set command that automatically increments the write cursor. See: "Entry mode set" @ Source(25) @ Table(6) @ Page(24).
+	_lcd_raw_u8(0b0100'0000); // Set CGRAM address to beginning to write the custom character bit patterns. See: "Set CGRAM address" @ Source(25) @ Table(6) @ Page(24).
+
+	pin_high(PIN_LCD_REGISTER_SELECT);
+	for (u8 i = 0; i < sizeof(LCD_CUSTOM_CHAR_PATTERNS); i += 1)
+	{
+		// Write the bit patterns of the custom characters.
+		// The write automatically increments the writing cursor address.
+		// See: Source(25) @ Table(5) @ Page(19).
+		_lcd_raw_u8(pgm_read_byte(((const u8*) LCD_CUSTOM_CHAR_PATTERNS) + i));
+	}
 }
 
 static void
@@ -114,7 +124,7 @@ lcd_refresh(void)
 				_lcd_raw_u8(0b1000'0000 | (x + (y % 2) * 64 + (y / 2) * 20)); // Set-DDRAM-Address command. See: "Set DDRAM Address" @ Source(25) @ Page(29).
 
 				pin_high(PIN_LCD_REGISTER_SELECT);
-				_lcd_raw_u8(lcd_display[y][x] ? lcd_display[y][x] : ' '); // Writing null character makes a funny symbol; space is more preferable.
+				_lcd_raw_u8(lcd_display[y][x]);
 			}
 		}
 	}
