@@ -150,6 +150,10 @@ static_assert(LITTLE_ENDIAN);
 	static char lcd_display[LCD_DIM_Y][LCD_DIM_X] = {0};
 	static u8_2 lcd_cursor_pos                    = {0};
 
+	// Character code assumes the LCD display has ROM code of 0xA00.  See: Source(25) @ Table(4) @ Page(16).
+	#define LCD_RIGHT_ARROW 0b0111'1110
+	#define LCD_LEFT_ARROW  0b0111'1111
+
 	static const u8 LCD_CUSTOM_CHAR_PATTERNS[][8] PROGMEM = // Restricted to 8 rows and 5 columns. See: Source(25) @ Table(5) @ Page(19).
 		{
 			[0b000] = // Empty space.

@@ -1,3 +1,8 @@
+#ifdef PROGMEM
+	#define pgm_u8(LVALUE)  pgm_read_byte((const u8 *) { &(LVALUE) })
+	#define pgm_u16(LVALUE) pgm_read_word((const u16*) { &(LVALUE) })
+#endif
+
 #if PROGRAM_MICROSERVICES
 static u16
 _crc16_update(u16 crc, u8 byte) // From avr-gcc's utils.

@@ -89,7 +89,7 @@ lcd_init(void)
 		// Write the bit patterns of the custom characters.
 		// The write automatically increments the writing cursor address.
 		// See: Source(25) @ Table(5) @ Page(19).
-		_lcd_raw_u8(pgm_read_byte(((const u8*) LCD_CUSTOM_CHAR_PATTERNS) + i));
+		_lcd_raw_u8(pgm_u8(((const u8*) LCD_CUSTOM_CHAR_PATTERNS)[i]));
 	}
 }
 
@@ -130,6 +130,7 @@ lcd_refresh(void)
 	}
 }
 
+#define lcd_pgm_char(VALUE) lcd_char(pgm_u8(VALUE))
 static void
 lcd_char(char value)
 {
