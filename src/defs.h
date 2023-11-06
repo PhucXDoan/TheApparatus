@@ -139,6 +139,19 @@ typedef struct { b64 x; b64 y; b64 z; b64 w; } b64_4;
 static_assert(LITTLE_ENDIAN);
 
 //
+// "lcd.c"
+//
+
+#ifdef PIN_LCD_ENABLE
+	#define LCD_DIM_X 20
+	#define LCD_DIM_Y 4
+
+	static char _lcd_cache [LCD_DIM_Y][LCD_DIM_X] = {0};
+	static char lcd_display[LCD_DIM_Y][LCD_DIM_X] = {0};
+	static u8_2 lcd_cursor_pos                    = {0};
+#endif
+
+//
 // Miscellaneous.
 //
 
@@ -181,18 +194,178 @@ static const u8 ZERO_BIT_COUNT_DT[] PROGMEM =
 	};
 #endif
 
-//
-// "lcd.c"
-//
+#define WORDGAME_BOARD_XMDT(X) \
+	/*    Names                               | Board Position | Board Dimensions (slots) | Slot Dimensions | Uncompressed Slot Stride | Compressed Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB          | Excluded Slot Coordinates */ \
+		X(anagrams_6, "Anagrams (6 Letters)",   39, 354,         6, 1,                      119,              195,                       105,                     32 , 656,              256, 16,                 0.2645, 0.2409, 0.3358, ) \
+		X(anagrams_7, "Anagrams (7 Letters)",   31, 375,         7, 1,                      102,              168,                       0,                       32 , 656,              256, 16,                 0.5036, 0.4814, 0.6467, )
 
-#ifdef PIN_LCD_ENABLE
-	#define LCD_DIM_X 20
-	#define LCD_DIM_Y 4
+#define WORDGAME_MAP_XMDT(X) \
+	X(anagrams_english_6, "Anagrams (EN, 6)") \
+	X(anagrams_english_7, "Anagrams (EN, 7)") \
+	X(anagrams_russian  , "Anagrams (RU)"   ) \
+	X(anagrams_french   , "Anagrams (FR)"   ) \
+	X(anagrams_german   , "Anagrams (DE)"   ) \
+	X(anagrams_spanish  , "Anagrams (ES)"   ) \
+	X(anagrams_italian  , "Anagrams (IT)"   ) \
+	X(wordhunt_4x4      , "WordHunt (4x4)"  ) \
+	X(wordhunt_o        , "WordHunt (O)"    ) \
+	X(wordhunt_x        , "WordHunt (X)"    ) \
+	X(wordhunt_5x5      , "WordHunt (5x5)"  ) \
+	X(wordbites         , "WordBites"       )
 
-	static char _lcd_cache [LCD_DIM_Y][LCD_DIM_X] = {0};
-	static char lcd_display[LCD_DIM_Y][LCD_DIM_X] = {0};
-	static u8_2 lcd_cursor_pos                    = {0};
+#define WORDGAME_MAP_MAX_PRINT_NAME_SIZE_(IDENTIFIER_NAME, PRINT_NAME, ...) u8 IDENTIFIER_NAME[sizeof(PRINT_NAME)];
+#define WORDGAME_BOARD_MAX_DIM_X_(IDENTIFIER_NAME, PRINT_NAME, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[DIM_SLOTS_X];
+#define WORDGAME_BOARD_MAX_DIM_Y_(IDENTIFIER_NAME, PRINT_NAME, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[DIM_SLOTS_Y];
+
+#define WORDGAME_MAP_MAX_PRINT_NAME_SIZE sizeof(union { WORDGAME_MAP_XMDT(WORDGAME_MAP_MAX_PRINT_NAME_SIZE_) })
+#define WORDGAME_BOARD_MAX_DIM_X         sizeof(union { WORDGAME_BOARD_XMDT(WORDGAME_BOARD_MAX_DIM_X_) })
+#define WORDGAME_BOARD_MAX_DIM_Y         sizeof(union { WORDGAME_BOARD_XMDT(WORDGAME_BOARD_MAX_DIM_Y_) })
+
+enum WordGameBoard
+{
+	#define MAKE(IDENTIFIER_NAME, ...) WordGameBoard_##IDENTIFIER_NAME,
+	WORDGAME_BOARD_XMDT(MAKE)
+	#undef MAKE
+	WordGameBoard_COUNT,
+};
+
+enum WordGameMap
+{
+	#define MAKE(IDENTIFIER_NAME, ...) WordGameMap_##IDENTIFIER_NAME,
+	WORDGAME_MAP_XMDT(MAKE)
+	#undef MAKE
+	WordGameMap_COUNT,
+};
+
+#if PROGRAM_DIPLOMAT
+	static const char WORDGAME_MAP_PRINT_NAME_CSTR[][WORDGAME_MAP_MAX_PRINT_NAME_SIZE] PROGMEM =
+		{
+			#define MAKE(IDENTIFIER_NAME, PRINT_NAME) PRINT_NAME,
+			WORDGAME_MAP_XMDT(MAKE)
+			#undef MAKE
+		};
 #endif
+
+#if PROGRAM_MICROSERVICES || PROGRAM_DIPLOMAT
+	struct WordGameBoardInfo
+	{
+		u8_2 dim_slots;
+		u8_2 excluded_slot_coords[5];
+		u8   excluded_slot_coords_count;
+		u8   compressed_slot_stride;
+
+		#if PROGRAM_MICROSERVICES
+			str   name;
+			i32_2 pos;
+			i32   slot_dim;
+			i32   uncompressed_slot_stride;
+			i32_2 test_region_pos;
+			i32_2 test_region_dim;
+			f64_3 test_region_rgb;
+		#endif
+	};
+
+	#if PROGRAM_DIPLOMAT
+		static const struct WordGameBoardInfo WORDGAME_BOARD_INFO[] PROGMEM =
+			{
+				#define MAKE( \
+					IDENTIFIER_NAME, \
+					PRINT_NAME, \
+					POS_X, POS_Y, \
+					DIM_SLOTS_X, DIM_SLOTS_Y, \
+					SLOT_DIM, \
+					UNCOMPRESSED_SLOT_STRIDE, \
+					COMPRESSED_SLOT_STRIDE, \
+					TEST_REGION_POS_X, TEST_REGION_POS_Y, \
+					TEST_REGION_DIM_X, TEST_REGION_DIM_Y, \
+					TEST_REGION_R, TEST_REGION_G, TEST_REGION_B, \
+					... \
+				) \
+					{ \
+						.dim_slots.x                = DIM_SLOTS_X, \
+						.dim_slots.y                = DIM_SLOTS_Y, \
+						.excluded_slot_coords       = { [0] = { 0, 0 }, __VA_ARGS__ }, \
+						.excluded_slot_coords_count = countof((u8[][2]) { { 0, 0 }, __VA_ARGS__ }) - 1, \
+						.compressed_slot_stride     = COMPRESSED_SLOT_STRIDE, \
+					},
+				WORDGAME_BOARD_XMDT(MAKE)
+				#undef MAKE
+			};
+	#else
+		static const struct WordGameBoardInfo WORDGAME_BOARD_INFO[] =
+			{
+				#define MAKE( \
+					IDENTIFIER_NAME, \
+					PRINT_NAME, \
+					POS_X, POS_Y, \
+					DIM_SLOTS_X, DIM_SLOTS_Y, \
+					SLOT_DIM, \
+					UNCOMPRESSED_SLOT_STRIDE, \
+					COMPRESSED_SLOT_STRIDE, \
+					TEST_REGION_POS_X, TEST_REGION_POS_Y, \
+					TEST_REGION_DIM_X, TEST_REGION_DIM_Y, \
+					TEST_REGION_R, TEST_REGION_G, TEST_REGION_B, \
+					... \
+				) \
+					{ \
+						.name                       = STR(PRINT_NAME), \
+						.pos.x                      = POS_X, \
+						.pos.y                      = POS_Y, \
+						.dim_slots.x                = DIM_SLOTS_X, \
+						.dim_slots.y                = DIM_SLOTS_Y, \
+						.slot_dim                   = SLOT_DIM, \
+						.uncompressed_slot_stride   = UNCOMPRESSED_SLOT_STRIDE, \
+						.compressed_slot_stride     = COMPRESSED_SLOT_STRIDE, \
+						.test_region_pos.x          = TEST_REGION_POS_X, \
+						.test_region_pos.y          = TEST_REGION_POS_Y, \
+						.test_region_dim.x          = TEST_REGION_DIM_X, \
+						.test_region_dim.y          = TEST_REGION_DIM_Y, \
+						.test_region_rgb.x          = TEST_REGION_R, \
+						.test_region_rgb.y          = TEST_REGION_G, \
+						.test_region_rgb.z          = TEST_REGION_B, \
+						.excluded_slot_coords       = { [0] = { 0, 0 }, __VA_ARGS__ }, \
+						.excluded_slot_coords_count = countof((u8_2[]) { { 0, 0 }, __VA_ARGS__ }) - 1, \
+					},
+				WORDGAME_BOARD_XMDT(MAKE)
+				#undef MAKE
+			};
+	#endif
+#endif
+
+#define MASK_ACTIVATION_THRESHOLD 8
+#define MASK_DIM                  64
+
+#define LETTER_XMDT(X) \
+	X(a) X(b) X(c) X(d) X(e) X(f) X(g) X(h) X(i) X(j) X(k) X(l) X(m) \
+	X(n) X(o) X(p) X(q) X(r) X(s) X(t) X(u) X(v) X(w) X(x) X(y) X(z) \
+	X(boris  ) X(chelovek    ) X(dmitri) X(fyodor) X(gregory) X(ivan) X(ivan_kratkiy) \
+	X(leonid ) X(myagkiy_znak) X(pavel ) X(shura ) X(ulyana ) X(yery) X(zhenya      ) \
+	X(zinaida) \
+	X(a_umlaut) X(o_umlaut) \
+	X(ene)
+
+enum Letter
+{
+	#define MAKE(NAME) Letter_##NAME,
+	LETTER_XMDT(MAKE)
+	#undef MAKE
+	Letter_COUNT,
+};
+
+#if PROGRAM_MICROSERVICES
+	static const str LETTER_NAMES[] =
+		{
+			#define MAKE(NAME) STR(#NAME),
+			LETTER_XMDT(MAKE)
+			#undef MAKE
+		};
+#endif
+
+struct RowReducedMaskEntry // Note: changing size of this means changing the calculation for the maskiverse microservice.
+{
+	const u8* data;
+	u8        empty_rows; // Least significant nibble stores amount of empty rows from bottom, most significant nibble stores aount of empty rows on top.
+};
 
 //
 // "string.c"
@@ -430,7 +603,7 @@ struct BMPDIBHeader // "BITMAPCOREHEADER" not supported.
 		#define MAKE(PROGRAM_NAME, PROGRAM_DESC) CLIProgram_##PROGRAM_NAME,
 		CLI_PROGRAM_XMDT(MAKE)
 		#undef MAKE
-		CLIProgram_COUNT
+		CLIProgram_COUNT,
 	};
 
 	#define MAKE_CLI_FIELD(PROGRAM_NAME, PROGRAM_DESC) \
@@ -500,162 +673,10 @@ struct BMPDIBHeader // "BITMAPCOREHEADER" not supported.
 		};
 #endif
 
-
-
-
-
-
-
 #define SCREENSHOT_DIM_X 1170
 #define SCREENSHOT_DIM_Y 2532
 
 #define EXTRACTOR_RGB_EPSILON 0.015
-
-#define WORDGAME_XMDT(X) \
-	/*    Names                               | Board Position | Board Dimensions (slots) | Slot Dimensions | Uncompressed Slot Stride | Compressed Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB          | Excluded Slot Coordinates */ \
-		X(anagrams_6, "Anagrams (6 Letters)",   39, 354,         6, 1,                      119,              195,                       105,                     32 , 656,              256, 16,                 0.2645, 0.2409, 0.3358, ) \
-		X(anagrams_7, "Anagrams (7 Letters)",   31, 375,         7, 1,                      102,              168,                       0,                       32 , 656,              256, 16,                 0.5036, 0.4814, 0.6467, )
-
-#define WORDGAME_BOARD_MAX_DIM_X_(IDENTIFIER_NAME, PRINT_NAME, BOARD_POS_X, BOARD_POS_Y, BOARD_DIM_SLOTS_X, BOARD_DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[BOARD_DIM_SLOTS_X];
-#define WORDGAME_BOARD_MAX_DIM_Y_(IDENTIFIER_NAME, PRINT_NAME, BOARD_POS_X, BOARD_POS_Y, BOARD_DIM_SLOTS_X, BOARD_DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[BOARD_DIM_SLOTS_Y];
-#define WORDGAME_BOARD_MAX_DIM_X sizeof(union { WORDGAME_XMDT(WORDGAME_BOARD_MAX_DIM_X_) })
-#define WORDGAME_BOARD_MAX_DIM_Y sizeof(union { WORDGAME_XMDT(WORDGAME_BOARD_MAX_DIM_Y_) })
-
-enum WordGame
-{
-	#define MAKE(IDENTIFIER_NAME, ...) \
-		WordGame_##IDENTIFIER_NAME,
-	WORDGAME_XMDT(MAKE)
-	#undef MAKE
-	WordGame_COUNT
-};
-
-#if PROGRAM_MICROSERVICES || PROGRAM_DIPLOMAT
-	struct WordGameInfo
-	{
-		u8_2 board_dim_slots;
-		u8_2 excluded_slot_coords[5];
-		u8   excluded_slot_coords_count;
-		u8   compressed_slot_stride;
-
-		#if PROGRAM_MICROSERVICES
-			str   name;
-			i32_2 board_pos;
-			i32   slot_dim;
-			i32   uncompressed_slot_stride;
-			i32_2 test_region_pos;
-			i32_2 test_region_dim;
-			f64_3 test_region_rgb;
-		#endif
-	};
-
-	#if PROGRAM_DIPLOMAT
-		static const struct WordGameInfo WORDGAME_INFO[] PROGMEM =
-			{
-				#define MAKE( \
-					IDENTIFIER_NAME, \
-					PRINT_NAME, \
-					BOARD_POS_X, BOARD_POS_Y, \
-					BOARD_DIM_SLOTS_X, BOARD_DIM_SLOTS_Y, \
-					SLOT_DIM, \
-					UNCOMPRESSED_SLOT_STRIDE, \
-					COMPRESSED_SLOT_STRIDE, \
-					TEST_REGION_POS_X, TEST_REGION_POS_Y, \
-					TEST_REGION_DIM_X, TEST_REGION_DIM_Y, \
-					TEST_REGION_R, TEST_REGION_G, TEST_REGION_B, \
-					... \
-				) \
-					{ \
-						.board_dim_slots.x          = BOARD_DIM_SLOTS_X, \
-						.board_dim_slots.y          = BOARD_DIM_SLOTS_Y, \
-						.excluded_slot_coords       = { [0] = { 0, 0 }, __VA_ARGS__ }, \
-						.excluded_slot_coords_count = countof((u8[][2]) { { 0, 0 }, __VA_ARGS__ }) - 1, \
-						.compressed_slot_stride     = COMPRESSED_SLOT_STRIDE, \
-					},
-				WORDGAME_XMDT(MAKE)
-				#undef MAKE
-			};
-	#else
-		static const struct WordGameInfo WORDGAME_INFO[] =
-			{
-				#define MAKE( \
-					IDENTIFIER_NAME, \
-					PRINT_NAME, \
-					BOARD_POS_X, BOARD_POS_Y, \
-					BOARD_DIM_SLOTS_X, BOARD_DIM_SLOTS_Y, \
-					SLOT_DIM, \
-					UNCOMPRESSED_SLOT_STRIDE, \
-					COMPRESSED_SLOT_STRIDE, \
-					TEST_REGION_POS_X, TEST_REGION_POS_Y, \
-					TEST_REGION_DIM_X, TEST_REGION_DIM_Y, \
-					TEST_REGION_R, TEST_REGION_G, TEST_REGION_B, \
-					... \
-				) \
-					{ \
-						.name                       = STR(PRINT_NAME), \
-						.board_pos.x                = BOARD_POS_X, \
-						.board_pos.y                = BOARD_POS_Y, \
-						.board_dim_slots.x          = BOARD_DIM_SLOTS_X, \
-						.board_dim_slots.y          = BOARD_DIM_SLOTS_Y, \
-						.slot_dim                   = SLOT_DIM, \
-						.uncompressed_slot_stride   = UNCOMPRESSED_SLOT_STRIDE, \
-						.compressed_slot_stride     = COMPRESSED_SLOT_STRIDE, \
-						.test_region_pos.x          = TEST_REGION_POS_X, \
-						.test_region_pos.y          = TEST_REGION_POS_Y, \
-						.test_region_dim.x          = TEST_REGION_DIM_X, \
-						.test_region_dim.y          = TEST_REGION_DIM_Y, \
-						.test_region_rgb.x          = TEST_REGION_R, \
-						.test_region_rgb.y          = TEST_REGION_G, \
-						.test_region_rgb.z          = TEST_REGION_B, \
-						.excluded_slot_coords       = { [0] = { 0, 0 }, __VA_ARGS__ }, \
-						.excluded_slot_coords_count = countof((u8_2[]) { { 0, 0 }, __VA_ARGS__ }) - 1, \
-					},
-				WORDGAME_XMDT(MAKE)
-				#undef MAKE
-			};
-	#endif
-#endif
-
-
-
-
-
-
-
-#define MASK_ACTIVATION_THRESHOLD 8
-#define MASK_DIM                  64
-
-#define LETTER_XMDT(X) \
-	X(a) X(b) X(c) X(d) X(e) X(f) X(g) X(h) X(i) X(j) X(k) X(l) X(m) \
-	X(n) X(o) X(p) X(q) X(r) X(s) X(t) X(u) X(v) X(w) X(x) X(y) X(z) \
-	X(boris  ) X(chelovek    ) X(dmitri) X(fyodor) X(gregory) X(ivan) X(ivan_kratkiy) \
-	X(leonid ) X(myagkiy_znak) X(pavel ) X(shura ) X(ulyana ) X(yery) X(zhenya      ) \
-	X(zinaida) \
-	X(a_umlaut) X(o_umlaut) \
-	X(ene)
-
-enum Letter
-{
-	#define MAKE(NAME) Letter_##NAME,
-	LETTER_XMDT(MAKE)
-	#undef MAKE
-	Letter_COUNT
-};
-
-#if PROGRAM_MICROSERVICES
-	static const str LETTER_NAMES[] =
-		{
-			#define MAKE(NAME) STR(#NAME),
-			LETTER_XMDT(MAKE)
-			#undef MAKE
-		};
-#endif
-
-struct RowReducedMaskEntry // Note: changing size of this means changing the calculation for the maskiverse microservice.
-{
-	const u8* data;
-	u8        empty_rows; // Least significant nibble stores amount of empty rows from bottom, most significant nibble stores aount of empty rows on top.
-};
 
 //
 // "pin.c"
@@ -912,7 +933,7 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 #if DEBUG // Used to disable some USB functionalities for development purposes, but does not necessairly remove all data and control flow.
 	#define USB_CDC_ENABLE true
 	#define USB_HID_ENABLE false
-	#define USB_MS_ENABLE  true
+	#define USB_MS_ENABLE  false
 #else
 	#define USB_CDC_ENABLE false
 	#define USB_HID_ENABLE true
@@ -1786,9 +1807,9 @@ struct USBConfig // This layout is defined uniquely for our device application.
 		static struct USBMSCommandStatusWrapper _usb_ms_status      = { .dCSWSignature = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE };
 		static b8                               _usb_ms_send_status = false;
 
-		static volatile b8            usb_ms_ocr_processing = false;
-		static volatile enum WordGame usb_ms_ocr_wordgame   = {0};
-		static volatile enum Letter   usb_ms_ocr_grid[WORDGAME_BOARD_MAX_DIM_Y][WORDGAME_BOARD_MAX_DIM_X] = {0};
+		static volatile b8                 usb_ms_ocr_processing     = false;
+		static volatile enum WordGameBoard usb_ms_ocr_wordgame_board = {0};
+		static volatile enum Letter        usb_ms_ocr_grid[WORDGAME_BOARD_MAX_DIM_Y][WORDGAME_BOARD_MAX_DIM_X] = {0};
 
 		static u32 _usb_ms_ocr_pixels_processed                                        = 0;
 		static u8  _usb_ms_ocr_slot_bits[MASK_DIM / 8]                                 = {0};
@@ -1828,6 +1849,53 @@ struct USBConfig // This layout is defined uniquely for our device application.
 		#endif
 	#endif
 #endif
+
+//
+// "Diplomat.c"
+//
+
+//#if PROGRAM_DIPLOMAT
+//	static const char WORDGAME_CATEGORY_PRINT_NAMES_CSTR[][WORDGAME_CATEGORY_MAX_PRINT_NAME_SIZE] PROGMEM =
+//		{
+//			#define MAKE(IDENTIFIER_NAME, PRINT_NAME) PRINT_NAME,
+//			WORDGAME_CATEGORY_XMDT(MAKE)
+//			#undef MAKE
+//		};
+//
+//	static const char ANAGRAMS_LANGUAGE_PRINT_NAMES_CSTR[][ANAGRAMS_LANGUAGE_MAX_PRINT_NAME_SIZE] PROGMEM =
+//		{
+//			#define MAKE(IDENTIFIER_NAME, PRINT_NAME) PRINT_NAME,
+//			ANAGRAMS_LANGUAGE_XMDT(MAKE)
+//			#undef MAKE
+//		};
+//#endif
+// #define ANAGRAMS_LANGUAGE_MAX_PRINT_NAME_SIZE_(IDENTIFIER_NAME, PRINT_NAME, ...)                            u8 IDENTIFIER_NAME[sizeof(PRINT_NAME)];
+// #define ANAGRAMS_LANGUAGE_MAX_PRINT_NAME_SIZE sizeof(union { ANAGRAMS_LANGUAGE_XMDT(WORDGAME_CATEGORY_MAX_PRINT_NAME_SIZE_) })
+// #define WORDGAME_CATEGORY_MAX_PRINT_NAME_SIZE_(IDENTIFIER_NAME, PRINT_NAME, ...)                            u8 IDENTIFIER_NAME[sizeof(PRINT_NAME)];
+// #define WORDGAME_CATEGORY_MAX_PRINT_NAME_SIZE sizeof(union { WORDGAME_CATEGORY_XMDT(WORDGAME_CATEGORY_MAX_PRINT_NAME_SIZE_) })
+// #define WORDGAME_CATEGORY_XMDT(X, ...) \
+// 	X(anagrams , "Anagrams" ,##__VA_ARGS__) \
+// 	X(wordhunt , "WordHunt" ,##__VA_ARGS__) \
+// 	X(wordbites, "WordBites",##__VA_ARGS__)
+// 
+// #define ANAGRAMS_LANGUAGE_XMDT(X, ...) \
+// 	X(english, "English",##__VA_ARGS__) \
+// enum WordGameCategory
+// {
+// 	#define MAKE(IDENTIFIER_NAME, PRINT_NAME) WordGameCategory_##IDENTIFIER_NAME,
+// 	WORDGAME_CATEGORY_XMDT(MAKE)
+// 	#undef MAKE
+// 	WordGameCategory_COUNT,
+// };
+// 
+// enum AnagramsLanguage
+// {
+// 	#define MAKE(IDENTIFIER_NAME, ...) AnagramsLanguage_##IDENTIFIER_NAME,
+// 	ANAGRAMS_LANGUAGE_XMDT(MAKE)
+// 	#undef MAKE
+// 	AnagramsLanguage_COUNT,
+// };
+
 
 //
 // Documentation.

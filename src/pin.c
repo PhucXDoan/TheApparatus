@@ -25,7 +25,7 @@
 	static inline b8 \
 	pin_read_##P(void) \
 	{ \
-		return PIN##X & (1 << PIN##X##N); \
+		return (PIN##X >> PIN##X##N) & 1; \
 	}
 PIN_XMDT(MAKE)
 #undef MAKE

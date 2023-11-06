@@ -1,27 +1,19 @@
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE HaltSource_usb
 
-// "HELD"   : Must evaluate to 0 or 1.
-// "DEST_X" : Must be within [0, 127].
-// "DEST_Y" : Must be within [0, 255].
-// See: [Mouse Commands].
 #if USB_HID_ENABLE
-#define usb_mouse_command(HELD, DEST_X, DEST_Y) usb_mouse_command_((u16(HELD) << 15) | (u16(DEST_X) << 8) | u16(DEST_Y))
-static void
-usb_mouse_command_(u16 command)
-{
-	#ifdef PIN_USB_BUSY
-	pin_high(PIN_USB_BUSY);
-	#endif
-
-	while (_usb_mouse_command_writer_masked(1) == _usb_mouse_command_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
-	_usb_mouse_command_buffer[_usb_mouse_command_writer_masked(0)] = command;
-	_usb_mouse_command_writer += 1;
-
-	#ifdef PIN_USB_BUSY
-	pin_low(PIN_USB_BUSY);
-	#endif
-}
+	// "HELD"   : Must evaluate to 0 or 1.
+	// "DEST_X" : Must be within [0, 127].
+	// "DEST_Y" : Must be within [0, 255].
+	// See: [Mouse Commands].
+	#define usb_mouse_command(HELD, DEST_X, DEST_Y) usb_mouse_command_((u16(HELD) << 15) | (u16(DEST_X) << 8) | u16(DEST_Y))
+	static void
+	usb_mouse_command_(u16 command)
+	{
+		while (_usb_mouse_command_writer_masked(1) == _usb_mouse_command_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
+		_usb_mouse_command_buffer[_usb_mouse_command_writer_masked(0)] = command;
+		_usb_mouse_command_writer += 1;
+	}
 #endif
 
 static void
@@ -53,9 +45,6 @@ usb_init(void)
 	// i.e. wait momentairly for the diagnostic signal.
 
 	#if DEBUG && USB_CDC_ENABLE
-	#ifdef PIN_USB_BUSY
-	pin_high(PIN_USB_BUSY);
-	#endif
 	for (u8 i = 0; i < 255; i += 1)
 	{
 		if (debug_usb_diagnostic_signal_received)
@@ -67,14 +56,15 @@ usb_init(void)
 			_delay_ms(8.0);
 		}
 	}
-	#ifdef PIN_USB_BUSY
-	pin_low(PIN_USB_BUSY);
-	#endif
 	#endif
 }
 
 ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 {
+	#ifdef PIN_USB_BUSY
+	pin_high(PIN_USB_BUSY);
+	#endif
+
 	if (UDINT & (1 << EORSTI)) // End-of-Reset.
 	{
 		for (u8 endpoint_index = 0; endpoint_index < countof(USB_ENDPOINT_UECFGNX); endpoint_index += 1)
@@ -236,31 +226,39 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 	}
 
 	UDINT = 0; // Clear interrupt flags to prevent this routine from executing again.
+
+	#ifdef PIN_USB_BUSY
+	pin_low(PIN_USB_BUSY);
+	#endif
 }
 
 #if USB_MS_ENABLE
-static b8
-_usb_ms_ocr_slot_excluded(u8_2 coords)
-{
-	b8 slot_excluded = false;
-	for (u8 i = 0; i < pgm_read_byte(&WORDGAME_INFO[usb_ms_ocr_wordgame].excluded_slot_coords_count); i += 1)
+	static b8
+	_usb_ms_ocr_slot_excluded(u8_2 coords)
 	{
-		if
-		(
-			coords.x == pgm_read_byte(&WORDGAME_INFO[usb_ms_ocr_wordgame].excluded_slot_coords[i].x) &&
-			coords.y == pgm_read_byte(&WORDGAME_INFO[usb_ms_ocr_wordgame].excluded_slot_coords[i].y)
-		)
+		b8 slot_excluded = false;
+		for (u8 i = 0; i < pgm_read_byte(&WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].excluded_slot_coords_count); i += 1)
 		{
-			slot_excluded = true;
-			break;
+			if
+			(
+				coords.x == pgm_read_byte(&WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].excluded_slot_coords[i].x) &&
+				coords.y == pgm_read_byte(&WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].excluded_slot_coords[i].y)
+			)
+			{
+				slot_excluded = true;
+				break;
+			}
 		}
+		return slot_excluded;
 	}
-	return slot_excluded;
-}
 #endif
 
 ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 {
+	#ifdef PIN_USB_BUSY
+	pin_high(PIN_USB_BUSY);
+	#endif
+
 	UENUM = USB_ENDPOINT_DFLT_INDEX;
 	if (UEINTX & (1 << RXSTPI)) // [Endpoint 0: SETUP-Transactions].
 	{
@@ -736,11 +734,11 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 					struct BMPDIBHeader*  bmp_dib_header                        = (struct BMPDIBHeader* ) (sd_sector + sizeof(struct BMPFileHeader));
 					static_assert(sizeof(struct BMPFileHeader) + sizeof(struct BMPDIBHeader) <= sizeof(sd_sector));
 
-					u8   wordgame_compressed_slot_stride = pgm_read_byte(&WORDGAME_INFO[usb_ms_ocr_wordgame].compressed_slot_stride);
+					u8   wordgame_compressed_slot_stride = pgm_read_byte(&WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].compressed_slot_stride);
 					u8_2 wordgame_board_dim              =
 						{
-							pgm_read_byte(&WORDGAME_INFO[usb_ms_ocr_wordgame].board_dim_slots.x),
-							pgm_read_byte(&WORDGAME_INFO[usb_ms_ocr_wordgame].board_dim_slots.y),
+							pgm_read_byte(&WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.x),
+							pgm_read_byte(&WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.y),
 						};
 					u16_2 wordgame_bmp_dim =
 						{
@@ -1206,6 +1204,10 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 		UEINTX &= ~(1 << FIFOCON);
 	}
 #endif
+
+	#ifdef PIN_USB_BUSY
+	pin_low(PIN_USB_BUSY);
+	#endif
 }
 
 #if DEBUG && USB_CDC_ENABLE
@@ -1214,18 +1216,12 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 	{
 		if (debug_usb_diagnostic_signal_received)
 		{
-			#ifdef PIN_USB_BUSY
-			pin_high(PIN_USB_BUSY);
-			#endif
 			for (u16 i = 0; i < value_size; i += 1)
 			{
 				while (debug_usb_cdc_in_writer_masked(1) == debug_usb_cdc_in_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
 				debug_usb_cdc_in_buffer[debug_usb_cdc_in_writer_masked(0)] = value[i];
 				debug_usb_cdc_in_writer += 1;
 			}
-			#ifdef PIN_USB_BUSY
-			pin_low(PIN_USB_BUSY);
-			#endif
 		}
 	}
 

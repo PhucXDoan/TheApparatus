@@ -54,16 +54,16 @@ alloc_load_masks(struct BMP* dst_masks, str dir_path)
 }
 
 static b32
-slot_coord_excluded(enum WordGame wordgame, i32 x, i32 y)
+slot_coord_excluded(enum WordGameBoard board, i32 x, i32 y)
 {
-	assert(wordgame < WordGame_COUNT);
+	assert(board < WordGameBoard_COUNT);
 	b32 slot_coord_excluded = false;
-	for (i32 i = 0; i < WORDGAME_INFO[wordgame].excluded_slot_coords_count; i += 1)
+	for (i32 i = 0; i < WORDGAME_BOARD_INFO[board].excluded_slot_coords_count; i += 1)
 	{
 		if
 		(
-			WORDGAME_INFO[wordgame].excluded_slot_coords[i].x == x &&
-			WORDGAME_INFO[wordgame].excluded_slot_coords[i].y == y
+			WORDGAME_BOARD_INFO[board].excluded_slot_coords[i].x == x &&
+			WORDGAME_BOARD_INFO[board].excluded_slot_coords[i].y == y
 		)
 		{
 			slot_coord_excluded = true;
@@ -231,23 +231,23 @@ iterate_dir_bmp_alloc(struct DirBMPIteratorState* state)
 	return found_bmp;
 }
 
-static enum WordGame // WordGame_COUNT if no matching test region could be identified. In this case, "opt_dst_unknown_game_test_region_rgbs" will be filled if provided.
-identify_wordgame
+static enum WordGameBoard // WordGameBoard_COUNT if no matching test region could be identified. In this case, "opt_dst_unknown_game_test_region_rgbs" will be filled if provided.
+identify_wordgame_board
 (
 	struct BMP bmp,
-	f64_3*     opt_dst_unknown_game_test_region_rgbs // Null, or at least WordGame_COUNt.
+	f64_3*     opt_dst_unknown_game_test_region_rgbs // Null, or at least WordGameBoard_COUNt.
 )
 {
 	assert(bmp.dim.x == SCREENSHOT_DIM_X && bmp.dim.y == SCREENSHOT_DIM_Y);
 
-	enum WordGame identified_wordgame = WordGame_COUNT;
+	enum WordGameBoard identified_wordgame = WordGameBoard_COUNT;
 
 	if (opt_dst_unknown_game_test_region_rgbs)
 	{
-		memset(opt_dst_unknown_game_test_region_rgbs, 0, sizeof(f64_3) * WordGame_COUNT);
+		memset(opt_dst_unknown_game_test_region_rgbs, 0, sizeof(f64_3) * WordGameBoard_COUNT);
 	}
 
-	for (enum WordGame wordgame = {0}; wordgame < WordGame_COUNT; wordgame += 1)
+	for (enum WordGameBoard board = {0}; board < WordGameBoard_COUNT; board += 1)
 	{
 		//
 		// Compute average RGB of test region.
@@ -256,15 +256,15 @@ identify_wordgame
 		f64_3 test_region_rgb = {0};
 		for
 		(
-			i32 y = WORDGAME_INFO[wordgame].test_region_pos.y;
-			y < WORDGAME_INFO[wordgame].test_region_pos.y + WORDGAME_INFO[wordgame].test_region_dim.y;
+			i32 y = WORDGAME_BOARD_INFO[board].test_region_pos.y;
+			y < WORDGAME_BOARD_INFO[board].test_region_pos.y + WORDGAME_BOARD_INFO[board].test_region_dim.y;
 			y += 1
 		)
 		{
 			for
 			(
-				i32 x = WORDGAME_INFO[wordgame].test_region_pos.x;
-				x < WORDGAME_INFO[wordgame].test_region_pos.x + WORDGAME_INFO[wordgame].test_region_dim.x;
+				i32 x = WORDGAME_BOARD_INFO[board].test_region_pos.x;
+				x < WORDGAME_BOARD_INFO[board].test_region_pos.x + WORDGAME_BOARD_INFO[board].test_region_dim.x;
 				x += 1
 			)
 			{
@@ -273,9 +273,9 @@ identify_wordgame
 				test_region_rgb.z += bmp.data[y * bmp.dim.x + x].b;
 			}
 		}
-		test_region_rgb.x /= 256.0 * WORDGAME_INFO[wordgame].test_region_dim.x * WORDGAME_INFO[wordgame].test_region_dim.y;
-		test_region_rgb.y /= 256.0 * WORDGAME_INFO[wordgame].test_region_dim.x * WORDGAME_INFO[wordgame].test_region_dim.y;
-		test_region_rgb.z /= 256.0 * WORDGAME_INFO[wordgame].test_region_dim.x * WORDGAME_INFO[wordgame].test_region_dim.y;
+		test_region_rgb.x /= 256.0 * WORDGAME_BOARD_INFO[board].test_region_dim.x * WORDGAME_BOARD_INFO[board].test_region_dim.y;
+		test_region_rgb.y /= 256.0 * WORDGAME_BOARD_INFO[board].test_region_dim.x * WORDGAME_BOARD_INFO[board].test_region_dim.y;
+		test_region_rgb.z /= 256.0 * WORDGAME_BOARD_INFO[board].test_region_dim.x * WORDGAME_BOARD_INFO[board].test_region_dim.y;
 
 		//
 		// Extract slots.
@@ -283,19 +283,19 @@ identify_wordgame
 
 		if
 		(
-			fabs(test_region_rgb.x - WORDGAME_INFO[wordgame].test_region_rgb.x) <= EXTRACTOR_RGB_EPSILON &&
-			fabs(test_region_rgb.y - WORDGAME_INFO[wordgame].test_region_rgb.y) <= EXTRACTOR_RGB_EPSILON &&
-			fabs(test_region_rgb.z - WORDGAME_INFO[wordgame].test_region_rgb.z) <= EXTRACTOR_RGB_EPSILON
+			fabs(test_region_rgb.x - WORDGAME_BOARD_INFO[board].test_region_rgb.x) <= EXTRACTOR_RGB_EPSILON &&
+			fabs(test_region_rgb.y - WORDGAME_BOARD_INFO[board].test_region_rgb.y) <= EXTRACTOR_RGB_EPSILON &&
+			fabs(test_region_rgb.z - WORDGAME_BOARD_INFO[board].test_region_rgb.z) <= EXTRACTOR_RGB_EPSILON
 		)
 		{
-			identified_wordgame  = wordgame;
+			identified_wordgame  = board;
 			break;
 		}
 		else if (opt_dst_unknown_game_test_region_rgbs)
 		{
-			opt_dst_unknown_game_test_region_rgbs[wordgame].x = test_region_rgb.x;
-			opt_dst_unknown_game_test_region_rgbs[wordgame].y = test_region_rgb.y;
-			opt_dst_unknown_game_test_region_rgbs[wordgame].z = test_region_rgb.z;
+			opt_dst_unknown_game_test_region_rgbs[board].x = test_region_rgb.x;
+			opt_dst_unknown_game_test_region_rgbs[board].y = test_region_rgb.y;
+			opt_dst_unknown_game_test_region_rgbs[board].z = test_region_rgb.z;
 		}
 	}
 
@@ -536,8 +536,8 @@ main(int argc, char** argv)
 				struct CLIProgram_eaglepeek_t cli                  = cli_unknown.eaglepeek;
 				i32                           screenshots_examined = 0;
 				i32                           unknown_games        = 0;
-				f64_3                         accumulated_unknown_game_test_region_rgbs[WordGame_COUNT] = {0};
-				i32                           wordgame_count[WordGame_COUNT] = {0};
+				f64_3                         accumulated_unknown_game_test_region_rgbs[WordGameBoard_COUNT] = {0};
+				i32                           wordgame_count[WordGameBoard_COUNT] = {0};
 
 				printf("Hello. My name is Eagle Peek. How can I help you?\n");
 
@@ -567,17 +567,17 @@ main(int argc, char** argv)
 							// Identify game.
 							//
 
-							f64_3         unknown_game_test_region_rgbs[WordGame_COUNT] = {0};
-							enum WordGame identified_wordgame = identify_wordgame(iterator_state.bmp, unknown_game_test_region_rgbs);
+							f64_3         unknown_game_test_region_rgbs[WordGameBoard_COUNT] = {0};
+							enum WordGameBoard identified_wordgame = identify_wordgame_board(iterator_state.bmp, unknown_game_test_region_rgbs);
 
 							//
 							// Respond to identification result.
 							//
 
 							str game_name = {0};
-							if (identified_wordgame < WordGame_COUNT)
+							if (identified_wordgame < WordGameBoard_COUNT)
 							{
-								game_name                            = WORDGAME_INFO[identified_wordgame].name;
+								game_name                            = WORDGAME_BOARD_INFO[identified_wordgame].name;
 								wordgame_count[identified_wordgame] += 1;
 							}
 							else
@@ -585,11 +585,11 @@ main(int argc, char** argv)
 								game_name      = str("Unknown game");
 								unknown_games += 1;
 
-								for (enum WordGame wordgame = {0}; wordgame < WordGame_COUNT; wordgame += 1)
+								for (enum WordGameBoard board = {0}; board < WordGameBoard_COUNT; board += 1)
 								{
-									accumulated_unknown_game_test_region_rgbs[wordgame].x += unknown_game_test_region_rgbs[wordgame].x;
-									accumulated_unknown_game_test_region_rgbs[wordgame].y += unknown_game_test_region_rgbs[wordgame].y;
-									accumulated_unknown_game_test_region_rgbs[wordgame].z += unknown_game_test_region_rgbs[wordgame].z;
+									accumulated_unknown_game_test_region_rgbs[board].x += unknown_game_test_region_rgbs[board].x;
+									accumulated_unknown_game_test_region_rgbs[board].y += unknown_game_test_region_rgbs[board].y;
+									accumulated_unknown_game_test_region_rgbs[board].z += unknown_game_test_region_rgbs[board].z;
 								}
 							}
 
@@ -617,23 +617,23 @@ main(int argc, char** argv)
 				//
 
 				i64 margin = 0;
-				for (enum WordGame wordgame = {0}; wordgame < WordGame_COUNT; wordgame += 1)
+				for (enum WordGameBoard board = {0}; board < WordGameBoard_COUNT; board += 1)
 				{
-					if (margin < WORDGAME_INFO[wordgame].name.length)
+					if (margin < WORDGAME_BOARD_INFO[board].name.length)
 					{
-						margin = WORDGAME_INFO[wordgame].name.length;
+						margin = WORDGAME_BOARD_INFO[board].name.length;
 					}
 				}
 				margin += 1;
 
-				for (enum WordGame wordgame = {0}; wordgame < WordGame_COUNT; wordgame += 1)
+				for (enum WordGameBoard board = {0}; board < WordGameBoard_COUNT; board += 1)
 				{
 					printf
 					(
 						"%.*s%*s: %d\n",
-						i32(WORDGAME_INFO[wordgame].name.length), WORDGAME_INFO[wordgame].name.data,
-						i32(margin - WORDGAME_INFO[wordgame].name.length), "",
-						wordgame_count[wordgame]
+						i32(WORDGAME_BOARD_INFO[board].name.length), WORDGAME_BOARD_INFO[board].name.data,
+						i32(margin - WORDGAME_BOARD_INFO[board].name.length), "",
+						wordgame_count[board]
 					);
 				}
 
@@ -649,23 +649,23 @@ main(int argc, char** argv)
 						"Eagle Peek found %d unknown games!\n",
 						unknown_games
 					);
-					for (enum WordGame wordgame = {0}; wordgame < WordGame_COUNT; wordgame += 1)
+					for (enum WordGameBoard board = {0}; board < WordGameBoard_COUNT; board += 1)
 					{
 						printf
 						(
 							"Average Test Region RGB of %.*s%*s: Delta(%.4f, %.4f, %.4f) : Expected(%.4f, %.4f, %.4f) @ (%d, %d) (%dx%d).\n",
-							i32(WORDGAME_INFO[wordgame].name.length), WORDGAME_INFO[wordgame].name.data,
-							i32(margin - WORDGAME_INFO[wordgame].name.length), "",
-							fabs(accumulated_unknown_game_test_region_rgbs[wordgame].x / unknown_games - WORDGAME_INFO[wordgame].test_region_rgb.x),
-							fabs(accumulated_unknown_game_test_region_rgbs[wordgame].y / unknown_games - WORDGAME_INFO[wordgame].test_region_rgb.y),
-							fabs(accumulated_unknown_game_test_region_rgbs[wordgame].z / unknown_games - WORDGAME_INFO[wordgame].test_region_rgb.z),
-							accumulated_unknown_game_test_region_rgbs[wordgame].x / unknown_games,
-							accumulated_unknown_game_test_region_rgbs[wordgame].y / unknown_games,
-							accumulated_unknown_game_test_region_rgbs[wordgame].z / unknown_games,
-							WORDGAME_INFO[wordgame].test_region_pos.x,
-							WORDGAME_INFO[wordgame].test_region_pos.y,
-							WORDGAME_INFO[wordgame].test_region_dim.x,
-							WORDGAME_INFO[wordgame].test_region_dim.y
+							i32(WORDGAME_BOARD_INFO[board].name.length), WORDGAME_BOARD_INFO[board].name.data,
+							i32(margin - WORDGAME_BOARD_INFO[board].name.length), "",
+							fabs(accumulated_unknown_game_test_region_rgbs[board].x / unknown_games - WORDGAME_BOARD_INFO[board].test_region_rgb.x),
+							fabs(accumulated_unknown_game_test_region_rgbs[board].y / unknown_games - WORDGAME_BOARD_INFO[board].test_region_rgb.y),
+							fabs(accumulated_unknown_game_test_region_rgbs[board].z / unknown_games - WORDGAME_BOARD_INFO[board].test_region_rgb.z),
+							accumulated_unknown_game_test_region_rgbs[board].x / unknown_games,
+							accumulated_unknown_game_test_region_rgbs[board].y / unknown_games,
+							accumulated_unknown_game_test_region_rgbs[board].z / unknown_games,
+							WORDGAME_BOARD_INFO[board].test_region_pos.x,
+							WORDGAME_BOARD_INFO[board].test_region_pos.y,
+							WORDGAME_BOARD_INFO[board].test_region_dim.x,
+							WORDGAME_BOARD_INFO[board].test_region_dim.y
 						);
 					}
 					printf("\n");
@@ -725,13 +725,13 @@ main(int argc, char** argv)
 							// Determine game.
 							//
 
-							enum WordGame wordgame = identify_wordgame(iterator_state.bmp, 0);
-							if (wordgame != WordGame_COUNT)
+							enum WordGameBoard board = identify_wordgame_board(iterator_state.bmp, 0);
+							if (board != WordGameBoard_COUNT)
 							{
 								struct BMP slot =
 									{
-										.dim.x = WORDGAME_INFO[wordgame].slot_dim,
-										.dim.y = WORDGAME_INFO[wordgame].slot_dim,
+										.dim.x = WORDGAME_BOARD_INFO[board].slot_dim,
+										.dim.y = WORDGAME_BOARD_INFO[board].slot_dim,
 									};
 								alloc(&slot.data, slot.dim.x * slot.dim.y);
 
@@ -739,21 +739,21 @@ main(int argc, char** argv)
 								// Create a BMP of each slot.
 								//
 
-								for (i32 slot_coord_y = 0; slot_coord_y < WORDGAME_INFO[wordgame].board_dim_slots.y; slot_coord_y += 1)
+								for (i32 slot_coord_y = 0; slot_coord_y < WORDGAME_BOARD_INFO[board].dim_slots.y; slot_coord_y += 1)
 								{
-									for (i32 slot_coord_x = 0; slot_coord_x < WORDGAME_INFO[wordgame].board_dim_slots.x; slot_coord_x += 1)
+									for (i32 slot_coord_x = 0; slot_coord_x < WORDGAME_BOARD_INFO[board].dim_slots.x; slot_coord_x += 1)
 									{
-										if (!slot_coord_excluded(wordgame, slot_coord_x, slot_coord_y))
+										if (!slot_coord_excluded(board, slot_coord_x, slot_coord_y))
 										{
-											for (i32 slot_px_y = 0; slot_px_y < WORDGAME_INFO[wordgame].slot_dim; slot_px_y += 1)
+											for (i32 slot_px_y = 0; slot_px_y < WORDGAME_BOARD_INFO[board].slot_dim; slot_px_y += 1)
 											{
-												for (i32 slot_px_x = 0; slot_px_x < WORDGAME_INFO[wordgame].slot_dim; slot_px_x += 1)
+												for (i32 slot_px_x = 0; slot_px_x < WORDGAME_BOARD_INFO[board].slot_dim; slot_px_x += 1)
 												{
 													struct BMPPixel pixel =
 														iterator_state.bmp.data
 														[
-															(WORDGAME_INFO[wordgame].board_pos.y + slot_coord_y * WORDGAME_INFO[wordgame].uncompressed_slot_stride + slot_px_y) * iterator_state.bmp.dim.x
-																+ (WORDGAME_INFO[wordgame].board_pos.x + slot_coord_x * WORDGAME_INFO[wordgame].uncompressed_slot_stride + slot_px_x)
+															(WORDGAME_BOARD_INFO[board].pos.y + slot_coord_y * WORDGAME_BOARD_INFO[board].uncompressed_slot_stride + slot_px_y) * iterator_state.bmp.dim.x
+																+ (WORDGAME_BOARD_INFO[board].pos.x + slot_coord_x * WORDGAME_BOARD_INFO[board].uncompressed_slot_stride + slot_px_x)
 														];
 													slot.data[slot_px_y * slot.dim.x + slot_px_x] = pixel;
 												}
@@ -762,7 +762,7 @@ main(int argc, char** argv)
 											struct StrBuf slot_file_path = StrBuf(256);
 											strbuf_str (&slot_file_path, cli.output_dir_path.str);
 											strbuf_char(&slot_file_path, '\\');
-											strbuf_str (&slot_file_path, WORDGAME_INFO[wordgame].name);
+											strbuf_str (&slot_file_path, WORDGAME_BOARD_INFO[board].name);
 											strbuf_cstr(&slot_file_path, " (");
 											strbuf_i64 (&slot_file_path, slot_coord_x);
 											strbuf_cstr(&slot_file_path, ", ");
@@ -789,8 +789,8 @@ main(int argc, char** argv)
 								}
 
 								slots_extracted +=
-									WORDGAME_INFO[wordgame].board_dim_slots.x * WORDGAME_INFO[wordgame].board_dim_slots.y
-										- WORDGAME_INFO[wordgame].excluded_slot_coords_count;
+									WORDGAME_BOARD_INFO[board].dim_slots.x * WORDGAME_BOARD_INFO[board].dim_slots.y
+										- WORDGAME_BOARD_INFO[board].excluded_slot_coords_count;
 
 								free(slot.data);
 							}
@@ -800,9 +800,9 @@ main(int argc, char** argv)
 							//
 
 							str wordgame_name = {0};
-							if (wordgame < WordGame_COUNT)
+							if (board < WordGameBoard_COUNT)
 							{
-								wordgame_name = WORDGAME_INFO[wordgame].name;
+								wordgame_name = WORDGAME_BOARD_INFO[board].name;
 							}
 							else
 							{
@@ -1560,20 +1560,20 @@ main(int argc, char** argv)
 				// Identify word game.
 				//
 
-				enum WordGame wordgame = identify_wordgame(screenshot, 0);
-				if (wordgame == WordGame_COUNT)
+				enum WordGameBoard board = identify_wordgame_board(screenshot, 0);
+				if (board == WordGameBoard_COUNT)
 				{
-					error("BEEP BOOP. UNKNOWN GAME.\n");
+					error("BEEP BOOP. UNKNOWN WORD GAME BOARD.\n");
 				}
 
-				printf("I KNOW THIS GAME... IT IS %.*s!\n", i32(WORDGAME_INFO[wordgame].name.length), WORDGAME_INFO[wordgame].name.data);
+				printf("I KNOW THIS GAME... IT IS %.*s!\n", i32(WORDGAME_BOARD_INFO[board].name.length), WORDGAME_BOARD_INFO[board].name.data);
 
 
 				//
 				// Begin identifying slots.
 				//
 
-				for (i32 i = 0; i < WORDGAME_INFO[wordgame].board_dim_slots.x * (longest_letter_name_length + 1) + 1; i += 1)
+				for (i32 i = 0; i < WORDGAME_BOARD_INFO[board].dim_slots.x * (longest_letter_name_length + 1) + 1; i += 1)
 				{
 					printf("-");
 				}
@@ -1581,7 +1581,7 @@ main(int argc, char** argv)
 
 				for
 				(
-					i32 slot_coord_y = WORDGAME_INFO[wordgame].board_dim_slots.y - 1;
+					i32 slot_coord_y = WORDGAME_BOARD_INFO[board].dim_slots.y - 1;
 					slot_coord_y >= 0;
 					slot_coord_y -= 1
 				)
@@ -1592,7 +1592,7 @@ main(int argc, char** argv)
 
 					printf("|");
 
-					for (i32 slot_coord_x = 0; slot_coord_x < WORDGAME_INFO[wordgame].board_dim_slots.x; slot_coord_x += 1)
+					for (i32 slot_coord_x = 0; slot_coord_x < WORDGAME_BOARD_INFO[board].dim_slots.x; slot_coord_x += 1)
 					{
 						//
 						// Determine best letter of this slot.
@@ -1601,7 +1601,7 @@ main(int argc, char** argv)
 						enum Letter best_matching_letter = Letter_COUNT;
 						i32         best_matching_score  = 0;
 
-						if (!slot_coord_excluded(wordgame, slot_coord_x, slot_coord_y))
+						if (!slot_coord_excluded(board, slot_coord_x, slot_coord_y))
 						{
 							for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
 							{
@@ -1618,13 +1618,13 @@ main(int argc, char** argv)
 									{
 										i32_2 base_offset =
 											{
-												WORDGAME_INFO[wordgame].board_pos.x + slot_coord_x * WORDGAME_INFO[wordgame].uncompressed_slot_stride,
-												WORDGAME_INFO[wordgame].board_pos.y + slot_coord_y * WORDGAME_INFO[wordgame].uncompressed_slot_stride,
+												WORDGAME_BOARD_INFO[board].pos.x + slot_coord_x * WORDGAME_BOARD_INFO[board].uncompressed_slot_stride,
+												WORDGAME_BOARD_INFO[board].pos.y + slot_coord_y * WORDGAME_BOARD_INFO[board].uncompressed_slot_stride,
 											};
 										i32_2 slot_pixel_delta =
 											{
-												i32(f64(mask_x) / f64(masks[letter].dim.x) * WORDGAME_INFO[wordgame].slot_dim),
-												i32(f64(mask_y) / f64(masks[letter].dim.y) * WORDGAME_INFO[wordgame].slot_dim),
+												i32(f64(mask_x) / f64(masks[letter].dim.x) * WORDGAME_BOARD_INFO[board].slot_dim),
+												i32(f64(mask_y) / f64(masks[letter].dim.y) * WORDGAME_BOARD_INFO[board].slot_dim),
 											};
 										struct BMPPixel pixel = screenshot.data
 											[
@@ -1679,7 +1679,7 @@ main(int argc, char** argv)
 
 					printf("\n");
 
-					for (i32 i = 0; i < WORDGAME_INFO[wordgame].board_dim_slots.x * (longest_letter_name_length + 1) + 1; i += 1)
+					for (i32 i = 0; i < WORDGAME_BOARD_INFO[board].dim_slots.x * (longest_letter_name_length + 1) + 1; i += 1)
 					{
 						printf("-");
 					}

@@ -151,6 +151,16 @@ lcd_cstr(char* value)
 	}
 }
 
+#define lcd_pstr(STRLIT) lcd_pgm_cstr(PSTR(STRLIT))
+static void
+lcd_pgm_cstr(const char* value)
+{
+	for (u16 i = 0; pgm_read_byte(&value[i]); i += 1)
+	{
+		lcd_char(pgm_read_byte(&value[i]));
+	}
+}
+
 static void
 lcd_u64(u64 value)
 {
