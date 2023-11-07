@@ -684,6 +684,18 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 			}
 			else
 			{
+				u8   wordgame_compressed_slot_stride = pgm_read_byte(&WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].compressed_slot_stride);
+				u8_2 wordgame_board_dim              =
+					{
+						pgm_read_byte(&WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.x),
+						pgm_read_byte(&WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.y),
+					};
+				u16_2 wordgame_bmp_dim =
+					{
+						u16(wordgame_board_dim.x) * u16(wordgame_compressed_slot_stride) - u16(wordgame_compressed_slot_stride - MASK_DIM),
+						u16(wordgame_board_dim.y) * u16(wordgame_compressed_slot_stride) - u16(wordgame_compressed_slot_stride - MASK_DIM),
+					};
+
 				for (u32 sector_index = 0; sector_index < sector_count; sector_index += 1)
 				{
 					//
@@ -721,8 +733,10 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 					sd_write(sector_address + sector_index);
 
+					/**************** [OCR] ****************/
+
 					//
-					// Determine interval to read from sector for OCR.
+					// "Determine range in sector to parse".
 					//
 
 					u16                   processing_red_alpha_pair_byte_offset = 0;
@@ -730,18 +744,6 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 					struct BMPFileHeader* bmp_file_header                       = (struct BMPFileHeader*)  sd_sector;
 					struct BMPDIBHeader*  bmp_dib_header                        = (struct BMPDIBHeader* ) (sd_sector + sizeof(struct BMPFileHeader));
 					static_assert(sizeof(struct BMPFileHeader) + sizeof(struct BMPDIBHeader) <= sizeof(sd_sector));
-
-					u8   wordgame_compressed_slot_stride = pgm_read_byte(&WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].compressed_slot_stride);
-					u8_2 wordgame_board_dim              =
-						{
-							pgm_read_byte(&WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.x),
-							pgm_read_byte(&WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.y),
-						};
-					u16_2 wordgame_bmp_dim =
-						{
-							u16(wordgame_board_dim.x) * u16(wordgame_compressed_slot_stride) - u16(wordgame_compressed_slot_stride - MASK_DIM),
-							u16(wordgame_board_dim.y) * u16(wordgame_compressed_slot_stride) - u16(wordgame_compressed_slot_stride - MASK_DIM),
-						};
 
 					switch (usb_ms_ocr_state)
 					{
@@ -779,10 +781,6 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 								usb_ms_ocr_state             = USBMSOCRState_processing;
 								_usb_ms_ocr_pixels_processed = 0;
 								memset(_usb_ms_ocr_slot_scores, 0, sizeof(_usb_ms_ocr_slot_scores));
-
-								// TEMP
-								pin_output(HALT);
-								pin_low(HALT);
 							}
 						} break;
 
@@ -804,7 +802,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 					if (usb_ms_ocr_state == USBMSOCRState_processing)
 					{
 						//
-						// Check if sector is actually data for BMP.
+						// "Verify sector".
 						//
 
 						b8 is_bmp_data = true;
@@ -820,7 +818,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 						if (is_bmp_data)
 						{
 							//
-							// Process pixels in the sector as scanlines.
+							// "Process sector in scanlines".
 							//
 
 							while (processing_red_alpha_pair_count)
@@ -876,7 +874,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 									if (!_usb_ms_ocr_slot_excluded(slot_coords))
 									{
 										//
-										// Parse scanline for the bits of the slot's pixels.
+										// "Parse scanline of a slot".
 										//
 
 										for (u8 scanline_pixel_index = 0; scanline_pixel_index < pixels_in_scanline; scanline_pixel_index += 1)
@@ -894,7 +892,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 										}
 
 										//
-										// When finished processing entire scanline of the slot, add points for each letter of the slot.
+										// "Add points."
 										//
 
 										if (beginning_scanline_inner_tile_coords.x + pixels_in_scanline == MASK_DIM)
@@ -950,13 +948,13 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 									}
 
 									//
-									// After finishing all scanlines for the single row of slots in the board, pick the best scoring letter for each slot.
+									// "Pick winning letters."
 									//
 
 									if
 									(
-										beginning_scanline_inner_tile_coords.x + pixels_in_scanline == MASK_DIM &&              // Finished entire scanline of this slot.
-										beginning_scanline_inner_tile_coords.y                      == MASK_DIM - 1 &&          // The scanline was the last one for the slot.
+										beginning_scanline_inner_tile_coords.x + pixels_in_scanline == MASK_DIM &&              // Finished entire row of pixels of this slot.
+										beginning_scanline_inner_tile_coords.y                      == MASK_DIM - 1 &&          // The row of pixels was the last one for the slot.
 										slot_coords.x                                               == wordgame_board_dim.x - 1 // The slot is the last one in the row of slots.
 									)
 									{
@@ -991,10 +989,6 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 							if (_usb_ms_ocr_pixels_processed == wordgame_bmp_dim.x * wordgame_bmp_dim.y)
 							{
-								// TEMP
-								pin_output(HALT);
-								pin_high(HALT);
-
 								usb_ms_ocr_state = USBMSOCRState_ready;
 							}
 						}
@@ -2026,10 +2020,10 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 	result in a 512-byte read/write command. Overall, this is pretty negligible for us.
 
 	Now, originally, I was planning to just fool the host by sending the right sectors to convince
-	that it was looking at some FAT32 file system. This would allow us to not have to require an
-	actual external storage component to contain the entire file system, because all we needed was
-	to make the host be able to send image data to us. When the image data comes in, we would parse
-	it in the moment and not actually store it long-term.
+	that it was looking at some FAT32 file system (see: [Mass Storage - FAT32]). This would allow
+	us to not have to require an actual external storage component to contain the entire file
+	system, because all we needed was to make the host be able to send image data to us. When the
+	image data comes in, we would parse it in the moment and not actually store it long-term.
 
 	... turns out things are never that simple. For one, Windows makes some system files and
 	directories when you plug in a fresh mass storage device. Things like
@@ -2104,7 +2098,141 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 	355 KB/s. If we assume our device is taking 4 us/byte, then that's around 250 KB/s. Not too
 	far off honestly.
 
-	TODO FAT32 description
+	For actually using the mass storage class itself for doing OCR, see [Mass Storage - OCR].
+*/
+
+/* [Mass Storage - FAT32].
+	The mass storage specification obviously does not specify what file system is actually used on
+	the mass storage device itself. The OS will just have to determine that based on the data it
+	reads from the sectors that we send. I decided to pick the FAT32 file system since that is what
+	I'm most familiar with. I'm not sure if FAT12/FAT16 would work with Apple, it just might, but I
+	doubt there would be much of any performance benefits gained to implementing it over FAT32; it
+	definitely won't be worth the hassle either.
+
+	Overall the FAT32 file system is pretty simple. The first sector is the boot sector and it has
+	a lot of junk from the old DOS times, but the most important pieces of information are things
+	like sectors per cluster, reserved sector count, bytes per sectors, etc. The reserved sectors
+	are the first N sectors (including the boot sector itself) within the storage device. After
+	the reserved sectors is the FAT ("File Allocation Table") itself. The boot sector also
+	specifies how many sectors are dedicated to this FAT, and there even may be multiple FATs for
+	redundancy. The table describes whether or not a cluster of sectors is free to be used, or if
+	it is already allocated, and if so, indicates the next cluster in the chain. This essentially
+	creates a linked list of clusters that can adapt to dynamically changing file and directory
+	sizes. Finally after the FAT section is the data region where sectors themselves actually
+	contain data pertaining to things such as file contents or directories. The sectors themselves
+	are grouped into clusters with the numbering scheme beginning at #2 since "cluster #0" and
+	"cluster #1" are reserved for something specific in the FAT (great job Microsoft!).
+
+	Pictorally, the layout is something like this:
+	.................................................................................
+	:                                                                               :
+	:                                                      - ---------------------  :
+	:                                                        | ----------------- |  :
+	:                                                  0     | |  BOOT SECTOR  | |  :
+	:                                                        | ----------------- |  :
+	:                                                      - | . . . . . . . . . |  :
+	:                                                        |  . . . . . . . .  |  :
+	:                                                  1     | . . . . . . . . . |  :
+	:                                                        |  . . . . . . . .  |  :
+	:                                                      - | . . . . . . . . . |  :
+	:                                                        |  . . . . . . . .  |  :
+	:                                                 ...    | . . . . . . . . . |  :
+	:                                                        |  . . . . . . . .  |  :
+	:                                    (BPB_RsvdSecCnt)  - |--------------------  :
+	:                                                        |                   |  :
+	:                                                  +0    |                   |  :
+	:                                                        |                   |  :
+	:                                                      - |                   |  :
+	:                                                        |                   |  :
+	:                                                  +1    |       FILE        |  :
+	:                                                        |    ALLOCATION     |  :
+	:                                                      - |      TABLE        |  :
+	:                                                        |                   |  :
+	:                                                  +2    |                   |  :
+	:                                                        |                   |  :
+	:                                                      - |                   |  :
+	:                                                        |  . . . . . . . .  |  :
+	:                                                 ...    | . . . . . . . . . |  :
+	:                                                        |  . . . . . . . .  |  :
+	:                        BPB_RsvdSecCnt + BPB_FATSz32  - |-------------------|  :
+	:                                                        |                   |  :
+	:                                                  +0    |                   |  :
+	:                                                        |                   |  :
+	:                                                      - |                   |  :
+	:                                                        |                   |  :
+	:                                                  +1    |                   |  :
+	:                                                        |                   |  :
+	:                                                      - |    CLUSTER #2     |  :
+	:                                                        |                   |  :
+	:                                                  +2    |                   |  :
+	:                                                        |                   |  :
+	:                                                      - |                   |  :
+	:                                                        |  . . . . . . . .  |  :
+	:                                                 ...    | . . . . . . . . . |  :
+	:                                                        |  . . . . . . . .  |  :
+	:     (BPB_RsvdSecCnt + BPB_FATSz32 + BPB_SecPerClus)  - |-------------------|  :
+	:                                                        |                   |  :
+	:                                                  +0    |                   |  :
+	:                                                        |                   |  :
+	:                                                      - |                   |  :
+	:                                                        |                   |  :
+	:                                                  +1    |                   |  :
+	:                                                        |                   |  :
+	:                                                      - |    CLUSTER #3     |  :
+	:                                                        |                   |  :
+	:                                                  +2    |                   |  :
+	:                                                        |                   |  :
+	:                                                      - |                   |  :
+	:                                                        |  . . . . . . . .  |  :
+	:                                                 ...    | . . . . . . . . . |  :
+	:                                                        |  . . . . . . . .  |  :
+	: (BPB_RsvdSecCnt + BPB_FATSz32 + BPB_SecPerClus * 2)  - ---------------------  :
+	:                                                        |                   |  :
+	:                                                  +0    |                   |  :
+	:                                                        |                   |  :
+	:                                                      - |                   |  :
+	:                                                        |                   |  :
+	:                                                  +1    |                   |  :
+	:                                                        |                   |  :
+	:                                                      - |    CLUSTER #4     |  :
+	:                                                        |                   |  :
+	:                                                  +2    |                   |  :
+	:                                                        |                   |  :
+	:                                                      - |                   |  :
+	:                                                        |  . . . . . . . .  |  :
+	:                                                 ...    | . . . . . . . . . |  :
+	:                                                        |  . . . . . . . .  |  :
+	: (BPB_RsvdSecCnt + BPB_FATSz32 + BPB_SecPerClus * 3)  - ---------------------  :
+	:                                                        |  . . . . . . . .  |  :
+	:                                                 ...    | . . . . . . . . . |  :
+	:                                                        |  . . . . . . . .  |  :
+	:                                                      - | . . . . . . . . . |  :
+	:                                                        |  . . . . . . . .  |  :
+	:                                                 ...    | . . . . . . . . . |  :
+	:                                                        |  . . . . . . . .  |  :
+	:                                                      - | . . . . . . . . . |  :
+	:                                                        |  . . . . . . . .  |  :
+	:                                                 ...    | . . . . . . . . . |  :
+	:                                                        |  . . . . . . . .  |  :
+	:                                                      - | . . . . . . . . . |  :
+	:                                                        |  . . . . . . . .  |  :
+	:                                                 ...    | . . . . . . . . . |  :
+	:                                                        |  . . . . . . . .  |  :
+	:                                        BPB_TotSec32  - ---------------------  :
+	:                                                                               :
+	:...............................................................................:
+
+	It's important to have the FAT32 file system to have the right properties to be
+	as unintrusive as possible in the OCR process. For example, having a cluster size
+	(or "allocation unit size" as Windows' drive formatter calls it) as large as possible
+	and overall sector count as smallest as it can be will make the FAT itself smaller.
+	Windows seem to copy the entire table when the device is first plugged in, so having
+	to transfer less sectors for the FAT reduces the initialization time dramatically.
+	Apple doesn't seem to do it, but having a large cluster size will also theoretically
+	make the FAT have to be updated less often.
+
+	To keep things sane when needed, it is also possible for the Diplomat to perform a
+	full wipe of the file system that'll completely clear the FAT and root cluster.
 */
 
 /* [Endpoint 0: SetAddress].
@@ -2336,6 +2464,109 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 	(1) Base Mass Storage Specification @ Source(11).
 	(2) Bulk-Only Transport Specification @ Source(12).
 	(3) "Command/Data/Status Flow" @ Source(12) @ Figure(1) @ AbsPage(12).
+*/
+
+/* [Mass Storage - OCR].
+	The OCR is pretty gnarly here! The concept is fairly simple: given a BMP image of the game's
+	board, compare each slot with a mask of each letter and pick the one with the fewest
+	differences. That's it... except that we have to do each of the following very carefully...
+
+		- "Determine range in sector to parse".
+
+			We actually have no idea when the host actually sends us a BMP image! We could try
+			to walk through the FAT32 file system and find it, but this is obviously stupid slow.
+			Luckily, all BMPs begin with the same magic characters: 'B' followed by 'M'. Checking
+			for this along with a couple other fields helps us determine that the host has began
+			to send us a BMP image.  We also have to ensure that the image's dimensions are what
+			we expect. Since the host is going to essentially be pumping a continious stream of
+			pixel data to us, we have to be sure of our current position in the image. It also
+			doesn't help with the fact that Apple generate their BMP top-down!
+
+			Furthermore, when we receive the beginning sector of the BMP image, part of it will be
+			the file header in combination with the DIB header, but the rest of the sector will
+			contain some pixel data. Consequently, we have to begin parsing the pixel data
+			awkwardly in the middle of the sector! Similar thing happens again when we reach the
+			end of the entire BMP pixel data where the last sector may not be entirely filled with
+			meaningful information.
+
+			On top of that, we aren't actually examining the entire pixel of the receiving image,
+			since this isn't really necessary. It's sufficient to just look at the red channel of
+			the pixel and determine whether or not that pixel is "activated" or not. This move,
+			while great for performance, was also probably necessary since the pixels themselves
+			are not sector-aligned. That is, one half of a pixel is described in one sector, but
+			the other half will be in the next sector. Absolute nightmare to handle that.
+			Fortunately, the file and DIB header of the BMP are perfectly sized so that sectors
+			(except for the starting one) will begin with the red channel of a pixel. Neat how
+			things just work out!
+
+		- "Verify sector".
+
+			When we receive the initial BMP sector, every sector after that may or may not actually
+			be related to the BMP pixel data itself. What could actually happen is that the driver
+			writes a small chunk of the entire BMP file to a couple clusters, and then write to
+			some other system file for housekeeping or something, and then continue writing the
+			BMP file. In other words, we're still dealing with sectors here! Who knows what we're
+			dealing with!
+
+			But as luck would have it, we can somewhat determine if a sector actually contains
+			pixel data, or if it is just some random junk that OS is wanting to write to our SD
+			card, by checking all of the bytes where the alpha channel of the pixels would be at.
+			If they're all 0xFF, then good chance that we're looking at a sector of pixel data of
+			the BMP. Otherwise, it's just junk we should ignore.
+
+			Now this isn't exactly comprehensive. There's nothing stopping the driver from doing
+			something extremely uncharacteristic like write an entire cluster sector-by-sector
+			**backwards**, or write to a file wheree the sectors of that file would just be all
+			0xFF, and we then mistake this for a sector of pixel data. By god's fortunes though,
+			these little things don't seem to really occur at all!
+
+		- "Process sector in scanlines".
+
+			Now this is probably the most difficult aspect of this problem: the fact that we are
+			receiving BMP pixel data in terms of rows, top-down, that are not sector-aligned. In
+			other words, the sector that we have on hand that we got from the host could be
+			describing a small slice of a slot on the board, could span onto the next row of the
+			BMP, or just be padding pixels that we don't care about, and so on and on. It's
+			absolutely bananas how complicated this really is...! Thus, to make it all managable,
+			we break the pixels that are in the sector into chunks of scanlines. A scanline could
+			be part of a single row of a single slot, be padding between two horizontally adjacent
+			slots, etc, etc. A scanline is just essentially something that we can process entirely
+			in a coherent manner without having to worry about all the alignment issues.
+
+		- "Parse scanline of a slot".
+
+			When we have a scanline of a single row of a single slot (which may not be the entire
+			row actually, since it could be truncated and the rest of the row will be described in
+			the next sector that we receive), we look at the red channel of each pixel and
+			determine the active and inactive bits. We have to store these bits somewhere, since
+			it may take two scanlines to parse the entire single row of this one slot we're at.
+
+		- "Add points."
+
+			When we do have the entire single row of a single slot processed by testing the red
+			channel of each bit, we then iterate through the mask of each letter and determine
+			the amount of points that should be rewarded to the respective letter. So if the row
+			of a letter's mask and the row that we just finished parsing are identical, then that
+			letter will receive the maximum amount of points. Masks that differ will receive less
+			points. We also have to be considerate of empty rows since we perform row-reduction on
+			the masks to save flash memory.
+
+			It should be noted that after we finish adding points for this particular slot, the
+			next series of pixels will lead up to the next horizontally adjacent slot (if one
+			exists). This means that we have to remember the current score of each slot in the row
+			of the board until we have completely processed the entire rows of pixels in the single
+			row of slots in the board. Whew!
+
+		- "Pick winning letters."
+
+			After we have processed and accumulated points for each slot in the row of the board,
+			we iterate through each slot and determine the best matching letter. Doing this, we
+			have essentially performed OCR on a single row of the wordgame's board. Rinse and
+			repeat as necessary...
+
+	This OCR system is pretty harcore and I'm pretty proud of myself in managing to implement it
+	within a day. Of course, this relies on the presence of the mask of the letters being provided
+	somewhere. This is generated through microservices. See: "Microservices.c".
 */
 
 /* [Endpoint Sizes].
