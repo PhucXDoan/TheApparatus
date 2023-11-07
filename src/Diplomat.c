@@ -62,13 +62,21 @@ main(void)
 
 	enum Menu
 	{
-		Menu_selecting_map,
+		Menu_main,
 		Menu_displaying,
 	};
 
-	enum Menu        menu                = {0};
-	enum WordGameMap selected_map        = {0};
-	enum WordGameMap first_displayed_map = {0};
+	enum MenuMainOption
+	{
+		// ... enum WordGameMap ...
+
+		MenuMainOption_reset_filesystem = WordGameMap_COUNT,
+		MenuMainOption_COUNT,
+	};
+
+	enum Menu           menu                             = {0};
+	enum MenuMainOption menu_main_selected_option        = {0};
+	enum MenuMainOption menu_main_first_displayed_option = {0};
 
 	//
 	// Loop.
@@ -149,24 +157,76 @@ main(void)
 
 		switch (menu)
 		{
-			case Menu_selecting_map:
+			case Menu_main:
 			{
-				selected_map += WordGameMap_COUNT + rotary_rotation;
-				selected_map %= WordGameMap_COUNT;
+				menu_main_selected_option += MenuMainOption_COUNT + rotary_rotation;
+				menu_main_selected_option %= MenuMainOption_COUNT;
 
-				if ((selected_map - first_displayed_map + WordGameMap_COUNT) % WordGameMap_COUNT >= LCD_DIM_Y)
+				if ((menu_main_selected_option - menu_main_first_displayed_option + MenuMainOption_COUNT) % MenuMainOption_COUNT >= LCD_DIM_Y)
 				{
-					first_displayed_map += WordGameMap_COUNT + rotary_rotation;
-					first_displayed_map %= WordGameMap_COUNT;
+					menu_main_first_displayed_option += MenuMainOption_COUNT + rotary_rotation;
+					menu_main_first_displayed_option %= MenuMainOption_COUNT;
 				}
 
 				if (rotary_transition == -1)
 				{
-					assert(usb_ms_ocr_state == USBMSOCRState_ready);
-					usb_ms_ocr_state          = USBMSOCRState_set;
-					usb_ms_ocr_wordgame_board = pgm_u8(WORDGAME_MAP_INFO[selected_map].board);
+					if (menu_main_selected_option < (enum MenuMainOption) WordGameMap_COUNT)
+					{
+						assert(usb_ms_ocr_state == USBMSOCRState_ready);
+						usb_ms_ocr_state          = USBMSOCRState_set;
+						usb_ms_ocr_wordgame_board = pgm_u8(WORDGAME_MAP_INFO[menu_main_selected_option].board);
 
-					menu = Menu_displaying;
+						menu = Menu_displaying;
+					}
+					else
+					{
+						switch (menu_main_selected_option)
+						{
+							case MenuMainOption_reset_filesystem:
+							{
+								cli();
+
+								USBCON &= ~(1 << USBE);
+
+								memset(sd_sector, 0, sizeof(sd_sector));
+								for (u32 sector_address = 0; sector_address < FAT32_WIPE_SECTOR_COUNT; sector_address += 1)
+								{
+									if (!(sector_address & 0b1111))
+									{
+										lcd_reset();
+										lcd_pstr
+										(
+											"Clearing sectors...\n"
+											"\n"
+											"     "
+										);
+										lcd_u64(sector_address);
+										lcd_pstr("/");
+										lcd_u64(FAT32_WIPE_SECTOR_COUNT);
+										lcd_refresh();
+									}
+
+									sd_write(sector_address);
+								}
+
+								#define MAKE(SECTOR_DATA, SECTOR_ADDRESS) \
+									{ \
+										static_assert(sizeof(sd_sector) == sizeof(SECTOR_DATA)); \
+										memcpy_P(sd_sector, &(SECTOR_DATA), sizeof(SECTOR_DATA)); \
+										sd_write(SECTOR_ADDRESS); \
+									}
+								FAT32_SECTOR_XMDT(MAKE);
+								#undef MAKE
+
+								restart();
+							} break;
+
+							case MenuMainOption_COUNT:
+							{
+								error();
+							} break;
+						}
+					}
 				}
 			} break;
 
@@ -174,7 +234,7 @@ main(void)
 			{
 				if (usb_ms_ocr_state == USBMSOCRState_ready && rotary_transition == -1)
 				{
-					menu = Menu_selecting_map;
+					menu = Menu_main;
 				}
 			} break;
 		}
@@ -187,7 +247,7 @@ main(void)
 
 		switch (menu)
 		{
-			case Menu_selecting_map:
+			case Menu_main:
 			{
 				for
 				(
@@ -196,12 +256,23 @@ main(void)
 					row += 1
 				)
 				{
-					enum WordGameMap map = (first_displayed_map + row) % WordGameMap_COUNT;
+					enum MenuMainOption option = (menu_main_first_displayed_option + row) % MenuMainOption_COUNT;
 
-					static_assert(2 + (sizeof(WORDGAME_MAP_INFO[map].print_name_cstr) - 1) <= LCD_DIM_X);
-					lcd_pgm_cstr(WORDGAME_MAP_INFO[map].print_name_cstr);
+					if (option < (enum MenuMainOption) WordGameMap_COUNT)
+					{
+						static_assert(2 + (sizeof(WORDGAME_MAP_INFO[option].print_name_cstr) - 1) <= LCD_DIM_X);
+						lcd_pgm_cstr(WORDGAME_MAP_INFO[option].print_name_cstr);
+					}
+					else
+					{
+						switch (option)
+						{
+							case MenuMainOption_reset_filesystem : lcd_pstr("Reset file system"); break;
+							case MenuMainOption_COUNT            : error(); break;
+						}
+					}
 
-					if (map == selected_map)
+					if (option == menu_main_selected_option)
 					{
 						lcd_char(' ');
 						lcd_char(LCD_LEFT_ARROW);
@@ -253,50 +324,6 @@ main(void)
 		}
 
 		lcd_refresh();
-
-		//
-		// Wipe file system if requested.
-		//
-
-		char input = {0};
-		if (debug_rx(&input, 1) && input == 'W')
-		{
-			cli();
-
-			USBCON &= ~(1 << USBE);
-
-			memset(sd_sector, 0, sizeof(sd_sector));
-			for (u32 sector_address = 0; sector_address < FAT32_WIPE_SECTOR_COUNT; sector_address += 1)
-			{
-				if (!(sector_address & 0b1111))
-				{
-					lcd_reset();
-					lcd_pstr
-					(
-						"Clearing sectors...\n"
-						"\n"
-						"     "
-					);
-					lcd_u64(sector_address);
-					lcd_pstr("/");
-					lcd_u64(FAT32_WIPE_SECTOR_COUNT);
-					lcd_refresh();
-				}
-
-				sd_write(sector_address);
-			}
-
-			#define MAKE(SECTOR_DATA, SECTOR_ADDRESS) \
-				{ \
-					static_assert(sizeof(sd_sector) == sizeof(SECTOR_DATA)); \
-					memcpy_P(sd_sector, &(SECTOR_DATA), sizeof(SECTOR_DATA)); \
-					sd_write(SECTOR_ADDRESS); \
-				}
-			FAT32_SECTOR_XMDT(MAKE);
-			#undef MAKE
-
-			restart();
-		}
 	}
 }
 //
