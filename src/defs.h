@@ -169,7 +169,6 @@ static_assert(LITTLE_ENDIAN);
 				},
 			[0b001] = // Letter_boris.
 				{
-					0b00000,
 					0b11111,
 					0b10001,
 					0b10000,
@@ -177,10 +176,10 @@ static_assert(LITTLE_ENDIAN);
 					0b10001,
 					0b10001,
 					0b11110,
+					0b00000,
 				},
 			[0b010] = // Letter_chelovek.
 				{
-					0b00000,
 					0b10001,
 					0b10001,
 					0b10001,
@@ -188,10 +187,10 @@ static_assert(LITTLE_ENDIAN);
 					0b00001,
 					0b00001,
 					0b00001,
+					0b00000,
 				},
 			[0b011] = // Letter_ivan.
 				{
-					0b00000,
 					0b10001,
 					0b10001,
 					0b10011,
@@ -199,21 +198,21 @@ static_assert(LITTLE_ENDIAN);
 					0b11001,
 					0b10001,
 					0b10001,
+					0b00000,
 				},
 			[0b100] = // Letter_ivan_kratkiy.
 				{
 					0b01010,
 					0b00100,
 					0b10001,
-					0b10001,
 					0b10011,
 					0b10101,
 					0b11001,
 					0b10001,
+					0b00000,
 				},
 			[0b101] = // Letter_shura.
 				{
-					0b00000,
 					0b00000,
 					0b10101,
 					0b10101,
@@ -221,21 +220,21 @@ static_assert(LITTLE_ENDIAN);
 					0b10101,
 					0b10101,
 					0b11111,
+					0b00000,
 				},
 			[0b110] = // Letter_yery.
 				{
+					0b10001,
+					0b10001,
+					0b10001,
+					0b11001,
+					0b10101,
+					0b10101,
+					0b11001,
 					0b00000,
-					0b10001,
-					0b10001,
-					0b10001,
-					0b11001,
-					0b10101,
-					0b10101,
-					0b11001,
 				},
 			[0b111] = // Letter_zhenya.
 				{
-					0b00000,
 					0b10101,
 					0b10101,
 					0b10101,
@@ -243,6 +242,7 @@ static_assert(LITTLE_ENDIAN);
 					0b10101,
 					0b10101,
 					0b10101,
+					0b00000,
 				},
 		};
 	static_assert(countof(LCD_CUSTOM_CHAR_PATTERNS) <= 8);
@@ -1062,7 +1062,7 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 #if DEBUG // Used to disable some USB functionalities for development purposes, but does not necessairly remove all data and control flow.
 	#define USB_CDC_ENABLE true
 	#define USB_HID_ENABLE false
-	#define USB_MS_ENABLE  false
+	#define USB_MS_ENABLE  true
 #else
 	#define USB_CDC_ENABLE false
 	#define USB_HID_ENABLE true
@@ -1941,8 +1941,6 @@ struct USBConfig // This layout is defined uniquely for our device application.
 
 	static volatile enum USBMSOCRState usb_ms_ocr_state          = {0};
 	static volatile enum WordGameBoard usb_ms_ocr_wordgame_board = {0};
-
-	static volatile b8                 usb_ms_ocr_processing     = false; // TEMP
 	static volatile enum Letter        usb_ms_ocr_grid[WORDGAME_BOARD_MAX_DIM_Y][WORDGAME_BOARD_MAX_DIM_X] = {0};
 
 	#if USB_MS_ENABLE

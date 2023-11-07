@@ -569,9 +569,6 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 	UENUM = USB_ENDPOINT_MS_OUT_INDEX;
 	if (!_usb_ms_send_status && (UEINTX & (1 << RXOUTI)))
 	{
-		static u16 TEMP = 0;
-		//debug_u16(TEMP += 1);
-
 		//
 		// Fetch command.
 		//
@@ -746,54 +743,65 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 							u16(wordgame_board_dim.y) * u16(wordgame_compressed_slot_stride) - u16(wordgame_compressed_slot_stride - MASK_DIM),
 						};
 
-					if (usb_ms_ocr_processing)
+					switch (usb_ms_ocr_state)
 					{
-						processing_red_alpha_pair_byte_offset = 0;
-						processing_red_alpha_pair_count  = FAT32_SECTOR_SIZE / sizeof(struct BMPPixel);
-						if (processing_red_alpha_pair_count > wordgame_bmp_dim.x * wordgame_bmp_dim.y - _usb_ms_ocr_pixels_processed)
+						case USBMSOCRState_ready:
 						{
-							processing_red_alpha_pair_count = wordgame_bmp_dim.x * wordgame_bmp_dim.y - _usb_ms_ocr_pixels_processed;
-						}
-					}
-					else if // Sector is beginning of BMP?
-					(
-						sector_index == 0
-						&& (sector_address >= FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT)
-						&& (sector_address - (FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT)) % FAT32_SECTORS_PER_CLUSTER == 0
-						&& bmp_file_header->bfType      == BMP_FILE_HEADER_SIGNATURE
-						&& bmp_file_header->bfOffBits   == sizeof(struct BMPFileHeader) + BMPDIBHEADER_MIN_SIZE_V5
-						&& bmp_dib_header->Size         == BMPDIBHEADER_MIN_SIZE_V5
-						&& bmp_dib_header->Planes       == 1
-						&& bmp_dib_header->BitCount     == 32
-						&& bmp_dib_header->Compression  == BMPCompression_BITFIELDS
-						&& bmp_dib_header->v2.RedMask   == 0x00'FF'00'00
-						&& bmp_dib_header->v2.GreenMask == 0x00'00'FF'00
-						&& bmp_dib_header->v2.BlueMask  == 0x00'00'00'FF
-						&& bmp_dib_header->v3.AlphaMask == 0xFF'00'00'00
-					)
-					{
-						if (!(bmp_dib_header->Width == i32(wordgame_bmp_dim.x) && bmp_dib_header->Height == -i32(wordgame_bmp_dim.y)))
+						} break;
+
+						case USBMSOCRState_set:
 						{
-							error(); // Received BMP is not conforming to the expect dimensions for the wordgame.
-						}
+							if // Sector is beginning of BMP?
+							(
+								sector_index == 0
+								&& (sector_address >= FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT)
+								&& (sector_address - (FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT)) % FAT32_SECTORS_PER_CLUSTER == 0
+								&& bmp_file_header->bfType      == BMP_FILE_HEADER_SIGNATURE
+								&& bmp_file_header->bfOffBits   == sizeof(struct BMPFileHeader) + BMPDIBHEADER_MIN_SIZE_V5
+								&& bmp_dib_header->Size         == BMPDIBHEADER_MIN_SIZE_V5
+								&& bmp_dib_header->Planes       == 1
+								&& bmp_dib_header->BitCount     == 32
+								&& bmp_dib_header->Compression  == BMPCompression_BITFIELDS
+								&& bmp_dib_header->v2.RedMask   == 0x00'FF'00'00
+								&& bmp_dib_header->v2.GreenMask == 0x00'00'FF'00
+								&& bmp_dib_header->v2.BlueMask  == 0x00'00'00'FF
+								&& bmp_dib_header->v3.AlphaMask == 0xFF'00'00'00
+							)
+							{
+								if (!(bmp_dib_header->Width == i32(wordgame_bmp_dim.x) && bmp_dib_header->Height == -i32(wordgame_bmp_dim.y)))
+								{
+									error(); // Received BMP is not conforming to the expect dimensions for the wordgame.
+								}
 
-						usb_ms_ocr_processing        = true;
-						_usb_ms_ocr_pixels_processed = 0;
-						memset(_usb_ms_ocr_slot_scores, 0, sizeof(_usb_ms_ocr_slot_scores));
+								processing_red_alpha_pair_byte_offset = sizeof(struct BMPFileHeader) + sizeof(struct BMPDIBHeader) + 2; // Color channels are ordered BGRA in memory; +2 skips blue and green bytes.
+								processing_red_alpha_pair_count       = (FAT32_SECTOR_SIZE - sizeof(struct BMPFileHeader) - sizeof(struct BMPDIBHeader)) / sizeof(struct BMPPixel);
 
-						processing_red_alpha_pair_byte_offset = sizeof(struct BMPFileHeader) + sizeof(struct BMPDIBHeader) + 2; // Color channels are ordered BGRA in memory; +2 skips blue and green bytes.
-						processing_red_alpha_pair_count       = (FAT32_SECTOR_SIZE - sizeof(struct BMPFileHeader) - sizeof(struct BMPDIBHeader)) / sizeof(struct BMPPixel);
+								usb_ms_ocr_state             = USBMSOCRState_processing;
+								_usb_ms_ocr_pixels_processed = 0;
+								memset(_usb_ms_ocr_slot_scores, 0, sizeof(_usb_ms_ocr_slot_scores));
 
-						// TEMP
-						pin_output(HALT);
-						pin_low(HALT);
+								// TEMP
+								pin_output(HALT);
+								pin_low(HALT);
+							}
+						} break;
+
+						case USBMSOCRState_processing:
+						{
+							processing_red_alpha_pair_byte_offset = 0;
+							processing_red_alpha_pair_count  = FAT32_SECTOR_SIZE / sizeof(struct BMPPixel);
+							if (processing_red_alpha_pair_count > wordgame_bmp_dim.x * wordgame_bmp_dim.y - _usb_ms_ocr_pixels_processed)
+							{
+								processing_red_alpha_pair_count = wordgame_bmp_dim.x * wordgame_bmp_dim.y - _usb_ms_ocr_pixels_processed;
+							}
+						} break;
 					}
 
 					//
 					// Process sector.
 					//
 
-					if (usb_ms_ocr_processing)
+					if (usb_ms_ocr_state == USBMSOCRState_processing)
 					{
 						//
 						// Check if sector is actually data for BMP.
@@ -987,7 +995,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 								pin_output(HALT);
 								pin_high(HALT);
 
-								usb_ms_ocr_processing = false;
+								usb_ms_ocr_state = USBMSOCRState_ready;
 							}
 						}
 					}

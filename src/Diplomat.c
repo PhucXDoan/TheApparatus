@@ -63,7 +63,7 @@ main(void)
 	enum Menu
 	{
 		Menu_selecting_map,
-		Menu_displaying_letters,
+		Menu_displaying,
 	};
 
 	enum Menu        menu                = {0};
@@ -163,15 +163,16 @@ main(void)
 				if (rotary_transition == -1)
 				{
 					assert(usb_ms_ocr_state == USBMSOCRState_ready);
+					usb_ms_ocr_state          = USBMSOCRState_set;
 					usb_ms_ocr_wordgame_board = pgm_u8(WORDGAME_MAP_INFO[selected_map].board);
 
-					menu = Menu_displaying_letters;
+					menu = Menu_displaying;
 				}
 			} break;
 
-			case Menu_displaying_letters:
+			case Menu_displaying:
 			{
-				if (rotary_transition == -1)
+				if (usb_ms_ocr_state == USBMSOCRState_ready && rotary_transition == -1)
 				{
 					menu = Menu_selecting_map;
 				}
@@ -210,26 +211,42 @@ main(void)
 				}
 			} break;
 
-			case Menu_displaying_letters:
+			case Menu_displaying:
 			{
-				switch (usb_ms_ocr_wordgame_board)
+				switch (usb_ms_ocr_state)
 				{
-					case WordGameBoard_anagrams_6:
-					case WordGameBoard_anagrams_7:
+					case USBMSOCRState_ready:
 					{
-						for (u8 y = 0; y < pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.y); y += 1)
+						switch (usb_ms_ocr_wordgame_board)
 						{
-							for (u8 x = 0; x < pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.x); x += 1)
+							case WordGameBoard_anagrams_6:
+							case WordGameBoard_anagrams_7:
 							{
-								lcd_pgm_char(LETTER_LCD_CODES[usb_ms_ocr_grid[0][x]]);
-							}
-							lcd_char('\n');
+								for (u8 y = 0; y < pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.y); y += 1)
+								{
+									for (u8 x = 0; x < pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.x); x += 1)
+									{
+										lcd_pgm_char(LETTER_LCD_CODES[usb_ms_ocr_grid[0][x]]);
+									}
+									lcd_char('\n');
+								}
+							} break;
+
+							case WordGameBoard_COUNT:
+							{
+								error();
+							} break;
 						}
 					} break;
 
-					case WordGameBoard_COUNT:
+					case USBMSOCRState_set:
 					{
-						error();
+						lcd_pstr("Waiting for BMP...");
+					} break;
+
+					case USBMSOCRState_processing:
+					{
+						lcd_pstr("Processing BMP...");
 					} break;
 				}
 			} break;
@@ -249,10 +266,24 @@ main(void)
 			USBCON &= ~(1 << USBE);
 
 			memset(sd_sector, 0, sizeof(sd_sector));
-			for (u32 i = 0; i < FAT32_WIPE_SECTOR_COUNT; i += 1)
+			for (u32 sector_address = 0; sector_address < FAT32_WIPE_SECTOR_COUNT; sector_address += 1)
 			{
-				debug_u16(i);
-				sd_write(i);
+				if (!(sector_address & 0b1111))
+				{
+					lcd_reset();
+					lcd_pstr
+					(
+						"Clearing sectors...\n"
+						"\n"
+						"     "
+					);
+					lcd_u64(sector_address);
+					lcd_pstr("/");
+					lcd_u64(FAT32_WIPE_SECTOR_COUNT);
+					lcd_refresh();
+				}
+
+				sd_write(sector_address);
 			}
 
 			#define MAKE(SECTOR_DATA, SECTOR_ADDRESS) \
