@@ -296,23 +296,27 @@ static const u8 ZERO_BIT_COUNT_DT[] PROGMEM =
 
 #define WORDGAME_BOARD_XMDT(X) \
 	/*    Names                               | Board Position | Board Dimensions (slots) | Slot Dimensions | Uncompressed Slot Stride | Compressed Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB          | Excluded Slot Coordinates */ \
-		X(anagrams_6, "Anagrams (6 Letters)",   39, 354,         6, 1,                      119,              195,                       105,                     32, 656,               256, 16,                 0.2645, 0.2409, 0.3358, ) \
-		X(anagrams_7, "Anagrams (7 Letters)",   31, 375,         7, 1,                      102,              168,                       105,                     32, 656,               256, 16,                 0.5036, 0.4814, 0.6467, )
+		X(anagrams_6  , "Anagrams (6 Letters)", 39, 354,         6, 1,                      119,              195,                        52,                     32, 656,               256, 16,                 0.2645, 0.2409, 0.3358, ) \
+		X(anagrams_7  , "Anagrams (7 Letters)", 31, 375,         7, 1,                      102,              168,                        53,                     32, 656,               256, 16,                 0.5036, 0.4814, 0.6467, ) \
+		X(wordhunt_4x4, "WordHunt (4x4)"      ,  0,   0,         0, 0,                        0,                0,                         0,                      0,   0,                 0,  0,                 0.0000, 0.0000, 0.0000, ) \
+		X(wordhunt_o  , "WordHunt (O)"        ,  0,   0,         0, 0,                        0,                0,                         0,                      0,   0,                 0,  0,                 0.0000, 0.0000, 0.0000, ) \
+		X(wordhunt_x  , "WordHunt (X)"        ,  0,   0,         0, 0,                        0,                0,                         0,                      0,   0,                 0,  0,                 0.0000, 0.0000, 0.0000, ) \
+		X(wordhunt_5x5, "WordHunt (5x5)"      ,  0,   0,         0, 0,                        0,                0,                         0,                      0,   0,                 0,  0,                 0.0000, 0.0000, 0.0000, ) \
+		X(wordbites   , "WordBites"           ,  0,   0,         0, 0,                        0,                0,                         0,                      0,   0,                 0,  0,                 0.0000, 0.0000, 0.0000, ) \
 
 #define WORDGAME_MAP_XMDT(X) \
-	X(anagrams_english_6, "Anagrams (EN, 6)", anagrams_6) \
-	X(anagrams_english_7, "Anagrams (EN, 7)", anagrams_7) \
-	X(anagrams_russian  , "Anagrams (RU)"   , anagrams_6) \
-	X(anagrams_french   , "Anagrams (FR)"   , anagrams_6) \
-	X(anagrams_german   , "Anagrams (DE)"   , anagrams_6) \
-	X(anagrams_spanish  , "Anagrams (ES)"   , anagrams_6) \
-	X(anagrams_italian  , "Anagrams (IT)"   , anagrams_6) \
-
-//	X(wordhunt_4x4      , "WordHunt (4x4)"  , COUNT) /* TEMP!!! */ \
-//	X(wordhunt_o        , "WordHunt (O)"    , COUNT) /* TEMP!!! */ \
-//	X(wordhunt_x        , "WordHunt (X)"    , COUNT) /* TEMP!!! */ \
-//	X(wordhunt_5x5      , "WordHunt (5x5)"  , COUNT) /* TEMP!!! */ \
-//	X(wordbites         , "WordBites"       , COUNT) /* TEMP!!! */
+	X(anagrams_english_6, "Anagrams (EN, 6)", anagrams_6  ) \
+	X(anagrams_english_7, "Anagrams (EN, 7)", anagrams_7  ) \
+	X(anagrams_russian  , "Anagrams (RU)"   , anagrams_6  ) \
+	X(anagrams_french   , "Anagrams (FR)"   , anagrams_6  ) \
+	X(anagrams_german   , "Anagrams (DE)"   , anagrams_6  ) \
+	X(anagrams_spanish  , "Anagrams (ES)"   , anagrams_6  ) \
+	X(anagrams_italian  , "Anagrams (IT)"   , anagrams_6  ) \
+	X(wordhunt_4x4      , "WordHunt (4x4)"  , wordhunt_4x4) \
+	X(wordhunt_o        , "WordHunt (O)"    , wordhunt_o  ) \
+	X(wordhunt_x        , "WordHunt (X)"    , wordhunt_x  ) \
+	X(wordhunt_5x5      , "WordHunt (5x5)"  , wordhunt_5x5) \
+	X(wordbites         , "WordBites"       , wordbites   ) \
 
 #define WORDGAME_MAP_MAX_PRINT_NAME_SIZE_(IDENTIFIER_NAME, PRINT_NAME, ...) u8 IDENTIFIER_NAME[sizeof(PRINT_NAME)];
 #define WORDGAME_BOARD_MAX_DIM_X_(IDENTIFIER_NAME, PRINT_NAME, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[DIM_SLOTS_X];
@@ -444,7 +448,7 @@ enum WordGameMap
 #endif
 
 #define MASK_ACTIVATION_THRESHOLD 8
-#define MASK_DIM                  64
+#define MASK_DIM                  32
 #define ROW_REDUCTION_SIZE        16
 
 #define LETTER_XMDT(X) \
@@ -1097,7 +1101,7 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 #if DEBUG // Used to disable some USB functionalities for development purposes, but does not necessairly remove all data and control flow.
 	#define USB_CDC_ENABLE true
 	#define USB_HID_ENABLE true
-	#define USB_MS_ENABLE  false
+	#define USB_MS_ENABLE  true
 #else
 	#define USB_CDC_ENABLE false
 	#define USB_HID_ENABLE true
@@ -2014,8 +2018,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 			static_assert(countof(debug_usb_cdc_in_buffer ) && !(countof(debug_usb_cdc_in_buffer ) & (countof(debug_usb_cdc_in_buffer ) - 1)));
 			static_assert(countof(debug_usb_cdc_out_buffer) && !(countof(debug_usb_cdc_out_buffer) & (countof(debug_usb_cdc_out_buffer) - 1)));
 
-			static volatile b8 debug_usb_diagnostic_signal_received = false;
-			static          b8 debug_usb_is_on_host_machine         = false;
+			static b8 debug_usb_is_on_host_machine = false;
 		#endif
 	#endif
 #endif

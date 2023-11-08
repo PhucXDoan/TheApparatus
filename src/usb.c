@@ -40,23 +40,6 @@ usb_init(void)
 	// 5. "Configure USB interface".
 	UDIEN = (1 << EORSTE) | (1 << SOFI);
 	UDCON = 0; // Clearing the DETACH bit allows the device to be connected to the host. See: Source(1) @ Section(22.18.1) @ Page(281).
-
-	// 6. "Wait for USB VBUS information connection".
-	// i.e. wait momentairly for the diagnostic signal.
-
-	#if DEBUG && USB_CDC_ENABLE
-	for (u8 i = 0; i < 255; i += 1)
-	{
-		if (debug_usb_diagnostic_signal_received)
-		{
-			break;
-		}
-		else
-		{
-			_delay_ms(8.0);
-		}
-	}
-	#endif
 }
 
 ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
@@ -433,13 +416,6 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 							*(volatile u16*) 0x0800 = 0x7777; // Magic!
 							restart();
 						} break;
-
-						#if DEBUG
-						case DIAGNOSTIC_BAUD_SIGNAL:
-						{
-							debug_usb_diagnostic_signal_received = true;
-						} break;
-						#endif
 
 						default:
 						{
@@ -1217,7 +1193,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 	static void
 	debug_tx_chars(char* value, u16 value_size)
 	{
-		if (debug_usb_diagnostic_signal_received)
+		if (debug_usb_is_on_host_machine)
 		{
 			for (u16 i = 0; i < value_size; i += 1)
 			{
@@ -1233,7 +1209,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 	{
 		u8 result = 0;
 
-		if (debug_usb_diagnostic_signal_received)
+		if (debug_usb_is_on_host_machine)
 		{
 			while (result < dst_max_length && debug_usb_cdc_out_reader_masked(0) != debug_usb_cdc_out_writer_masked(0))
 			{
@@ -1335,9 +1311,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 			really ends up bogging the main program down too much.
 
 		6. "Wait for USB VBUS information connection".
-			At this point, the rest of USB initialization will be done in the USB_GEN_vect interrupt
-			routine. If we're in DEBUG mode, we'll wait for PuTTY to open up so we won't miss any
-			diagnostic outputs.
+			No need to really wait.
 
 	(1) "Power On the USB interface" @ Source(1) @ Section(21.12) @ Page(266).
 	(2) "USB Controller Block Diagram Overview" @ Source(1) @ Figure(21-1) @ Page(256).

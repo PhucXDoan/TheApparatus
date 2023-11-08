@@ -100,7 +100,7 @@ bmp_alloc_read_file(str file_path)
 	)
 	{
 		u32 bytes_per_row = ((dib_header->Width + 7) / 8 + 3) / 4 * 4;
-		if (dib_header->SizeImage && dib_header->SizeImage != bytes_per_row * dib_header->SizeImage)
+		if (dib_header->SizeImage && dib_header->SizeImage != bytes_per_row * dib_header->Height)
 		{
 			error("DIB with invalid \"SizeImage\" field.");
 		}

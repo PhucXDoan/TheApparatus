@@ -311,11 +311,6 @@ main(void)
 				// Update selection.
 				//
 
-				// assert(usb_ms_ocr_state == USBMSOCRState_ready);
-				// usb_ms_ocr_state          = USBMSOCRState_set;
-				// usb_ms_ocr_wordgame_board = pgm_u8(WORDGAME_MAP_INFO[menu_main_selected_option].board);
-				// menu = Menu_displaying;
-
 				menu_chosen_map_selected_option += MenuChosenMapOption_COUNT + rotary.rotation;
 				menu_chosen_map_selected_option %= MenuChosenMapOption_COUNT;
 				if ((menu_chosen_map_selected_option - menu_chosen_map_first_displayed_option + MenuChosenMapOption_COUNT) % MenuChosenMapOption_COUNT >= LCD_DIM_Y - 1)
@@ -375,6 +370,10 @@ main(void)
 
 						case MenuChosenMapOption_on_guard:
 						{
+							assert(usb_ms_ocr_state == USBMSOCRState_ready);
+							usb_ms_ocr_state          = USBMSOCRState_set;
+							usb_ms_ocr_wordgame_board = pgm_u8(WORDGAME_MAP_INFO[menu_main_selected_option].board);
+							menu = Menu_displaying;
 						} break;
 
 						case MenuChosenMapOption_datamine:
@@ -457,14 +456,19 @@ main(void)
 											u8 language_index = {0};
 											switch ((enum WordGameMap) menu_main_selected_option)
 											{
-												case WordGameMap_anagrams_english_6 : language_index = 0; break;
+												case WordGameMap_anagrams_english_6 :
 												case WordGameMap_anagrams_english_7 : language_index = 0; break;
 												case WordGameMap_anagrams_russian   : language_index = 1; break;
 												case WordGameMap_anagrams_french    : language_index = 2; break;
 												case WordGameMap_anagrams_german    : language_index = 3; break;
 												case WordGameMap_anagrams_spanish   : language_index = 4; break;
 												case WordGameMap_anagrams_italian   : language_index = 5; break;
-												default: error();
+												case WordGameMap_wordhunt_4x4       :
+												case WordGameMap_wordhunt_o         :
+												case WordGameMap_wordhunt_x         :
+												case WordGameMap_wordhunt_5x5       :
+												case WordGameMap_wordbites          :
+												case WordGameMap_COUNT              : error(); break;
 											}
 
 											CLICK(22 + language_index * 17, 255);
@@ -483,8 +487,50 @@ main(void)
 										play_button_y = 200;
 									} break;
 
+									case WordGameMap_wordhunt_4x4:
+									case WordGameMap_wordhunt_o:
+									case WordGameMap_wordhunt_x:
+									case WordGameMap_wordhunt_5x5:
+									{
+										CLICK(64, 238); // Wordhunt games.
+										WAIT(350);
+
+										if (!screenshot_count)
+										{
+											u8 layout_index = {0};
+											switch ((enum WordGameMap) menu_main_selected_option)
+											{
+												case WordGameMap_wordhunt_4x4       : layout_index = 0; break;
+												case WordGameMap_wordhunt_o         : layout_index = 1; break;
+												case WordGameMap_wordhunt_x         : layout_index = 2; break;
+												case WordGameMap_wordhunt_5x5       : layout_index = 3; break;
+												case WordGameMap_anagrams_english_6 :
+												case WordGameMap_anagrams_english_7 :
+												case WordGameMap_anagrams_russian   :
+												case WordGameMap_anagrams_french    :
+												case WordGameMap_anagrams_german    :
+												case WordGameMap_anagrams_spanish   :
+												case WordGameMap_anagrams_italian   :
+												case WordGameMap_wordbites          :
+												case WordGameMap_COUNT              : error(); break;
+											}
+
+											CLICK(24 + 27 * layout_index, 255);
+											WAIT(350);
+										}
+
+										play_button_y = 212;
+									} break;
+
+									case WordGameMap_wordbites:
+									{
+										CLICK(99, 238); // WordBites game.
+										WAIT(350);
+
+										play_button_y = 212;
+									} break;
+
 									case WordGameMap_COUNT:
-									default:
 									{
 										error();
 									} break;
@@ -547,7 +593,6 @@ main(void)
 						} break;
 
 						case MenuChosenMapOption_COUNT:
-						default:
 						{
 							error();
 						} break;
@@ -570,6 +615,7 @@ main(void)
 						{
 							case WordGameBoard_anagrams_6:
 							case WordGameBoard_anagrams_7:
+							case WordGameBoard_wordhunt_4x4:
 							{
 								for (u8 y = 0; y < pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.y); y += 1)
 								{
@@ -581,8 +627,17 @@ main(void)
 								}
 							} break;
 
+							case WordGameBoard_wordhunt_o:
+							case WordGameBoard_wordhunt_x:
+							case WordGameBoard_wordhunt_5x5:
+							{
+							} break;
+
+							case WordGameBoard_wordbites:
+							{
+							} break;
+
 							case WordGameBoard_COUNT:
-							default:
 							{
 								error();
 							} break;

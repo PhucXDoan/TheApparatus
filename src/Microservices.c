@@ -34,7 +34,7 @@ alloc_load_masks(struct BMP* dst_masks, str dir_path)
 			error
 			(
 				"Mask \"%.*s\" does not have mask dimensions (%dx%d).\n",
-				i32(dir_path.length), dir_path.data,
+				i32(mask_file_path.length), mask_file_path.data,
 				MASK_DIM, MASK_DIM
 			);
 		}
