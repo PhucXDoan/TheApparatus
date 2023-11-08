@@ -903,7 +903,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 										// Give out points for each letter.
 										//
 
-										for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
+										for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
 										{
 											const u8* mask_data              = pgm_read_ptr(&ROW_REDUCED_MASK_ENTRIES[letter].data);
 											u8        mask_empty_bottom_rows = (pgm_u8(ROW_REDUCED_MASK_ENTRIES[letter].empty_rows) >> 0) & 0b0000'1111;
@@ -949,7 +949,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 										for (u8 slot_coord_x = 0; slot_coord_x < wordgame_board_dim.x; slot_coord_x += 1)
 										{
 											u16 highest_score = 0;
-											for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
+											for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
 											{
 												u16 letter_score = _usb_ms_ocr_accumulated_scores_for_single_row_of_slots_in_board[slot_coord_x][letter];
 												if (highest_score < letter_score)

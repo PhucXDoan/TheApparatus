@@ -16,7 +16,7 @@ for /D %%i in (W:\data\collectune\!FOLDER!\*) do (
 	W:\build\Microservices.exe meltingpot W:\data\meltingpot\!FOLDER!\%%~nxi.bmp %%i --or
 )
 
-REM W:\build\Microservices.exe maskiverse W:\data\meltingpot\!FOLDER!\
+W:\build\Microservices.exe maskiverse W:\data\meltingpot\!FOLDER!\
 
 REM W:\build\Microservices.exe eaglepeek W:\data\screenshots\anagrams_6\ W:\data\screenshots\anagrams_7\
 REM W:\build\Microservices.exe catchya W:\data\masks\ "W:\data\screenshots\anagrams_6\Image (9).bmp"

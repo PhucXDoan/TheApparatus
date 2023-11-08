@@ -20,7 +20,8 @@
 static void
 alloc_load_masks(struct BMP* dst_masks, str dir_path)
 {
-	for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
+	dst_masks[0] = (struct BMP) {0};
+	for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
 	{
 		struct StrBuf mask_file_path = StrBuf(256);
 		strbuf_str (&mask_file_path, dir_path);
@@ -305,17 +306,6 @@ identify_wordgame_board
 int
 main(int argc, char** argv)
 {
-	i32 longest_letter_name_length = 0;
-	for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
-	{
-		if (longest_letter_name_length < LETTER_NAMES[letter].length)
-		{
-			longest_letter_name_length = i32(LETTER_NAMES[letter].length);
-		}
-	}
-
-	/****************/
-
 	enum CLIProgram cli_program = CLIProgram_COUNT;
 
 	if (argc >= 2) // Determine CLI program.
@@ -1066,7 +1056,7 @@ main(int argc, char** argv)
 					error("Output directory \"%s\" is not empty. Use (--clear-output-dir) to empty the directory for processing.\n", cli.output_dir_path.cstr);
 				}
 
-				for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
+				for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
 				{
 					struct StrBuf letter_dir_path = StrBuf(256);
 					strbuf_str (&letter_dir_path, cli.output_dir_path.str);
@@ -1091,10 +1081,10 @@ main(int argc, char** argv)
 						// Determine best matching letter.
 						//
 
-						enum Letter best_matching_letter = Letter_COUNT;
+						enum Letter best_matching_letter = {0};
 						i32         best_matching_score  = 0;
 
-						for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
+						for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
 						{
 							i32 score = 0;
 							for (i32 y = 0; y < iterator_state.bmp.dim.y; y += 1)
@@ -1121,7 +1111,7 @@ main(int argc, char** argv)
 							}
 						}
 
-						assert(best_matching_letter != Letter_COUNT);
+						assert(best_matching_letter);
 
 						//
 						// Copy BMP into the appropriate subfolder of the letter.
@@ -1316,7 +1306,7 @@ main(int argc, char** argv)
 				struct { i32 bottom; i32 top; } empty_rows[Letter_COUNT] = {0};
 				i32                             bytes_of_flash_used      = (MASK_DIM * MASK_DIM / 8 + 3) * Letter_COUNT;
 				i32                             total_bytes_saved        = 0;
-				for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
+				for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
 				{
 					//
 					// Count amount of empty bottom rows.
@@ -1390,7 +1380,7 @@ main(int argc, char** argv)
 					(
 						"\t\'%.*s'%*s : %3d bytes reduced.\n",
 						i32(LETTER_NAMES[letter].length), LETTER_NAMES[letter].data,
-						i32(longest_letter_name_length - LETTER_NAMES[letter].length), "",
+						i32(LETTER_MAX_NAME_LENGTH - LETTER_NAMES[letter].length), "",
 						bytes_saved
 					);
 
@@ -1410,7 +1400,7 @@ main(int argc, char** argv)
 
 				struct StrBuf output_buf = StrBuf(256);
 
-				for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
+				for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
 				{
 					//
 					// Declaration.
@@ -1481,14 +1471,14 @@ main(int argc, char** argv)
 
 				strbuf_cstr(&output_buf, "static const struct RowReducedMaskEntry ROW_REDUCED_MASK_ENTRIES[] PROGMEM =\n");
 				strbuf_cstr(&output_buf, "\t{\n");
-				for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
+				for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
 				{
 					strbuf_cstr  (&output_buf, "\t\t[Letter_");
 					strbuf_str   (&output_buf, LETTER_NAMES[letter]);
-					strbuf_char_n(&output_buf, ' ', longest_letter_name_length - LETTER_NAMES[letter].length);
+					strbuf_char_n(&output_buf, ' ', LETTER_MAX_NAME_LENGTH - LETTER_NAMES[letter].length);
 					strbuf_cstr  (&output_buf, "] = { .data = (const u8*) ROW_REDUCED_MASK_");
 					strbuf_str   (&output_buf, LETTER_NAMES[letter]);
-					strbuf_char_n(&output_buf, ' ', longest_letter_name_length - LETTER_NAMES[letter].length);
+					strbuf_char_n(&output_buf, ' ', LETTER_MAX_NAME_LENGTH - LETTER_NAMES[letter].length);
 					strbuf_cstr  (&output_buf, ", .empty_rows = 0b");
 					for (i32 i = 0; i < 4; i += 1)
 					{
@@ -1573,7 +1563,7 @@ main(int argc, char** argv)
 				// Begin identifying slots.
 				//
 
-				for (i32 i = 0; i < WORDGAME_BOARD_INFO[board].dim_slots.x * (longest_letter_name_length + 1) + 1; i += 1)
+				for (i32 i = 0; i < WORDGAME_BOARD_INFO[board].dim_slots.x * (LETTER_MAX_NAME_LENGTH + 1) + 1; i += 1)
 				{
 					printf("-");
 				}
@@ -1598,12 +1588,12 @@ main(int argc, char** argv)
 						// Determine best letter of this slot.
 						//
 
-						enum Letter best_matching_letter = Letter_COUNT;
+						enum Letter best_matching_letter = Letter_null;
 						i32         best_matching_score  = 0;
 
 						if (!slot_coord_excluded(board, slot_coord_x, slot_coord_y))
 						{
-							for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
+							for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
 							{
 								//
 								// Determine amount of differing pixels.
@@ -1661,13 +1651,13 @@ main(int argc, char** argv)
 						// Report identified letter.
 						//
 
-						if (best_matching_letter < Letter_COUNT)
+						if (best_matching_letter)
 						{
-							printf("%*s", longest_letter_name_length, LETTER_NAMES[best_matching_letter].data);
+							printf("%*s", LETTER_MAX_NAME_LENGTH, LETTER_NAMES[best_matching_letter].data);
 						}
 						else
 						{
-							printf("%*s", longest_letter_name_length, "");
+							printf("%*s", LETTER_MAX_NAME_LENGTH, "");
 						}
 
 						printf("|");
@@ -1679,7 +1669,7 @@ main(int argc, char** argv)
 
 					printf("\n");
 
-					for (i32 i = 0; i < WORDGAME_BOARD_INFO[board].dim_slots.x * (longest_letter_name_length + 1) + 1; i += 1)
+					for (i32 i = 0; i < WORDGAME_BOARD_INFO[board].dim_slots.x * (LETTER_MAX_NAME_LENGTH + 1) + 1; i += 1)
 					{
 						printf("-");
 					}

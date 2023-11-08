@@ -444,26 +444,55 @@ enum WordGameMap
 #define ROW_REDUCTION_SIZE        16
 
 #define LETTER_XMDT(X) \
-	X(a, 'A') X(b, 'B') X(c, 'C') X(d, 'D') X(e, 'E') X(f, 'F') X(g, 'G') X(h, 'H') X(i, 'I') X(j, 'J') X(k, 'K') X(l, 'L') X(m, 'M') \
-	X(n, 'N') X(o, 'O') X(p, 'P') X(q, 'Q') X(r, 'R') X(s, 'S') X(t, 'T') X(u, 'U') X(v, 'V') X(w, 'W') X(x, 'X') X(y, 'Y') X(z, 'Z') \
-	X(boris       , 0b001      ) \
-	X(chelovek    , 0b010      ) \
-	X(dmitri      , 0b1101'1011) \
-	X(fyodor      , '0'        ) \
-	X(gregory     , 'r'        ) \
-	X(ivan        , 0b011      ) \
-	X(ivan_kratkiy, 0b100      ) \
-	X(leonid      , 0b1011'0110) \
-	X(myagkiy_znak, 'b'        ) \
-	X(pavel       , 0b1111'0111) \
-	X(shura       , 0b101      ) \
-	X(ulyana      , 'y'        ) \
-	X(yery        , 0b110      ) \
-	X(zhenya      , 0b111      ) \
-	X(zinaida     , '3'        ) \
-	X(a_umlaut    , 0b1110'0001) \
-	X(o_umlaut    , 0b1110'1111) \
-	X(ene         , 0b1110'1110)
+	/* Name       | LCD Character Code */ \
+	X(null        , 0b1111'1111        ) \
+	X(a           , 'A'                ) \
+	X(b           , 'B'                ) \
+	X(c           , 'C'                ) \
+	X(d           , 'D'                ) \
+	X(e           , 'E'                ) \
+	X(f           , 'F'                ) \
+	X(g           , 'G'                ) \
+	X(h           , 'H'                ) \
+	X(i           , 'I'                ) \
+	X(j           , 'J'                ) \
+	X(k           , 'K'                ) \
+	X(l           , 'L'                ) \
+	X(m           , 'M'                ) \
+	X(n           , 'N'                ) \
+	X(o           , 'O'                ) \
+	X(p           , 'P'                ) \
+	X(q           , 'Q'                ) \
+	X(r           , 'R'                ) \
+	X(s           , 'S'                ) \
+	X(t           , 'T'                ) \
+	X(u           , 'U'                ) \
+	X(v           , 'V'                ) \
+	X(w           , 'W'                ) \
+	X(x           , 'X'                ) \
+	X(y           , 'Y'                ) \
+	X(z           , 'Z'                ) \
+	X(boris       , 0b001              ) \
+	X(chelovek    , 0b010              ) \
+	X(dmitri      , 0b1101'1011        ) \
+	X(fyodor      , '0'                ) \
+	X(gregory     , 'r'                ) \
+	X(ivan        , 0b011              ) \
+	X(ivan_kratkiy, 0b100              ) \
+	X(leonid      , 0b1011'0110        ) \
+	X(myagkiy_znak, 'b'                ) \
+	X(pavel       , 0b1111'0111        ) \
+	X(shura       , 0b101              ) \
+	X(ulyana      , 'y'                ) \
+	X(yery        , 0b110              ) \
+	X(zhenya      , 0b111              ) \
+	X(zinaida     , '3'                ) \
+	X(a_umlaut    , 0b1110'0001        ) \
+	X(o_umlaut    , 0b1110'1111        ) \
+	X(ene         , 0b1110'1110        )
+
+#define LETTER_MAX_NAME_LENGTH_(IDENTIFIER_NAME, ...) u8 IDENTIFIER_NAME[sizeof(#IDENTIFIER_NAME) - 1];
+#define LETTER_MAX_NAME_LENGTH i32(sizeof(union { LETTER_XMDT(LETTER_MAX_NAME_LENGTH_) }))
 
 enum Letter
 {
