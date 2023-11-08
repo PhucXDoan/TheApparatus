@@ -232,27 +232,6 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 	#endif
 }
 
-#if USB_MS_ENABLE
-	static b8
-	_usb_ms_ocr_slot_excluded(u8_2 coords)
-	{
-		b8 slot_excluded = false;
-		for (u8 i = 0; i < pgm_read_byte(&WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].excluded_slot_coords_count); i += 1)
-		{
-			if
-			(
-				coords.x == pgm_read_byte(&WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].excluded_slot_coords[i].x) &&
-				coords.y == pgm_read_byte(&WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].excluded_slot_coords[i].y)
-			)
-			{
-				slot_excluded = true;
-				break;
-			}
-		}
-		return slot_excluded;
-	}
-#endif
-
 ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 {
 	#ifdef PIN_USB_BUSY
@@ -739,20 +718,22 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 					// "Determine range in sector to parse".
 					//
 
-					u16                   processing_red_alpha_pair_byte_offset = 0;
-					u8                    processing_red_alpha_pair_count       = 0;
-					struct BMPFileHeader* bmp_file_header                       = (struct BMPFileHeader*)  sd_sector;
-					struct BMPDIBHeader*  bmp_dib_header                        = (struct BMPDIBHeader* ) (sd_sector + sizeof(struct BMPFileHeader));
-					static_assert(sizeof(struct BMPFileHeader) + sizeof(struct BMPDIBHeader) <= sizeof(sd_sector));
+					u16 offset_in_sector_for_unprocessed_red_alpha_pairs = 0;
+					u8  amount_of_unprocessed_red_alpha_pairs_remaining  = 0;
 
 					switch (usb_ms_ocr_state)
 					{
 						case USBMSOCRState_ready:
 						{
+							// The main program is setting up the OCR state or is reading the resulting parse from OCR.
 						} break;
 
 						case USBMSOCRState_set:
 						{
+							struct BMPFileHeader* bmp_file_header = (struct BMPFileHeader*)  sd_sector;
+							struct BMPDIBHeader*  bmp_dib_header  = (struct BMPDIBHeader* ) (sd_sector + sizeof(struct BMPFileHeader));
+							static_assert(sizeof(struct BMPFileHeader) + sizeof(struct BMPDIBHeader) <= sizeof(sd_sector));
+
 							if // Sector is beginning of BMP?
 							(
 								sector_index == 0
@@ -770,27 +751,30 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 								&& bmp_dib_header->v3.AlphaMask == 0xFF'00'00'00
 							)
 							{
-								if (!(bmp_dib_header->Width == i32(wordgame_bmp_dim.x) && bmp_dib_header->Height == -i32(wordgame_bmp_dim.y)))
+								if (bmp_dib_header->Width != wordgame_bmp_dim.x || -bmp_dib_header->Height != wordgame_bmp_dim.y)
 								{
 									error(); // Received BMP is not conforming to the expect dimensions for the wordgame.
 								}
 
-								processing_red_alpha_pair_byte_offset = sizeof(struct BMPFileHeader) + sizeof(struct BMPDIBHeader) + 2; // Color channels are ordered BGRA in memory; +2 skips blue and green bytes.
-								processing_red_alpha_pair_count       = (FAT32_SECTOR_SIZE - sizeof(struct BMPFileHeader) - sizeof(struct BMPDIBHeader)) / sizeof(struct BMPPixel);
+								// Color channels are ordered BGRA in memory; +2 skips blue and green bytes.
+								offset_in_sector_for_unprocessed_red_alpha_pairs = sizeof(struct BMPFileHeader) + sizeof(struct BMPDIBHeader) + 2;
 
-								usb_ms_ocr_state             = USBMSOCRState_processing;
-								_usb_ms_ocr_pixels_processed = 0;
-								memset(_usb_ms_ocr_slot_scores, 0, sizeof(_usb_ms_ocr_slot_scores));
+								// First chunk of the sector is just BMP header stuff; there should be 93 red-alpha pairs remaining in the sector.
+								amount_of_unprocessed_red_alpha_pairs_remaining = (FAT32_SECTOR_SIZE - sizeof(struct BMPFileHeader) - sizeof(struct BMPDIBHeader)) / sizeof(struct BMPPixel);
+
+								usb_ms_ocr_state = USBMSOCRState_processing;
 							}
 						} break;
 
 						case USBMSOCRState_processing:
 						{
-							processing_red_alpha_pair_byte_offset = 0;
-							processing_red_alpha_pair_count  = FAT32_SECTOR_SIZE / sizeof(struct BMPPixel);
-							if (processing_red_alpha_pair_count > wordgame_bmp_dim.x * wordgame_bmp_dim.y - _usb_ms_ocr_pixels_processed)
+							offset_in_sector_for_unprocessed_red_alpha_pairs = 0;
+							amount_of_unprocessed_red_alpha_pairs_remaining  = FAT32_SECTOR_SIZE / sizeof(struct BMPPixel);
+
+							u16 total_amount_of_pixels_remaining = wordgame_bmp_dim.x * wordgame_bmp_dim.y - _usb_ms_ocr_pixels_processed;
+							if (amount_of_unprocessed_red_alpha_pairs_remaining > total_amount_of_pixels_remaining)
 							{
-								processing_red_alpha_pair_count = wordgame_bmp_dim.x * wordgame_bmp_dim.y - _usb_ms_ocr_pixels_processed;
+								amount_of_unprocessed_red_alpha_pairs_remaining = total_amount_of_pixels_remaining;
 							}
 						} break;
 					}
@@ -805,145 +789,149 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 						// "Verify sector".
 						//
 
-						b8 is_bmp_data = true;
-						for (u8 pair_index = 0; pair_index < processing_red_alpha_pair_count; pair_index += 1)
+						b8 is_red_alpha_pairs_actually_pixel_data = true;
+						for (u8 pair_index = 0; pair_index < amount_of_unprocessed_red_alpha_pairs_remaining; pair_index += 1)
 						{
-							if (sd_sector[processing_red_alpha_pair_byte_offset + pair_index * sizeof(struct BMPPixel) + 1] != 0xFF) // Alpha should always be set.
+							if (sd_sector[offset_in_sector_for_unprocessed_red_alpha_pairs + pair_index * sizeof(struct BMPPixel) + 1] != 0xFF)
 							{
-								is_bmp_data = false;
+								is_red_alpha_pairs_actually_pixel_data = false;
 								break;
 							}
 						}
 
-						if (is_bmp_data)
+						if (is_red_alpha_pairs_actually_pixel_data)
 						{
 							//
 							// "Process sector in scanlines".
 							//
 
-							while (processing_red_alpha_pair_count)
+							while (amount_of_unprocessed_red_alpha_pairs_remaining)
 							{
 								//
 								// Determine scanline length.
 								//
 
-								u16   pixels_in_scanline                   = {0};
-								b8    slot_scanline                        = false;
-								u16_2 beginning_scanline_inner_tile_coords =
+								#define MAKE(IDENTIFIER_NAME, PRINT_NAME, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, SLOT_DIM, UNCOMPRESSED_SLOT_STRIDE, COMPRESSED_SLOT_STRIDE, ...) \
+									static_assert(COMPRESSED_SLOT_STRIDE < 256); // If the stride is too big, we'll have to make starting_slot_pixel_coordinates word-sized.
+								WORDGAME_BOARD_XMDT(MAKE)
+								#undef MAKE
+
+								u16  scanline_length                 = {0};
+								b8   scanline_is_for_slot            = false;
+								u8_2 starting_slot_pixel_coordinates =
 									{
 										(_usb_ms_ocr_pixels_processed % wordgame_bmp_dim.x) % wordgame_compressed_slot_stride,
 										(_usb_ms_ocr_pixels_processed / wordgame_bmp_dim.x) % wordgame_compressed_slot_stride,
 									};
+								starting_slot_pixel_coordinates.y = MASK_DIM - 1 - starting_slot_pixel_coordinates.y; // Purposely allow underflow.
 
-								if (beginning_scanline_inner_tile_coords.y >= MASK_DIM) // Scanline beginning on BMP row that's just padding.
+								if (starting_slot_pixel_coordinates.y >= MASK_DIM) // Scanline beginning on BMP row that's just padding.
 								{
-									pixels_in_scanline = wordgame_bmp_dim.x - (_usb_ms_ocr_pixels_processed % wordgame_bmp_dim.x); // Try to go to end of the row of pixels.
+									scanline_length = wordgame_bmp_dim.x - (_usb_ms_ocr_pixels_processed % wordgame_bmp_dim.x); // Try to go to end of the row of pixels.
 								}
-								else if (beginning_scanline_inner_tile_coords.x >= MASK_DIM) // Scanline beginning on BMP column that's just padding.
+								else if (starting_slot_pixel_coordinates.x >= MASK_DIM) // Scanline beginning on BMP column that's just padding.
 								{
-									pixels_in_scanline = wordgame_compressed_slot_stride - beginning_scanline_inner_tile_coords.x; // Try to go to the next slot.
+									scanline_length = wordgame_compressed_slot_stride - starting_slot_pixel_coordinates.x; // Try to go to the next slot.
 								}
 								else // Scanline beginning on BMP column that contains letters.
 								{
-									pixels_in_scanline = MASK_DIM - beginning_scanline_inner_tile_coords.x; // Try to process all remaining pixels in the slot's scanline.
-									slot_scanline      = true;
+									scanline_length      = MASK_DIM - starting_slot_pixel_coordinates.x; // Try to process all remaining pixels in the single row of pixels of this slot.
+									scanline_is_for_slot = true;
 								}
 
-								if (pixels_in_scanline > processing_red_alpha_pair_count) // Can't process more pixels than there are remaining in the sector.
+								if (scanline_length > amount_of_unprocessed_red_alpha_pairs_remaining) // Can't process more pixels than there are remaining in the sector.
 								{
-									pixels_in_scanline = processing_red_alpha_pair_count;
+									scanline_length = amount_of_unprocessed_red_alpha_pairs_remaining;
 								}
 
 								//
 								// Process scanline.
 								//
 
-								if (slot_scanline)
+								if (scanline_is_for_slot)
 								{
-									//
-									// Only actually process scanline of the slot if the slot is not excluded.
-									//
-
-									u8_2 slot_coords =
+									u8_2 slot_coords_on_board =
 										{
 											(_usb_ms_ocr_pixels_processed % wordgame_bmp_dim.x) / wordgame_compressed_slot_stride,
 											(_usb_ms_ocr_pixels_processed / wordgame_bmp_dim.x) / wordgame_compressed_slot_stride,
 										};
-									slot_coords.y = wordgame_board_dim.y - 1 - slot_coords.y;
+									slot_coords_on_board.y = wordgame_board_dim.y - 1 - slot_coords_on_board.y;
 
-									if (!_usb_ms_ocr_slot_excluded(slot_coords))
+									//
+									// "Parse scanline of the slot".
+									//
+
+									for (u8 pixel_index = 0; pixel_index < scanline_length; pixel_index += 1)
+									{
+										u8 slot_pixel_x = starting_slot_pixel_coordinates.x + pixel_index;
+
+										if (sd_sector[offset_in_sector_for_unprocessed_red_alpha_pairs + pixel_index * sizeof(struct BMPPixel)] <= MASK_ACTIVATION_THRESHOLD)
+										{
+											_usb_ms_ocr_bits_of_a_single_row_of_pixels_for_a_single_slot[slot_pixel_x / 8] |= 1 << (slot_pixel_x % 8);
+										}
+										else
+										{
+											_usb_ms_ocr_bits_of_a_single_row_of_pixels_for_a_single_slot[slot_pixel_x / 8] &= ~(1 << (slot_pixel_x % 8));
+										}
+									}
+
+									//
+									// "Add points."
+									//
+
+									if (starting_slot_pixel_coordinates.x + scanline_length == MASK_DIM)
 									{
 										//
-										// "Parse scanline of a slot".
+										// Count cleared bits if the row is eligible for row-reduction.
 										//
 
-										for (u8 scanline_pixel_index = 0; scanline_pixel_index < pixels_in_scanline; scanline_pixel_index += 1)
-										{
-											u8 slot_inner_px_x = beginning_scanline_inner_tile_coords.x + scanline_pixel_index;
+										u8 cleared_bits = 0;
 
-											if (sd_sector[processing_red_alpha_pair_byte_offset + scanline_pixel_index * sizeof(struct BMPPixel)] <= MASK_ACTIVATION_THRESHOLD)
+										if
+										(
+											starting_slot_pixel_coordinates.y < ROW_REDUCTION_SIZE ||
+											starting_slot_pixel_coordinates.y > (MASK_DIM - 1) - ROW_REDUCTION_SIZE
+										)
+										{
+											for (u8 i = 0; i < countof(_usb_ms_ocr_bits_of_a_single_row_of_pixels_for_a_single_slot); i += 1)
 											{
-												_usb_ms_ocr_slot_bits[slot_inner_px_x / 8] |= 1 << (slot_inner_px_x % 8);
-											}
-											else
-											{
-												_usb_ms_ocr_slot_bits[slot_inner_px_x / 8] &= ~(1 << (slot_inner_px_x % 8));
+												cleared_bits += count_cleared_bits(_usb_ms_ocr_bits_of_a_single_row_of_pixels_for_a_single_slot[i]);
 											}
 										}
 
 										//
-										// "Add points."
+										// Give out points for each letter.
 										//
 
-										if (beginning_scanline_inner_tile_coords.x + pixels_in_scanline == MASK_DIM)
+										for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
 										{
-											//
-											// Count cleared bits if the row is eligible for row-reduction.
-											//
+											const u8* mask_data              = pgm_read_ptr(&ROW_REDUCED_MASK_ENTRIES[letter].data);
+											u8        mask_empty_bottom_rows = (pgm_u8(ROW_REDUCED_MASK_ENTRIES[letter].empty_rows) >> 0) & 0b0000'1111;
+											u8        mask_empty_top_rows    = (pgm_u8(ROW_REDUCED_MASK_ENTRIES[letter].empty_rows) >> 4) & 0b0000'1111;
+											u8        score_addend           = 0;
 
-											u8 slot_inner_px_y = MASK_DIM - 1 - beginning_scanline_inner_tile_coords.y;
-											u8 cleared_bits    = 0;
-
-											if (slot_inner_px_y < 16 || beginning_scanline_inner_tile_coords.y < 16)
+											if // This row of the mask has been reduced.
+											(
+												starting_slot_pixel_coordinates.y < mask_empty_bottom_rows ||
+												starting_slot_pixel_coordinates.y > MASK_DIM - 1 - mask_empty_top_rows
+											)
 											{
-												for (u8 i = 0; i < countof(_usb_ms_ocr_slot_bits); i += 1)
+												score_addend = cleared_bits;
+											}
+											else // Compare slot bits with mask.
+											{
+												for (u8 byte_index = 0; byte_index < MASK_DIM / 8; byte_index += 1)
 												{
-													cleared_bits += count_cleared_bits(_usb_ms_ocr_slot_bits[i]);
+													score_addend +=
+														count_cleared_bits
+														(
+															_usb_ms_ocr_bits_of_a_single_row_of_pixels_for_a_single_slot[byte_index]
+															^ pgm_u8(mask_data[(starting_slot_pixel_coordinates.y - mask_empty_bottom_rows) * (MASK_DIM / 8) + byte_index])
+														);
 												}
 											}
 
-											//
-											// Give out points for each letter.
-											//
-
-											for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
-											{
-												u8 score_addend = 0;
-
-												u8 mask_empty_packed_rows = pgm_read_byte(&ROW_REDUCED_MASK_ENTRIES[letter].empty_rows);
-												u8 mask_empty_bottom_rows = (mask_empty_packed_rows >> 0) & 0b0000'1111;
-												u8 mask_empty_top_rows    = (mask_empty_packed_rows >> 4) & 0b0000'1111;
-
-												if // This row of the mask has been reduced.
-												(
-													slot_inner_px_y                        < mask_empty_bottom_rows ||
-													beginning_scanline_inner_tile_coords.y < mask_empty_top_rows
-												)
-												{
-													score_addend = cleared_bits;
-												}
-												else // Compare slot bits with mask.
-												{
-													for (u8 mask_row_byte_index = 0; mask_row_byte_index < MASK_DIM / 8; mask_row_byte_index += 1)
-													{
-														const u8* mask_data = (const u8*) pgm_read_ptr(&ROW_REDUCED_MASK_ENTRIES[letter].data);
-														u8        mask_byte = pgm_read_byte(&mask_data[(slot_inner_px_y - mask_empty_bottom_rows) * (MASK_DIM / 8) + mask_row_byte_index]);
-														score_addend += count_cleared_bits(_usb_ms_ocr_slot_bits[mask_row_byte_index] ^ mask_byte);
-													}
-												}
-
-												_usb_ms_ocr_slot_scores[slot_coords.x][letter] += score_addend;
-											}
+											_usb_ms_ocr_accumulated_scores_for_single_row_of_slots_in_board[slot_coords_on_board.x][letter] += score_addend;
 										}
 									}
 
@@ -953,27 +941,31 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 									if
 									(
-										beginning_scanline_inner_tile_coords.x + pixels_in_scanline == MASK_DIM &&              // Finished entire row of pixels of this slot.
-										beginning_scanline_inner_tile_coords.y                      == MASK_DIM - 1 &&          // The row of pixels was the last one for the slot.
-										slot_coords.x                                               == wordgame_board_dim.x - 1 // The slot is the last one in the row of slots.
+										starting_slot_pixel_coordinates.x + scanline_length == MASK_DIM &&              // Finished entire row of pixels of this slot.
+										starting_slot_pixel_coordinates.y                   == 0 &&                     // The row of pixels was the last one for the slot (remember, we're processing the BMP top-down).
+										slot_coords_on_board.x                              == wordgame_board_dim.x - 1 // The slot is the last one in the row of slots.
 									)
 									{
 										for (u8 slot_coord_x = 0; slot_coord_x < wordgame_board_dim.x; slot_coord_x += 1)
 										{
-											if (!_usb_ms_ocr_slot_excluded((u8_2) { slot_coord_x, slot_coords.y }))
+											u16 highest_score = 0;
+											for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
 											{
-												u16 best_matching_score = 0;
-
-												for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
+												u16 letter_score = _usb_ms_ocr_accumulated_scores_for_single_row_of_slots_in_board[slot_coord_x][letter];
+												if (highest_score < letter_score)
 												{
-													if (best_matching_score < _usb_ms_ocr_slot_scores[slot_coord_x][letter])
-													{
-														best_matching_score                          = _usb_ms_ocr_slot_scores[slot_coord_x][letter];
-														usb_ms_ocr_grid[slot_coords.y][slot_coord_x] = letter;
-													}
+													highest_score                                         = letter_score;
+													usb_ms_ocr_grid[slot_coords_on_board.y][slot_coord_x] = letter;
 												}
 											}
 										}
+
+										memset
+										(
+											_usb_ms_ocr_accumulated_scores_for_single_row_of_slots_in_board,
+											0,
+											sizeof(_usb_ms_ocr_accumulated_scores_for_single_row_of_slots_in_board)
+										);
 									}
 								}
 
@@ -981,15 +973,16 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 								// Jump ahead to next set of pixels to process as a scanline.
 								//
 
-								processing_red_alpha_pair_count       -= pixels_in_scanline;
-								processing_red_alpha_pair_byte_offset += pixels_in_scanline * sizeof(struct BMPPixel);
-								_usb_ms_ocr_pixels_processed          += pixels_in_scanline;
+								amount_of_unprocessed_red_alpha_pairs_remaining  -= scanline_length;
+								offset_in_sector_for_unprocessed_red_alpha_pairs += scanline_length * sizeof(struct BMPPixel);
+								_usb_ms_ocr_pixels_processed                     += scanline_length;
 								assert(_usb_ms_ocr_pixels_processed <= wordgame_bmp_dim.x * wordgame_bmp_dim.y);
 							}
 
 							if (_usb_ms_ocr_pixels_processed == wordgame_bmp_dim.x * wordgame_bmp_dim.y)
 							{
-								usb_ms_ocr_state = USBMSOCRState_ready;
+								usb_ms_ocr_state             = USBMSOCRState_ready;
+								_usb_ms_ocr_pixels_processed = 0;
 							}
 						}
 					}
@@ -2533,7 +2526,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 			slots, etc, etc. A scanline is just essentially something that we can process entirely
 			in a coherent manner without having to worry about all the alignment issues.
 
-		- "Parse scanline of a slot".
+		- "Parse scanline of the slot".
 
 			When we have a scanline of a single row of a single slot (which may not be the entire
 			row actually, since it could be truncated and the rest of the row will be described in

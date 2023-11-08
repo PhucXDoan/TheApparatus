@@ -441,6 +441,7 @@ enum WordGameMap
 
 #define MASK_ACTIVATION_THRESHOLD 8
 #define MASK_DIM                  64
+#define ROW_REDUCTION_SIZE        16
 
 #define LETTER_XMDT(X) \
 	X(a, 'A') X(b, 'B') X(c, 'C') X(d, 'D') X(e, 'E') X(f, 'F') X(g, 'G') X(h, 'H') X(i, 'I') X(j, 'J') X(k, 'K') X(l, 'L') X(m, 'M') \
@@ -495,6 +496,7 @@ struct RowReducedMaskEntry // Note: changing size of this means changing the cal
 	const u8* data;
 	u8        empty_rows; // Least significant nibble stores amount of empty rows from bottom, most significant nibble stores aount of empty rows on top.
 };
+static_assert(ROW_REDUCTION_SIZE <= 16); // To be able to fit numbers in the "empty_rows" field.
 
 //
 // "string.c"
@@ -1942,14 +1944,13 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	static volatile enum USBMSOCRState usb_ms_ocr_state          = {0};
 	static volatile enum WordGameBoard usb_ms_ocr_wordgame_board = {0};
 	static volatile enum Letter        usb_ms_ocr_grid[WORDGAME_BOARD_MAX_DIM_Y][WORDGAME_BOARD_MAX_DIM_X] = {0};
+	static u32                         _usb_ms_ocr_pixels_processed = 0;
+	static u16                         _usb_ms_ocr_accumulated_scores_for_single_row_of_slots_in_board[WORDGAME_BOARD_MAX_DIM_X + 1][Letter_COUNT] = {0};
+	static u8                          _usb_ms_ocr_bits_of_a_single_row_of_pixels_for_a_single_slot[MASK_DIM / 8] = {0};
 
 	#if USB_MS_ENABLE
 		static struct USBMSCommandStatusWrapper _usb_ms_status      = { .dCSWSignature = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE };
 		static b8                               _usb_ms_send_status = false;
-
-		static u32 _usb_ms_ocr_pixels_processed                                        = 0;
-		static u8  _usb_ms_ocr_slot_bits[MASK_DIM / 8]                                 = {0};
-		static u16 _usb_ms_ocr_slot_scores[WORDGAME_BOARD_MAX_DIM_X + 1][Letter_COUNT] = {0};
 	#endif
 
 	#if USB_CDC_ENABLE

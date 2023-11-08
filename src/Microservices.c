@@ -1343,7 +1343,7 @@ main(int argc, char** argv)
 						}
 					}
 
-					if (empty_rows[letter].bottom >= 16)
+					if (empty_rows[letter].bottom >= ROW_REDUCTION_SIZE)
 					{
 						error("Too many empty bottom rows in \"%.*s\" for row-reduction!", i32(cli.dir_path.str.length), cli.dir_path.str.data);
 					}
@@ -1373,7 +1373,7 @@ main(int argc, char** argv)
 						}
 					}
 
-					if (empty_rows[letter].top >= 16)
+					if (empty_rows[letter].top >= ROW_REDUCTION_SIZE)
 					{
 						error("Too many empty top rows in \"%.*s\" for row-reduction!", i32(cli.dir_path.str.length), cli.dir_path.str.data);
 					}
@@ -1432,7 +1432,7 @@ main(int argc, char** argv)
 						y += 1
 					)
 					{
-						static_assert(MASK_DIM >= 16);
+						static_assert(MASK_DIM >= ROW_REDUCTION_SIZE);
 						static_assert(MASK_DIM % 8 == 0);
 						for
 						(
