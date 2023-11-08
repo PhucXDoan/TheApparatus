@@ -33,6 +33,120 @@
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE HaltSource_diplomat
 
+enum Menu
+{
+	Menu_main,
+	Menu_chosen_map,
+	Menu_displaying,
+};
+
+#define MENU_CHOSEN_MAP_OPTION_XMDT(X) \
+	X(back     , "Back"       ) \
+	X(auto_play, "Auto play"  ) \
+	X(on_guard , "Be on guard") \
+	X(datamine , "Datamine"   )
+
+#define MENU_CHOSEN_MAP_OPTION_MAX_MESSAGE_SIZE_(NAME, MESSAGE) u8 NAME[sizeof(MESSAGE)];
+#define MENU_CHOSEN_MAP_OPTION_MAX_MESSAGE_SIZE sizeof(union { MENU_CHOSEN_MAP_OPTION_XMDT(MENU_CHOSEN_MAP_OPTION_MAX_MESSAGE_SIZE_) })
+
+enum MenuChosenMapOption
+{
+	#define MAKE(NAME, ...) MenuChosenMapOption_##NAME,
+	MENU_CHOSEN_MAP_OPTION_XMDT(MAKE)
+	#undef MAKE
+	MenuChosenMapOption_COUNT,
+};
+
+static const char MENU_CHOSEN_MAP_OPTIONS[MenuChosenMapOption_COUNT][MENU_CHOSEN_MAP_OPTION_MAX_MESSAGE_SIZE] PROGMEM =
+	{
+		#define MAKE(NAME, MESSAGE) MESSAGE,
+		MENU_CHOSEN_MAP_OPTION_XMDT(MAKE)
+		#undef MAKE
+	};
+
+enum MenuMainOption
+{
+	// ... enum WordGameMap ...
+
+	MenuMainOption_reset_filesystem = WordGameMap_COUNT,
+	MenuMainOption_COUNT,
+};
+
+struct Rotary
+{
+	u8 clk;
+	u8 btn_bias;
+	i8 rotation;
+	i8 transition;
+};
+
+static void
+update_rotary(struct Rotary* rotary)
+{
+	rotary->rotation   = 0;
+	rotary->transition = 0;
+
+	if (pin_read(PIN_ROTARY_BTN)) // Rotary button unpressed?
+	{
+		//
+		// Handle rotary rotation.
+		//
+
+		if (pin_read(PIN_ROTARY_CLK) != rotary->clk)
+		{
+			if (rotary->clk)
+			{
+				if (pin_read(PIN_ROTARY_DAT))
+				{
+					rotary->rotation = 1;
+				}
+				else
+				{
+					rotary->rotation = -1;
+				}
+			}
+
+			rotary->clk = !rotary->clk;
+		}
+
+		//
+		// Handle rotary button being unpressed.
+		//
+
+		if (rotary->btn_bias >= 128)
+		{
+			rotary->btn_bias -= 1;
+
+			if (rotary->btn_bias < 128)
+			{
+				rotary->transition = -1;
+				rotary->btn_bias   = 0;
+			}
+		}
+		else
+		{
+			rotary->btn_bias = 0;
+		}
+	}
+	else // Rotary button pressed.
+	{
+		if (rotary->btn_bias < 128)
+		{
+			rotary->btn_bias += 1;
+
+			if (rotary->btn_bias >= 128)
+			{
+				rotary->transition = 1;
+				rotary->btn_bias   = 255;
+			}
+		}
+		else
+		{
+			rotary->btn_bias = 255;
+		}
+	}
+}
+
 int
 main(void)
 {
@@ -56,27 +170,12 @@ main(void)
 	pin_input(PIN_ROTARY_BTN);
 	pin_input(PIN_ROTARY_CLK);
 	pin_input(PIN_ROTARY_DAT);
-	b8 rotary_clk       = 0;
-	u8 rotary_btn_bias  = 0;
-
-
-	enum Menu
-	{
-		Menu_main,
-		Menu_displaying,
-	};
-
-	enum MenuMainOption
-	{
-		// ... enum WordGameMap ...
-
-		MenuMainOption_reset_filesystem = WordGameMap_COUNT,
-		MenuMainOption_COUNT,
-	};
-
-	enum Menu           menu                             = {0};
-	enum MenuMainOption menu_main_selected_option        = {0};
-	enum MenuMainOption menu_main_first_displayed_option = {0};
+	struct Rotary              rotary                                 = {0};
+	enum   Menu                menu                                   = {0};
+	enum   MenuMainOption      menu_main_selected_option              = {0};
+	enum   MenuMainOption      menu_main_first_displayed_option       = {0};
+	enum   MenuChosenMapOption menu_chosen_map_selected_option        = {0};
+	enum   MenuChosenMapOption menu_chosen_map_first_displayed_option = {0};
 
 	//
 	// Loop.
@@ -84,99 +183,73 @@ main(void)
 
 	while (true)
 	{
-		//
-		// Update rotary.
-		//
-
-		i8 rotary_rotation   = 0;
-		i8 rotary_transition = 0;
-
-		if (pin_read(PIN_ROTARY_BTN)) // Rotary button unpressed?
-		{
-			//
-			// Handle rotary rotation.
-			//
-
-			if (pin_read(PIN_ROTARY_CLK) != rotary_clk)
-			{
-				if (rotary_clk)
-				{
-					if (pin_read(PIN_ROTARY_DAT))
-					{
-						rotary_rotation = 1;
-					}
-					else
-					{
-						rotary_rotation = -1;
-					}
-				}
-
-				rotary_clk = !rotary_clk;
-			}
-
-			//
-			// Handle rotary button being unpressed.
-			//
-
-			if (rotary_btn_bias >= 128)
-			{
-				rotary_btn_bias -= 1;
-
-				if (rotary_btn_bias < 128)
-				{
-					rotary_transition = -1;
-					rotary_btn_bias   = 0;
-				}
-			}
-			else
-			{
-				rotary_btn_bias = 0;
-			}
-		}
-		else // Rotary button pressed.
-		{
-			if (rotary_btn_bias < 128)
-			{
-				rotary_btn_bias += 1;
-
-				if (rotary_btn_bias >= 128)
-				{
-					rotary_transition = 1;
-					rotary_btn_bias   = 255;
-				}
-			}
-			else
-			{
-				rotary_btn_bias = 255;
-			}
-		}
-
-		//
-		// Update to the user input.
-		//
+		update_rotary(&rotary);
 
 		switch (menu)
 		{
 			case Menu_main:
 			{
-				menu_main_selected_option += MenuMainOption_COUNT + rotary_rotation;
-				menu_main_selected_option %= MenuMainOption_COUNT;
+				//
+				// Update selection.
+				//
 
+				menu_main_selected_option += MenuMainOption_COUNT + rotary.rotation;
+				menu_main_selected_option %= MenuMainOption_COUNT;
 				if ((menu_main_selected_option - menu_main_first_displayed_option + MenuMainOption_COUNT) % MenuMainOption_COUNT >= LCD_DIM_Y)
 				{
-					menu_main_first_displayed_option += MenuMainOption_COUNT + rotary_rotation;
+					menu_main_first_displayed_option += MenuMainOption_COUNT + rotary.rotation;
 					menu_main_first_displayed_option %= MenuMainOption_COUNT;
 				}
 
-				if (rotary_transition == -1)
+				//
+				// Render.
+				//
+
+				lcd_reset();
+
+				for
+				(
+					u8 row = 0;
+					row < (LCD_DIM_Y < WordGameMap_COUNT ? LCD_DIM_Y : WordGameMap_COUNT);
+					row += 1
+				)
+				{
+					enum MenuMainOption option = (menu_main_first_displayed_option + row) % MenuMainOption_COUNT;
+
+					if (option < (enum MenuMainOption) WordGameMap_COUNT)
+					{
+						static_assert(2 + (sizeof(WORDGAME_MAP_INFO[option].print_name_cstr) - 1) <= LCD_DIM_X);
+						lcd_pgm_cstr(WORDGAME_MAP_INFO[option].print_name_cstr);
+					}
+					else
+					{
+						switch (option) // TODO?
+						{
+							case MenuMainOption_reset_filesystem : lcd_pstr("Reset file system"); break;
+							case MenuMainOption_COUNT            : error(); break;
+						}
+					}
+
+					if (option == menu_main_selected_option)
+					{
+						lcd_char(' ');
+						lcd_char(LCD_LEFT_ARROW);
+					}
+
+					lcd_char('\n');
+				}
+
+				lcd_refresh();
+
+				//
+				// React to selection.
+				//
+
+				if (rotary.transition == -1)
 				{
 					if (menu_main_selected_option < (enum MenuMainOption) WordGameMap_COUNT)
 					{
-						assert(usb_ms_ocr_state == USBMSOCRState_ready);
-						usb_ms_ocr_state          = USBMSOCRState_set;
-						usb_ms_ocr_wordgame_board = pgm_u8(WORDGAME_MAP_INFO[menu_main_selected_option].board);
-
-						menu = Menu_displaying;
+						menu = Menu_chosen_map;
 					}
 					else
 					{
@@ -230,49 +303,49 @@ main(void)
 				}
 			} break;
 
-			case Menu_displaying:
+			case Menu_chosen_map:
 			{
-				if (usb_ms_ocr_state == USBMSOCRState_ready && rotary_transition == -1)
+				assert(menu_main_selected_option < (enum MenuMainOption) WordGameMap_COUNT);
+
+				//
+				// Update selection.
+				//
+
+				// assert(usb_ms_ocr_state == USBMSOCRState_ready);
+				// usb_ms_ocr_state          = USBMSOCRState_set;
+				// usb_ms_ocr_wordgame_board = pgm_u8(WORDGAME_MAP_INFO[menu_main_selected_option].board);
+				// menu = Menu_displaying;
+
+				menu_chosen_map_selected_option += MenuChosenMapOption_COUNT + rotary.rotation;
+				menu_chosen_map_selected_option %= MenuChosenMapOption_COUNT;
+				if ((menu_chosen_map_selected_option - menu_chosen_map_first_displayed_option + MenuChosenMapOption_COUNT) % MenuChosenMapOption_COUNT >= LCD_DIM_Y - 1)
 				{
-					menu = Menu_main;
+					menu_chosen_map_first_displayed_option += MenuChosenMapOption_COUNT + rotary.rotation;
+					menu_chosen_map_first_displayed_option %= MenuChosenMapOption_COUNT;
 				}
-			} break;
-		}
 
-		//
-		// Display menu.
-		//
+				//
+				// Render.
+				//
 
-		lcd_reset();
+				lcd_reset();
 
-		switch (menu)
-		{
-			case Menu_main:
-			{
+				lcd_pgm_cstr(WORDGAME_MAP_INFO[menu_main_selected_option].print_name_cstr);
+				lcd_char('\n');
 				for
 				(
 					u8 row = 0;
-					row < (LCD_DIM_Y < WordGameMap_COUNT ? LCD_DIM_Y : WordGameMap_COUNT);
+					row < (LCD_DIM_Y - 1 < WordGameMap_COUNT ? LCD_DIM_Y - 1: WordGameMap_COUNT);
 					row += 1
 				)
 				{
-					enum MenuMainOption option = (menu_main_first_displayed_option + row) % MenuMainOption_COUNT;
+					enum MenuChosenMapOption option = (menu_chosen_map_first_displayed_option + row) % MenuChosenMapOption_COUNT;
 
-					if (option < (enum MenuMainOption) WordGameMap_COUNT)
-					{
-						static_assert(2 + (sizeof(WORDGAME_MAP_INFO[option].print_name_cstr) - 1) <= LCD_DIM_X);
-						lcd_pgm_cstr(WORDGAME_MAP_INFO[option].print_name_cstr);
-					}
-					else
-					{
-						switch (option)
-						{
-							case MenuMainOption_reset_filesystem : lcd_pstr("Reset file system"); break;
-							case MenuMainOption_COUNT            : error(); break;
-						}
-					}
+					static_assert(MENU_CHOSEN_MAP_OPTION_MAX_MESSAGE_SIZE + 2 + 2 <= LCD_DIM_X);
+					lcd_pstr("  ");
+					lcd_pgm_cstr(MENU_CHOSEN_MAP_OPTIONS[option]);
 
-					if (option == menu_main_selected_option)
+					if (option == menu_chosen_map_selected_option)
 					{
 						lcd_char(' ');
 						lcd_char(LCD_LEFT_ARROW);
@@ -280,10 +353,215 @@ main(void)
 
 					lcd_char('\n');
 				}
+
+				lcd_refresh();
+
+				//
+				// React to selection.
+				//
+
+				if (rotary.transition == -1)
+				{
+					switch (menu_chosen_map_selected_option)
+					{
+						case MenuChosenMapOption_back:
+						{
+							menu = Menu_main;
+						} break;
+
+						case MenuChosenMapOption_auto_play:
+						{
+						} break;
+
+						case MenuChosenMapOption_on_guard:
+						{
+						} break;
+
+						case MenuChosenMapOption_datamine:
+						{
+							#define WAIT(MS) \
+								do \
+								{ \
+									for (u16 i = 0; i < (MS); i += 1) \
+									{ \
+										update_rotary(&rotary); \
+										if (rotary.transition == 1) \
+										{ \
+											goto BREAK_DATAMINING; \
+										} \
+										else \
+										{ \
+											_delay_ms(1.0); \
+										} \
+									} \
+								} \
+								while (false)
+							#define CLICK(X, Y) \
+								do \
+								{ \
+									usb_mouse_command(false, (X), (Y)); \
+									WAIT(500); \
+									usb_mouse_command(true, (X), (Y)); \
+									WAIT(128); \
+									usb_mouse_command(false, (X), (Y)); \
+								} \
+								while (false)
+
+							u16 screenshot_count = 0;
+							while (true)
+							{
+								lcd_reset();
+								lcd_pgm_cstr(WORDGAME_MAP_INFO[menu_main_selected_option].print_name_cstr);
+								lcd_pstr
+								(
+									"\n"
+									"  Datamining #"
+								);
+								lcd_u64(screenshot_count);
+								lcd_pstr
+								(
+									"...\n"
+									"  Hold to cancel  "
+								);
+								lcd_refresh();
+
+								usb_mouse_command(false, 0, 0);
+
+								CLICK(45, 185); // Game Pigeon icon on iMessage bar.
+								WAIT(350);
+
+								CLICK(14, 255); // Word Games category.
+								WAIT(350);
+
+								u8 play_button_y = {0};
+								switch ((enum WordGameMap) menu_main_selected_option)
+								{
+									case WordGameMap_anagrams_english_6:
+									case WordGameMap_anagrams_english_7:
+									case WordGameMap_anagrams_russian:
+									case WordGameMap_anagrams_french:
+									case WordGameMap_anagrams_german:
+									case WordGameMap_anagrams_spanish:
+									case WordGameMap_anagrams_italian:
+									{
+										CLICK(30, 238); // Anagrams game.
+										WAIT(350);
+
+										if (!screenshot_count)
+										{
+											// TODO Explain.
+											CLICK(8, 250); // Language menu.
+											WAIT(350);
+
+											// TODO Language enum.
+											u8 language_index = {0};
+											switch ((enum WordGameMap) menu_main_selected_option)
+											{
+												case WordGameMap_anagrams_english_6 : language_index = 0; break;
+												case WordGameMap_anagrams_english_7 : language_index = 0; break;
+												case WordGameMap_anagrams_russian   : language_index = 1; break;
+												case WordGameMap_anagrams_french    : language_index = 2; break;
+												case WordGameMap_anagrams_german    : language_index = 3; break;
+												case WordGameMap_anagrams_spanish   : language_index = 4; break;
+												case WordGameMap_anagrams_italian   : language_index = 5; break;
+												default: error();
+											}
+
+											CLICK(22 + language_index * 17, 255);
+											WAIT(350);
+
+											if ((enum WordGameMap) menu_main_selected_option == WordGameMap_anagrams_english_6)
+											{
+												CLICK(67, 255);
+											}
+											else if ((enum WordGameMap) menu_main_selected_option == WordGameMap_anagrams_english_7)
+											{
+												CLICK(103, 255);
+											}
+										}
+
+										play_button_y = 200;
+									} break;
+
+									case WordGameMap_COUNT:
+									default:
+									{
+										error();
+									} break;
+								}
+
+								CLICK(121, 168); // Send.
+								WAIT(1000);
+
+								CLICK(64, 120); // Open game.
+								WAIT(500);
+
+								CLICK(64, play_button_y); // Start.
+								WAIT(500);
+
+								// Double tap AssistiveTouch.
+								usb_mouse_command(false, ASSISTIVE_TOUCH_X, ASSISTIVE_TOUCH_Y);
+								WAIT(500);
+								usb_mouse_command(true, ASSISTIVE_TOUCH_X, ASSISTIVE_TOUCH_Y);
+								WAIT(64);
+								usb_mouse_command(false, ASSISTIVE_TOUCH_X, ASSISTIVE_TOUCH_Y);
+								WAIT(64);
+								usb_mouse_command(true, ASSISTIVE_TOUCH_X, ASSISTIVE_TOUCH_Y);
+								WAIT(64);
+								usb_mouse_command(false, ASSISTIVE_TOUCH_X, ASSISTIVE_TOUCH_Y);
+								screenshot_count += 1;
+								WAIT(750);
+
+								CLICK(122, 25); // Close game.
+								WAIT(750);
+
+								// Swipe away screenshot.
+								usb_mouse_command(false, 25, 255);
+								WAIT(500);
+								usb_mouse_command(true, 0, 255);
+								WAIT(100);
+								usb_mouse_command(false, 0, 255);
+							}
+							BREAK_DATAMINING:;
+							lcd_reset();
+							lcd_pgm_cstr(WORDGAME_MAP_INFO[menu_main_selected_option].print_name_cstr);
+							lcd_pstr
+							(
+								"\n"
+								"  Datamined "
+							);
+							lcd_u64(screenshot_count);
+							lcd_pstr
+							(
+								"!\n"
+								"  Release to finish"
+							);
+							lcd_refresh();
+							while (rotary.transition != -1)
+							{
+								update_rotary(&rotary);
+							}
+
+							#undef WAIT
+							#undef CLICK
+						} break;
+
+						case MenuChosenMapOption_COUNT:
+						default:
+						{
+							error();
+						} break;
+					}
+				}
 			} break;
 
 			case Menu_displaying:
 			{
+				//
+				// Render.
+				//
+
+				lcd_reset();
 				switch (usb_ms_ocr_state)
 				{
 					case USBMSOCRState_ready:
@@ -304,6 +582,7 @@ main(void)
 							} break;
 
 							case WordGameBoard_COUNT:
+							default:
 							{
 								error();
 							} break;
@@ -320,10 +599,19 @@ main(void)
 						lcd_pstr("Processing BMP...");
 					} break;
 				}
+				lcd_refresh();
+
+				//
+				// React to selection.
+				//
+
+				if (usb_ms_ocr_state == USBMSOCRState_ready && rotary.transition == -1)
+				{
+					menu = Menu_main;
+				}
+
 			} break;
 		}
-
-		lcd_refresh();
 	}
 }
 //

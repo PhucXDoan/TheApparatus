@@ -97,6 +97,10 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 		UENUM  = USB_ENDPOINT_MS_OUT_INDEX;
 		UEIENX = (1 << RXOUTE);
 		#endif
+
+		#if DEBUG
+		debug_usb_is_on_host_machine = false; // For when switching from PC to phone or vice-versa.
+		#endif
 	}
 
 	if (UDINT & (1 << SOFI)) // Start-of-Frame.
@@ -155,10 +159,21 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 			i8 delta_x = 0;
 			i8 delta_y = 0; // Positive makes the mouse move downward.
 
+			#if DEBUG
+			if (debug_usb_is_on_host_machine)
+			{
+				// Ignore commands to make programming on host machine not be a hassle.
+				_usb_mouse_command_reader = _usb_mouse_command_writer;
+			}
+			else
+			#endif
 			if (_usb_mouse_calibrations < USB_MOUSE_CALIBRATIONS_REQUIRED) // Calibrate the mouse to a known origin.
 			{
-				delta_x                  = -128;
-				delta_y                  = -128;
+				if (_usb_mouse_calibrations < USB_MOUSE_CALIBRATIONS_REQUIRED * 3 / 4)
+				{
+					delta_x = -128;
+					delta_y = -128;
+				}
 				_usb_mouse_calibrations += 1;
 			}
 			else if (_usb_mouse_command_reader_masked(0) != _usb_mouse_command_writer_masked(0)) // There's an available command to handle.
@@ -168,13 +183,6 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 				u8  command_dest_x = (command >>  8) & 0b0111'1111;
 				u8  command_dest_y =  command        & 0b1111'1111;
 
-				#if DEBUG
-				if (debug_usb_is_on_host_machine)
-				{
-					// Ignore commands to make programming on host machine not be a hassle.
-				}
-				else
-				#endif
 				if (_usb_mouse_held != command_held)
 				{
 					_usb_mouse_held = command_held;
