@@ -1188,10 +1188,7 @@ main(int argc, char** argv)
 
 					if (!meltingpot.data)
 					{
-						if (!cli.or_filter)
-						{
-							alloc(&weights, iterator_state.bmp.dim.x * iterator_state.bmp.dim.y);
-						}
+						alloc(&weights, iterator_state.bmp.dim.x * iterator_state.bmp.dim.y);
 
 						meltingpot.dim.x = iterator_state.bmp.dim.x;
 						meltingpot.dim.y = iterator_state.bmp.dim.y;
@@ -1214,20 +1211,10 @@ main(int argc, char** argv)
 					{
 						for (i32 i = 0; i < iterator_state.bmp.dim.x * iterator_state.bmp.dim.y; i += 1)
 						{
-							if (cli.or_filter)
-							{
-								meltingpot.data[i].r |= iterator_state.bmp.data[i].r;
-								meltingpot.data[i].g |= iterator_state.bmp.data[i].g;
-								meltingpot.data[i].b |= iterator_state.bmp.data[i].b;
-								meltingpot.data[i].a |= iterator_state.bmp.data[i].a;
-							}
-							else
-							{
-								weights[i].x += iterator_state.bmp.data[i].r;
-								weights[i].y += iterator_state.bmp.data[i].g;
-								weights[i].z += iterator_state.bmp.data[i].b;
-								weights[i].w += iterator_state.bmp.data[i].a;
-							}
+							weights[i].x += iterator_state.bmp.data[i].r;
+							weights[i].y += iterator_state.bmp.data[i].g;
+							weights[i].z += iterator_state.bmp.data[i].b;
+							weights[i].w += iterator_state.bmp.data[i].a;
 						}
 
 						images_processed += 1;
@@ -1246,19 +1233,16 @@ main(int argc, char** argv)
 
 				if (images_processed)
 				{
-					if (!cli.or_filter)
+					for (i32 i = 0; i < meltingpot.dim.x * meltingpot.dim.y; i += 1)
 					{
-						for (i32 i = 0; i < meltingpot.dim.x * meltingpot.dim.y; i += 1)
-						{
-							meltingpot.data[i] =
-								(struct BMPPixel)
-								{
-									.r = u8(weights[i].x / images_processed),
-									.g = u8(weights[i].y / images_processed),
-									.b = u8(weights[i].z / images_processed),
-									.a = u8(weights[i].w / images_processed),
-								};
-						}
+						meltingpot.data[i] =
+							(struct BMPPixel)
+							{
+								.r = (weights[i].x / images_processed >= 128) * 255,
+								.g = (weights[i].y / images_processed >= 128) * 255,
+								.b = (weights[i].z / images_processed >= 128) * 255,
+								.a = (weights[i].w / images_processed >= 128) * 255,
+							};
 					}
 
 					bmp_export(meltingpot, cli.output_file_path.str);

@@ -617,11 +617,16 @@ main(void)
 							case WordGameBoard_anagrams_7:
 							case WordGameBoard_wordhunt_4x4:
 							{
-								for (u8 y = 0; y < pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.y); y += 1)
+								for
+								(
+									i8 y = pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.y) - 1;
+									y >= 0;
+									y -= 1
+								)
 								{
 									for (u8 x = 0; x < pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.x); x += 1)
 									{
-										lcd_pgm_char(LETTER_LCD_CODES[usb_ms_ocr_grid[0][x]]);
+										lcd_pgm_char(LETTER_LCD_CODES[usb_ms_ocr_grid[y][x]]);
 									}
 									lcd_char('\n');
 								}

@@ -7,7 +7,6 @@
 #define countof(...)     (sizeof(__VA_ARGS__) / sizeof((__VA_ARGS__)[0]))
 #define bitsof(...)      (sizeof(__VA_ARGS__) * 8)
 #define implies(P, Q)    (!(P) || (Q))
-#define grp(...)         { __VA_ARGS__ }
 #define static_assert(X) _Static_assert((X), #X)
 
 typedef uint8_t  u8;
@@ -295,14 +294,14 @@ static const u8 ZERO_BIT_COUNT_DT[] PROGMEM =
 #endif
 
 #define WORDGAME_BOARD_XMDT(X) \
-	/*    Names                               | Board Position | Board Dimensions (slots) | Slot Dimensions | Uncompressed Slot Stride | Compressed Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB          | Excluded Slot Coordinates */ \
-		X(anagrams_6  , "Anagrams (6 Letters)", 39, 354,         6, 1,                      119,              195,                        52,                     32, 656,               256, 16,                 0.2645, 0.2409, 0.3358, ) \
-		X(anagrams_7  , "Anagrams (7 Letters)", 31, 375,         7, 1,                      102,              168,                        53,                     32, 656,               256, 16,                 0.5036, 0.4814, 0.6467, ) \
-		X(wordhunt_4x4, "WordHunt (4x4)"      ,  0,   0,         0, 0,                        0,                0,                         0,                      0,   0,                 0,  0,                 0.0000, 0.0000, 0.0000, ) \
-		X(wordhunt_o  , "WordHunt (O)"        ,  0,   0,         0, 0,                        0,                0,                         0,                      0,   0,                 0,  0,                 0.0000, 0.0000, 0.0000, ) \
-		X(wordhunt_x  , "WordHunt (X)"        ,  0,   0,         0, 0,                        0,                0,                         0,                      0,   0,                 0,  0,                 0.0000, 0.0000, 0.0000, ) \
-		X(wordhunt_5x5, "WordHunt (5x5)"      ,  0,   0,         0, 0,                        0,                0,                         0,                      0,   0,                 0,  0,                 0.0000, 0.0000, 0.0000, ) \
-		X(wordbites   , "WordBites"           ,  0,   0,         0, 0,                        0,                0,                         0,                      0,   0,                 0,  0,                 0.0000, 0.0000, 0.0000, ) \
+	/*    Names                               | Board Position | Board Dimensions (slots) | Slot Dimensions | Uncompressed Slot Stride | Compressed Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB         | Excluded Slot Coordinates */ \
+		X(anagrams_6  , "Anagrams (6 Letters)",  39, 354,         6, 1,                      119,              195,                       52,                       32,  656,               256,   16,            0.2645, 0.2409, 0.3358,   false, {{0}} ) \
+		X(anagrams_7  , "Anagrams (7 Letters)",  31, 375,         7, 1,                      102,              168,                       53,                       32,  656,               256,   16,            0.5036, 0.4814, 0.6467,   false, {{0}} ) \
+		X(wordhunt_4x4, "WordHunt (4x4)"      , 199, 538,         4, 4,                      136,              212,                       50,                      128,  701,               900,   16,            0.2204, 0.2775, 0.2089,   false, {{0}} ) \
+		X(wordhunt_o  , "WordHunt (O)"        , 142, 480,         5, 5,                      123,              191,                        0,                      512,  854,               128,  128,            0.4765, 0.6349, 0.4380,   true , { { 0, 0 }, { 4, 0 }, { 2, 2 }, { 0, 4 }, { 4, 4 } }) \
+		X(wordhunt_x  , "WordHunt (X)"        , 142, 480,         5, 5,                      123,              191,                        0,                      900,  854,               128,  128,            0.4356, 0.5768, 0.4018,   true , { { 2, 0 }, { 0, 2 }, { 4, 2 }, { 2, 4 } }) \
+		X(wordhunt_5x5, "WordHunt (5x5)"      , 142, 480,         5, 5,                      123,              191,                        0,                     1050,  532,                64, 1000,            0.4024, 0.5326, 0.3719,   false, {{0}}) \
+		X(wordbites   , "WordBites"           ,   0,   0,         0, 0,                        0,                0,                        0,                        0,    0,                 0,    0,            0.0000, 0.0000, 0.0000,   false, {{0}}) \
 
 #define WORDGAME_MAP_XMDT(X) \
 	X(anagrams_english_6, "Anagrams (EN, 6)", anagrams_6  ) \
@@ -394,13 +393,14 @@ enum WordGameMap
 					TEST_REGION_POS_X, TEST_REGION_POS_Y, \
 					TEST_REGION_DIM_X, TEST_REGION_DIM_Y, \
 					TEST_REGION_R, TEST_REGION_G, TEST_REGION_B, \
+					HAS_EXCLUDED_SLOTS, \
 					... \
 				) \
 					{ \
 						.dim_slots.x                = DIM_SLOTS_X, \
 						.dim_slots.y                = DIM_SLOTS_Y, \
-						.excluded_slot_coords       = { [0] = { 0, 0 }, __VA_ARGS__ }, \
-						.excluded_slot_coords_count = countof((u8[][2]) { { 0, 0 }, __VA_ARGS__ }) - 1, \
+						.excluded_slot_coords       = __VA_ARGS__, \
+						.excluded_slot_coords_count = HAS_EXCLUDED_SLOTS ? countof((u8[][2]) __VA_ARGS__) : 0, \
 						.compressed_slot_stride     = COMPRESSED_SLOT_STRIDE, \
 					},
 				WORDGAME_BOARD_XMDT(MAKE)
@@ -420,6 +420,7 @@ enum WordGameMap
 					TEST_REGION_POS_X, TEST_REGION_POS_Y, \
 					TEST_REGION_DIM_X, TEST_REGION_DIM_Y, \
 					TEST_REGION_R, TEST_REGION_G, TEST_REGION_B, \
+					HAS_EXCLUDED_SLOTS, \
 					... \
 				) \
 					{ \
@@ -438,8 +439,8 @@ enum WordGameMap
 						.test_region_rgb.x          = TEST_REGION_R, \
 						.test_region_rgb.y          = TEST_REGION_G, \
 						.test_region_rgb.z          = TEST_REGION_B, \
-						.excluded_slot_coords       = { [0] = { 0, 0 }, __VA_ARGS__ }, \
-						.excluded_slot_coords_count = countof((u8_2[]) { { 0, 0 }, __VA_ARGS__ }) - 1, \
+						.excluded_slot_coords       = __VA_ARGS__, \
+						.excluded_slot_coords_count = HAS_EXCLUDED_SLOTS ? countof((u8[][2]) __VA_ARGS__) : 0, \
 					},
 				WORDGAME_BOARD_XMDT(MAKE)
 				#undef MAKE
@@ -447,7 +448,7 @@ enum WordGameMap
 	#endif
 #endif
 
-#define MASK_ACTIVATION_THRESHOLD 8
+#define MASK_ACTIVATION_THRESHOLD 100
 #define MASK_DIM                  32
 #define ROW_REDUCTION_SIZE        16
 
@@ -704,7 +705,7 @@ struct BMPDIBHeader // "BITMAPCOREHEADER" not supported.
 	X(monochromize, "Convert each BMP into a strictly black and white image based on the red channel.") \
 	X(stretchie   , "Resize BMPs into the common square mask.") \
 	X(collectune  , "Copy BMPs into folder with the closest matching mask.") \
-	X(meltingpot  , "Average together BMPs.") \
+	X(meltingpot  , "Amalgamate BMPs!") \
 	X(maskiverse  , "Format masks into data formatted for C to be included into compilation.") \
 	X(catchya     , "Identify letters and their positions within a screenshot of a Game Pigeon word game.") \
 	X(intelliteck , "Perform CRC-16 on an image's pixels that'd pass monochromize's threshold.")
@@ -735,8 +736,7 @@ struct BMPDIBHeader // "BITMAPCOREHEADER" not supported.
 
 #define CLI_PROGRAM_meltingpot_FIELD_XMDT(X, ...) \
 	X(output_file_path, string, "output-file-path", "File path of the result.",##__VA_ARGS__) \
-	X(input_dir_path  , string, "input-dir-path"  , "Directory path of the BMPs.",##__VA_ARGS__) \
-	X(or_filter       , b32   , "--or"            , "Logical OR each pixel instead of averaging.",##__VA_ARGS__)
+	X(input_dir_path  , string, "input-dir-path"  , "Directory path of the BMPs.",##__VA_ARGS__)
 
 #define CLI_PROGRAM_maskiverse_FIELD_XMDT(X, ...) \
 	X(dir_path, string, "mask-dir-path", "Directory path of the mask BMPs. Output will be dumped here.",##__VA_ARGS__) \
