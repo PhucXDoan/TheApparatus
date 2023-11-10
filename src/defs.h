@@ -295,12 +295,12 @@ static const u8 ZERO_BIT_COUNT_DT[] PROGMEM =
 
 #define WORDGAME_BOARD_XMDT(X) \
 	/*    Names                               | Board Position | Board Dimensions (slots) | Slot Dimensions | Uncompressed Slot Stride | Compressed Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB         | Excluded Slot Coordinates */ \
-		X(anagrams_6  , "Anagrams (6 Letters)",  39, 354,         6, 1,                      119,              195,                       52,                       32,  656,               256,   16,            0.2645, 0.2409, 0.3358,   false, {{0}} ) \
-		X(anagrams_7  , "Anagrams (7 Letters)",  31, 375,         7, 1,                      102,              168,                       53,                       32,  656,               256,   16,            0.5036, 0.4814, 0.6467,   false, {{0}} ) \
-		X(wordhunt_4x4, "WordHunt (4x4)"      , 199, 538,         4, 4,                      136,              212,                       50,                      128,  701,               900,   16,            0.2204, 0.2775, 0.2089,   false, {{0}} ) \
-		X(wordhunt_o  , "WordHunt (O)"        , 142, 480,         5, 5,                      123,              191,                        0,                      512,  854,               128,  128,            0.4765, 0.6349, 0.4380,   true , { { 0, 0 }, { 4, 0 }, { 2, 2 }, { 0, 4 }, { 4, 4 } }) \
-		X(wordhunt_x  , "WordHunt (X)"        , 142, 480,         5, 5,                      123,              191,                        0,                      900,  854,               128,  128,            0.4356, 0.5768, 0.4018,   true , { { 2, 0 }, { 0, 2 }, { 4, 2 }, { 2, 4 } }) \
-		X(wordhunt_5x5, "WordHunt (5x5)"      , 142, 480,         5, 5,                      123,              191,                        0,                     1050,  532,                64, 1000,            0.4024, 0.5326, 0.3719,   false, {{0}}) \
+		X(anagrams_6  , "Anagrams (6 Letters)",  39, 354,         6, 1,                      119,              195,                      105,                       32,  656,               256,   16,            0.2645, 0.2409, 0.3358,   false, {{0}} ) \
+		X(anagrams_7  , "Anagrams (7 Letters)",  31, 375,         7, 1,                      102,              168,                      105,                       32,  656,               256,   16,            0.5036, 0.4814, 0.6467,   false, {{0}} ) \
+		X(wordhunt_4x4, "WordHunt (4x4)"      , 199, 538,         4, 4,                      136,              212,                      100,                      128,  701,               900,   16,            0.2204, 0.2775, 0.2089,   false, {{0}} ) \
+		X(wordhunt_o  , "WordHunt (O)"        , 142, 480,         5, 5,                      123,              191,                      100,                      512,  854,               128,  128,            0.4765, 0.6349, 0.4380,   true , { { 0, 0 }, { 4, 0 }, { 2, 2 }, { 0, 4 }, { 4, 4 } }) \
+		X(wordhunt_x  , "WordHunt (X)"        , 142, 480,         5, 5,                      123,              191,                      100,                      900,  854,               128,  128,            0.4356, 0.5768, 0.4018,   true , { { 2, 0 }, { 0, 2 }, { 4, 2 }, { 2, 4 } }) \
+		X(wordhunt_5x5, "WordHunt (5x5)"      , 142, 480,         5, 5,                      123,              191,                      100,                     1050,  532,                64, 1000,            0.4024, 0.5326, 0.3719,   false, {{0}}) \
 		X(wordbites   , "WordBites"           ,   0,   0,         0, 0,                        0,                0,                        0,                        0,    0,                 0,    0,            0.0000, 0.0000, 0.0000,   false, {{0}}) \
 
 #define WORDGAME_MAP_XMDT(X) \
@@ -448,8 +448,8 @@ enum WordGameMap
 	#endif
 #endif
 
-#define MASK_ACTIVATION_THRESHOLD 100
-#define MASK_DIM                  32
+#define MASK_ACTIVATION_THRESHOLD 16
+#define MASK_DIM                  64
 #define ROW_REDUCTION_SIZE        16
 
 #define LETTER_XMDT(X) \
@@ -700,53 +700,23 @@ struct BMPDIBHeader // "BITMAPCOREHEADER" not supported.
 #define CLI_EXE_NAME "Microservices.exe"
 #define CLI_EXE_DESC "Microservices to help you bring change to the world."
 #define CLI_PROGRAM_XMDT(X) \
-	X(eaglepeek   , "Identify the Game Pigeon word game shown in a screenshot.") \
-	X(extractor   , "Create a BMP of each slot in screenshots of Game Pigeon word games.") \
-	X(monochromize, "Convert each BMP into a strictly black and white image based on the red channel.") \
-	X(stretchie   , "Resize BMPs into the common square mask.") \
-	X(collectune  , "Copy BMPs into folder with the closest matching mask.") \
-	X(meltingpot  , "Amalgamate BMPs!") \
-	X(maskiverse  , "Format masks into data formatted for C to be included into compilation.") \
-	X(catchya     , "Identify letters and their positions within a screenshot of a Game Pigeon word game.") \
-	X(intelliteck , "Perform CRC-16 on an image's pixels that'd pass monochromize's threshold.")
+	X(eaglepeek  , "Identify the Game Pigeon word game shown in screenshots."   ) \
+	X(extractorv2, "Create standard mask sized BMP of each slot in screenshots of Game Pigeon word games.") \
+	X(collectune , "Copy BMPs into folder with the closest matching mask.") \
 
 #define CLI_PROGRAM_eaglepeek_FIELD_XMDT(X, ...) \
 	X(input_dir_paths, dary_string, "screenshot-dir-path...", "Directory path of the screenshots to identify.",##__VA_ARGS__) \
 
-#define CLI_PROGRAM_extractor_FIELD_XMDT(X, ...) \
-	X(output_dir_path , string     , "output-dir-path"       , "Destination directory to store the extracted BMPs.",##__VA_ARGS__) \
-	X(input_dir_paths , dary_string, "screenshot-dir-path...", "Directory paths that'll be filtered for screenshots of the games.",##__VA_ARGS__) \
-	X(clear_output_dir, b32        , "--clear-output-dir"    , "Delete all content within the output directory before processing.",##__VA_ARGS__)
-
-#define CLI_PROGRAM_monochromize_FIELD_XMDT(X, ...) \
-	X(output_dir_path , string, "output-dir-path"   , "Destination directory to store the monochromized BMPs.",##__VA_ARGS__) \
-	X(input_dir_path  , string, "input-dir-path"    , "Directory path of the BMPs.",##__VA_ARGS__) \
-	X(clear_output_dir, b32   , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
-
-#define CLI_PROGRAM_stretchie_FIELD_XMDT(X, ...) \
-	X(output_dir_path , string, "output-dir-path"   , "Destination directory to store the stretchie'd BMPs.",##__VA_ARGS__) \
-	X(input_dir_path  , string, "input-dir-path"    , "Directory path of the BMPs.",##__VA_ARGS__) \
-	X(clear_output_dir, b32   , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
+#define CLI_PROGRAM_extractorv2_FIELD_XMDT(X, ...) \
+	X(output_dir_path , string     , "output-dir-path"   , "Destination directory to store the extracted BMPs.",##__VA_ARGS__) \
+	X(input_dir_paths , dary_string, "input-dir-path..." , "Directory paths that'll be filtered for screenshots of the games.",##__VA_ARGS__) \
+	X(clear_output_dir, b32        , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
 
 #define CLI_PROGRAM_collectune_FIELD_XMDT(X, ...) \
 	X(output_dir_path  , string, "output-dir-path"   , "Destination directory to store the collections.",##__VA_ARGS__) \
 	X(mask_dir_path    , string, "mask-dir-path"     , "Directory path of the masks.",##__VA_ARGS__) \
 	X(unsorted_dir_path, string, "unsorted-dir-path" , "Directory path of the BMPs to be sorted.",##__VA_ARGS__) \
 	X(clear_output_dir , b32   , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
-
-#define CLI_PROGRAM_meltingpot_FIELD_XMDT(X, ...) \
-	X(output_file_path, string, "output-file-path", "File path of the result.",##__VA_ARGS__) \
-	X(input_dir_path  , string, "input-dir-path"  , "Directory path of the BMPs.",##__VA_ARGS__)
-
-#define CLI_PROGRAM_maskiverse_FIELD_XMDT(X, ...) \
-	X(dir_path, string, "mask-dir-path", "Directory path of the mask BMPs. Output will be dumped here.",##__VA_ARGS__) \
-
-#define CLI_PROGRAM_catchya_FIELD_XMDT(X, ...) \
-	X(mask_dir_path       , string, "mask-dir-path"        , "Directory path of the masks.",##__VA_ARGS__) \
-	X(screenshot_file_path, string, "screenshot-file-path" , "File path to the screenshot.",##__VA_ARGS__) \
-
-#define CLI_PROGRAM_intelliteck_FIELD_XMDT(X, ...) \
-	X(input_file_path, string, "file-path", "File path to the image.",##__VA_ARGS__) \
 
 #define CLI_TYPING_XMDT(X) \
 	X(string     , union { struct { char* data; i64 length; }; char* cstr; str str; }) \

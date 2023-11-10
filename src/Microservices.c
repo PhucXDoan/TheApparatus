@@ -58,7 +58,7 @@ static b32
 slot_coord_excluded(enum WordGameBoard board, i32 x, i32 y)
 {
 	assert(board < WordGameBoard_COUNT);
-	b32 slot_coord_excluded = false;
+	b32 result = false;
 	for (i32 i = 0; i < WORDGAME_BOARD_INFO[board].excluded_slot_coords_count; i += 1)
 	{
 		if
@@ -67,11 +67,82 @@ slot_coord_excluded(enum WordGameBoard board, i32 x, i32 y)
 			WORDGAME_BOARD_INFO[board].excluded_slot_coords[i].y == y
 		)
 		{
-			slot_coord_excluded = true;
+			result = true;
 			break;
 		}
 	}
-	return slot_coord_excluded;
+	return result;
+}
+
+static enum WordGameBoard // WordGameBoard_COUNT if no matching test region could be identified. In this case, "opt_dst_unknown_game_test_region_rgbs" will be filled if provided.
+identify_wordgame_board
+(
+	struct BMP bmp,
+	f64_3*     opt_dst_unknown_game_test_region_rgbs // Null, or at least WordGameBoard_COUNT.
+)
+{
+	assert(bmp.dim.x == SCREENSHOT_DIM_X && bmp.dim.y == SCREENSHOT_DIM_Y);
+
+	enum WordGameBoard identified_wordgame = WordGameBoard_COUNT;
+
+	if (opt_dst_unknown_game_test_region_rgbs)
+	{
+		memset(opt_dst_unknown_game_test_region_rgbs, 0, sizeof(f64_3) * WordGameBoard_COUNT);
+	}
+
+	for (enum WordGameBoard board = {0}; board < WordGameBoard_COUNT; board += 1)
+	{
+		//
+		// Compute average RGB of test region.
+		//
+
+		f64_3 test_region_rgb = {0};
+		for
+		(
+			i32 y = WORDGAME_BOARD_INFO[board].test_region_pos.y;
+			y < WORDGAME_BOARD_INFO[board].test_region_pos.y + WORDGAME_BOARD_INFO[board].test_region_dim.y;
+			y += 1
+		)
+		{
+			for
+			(
+				i32 x = WORDGAME_BOARD_INFO[board].test_region_pos.x;
+				x < WORDGAME_BOARD_INFO[board].test_region_pos.x + WORDGAME_BOARD_INFO[board].test_region_dim.x;
+				x += 1
+			)
+			{
+				test_region_rgb.x += bmp.data[y * bmp.dim.x + x].r;
+				test_region_rgb.y += bmp.data[y * bmp.dim.x + x].g;
+				test_region_rgb.z += bmp.data[y * bmp.dim.x + x].b;
+			}
+		}
+		test_region_rgb.x /= 256.0 * WORDGAME_BOARD_INFO[board].test_region_dim.x * WORDGAME_BOARD_INFO[board].test_region_dim.y;
+		test_region_rgb.y /= 256.0 * WORDGAME_BOARD_INFO[board].test_region_dim.x * WORDGAME_BOARD_INFO[board].test_region_dim.y;
+		test_region_rgb.z /= 256.0 * WORDGAME_BOARD_INFO[board].test_region_dim.x * WORDGAME_BOARD_INFO[board].test_region_dim.y;
+
+		//
+		// Extract slots.
+		//
+
+		if
+		(
+			fabs(test_region_rgb.x - WORDGAME_BOARD_INFO[board].test_region_rgb.x) <= EXTRACTOR_RGB_EPSILON &&
+			fabs(test_region_rgb.y - WORDGAME_BOARD_INFO[board].test_region_rgb.y) <= EXTRACTOR_RGB_EPSILON &&
+			fabs(test_region_rgb.z - WORDGAME_BOARD_INFO[board].test_region_rgb.z) <= EXTRACTOR_RGB_EPSILON
+		)
+		{
+			identified_wordgame  = board;
+			break;
+		}
+		else if (opt_dst_unknown_game_test_region_rgbs)
+		{
+			opt_dst_unknown_game_test_region_rgbs[board].x = test_region_rgb.x;
+			opt_dst_unknown_game_test_region_rgbs[board].y = test_region_rgb.y;
+			opt_dst_unknown_game_test_region_rgbs[board].z = test_region_rgb.z;
+		}
+	}
+
+	return identified_wordgame;
 }
 
 static i32 // Amount of characters printed.
@@ -230,77 +301,6 @@ iterate_dir_bmp_alloc(struct DirBMPIteratorState* state)
 	}
 
 	return found_bmp;
-}
-
-static enum WordGameBoard // WordGameBoard_COUNT if no matching test region could be identified. In this case, "opt_dst_unknown_game_test_region_rgbs" will be filled if provided.
-identify_wordgame_board
-(
-	struct BMP bmp,
-	f64_3*     opt_dst_unknown_game_test_region_rgbs // Null, or at least WordGameBoard_COUNt.
-)
-{
-	assert(bmp.dim.x == SCREENSHOT_DIM_X && bmp.dim.y == SCREENSHOT_DIM_Y);
-
-	enum WordGameBoard identified_wordgame = WordGameBoard_COUNT;
-
-	if (opt_dst_unknown_game_test_region_rgbs)
-	{
-		memset(opt_dst_unknown_game_test_region_rgbs, 0, sizeof(f64_3) * WordGameBoard_COUNT);
-	}
-
-	for (enum WordGameBoard board = {0}; board < WordGameBoard_COUNT; board += 1)
-	{
-		//
-		// Compute average RGB of test region.
-		//
-
-		f64_3 test_region_rgb = {0};
-		for
-		(
-			i32 y = WORDGAME_BOARD_INFO[board].test_region_pos.y;
-			y < WORDGAME_BOARD_INFO[board].test_region_pos.y + WORDGAME_BOARD_INFO[board].test_region_dim.y;
-			y += 1
-		)
-		{
-			for
-			(
-				i32 x = WORDGAME_BOARD_INFO[board].test_region_pos.x;
-				x < WORDGAME_BOARD_INFO[board].test_region_pos.x + WORDGAME_BOARD_INFO[board].test_region_dim.x;
-				x += 1
-			)
-			{
-				test_region_rgb.x += bmp.data[y * bmp.dim.x + x].r;
-				test_region_rgb.y += bmp.data[y * bmp.dim.x + x].g;
-				test_region_rgb.z += bmp.data[y * bmp.dim.x + x].b;
-			}
-		}
-		test_region_rgb.x /= 256.0 * WORDGAME_BOARD_INFO[board].test_region_dim.x * WORDGAME_BOARD_INFO[board].test_region_dim.y;
-		test_region_rgb.y /= 256.0 * WORDGAME_BOARD_INFO[board].test_region_dim.x * WORDGAME_BOARD_INFO[board].test_region_dim.y;
-		test_region_rgb.z /= 256.0 * WORDGAME_BOARD_INFO[board].test_region_dim.x * WORDGAME_BOARD_INFO[board].test_region_dim.y;
-
-		//
-		// Extract slots.
-		//
-
-		if
-		(
-			fabs(test_region_rgb.x - WORDGAME_BOARD_INFO[board].test_region_rgb.x) <= EXTRACTOR_RGB_EPSILON &&
-			fabs(test_region_rgb.y - WORDGAME_BOARD_INFO[board].test_region_rgb.y) <= EXTRACTOR_RGB_EPSILON &&
-			fabs(test_region_rgb.z - WORDGAME_BOARD_INFO[board].test_region_rgb.z) <= EXTRACTOR_RGB_EPSILON
-		)
-		{
-			identified_wordgame  = board;
-			break;
-		}
-		else if (opt_dst_unknown_game_test_region_rgbs)
-		{
-			opt_dst_unknown_game_test_region_rgbs[board].x = test_region_rgb.x;
-			opt_dst_unknown_game_test_region_rgbs[board].y = test_region_rgb.y;
-			opt_dst_unknown_game_test_region_rgbs[board].z = test_region_rgb.z;
-		}
-	}
-
-	return identified_wordgame;
 }
 
 int
@@ -557,7 +557,7 @@ main(int argc, char** argv)
 							// Identify game.
 							//
 
-							f64_3         unknown_game_test_region_rgbs[WordGameBoard_COUNT] = {0};
+							f64_3              unknown_game_test_region_rgbs[WordGameBoard_COUNT] = {0};
 							enum WordGameBoard identified_wordgame = identify_wordgame_board(iterator_state.bmp, unknown_game_test_region_rgbs);
 
 							//
@@ -671,12 +671,19 @@ main(int argc, char** argv)
 				}
 			} break;
 
-			case CLIProgram_extractor:
+			case CLIProgram_extractorv2:
 			{
-				struct CLIProgram_extractor_t cli                  = cli_unknown.extractor;
-				i32                           screenshots_examined = 0;
-				i32                           unknown_games        = 0;
-				i32                           slots_extracted      = 0;
+				struct CLIProgram_extractorv2_t cli                  = cli_unknown.extractorv2;
+				i32                             screenshots_examined = 0;
+				i32                             unknown_games        = 0;
+				i32                             slots_extracted      = 0;
+
+				struct BMP compressed_slot =
+					{
+						.dim.x = MASK_DIM,
+						.dim.y = MASK_DIM,
+					};
+				alloc(&compressed_slot.data, compressed_slot.dim.x * compressed_slot.dim.y);
 
 				//
 				// Clear output directory.
@@ -697,7 +704,7 @@ main(int argc, char** argv)
 
 					printf
 					(
-						"(%d/%lld) EXTRACTOR EXTRACTIN' FROM \"%s\"!!\n",
+						"(%d/%lld) EXTRACTORv2 EXTRACTIN' FROM \"%s\"!!\n",
 						input_dir_path_index + 1,
 						cli.input_dir_paths.length,
 						input_dir_path.cstr
@@ -718,13 +725,6 @@ main(int argc, char** argv)
 							enum WordGameBoard board = identify_wordgame_board(iterator_state.bmp, 0);
 							if (board != WordGameBoard_COUNT)
 							{
-								struct BMP slot =
-									{
-										.dim.x = WORDGAME_BOARD_INFO[board].slot_dim,
-										.dim.y = WORDGAME_BOARD_INFO[board].slot_dim,
-									};
-								alloc(&slot.data, slot.dim.x * slot.dim.y);
-
 								//
 								// Create a BMP of each slot.
 								//
@@ -735,17 +735,40 @@ main(int argc, char** argv)
 									{
 										if (!slot_coord_excluded(board, slot_coord_x, slot_coord_y))
 										{
-											for (i32 slot_px_y = 0; slot_px_y < WORDGAME_BOARD_INFO[board].slot_dim; slot_px_y += 1)
+											for (i32 compressed_slot_px_y = 0; compressed_slot_px_y < MASK_DIM; compressed_slot_px_y += 1)
 											{
-												for (i32 slot_px_x = 0; slot_px_x < WORDGAME_BOARD_INFO[board].slot_dim; slot_px_x += 1)
+												for (i32 compressed_slot_px_x = 0; compressed_slot_px_x < MASK_DIM; compressed_slot_px_x += 1)
 												{
+													i32_2 uncompressed_board_bmp_dim =
+														{
+															(WORDGAME_BOARD_INFO[board].dim_slots.x - 1) * WORDGAME_BOARD_INFO[board].uncompressed_slot_stride + WORDGAME_BOARD_INFO[board].slot_dim,
+															(WORDGAME_BOARD_INFO[board].dim_slots.y - 1) * WORDGAME_BOARD_INFO[board].uncompressed_slot_stride + WORDGAME_BOARD_INFO[board].slot_dim,
+														};
+													i32_2 compressed_slot_abs_px_pos =
+														{
+															slot_coord_x * WORDGAME_BOARD_INFO[board].compressed_slot_stride + compressed_slot_px_x,
+															slot_coord_y * WORDGAME_BOARD_INFO[board].compressed_slot_stride + compressed_slot_px_y,
+														};
+													i32_2 compressed_board_bmp_dim =
+														{
+															(WORDGAME_BOARD_INFO[board].dim_slots.x - 1) * WORDGAME_BOARD_INFO[board].compressed_slot_stride + MASK_DIM,
+															(WORDGAME_BOARD_INFO[board].dim_slots.y - 1) * WORDGAME_BOARD_INFO[board].compressed_slot_stride + MASK_DIM,
+														};
+													f64_2 uv =
+														{
+															f64(compressed_slot_abs_px_pos.x) / f64(compressed_board_bmp_dim.x),
+															f64(compressed_slot_abs_px_pos.y) / f64(compressed_board_bmp_dim.y),
+														};
 													struct BMPPixel pixel =
 														iterator_state.bmp.data
 														[
-															(WORDGAME_BOARD_INFO[board].pos.y + slot_coord_y * WORDGAME_BOARD_INFO[board].uncompressed_slot_stride + slot_px_y) * iterator_state.bmp.dim.x
-																+ (WORDGAME_BOARD_INFO[board].pos.x + slot_coord_x * WORDGAME_BOARD_INFO[board].uncompressed_slot_stride + slot_px_x)
+															( WORDGAME_BOARD_INFO[board].pos.y + i32(uv.y * uncompressed_board_bmp_dim.y)) * iterator_state.bmp.dim.x
+															+ WORDGAME_BOARD_INFO[board].pos.x + i32(uv.x * uncompressed_board_bmp_dim.x)
 														];
-													slot.data[slot_px_y * slot.dim.x + slot_px_x] = pixel;
+
+													u8 value = pixel.r <= MASK_ACTIVATION_THRESHOLD ? 255 : 0;
+													compressed_slot.data[compressed_slot_px_y * compressed_slot.dim.x + compressed_slot_px_x] =
+														(struct BMPPixel) { value, value, value, 255 };
 												}
 											}
 
@@ -773,7 +796,7 @@ main(int argc, char** argv)
 											}
 											strbuf_cstr(&slot_file_path, ") ");
 											strbuf_cstr(&slot_file_path, iterator_state.finder_data.cFileName);
-											bmp_export(slot, slot_file_path.str);
+											bmp_export(compressed_slot, slot_file_path.str);
 										}
 									}
 								}
@@ -781,8 +804,6 @@ main(int argc, char** argv)
 								slots_extracted +=
 									WORDGAME_BOARD_INFO[board].dim_slots.x * WORDGAME_BOARD_INFO[board].dim_slots.y
 										- WORDGAME_BOARD_INFO[board].excluded_slot_coords_count;
-
-								free(slot.data);
 							}
 
 							//
@@ -804,7 +825,7 @@ main(int argc, char** argv)
 
 							printf
 							(
-								"[extractor] % 4d : %.*s : \"%s\".\n",
+								"[extractorv2] % 4d : %.*s : \"%s\".\n",
 								screenshots_examined,
 								i32(wordgame_name.length), wordgame_name.data,
 								iterator_state.finder_data.cFileName
@@ -850,195 +871,21 @@ main(int argc, char** argv)
 						"\n"
 					);
 				}
-			} break;
-
-			case CLIProgram_monochromize:
-			{
-				struct CLIProgram_monochromize_t cli              = cli_unknown.monochromize;
-				i32                              images_processed = 0;
-
-				//
-				// Clear output directory.
-				//
-
-				if (!create_dir(cli.output_dir_path.str, cli.clear_output_dir) && !cli.clear_output_dir)
-				{
-					error("Output directory \"%s\" is not empty. Use (--clear-output-dir) to empty the directory for processing.\n", cli.output_dir_path.cstr);
-				}
-
-				//
-				// Iterate through each image.
-				//
-
-				struct DirBMPIteratorState iterator_state =
-					{
-						.dir_path = cli.input_dir_path.str
-					};
-				while (iterate_dir_bmp_alloc(&iterator_state))
-				{
-					//
-					// Create monochrome BMP based on some threshold.
-					//
-
-					for (i32 y = 0; y < iterator_state.bmp.dim.y; y += 1)
-					{
-						for (i32 x = 0; x < iterator_state.bmp.dim.x; x += 1)
-						{
-							struct BMPPixel* pixel = &iterator_state.bmp.data[y * iterator_state.bmp.dim.x + x];
-
-							if (pixel->r <= MASK_ACTIVATION_THRESHOLD)
-							{
-								*pixel = (struct BMPPixel) { .r = 255, .g = 255, .b = 255, .a = 255 };
-							}
-							else
-							{
-								*pixel = (struct BMPPixel) { .r = 0, .g = 0, .b = 0, .a = 255 };
-							}
-						}
-					}
-
-					images_processed += 1;
-
-					//
-					// Export BMP.
-					//
-
-					struct StrBuf file_path = StrBuf(256);
-					strbuf_str (&file_path, cli.output_dir_path.str);
-					strbuf_char(&file_path, '\\');
-					strbuf_cstr(&file_path, iterator_state.finder_data.cFileName);
-					bmp_export(iterator_state.bmp, file_path.str);
-
-					printf("[MONOCHROMIZE] %4d : \"%s\".\n", images_processed, iterator_state.finder_data.cFileName);
-				}
-
-				//
-				// Output processing results.
-				//
-
-				if (images_processed)
-				{
-					printf
-					(
-						"\n"
-						"Monochromized %d images.\n"
-						"Thank you.\n"
-						"\n",
-						images_processed
-					);
-				}
-				else
-				{
-					printf
-					(
-						"No images were monochromized.\n"
-						"Screw you.\n"
-						"\n"
-					);
-				}
-			} break;
-
-			case CLIProgram_stretchie:
-			{
-				struct CLIProgram_stretchie_t cli              = cli_unknown.stretchie;
-				i32                           images_processed = 0;
-
-				//
-				// Initalize output BMP memory.
-				//
-
-				struct BMP stretchied_bmp =
-					{
-						.dim.x = MASK_DIM,
-						.dim.y = MASK_DIM,
-					};
-				alloc(&stretchied_bmp.data, stretchied_bmp.dim.x * stretchied_bmp.dim.y);
-
-				//
-				// Clear output directory.
-				//
-
-				if (!create_dir(cli.output_dir_path.str, cli.clear_output_dir) && !cli.clear_output_dir)
-				{
-					error("Output directory \"%s\" is not empty. Use (--clear-output-dir) to empty the directory for processing.\n", cli.output_dir_path.cstr);
-				}
-
-				//
-				// Iterate through each image in directory.
-				//
-
-				struct DirBMPIteratorState iterator_state =
-					{
-						.dir_path = cli.input_dir_path.str
-					};
-				while (iterate_dir_bmp_alloc(&iterator_state))
-				{
-					//
-					// Do basic sampling.
-					//
-
-					for (i32 stretchied_y = 0; stretchied_y < stretchied_bmp.dim.y; stretchied_y += 1)
-					{
-						for (i32 stretchied_x = 0; stretchied_x < stretchied_bmp.dim.x; stretchied_x += 1)
-						{
-							stretchied_bmp.data[stretchied_y * stretchied_bmp.dim.x + stretchied_x] =
-								iterator_state.bmp.data
-								[
-									i32(f64(stretchied_y) / f64(stretchied_bmp.dim.y) * f64(iterator_state.bmp.dim.y)) * iterator_state.bmp.dim.x
-										+ i32(f64(stretchied_x) / f64(stretchied_bmp.dim.x) * f64(iterator_state.bmp.dim.x))
-								];
-						}
-					}
-
-					//
-					// Export scaled image.
-					//
-
-					images_processed += 1;
-
-					struct StrBuf file_path = StrBuf(256);
-					strbuf_str (&file_path, cli.output_dir_path.str);
-					strbuf_char(&file_path, '\\');
-					strbuf_cstr(&file_path, iterator_state.finder_data.cFileName);
-					bmp_export(stretchied_bmp, file_path.str);
-
-					printf("[STRETCHIE] % 4d : \"%s\".\n", images_processed, iterator_state.finder_data.cFileName);
-				}
-
-				//
-				// Output processing result.
-				//
-
-				if (images_processed)
-				{
-					printf
-					(
-						"\n"
-						"Stretchie'd %d images!\n"
-						"\n",
-						images_processed
-					);
-				}
-				else
-				{
-					printf
-					(
-						"No images were stretchie'd!\n"
-						"\n"
-					);
-				}
 
 				//
 				// Clean up.
 				//
 
-				free(stretchied_bmp.data);
+				free(compressed_slot.data);
 			} break;
 
 			case CLIProgram_collectune:
 			{
-				struct CLIProgram_collectune_t cli              = cli_unknown.collectune;
-				i32                            images_processed = 0;
+				struct CLIProgram_collectune_t cli                                 = cli_unknown.collectune;
+				i32                            images_processed                    = 0;
+				i32                            matched_letter_counts[Letter_COUNT] = {0};
+				i32*                           merged_mask_weights                 = 0;
+				alloc(&merged_mask_weights, MASK_DIM * MASK_DIM * Letter_COUNT);
 
 				//
 				// Load masks.
@@ -1114,6 +961,28 @@ main(int argc, char** argv)
 						assert(best_matching_letter);
 
 						//
+						// Add weight to merged masks.
+						//
+
+						matched_letter_counts[best_matching_letter] += 1;
+						for (i32 y = 0; y < MASK_DIM; y += 1)
+						{
+							for (i32 x = 0; x < MASK_DIM; x += 1)
+							{
+								if
+								(
+									iterator_state.bmp.data[y * iterator_state.bmp.dim.x + x].r &&
+									iterator_state.bmp.data[y * iterator_state.bmp.dim.x + x].g &&
+									iterator_state.bmp.data[y * iterator_state.bmp.dim.x + x].b &&
+									iterator_state.bmp.data[y * iterator_state.bmp.dim.x + x].a
+								)
+								{
+									merged_mask_weights[MASK_DIM * MASK_DIM * best_matching_letter + y * MASK_DIM + x] += 1;
+								}
+							}
+						}
+
+						//
 						// Copy BMP into the appropriate subfolder of the letter.
 						//
 
@@ -1129,6 +998,39 @@ main(int argc, char** argv)
 
 						printf("[CollecTune(TM)] % 4d : \"%s\".\n", images_processed, iterator_state.finder_data.cFileName);
 					}
+				}
+
+				//
+				// Output average mask of each letter.
+				//
+
+				struct BMP new_avg_mask =
+					{
+						.dim.x = MASK_DIM,
+						.dim.y = MASK_DIM,
+					};
+				alloc(&new_avg_mask.data, new_avg_mask.dim.x * new_avg_mask.dim.y);
+
+				for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
+				{
+					for (i32 i = 0; i < MASK_DIM * MASK_DIM; i += 1)
+					{
+						if (merged_mask_weights[MASK_DIM * MASK_DIM * letter + i] > matched_letter_counts[letter] / 2)
+						{
+							new_avg_mask.data[i] = (struct BMPPixel) { 255, 255, 255, 255 };
+						}
+						else
+						{
+							new_avg_mask.data[i] = (struct BMPPixel) { 0, 0, 0, 255 };
+						}
+					}
+
+					struct StrBuf file_path = StrBuf(256);
+					strbuf_str (&file_path, cli.output_dir_path.str);
+					strbuf_char(&file_path, '\\');
+					strbuf_str (&file_path, LETTER_NAMES[letter]);
+					strbuf_cstr(&file_path, ".bmp");
+					bmp_export(new_avg_mask, file_path.str);
 				}
 
 				//
@@ -1162,557 +1064,9 @@ main(int argc, char** argv)
 				{
 					free(masks[i].data);
 				}
-			} break;
 
-			case CLIProgram_meltingpot:
-			{
-				struct CLIProgram_meltingpot_t cli              = cli_unknown.meltingpot;
-				i32                            images_processed = 0;
-				i32                            images_skipped   = 0;
-				struct BMP                     meltingpot       = {0};
-				i32_4*                         weights          = 0;
-
-				//
-				// Iterate through each image that'll be merged.
-				//
-
-				struct DirBMPIteratorState iterator_state =
-					{
-						.dir_path = cli.input_dir_path.str
-					};
-				while (iterate_dir_bmp_alloc(&iterator_state))
-				{
-					//
-					// Initialize meltingpotted BMP based on first found BMP.
-					//
-
-					if (!meltingpot.data)
-					{
-						alloc(&weights, iterator_state.bmp.dim.x * iterator_state.bmp.dim.y);
-
-						meltingpot.dim.x = iterator_state.bmp.dim.x;
-						meltingpot.dim.y = iterator_state.bmp.dim.y;
-						alloc(&meltingpot.data, meltingpot.dim.x * meltingpot.dim.y);
-
-						printf
-						(
-							"Using \"%s\" for bounding dimensions %dx%d.\n",
-							iterator_state.finder_data.cFileName,
-							meltingpot.dim.x,
-							meltingpot.dim.y
-						);
-					}
-
-					//
-					// Add some diversity into the meltingpot!
-					//
-
-					if (iterator_state.bmp.dim.x == meltingpot.dim.x && iterator_state.bmp.dim.y == meltingpot.dim.y)
-					{
-						for (i32 i = 0; i < iterator_state.bmp.dim.x * iterator_state.bmp.dim.y; i += 1)
-						{
-							weights[i].x += iterator_state.bmp.data[i].r;
-							weights[i].y += iterator_state.bmp.data[i].g;
-							weights[i].z += iterator_state.bmp.data[i].b;
-							weights[i].w += iterator_state.bmp.data[i].a;
-						}
-
-						images_processed += 1;
-						printf("[MELTINGPOT] % 4d : \"%s\".\n", images_processed, iterator_state.finder_data.cFileName);
-					}
-					else
-					{
-						images_skipped += 1;
-						printf("\t[MELTINGPOT] Deporting \"%s\".\n", iterator_state.finder_data.cFileName);
-					}
-				}
-
-				//
-				// Report processing results.
-				//
-
-				if (images_processed)
-				{
-					for (i32 i = 0; i < meltingpot.dim.x * meltingpot.dim.y; i += 1)
-					{
-						meltingpot.data[i] =
-							(struct BMPPixel)
-							{
-								.r = (weights[i].x / images_processed >= 128) * 255,
-								.g = (weights[i].y / images_processed >= 128) * 255,
-								.b = (weights[i].z / images_processed >= 128) * 255,
-								.a = (weights[i].w / images_processed >= 128) * 255,
-							};
-					}
-
-					bmp_export(meltingpot, cli.output_file_path.str);
-
-					printf
-					(
-						"\n"
-						"Meltingpotted %d images.\n"
-						"\n",
-						images_processed
-					);
-					if (images_skipped)
-					{
-						printf
-						(
-							"... but skipped %d images!\n"
-							"\n",
-							images_skipped
-						);
-					}
-				}
-				else
-				{
-					printf("No BMPs found.\n");
-				}
-			} break;
-
-			case CLIProgram_maskiverse:
-			{
-				struct CLIProgram_maskiverse_t cli = cli_unknown.maskiverse;
-
-				//
-				// Load masks.
-				//
-
-				struct BMP masks[Letter_COUNT] = {0};
-				alloc_load_masks(masks, cli.dir_path.str);
-
-				//
-				// Iterate through each mask.
-				//
-
-				printf("[MASKIVERSE PHASE 1] Row reducing masks...\n");
-
-				struct { i32 bottom; i32 top; } empty_rows[Letter_COUNT] = {0};
-				i32                             bytes_of_flash_used      = (MASK_DIM * MASK_DIM / 8 + 3) * Letter_COUNT;
-				i32                             total_bytes_saved        = 0;
-				for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
-				{
-					//
-					// Count amount of empty bottom rows.
-					//
-
-					while (empty_rows[letter].bottom < masks[letter].dim.y)
-					{
-						b32 row_used = false;
-						for (i32 x = 0; x < masks[letter].dim.x; x += 1)
-						{
-							if (masks[letter].data[empty_rows[letter].bottom * masks[letter].dim.x + x].r)
-							{
-								row_used = true;
-								break;
-							}
-						}
-						if (row_used)
-						{
-							break;
-						}
-						else
-						{
-							empty_rows[letter].bottom += 1;
-						}
-					}
-
-					if (empty_rows[letter].bottom >= ROW_REDUCTION_SIZE)
-					{
-						error("Too many empty bottom rows in \"%.*s\" for row-reduction!", i32(cli.dir_path.str.length), cli.dir_path.str.data);
-					}
-
-					//
-					// Count amount of empty top rows.
-					//
-
-					while (empty_rows[letter].top < masks[letter].dim.y)
-					{
-						b32 row_used = false;
-						for (i32 x = 0; x < masks[letter].dim.x; x += 1)
-						{
-							if (masks[letter].data[(masks[letter].dim.y - 1 - empty_rows[letter].top) * masks[letter].dim.x + x].r)
-							{
-								row_used = true;
-								break;
-							}
-						}
-						if (row_used)
-						{
-							break;
-						}
-						else
-						{
-							empty_rows[letter].top += 1;
-						}
-					}
-
-					if (empty_rows[letter].top >= ROW_REDUCTION_SIZE)
-					{
-						error("Too many empty top rows in \"%.*s\" for row-reduction!", i32(cli.dir_path.str.length), cli.dir_path.str.data);
-					}
-
-					//
-					// Report memory saved.
-					//
-
-					i32 bytes_saved = (empty_rows[letter].bottom + empty_rows[letter].top) * masks[letter].dim.x / 8;
-
-					total_bytes_saved += bytes_saved;
-
-					printf
-					(
-						"\t\'%.*s'%*s : %3d bytes reduced.\n",
-						i32(LETTER_NAMES[letter].length), LETTER_NAMES[letter].data,
-						i32(LETTER_MAX_NAME_LENGTH - LETTER_NAMES[letter].length), "",
-						bytes_saved
-					);
-
-					bytes_of_flash_used -= bytes_saved;
-				}
-
-				//
-				// Begin to generate C data of each row-reduced mask.
-				//
-
-				printf("[MASKIVERSE PHASE 2] Generating row-reduced masks...\n");
-
-				struct StrBuf c_source_file_path = StrBuf(256);
-				strbuf_str (&c_source_file_path, cli.dir_path.str);
-				strbuf_cstr(&c_source_file_path, "\\masks.h");
-				HANDLE c_source_handle = create_file_writing_handle(c_source_file_path.str);
-
-				struct StrBuf output_buf = StrBuf(256);
-
-				for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
-				{
-					//
-					// Declaration.
-					//
-
-					strbuf_cstr(&output_buf, "static const u8 ROW_REDUCED_MASK_");
-					strbuf_str (&output_buf, LETTER_NAMES[letter]);
-					strbuf_cstr(&output_buf, "[][MASK_DIM / 8] PROGMEM =\n");
-					strbuf_cstr(&output_buf, "\t{\n");
-
-					//
-					// Actual values.
-					//
-
-					for
-					(
-						i32 y = empty_rows[letter].bottom;
-						y < masks[letter].dim.y - empty_rows[letter].top;
-						y += 1
-					)
-					{
-						static_assert(MASK_DIM >= ROW_REDUCTION_SIZE);
-						static_assert(MASK_DIM % 8 == 0);
-						for
-						(
-							i32 x_major = 0;
-							x_major < masks[letter].dim.x;
-							x_major += 8
-						)
-						{
-							if (!x_major)
-							{
-								strbuf_cstr(&output_buf, "\t\t{");
-							}
-
-							u8 literal = 0;
-							for
-							(
-								i32 x_minor = 0;
-								x_minor < 8 && x_major + x_minor < masks[letter].dim.x;
-								x_minor += 1
-							)
-							{
-								literal |= u8(!!masks[letter].data[y * masks[letter].dim.x + x_major + x_minor].r) << x_minor;
-							}
-
-							strbuf_cstr(&output_buf, " 0b");
-							strbuf_8b  (&output_buf, literal);
-							strbuf_char(&output_buf, ',');
-						}
-						strbuf_cstr(&output_buf, " },\n");
-						write_flush_strbuf(c_source_handle, &output_buf);
-					}
-
-					//
-					// Closing.
-					//
-
-					strbuf_cstr(&output_buf, "\t};\n");
-				}
-				write_flush_strbuf(c_source_handle, &output_buf);
-
-				//
-				// Generate C data for the entries of the look-up table for the row-reduced masks.
-				//
-
-				printf("[MASKIVERSE PHASE 3] Generating entries...\n");
-
-				strbuf_cstr(&output_buf, "static const struct RowReducedMaskEntry ROW_REDUCED_MASK_ENTRIES[] PROGMEM =\n");
-				strbuf_cstr(&output_buf, "\t{\n");
-				for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
-				{
-					strbuf_cstr  (&output_buf, "\t\t[Letter_");
-					strbuf_str   (&output_buf, LETTER_NAMES[letter]);
-					strbuf_char_n(&output_buf, ' ', LETTER_MAX_NAME_LENGTH - LETTER_NAMES[letter].length);
-					strbuf_cstr  (&output_buf, "] = { .data = (const u8*) ROW_REDUCED_MASK_");
-					strbuf_str   (&output_buf, LETTER_NAMES[letter]);
-					strbuf_char_n(&output_buf, ' ', LETTER_MAX_NAME_LENGTH - LETTER_NAMES[letter].length);
-					strbuf_cstr  (&output_buf, ", .empty_rows = 0b");
-					for (i32 i = 0; i < 4; i += 1)
-					{
-						strbuf_char(&output_buf, '0' + ((empty_rows[letter].top >> (3 - i) & 1)));
-					}
-					strbuf_char(&output_buf, '\'');
-					for (i32 i = 0; i < 4; i += 1)
-					{
-						strbuf_char(&output_buf, '0' + ((empty_rows[letter].bottom >> (3 - i) & 1)));
-					}
-					strbuf_cstr(&output_buf, " },\n");
-					write_flush_strbuf(c_source_handle, &output_buf);
-				}
-				strbuf_cstr(&output_buf, "\t};\n");
-				write_flush_strbuf(c_source_handle, &output_buf);
-
-				//
-				// Report results.
-				//
-
-				printf
-				(
-					"[MASKIVERSE: ENDGAME] Complete! Row-reduced to %d bytes out of %d bytes.\n",
-					bytes_of_flash_used,
-					bytes_of_flash_used + total_bytes_saved
-				);
-
-				//
-				// Clean up.
-				//
-
-				close_file_writing_handle(c_source_handle);
-
-				for (i32 i = 0; i < countof(masks); i += 1)
-				{
-					free(masks[i].data);
-				}
-			} break;
-
-			case CLIProgram_catchya:
-			{
-				struct CLIProgram_catchya_t cli = cli_unknown.catchya;
-
-				//
-				// Load masks.
-				//
-
-				struct BMP masks[Letter_COUNT] = {0};
-				alloc_load_masks(masks, cli.mask_dir_path.str);
-
-				//
-				// Load screenshot.
-				//
-
-				printf("BEEP BOOP. CATCHYA INSPECTING \"%s\"...\n", cli.screenshot_file_path.cstr);
-
-				struct BMP screenshot = bmp_alloc_read_file(cli.screenshot_file_path.str);
-				if (!(screenshot.dim.x == SCREENSHOT_DIM_X && screenshot.dim.y == SCREENSHOT_DIM_Y))
-				{
-					error
-					(
-						"BEEP BOOP. SCREENSHOT \"%s\" IS NOT OF EXPECTED DIMENSIONS: %dx%d.\n",
-						cli.screenshot_file_path.cstr,
-						SCREENSHOT_DIM_X, SCREENSHOT_DIM_Y
-					);
-				}
-
-				//
-				// Identify word game.
-				//
-
-				enum WordGameBoard board = identify_wordgame_board(screenshot, 0);
-				if (board == WordGameBoard_COUNT)
-				{
-					error("BEEP BOOP. UNKNOWN WORD GAME BOARD.\n");
-				}
-
-				printf("I KNOW THIS GAME... IT IS %.*s!\n", i32(WORDGAME_BOARD_INFO[board].name.length), WORDGAME_BOARD_INFO[board].name.data);
-
-
-				//
-				// Begin identifying slots.
-				//
-
-				for (i32 i = 0; i < WORDGAME_BOARD_INFO[board].dim_slots.x * (LETTER_MAX_NAME_LENGTH + 1) + 1; i += 1)
-				{
-					printf("-");
-				}
-				printf("\n");
-
-				for
-				(
-					i32 slot_coord_y = WORDGAME_BOARD_INFO[board].dim_slots.y - 1;
-					slot_coord_y >= 0;
-					slot_coord_y -= 1
-				)
-				{
-					//
-					// Determine letter of slots in the row.
-					//
-
-					printf("|");
-
-					for (i32 slot_coord_x = 0; slot_coord_x < WORDGAME_BOARD_INFO[board].dim_slots.x; slot_coord_x += 1)
-					{
-						//
-						// Determine best letter of this slot.
-						//
-
-						enum Letter best_matching_letter = Letter_null;
-						i32         best_matching_score  = 0;
-
-						if (!slot_coord_excluded(board, slot_coord_x, slot_coord_y))
-						{
-							for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
-							{
-								//
-								// Determine amount of differing pixels.
-								//
-
-								b32 found_activation = false;
-								i32 score            = 0;
-
-								for (i32 mask_y = 0; mask_y < masks[letter].dim.y; mask_y += 1)
-								{
-									for (i32 mask_x = 0; mask_x < masks[letter].dim.x; mask_x += 1)
-									{
-										i32_2 base_offset =
-											{
-												WORDGAME_BOARD_INFO[board].pos.x + slot_coord_x * WORDGAME_BOARD_INFO[board].uncompressed_slot_stride,
-												WORDGAME_BOARD_INFO[board].pos.y + slot_coord_y * WORDGAME_BOARD_INFO[board].uncompressed_slot_stride,
-											};
-										i32_2 slot_pixel_delta =
-											{
-												i32(f64(mask_x) / f64(masks[letter].dim.x) * WORDGAME_BOARD_INFO[board].slot_dim),
-												i32(f64(mask_y) / f64(masks[letter].dim.y) * WORDGAME_BOARD_INFO[board].slot_dim),
-											};
-										struct BMPPixel pixel = screenshot.data
-											[
-												(base_offset.y + slot_pixel_delta.y) * screenshot.dim.x
-													+ (base_offset.x + slot_pixel_delta.x)
-											];
-										b32 activation = pixel.r <= MASK_ACTIVATION_THRESHOLD;
-
-										if (activation)
-										{
-											found_activation = true;
-										}
-
-										if ((masks[letter].data[mask_y * masks[letter].dim.x + mask_x].r == 255) == activation)
-										{
-											score += 1;
-										}
-									}
-								}
-
-								//
-								// Keep best.
-								//
-
-								if (found_activation && best_matching_score < score)
-								{
-									best_matching_letter = letter;
-									best_matching_score  = score;
-								}
-							}
-						}
-
-						//
-						// Report identified letter.
-						//
-
-						if (best_matching_letter)
-						{
-							printf("%*s", LETTER_MAX_NAME_LENGTH, LETTER_NAMES[best_matching_letter].data);
-						}
-						else
-						{
-							printf("%*s", LETTER_MAX_NAME_LENGTH, "");
-						}
-
-						printf("|");
-					}
-
-					//
-					// Onto the row below.
-					//
-
-					printf("\n");
-
-					for (i32 i = 0; i < WORDGAME_BOARD_INFO[board].dim_slots.x * (LETTER_MAX_NAME_LENGTH + 1) + 1; i += 1)
-					{
-						printf("-");
-					}
-					printf("\n");
-				}
-
-				//
-				// Clean up.
-				//
-
-				free(screenshot.data);
-
-				for (i32 i = 0; i < countof(masks); i += 1)
-				{
-					free(masks[i].data);
-				}
-			} break;
-
-			case CLIProgram_intelliteck:
-			{
-				struct CLIProgram_intelliteck_t cli = cli_unknown.intelliteck;
-				u16                             crc = 0;
-
-				//
-				// Iterate pixels.
-				//
-
-				struct BMP bmp = bmp_alloc_read_file(cli.input_file_path.str);
-
-				for
-				(
-					i32 y = bmp.dim.y - 1;
-					y >= 0;
-					y -= 1
-				)
-				{
-					for (i32 x = 0; x < bmp.dim.x; x += 1)
-					{
-						if (bmp.data[y * bmp.dim.x + x].r <= MASK_ACTIVATION_THRESHOLD)
-						{
-							crc = _crc16_update(crc, (x >> 0) & 0xFF);
-							crc = _crc16_update(crc, (x >> 8) & 0xFF);
-							crc = _crc16_update(crc, (y >> 0) & 0xFF);
-							crc = _crc16_update(crc, (y >> 8) & 0xFF);
-						}
-					}
-				}
-
-				//
-				// Output.
-				//
-
-				printf("intelliTeck : 0x%4X.\n", u32(crc));
-
-				//
-				// Clean up.
-				//
-
-				free(bmp.data);
+				free(new_avg_mask.data);
+				free(merged_mask_weights);
 			} break;
 
 			case CLIProgram_COUNT:
