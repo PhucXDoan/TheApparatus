@@ -255,8 +255,8 @@ static_assert(LITTLE_ENDIAN);
 #define ASSISTIVE_TOUCH_Y 9
 
 #if PROGRAM_DIPLOMAT
-#define count_cleared_bits(...) pgm_read_byte(&ZERO_BIT_COUNT_DT[(u8) { __VA_ARGS__ }])
-static const u8 ZERO_BIT_COUNT_DT[] PROGMEM =
+#define count_cleared_bits(...) pgm_read_byte(&COUNT_CLEARED_BITS_DT[(u8) { __VA_ARGS__ }])
+static const u8 COUNT_CLEARED_BITS_DT[] PROGMEM =
 	{
 		[0b00000000] = 8, [0b00000001] = 7, [0b00000010] = 7, [0b00000011] = 6, [0b00000100] = 7, [0b00000101] = 6, [0b00000110] = 6, [0b00000111] = 5,
 		[0b00001000] = 7, [0b00001001] = 6, [0b00001010] = 6, [0b00001011] = 5, [0b00001100] = 6, [0b00001101] = 5, [0b00001110] = 5, [0b00001111] = 4,
@@ -450,7 +450,6 @@ enum WordGameMap
 
 #define MASK_ACTIVATION_THRESHOLD 16
 #define MASK_DIM                  64
-#define ROW_REDUCTION_SIZE        16
 
 #define LETTER_XMDT(X) \
 	/* Name       | LCD Character Code */ \
@@ -529,13 +528,6 @@ enum Letter
 		};
 #endif
 
-struct RowReducedMaskEntry // Note: changing size of this means changing the calculation for the maskiverse microservice.
-{
-	const u8* data;
-	u8        empty_rows; // Least significant nibble stores amount of empty rows from bottom, most significant nibble stores aount of empty rows on top.
-};
-static_assert(ROW_REDUCTION_SIZE <= 16); // To be able to fit numbers in the "empty_rows" field.
-
 //
 // "string.c"
 //
@@ -583,6 +575,8 @@ struct Dary_void
 		}; \
 	}
 #define Dary_def(TYPE) Dary_define(TYPE, TYPE)
+
+Dary_def(u16);
 
 //
 // "Microservices_bmp.c"
@@ -700,9 +694,10 @@ struct BMPDIBHeader // "BITMAPCOREHEADER" not supported.
 #define CLI_EXE_NAME "Microservices.exe"
 #define CLI_EXE_DESC "Microservices to help you bring change to the world."
 #define CLI_PROGRAM_XMDT(X) \
-	X(eaglepeek  , "Identify the Game Pigeon word game shown in screenshots."   ) \
-	X(extractorv2, "Create standard mask sized BMP of each slot in screenshots of Game Pigeon word games.") \
-	X(collectune , "Copy BMPs into folder with the closest matching mask.") \
+	X(eaglepeek   , "Identify the Game Pigeon word game shown in screenshots."   ) \
+	X(extractorv2 , "Create standard mask sized BMP of each slot in screenshots of Game Pigeon word games.") \
+	X(collectune  , "Copy BMPs into folder with the closest matching mask.") \
+	X(maskiversev2, "Format masks into streaming data to be included into C compilation.") \
 
 #define CLI_PROGRAM_eaglepeek_FIELD_XMDT(X, ...) \
 	X(input_dir_paths, dary_string, "screenshot-dir-path...", "Directory path of the screenshots to identify.",##__VA_ARGS__) \
@@ -717,6 +712,10 @@ struct BMPDIBHeader // "BITMAPCOREHEADER" not supported.
 	X(mask_dir_path    , string, "mask-dir-path"     , "Directory path of the masks.",##__VA_ARGS__) \
 	X(unsorted_dir_path, string, "unsorted-dir-path" , "Directory path of the BMPs to be sorted.",##__VA_ARGS__) \
 	X(clear_output_dir , b32   , "--clear-output-dir", "Delete all content within the output directory before processing.",##__VA_ARGS__)
+
+#define CLI_PROGRAM_maskiversev2_FIELD_XMDT(X, ...) \
+	X(output_file_path, string, "output-file-path", "File path of the formatted data.",##__VA_ARGS__) \
+	X(dir_path        , string, "mask-dir-path"   , "Directory path of the mask BMPs.",##__VA_ARGS__)
 
 #define CLI_TYPING_XMDT(X) \
 	X(string     , union { struct { char* data; i64 length; }; char* cstr; str str; }) \

@@ -1069,6 +1069,142 @@ main(int argc, char** argv)
 				free(merged_mask_weights);
 			} break;
 
+			case CLIProgram_maskiversev2:
+			{
+				struct CLIProgram_maskiversev2_t cli                 = cli_unknown.maskiversev2;
+
+				//
+				// Load masks.
+				//
+
+				struct BMP masks[Letter_COUNT] = {0};
+				alloc_load_masks(masks, cli.dir_path.str);
+
+				//
+				//
+				//
+
+				HANDLE c_source_handle = create_file_writing_handle(cli.output_file_path.str);
+
+				struct StrBuf output_buf = StrBuf(256);
+
+				strbuf_cstr(&output_buf, "static const u8 MASK_U8_STREAM[] PROGMEM = { ");
+				write_flush_strbuf(c_source_handle, &output_buf);
+
+				struct Dary_u16 overflowed_runlengths = {0};
+				i32_2           pos                   = { 0, MASK_DIM - 1 };
+				enum Letter     letter                = {1};
+				i32             runlength             = 0;
+				i32             run_count             = 0;
+				while (true)
+				{
+					b32 flush    = false;
+					b32 finished = false;
+
+					if (pos.x == MASK_DIM)
+					{
+						pos.x   = 0;
+						letter += 1;
+
+						if (letter == Letter_COUNT)
+						{
+							letter  = (enum Letter) {1};
+							pos.y  -= 1;
+
+							if (pos.y == -1)
+							{
+								finished = true;
+								flush    = true;
+							}
+						}
+					}
+
+					if (!finished)
+					{
+						if ((masks[letter].data[pos.y * MASK_DIM + pos.x].r & 1) == (run_count & 1))
+						{
+							runlength += 1;
+							pos.x     += 1;
+						}
+						else
+						{
+							flush = true;
+						}
+					}
+
+					if (flush)
+					{
+						if (0 < runlength && runlength < 255)
+						{
+							strbuf_u64(&output_buf, runlength);
+						}
+						else
+						{
+							if (runlength > u16(-1))
+							{
+								error("Run length too long!");
+							}
+
+							dary_push(&overflowed_runlengths, &(u16) { u16(runlength) });
+							strbuf_cstr(&output_buf, "0x00");
+						}
+
+						strbuf_cstr(&output_buf, ", "),
+						write_flush_strbuf(c_source_handle, &output_buf);
+
+						runlength  = 0;
+						run_count += 1;
+					}
+
+					if (finished)
+					{
+						break;
+					}
+				}
+
+				strbuf_cstr
+				(
+					&output_buf,
+					"};\n"
+					"\n"
+					"static const u16 MASK_U16_STREAM[] PROGMEM = { "
+				);
+				write_flush_strbuf(c_source_handle, &output_buf);
+
+				for (i32 i = 0; i < overflowed_runlengths.length; i += 1)
+				{
+					strbuf_u64 (&output_buf, overflowed_runlengths.data[i]);
+					strbuf_cstr(&output_buf, ", "),
+					write_flush_strbuf(c_source_handle, &output_buf);
+				}
+
+				strbuf_cstr(&output_buf, " };\n");
+				write_flush_strbuf(c_source_handle, &output_buf);
+
+				//
+				// Report results.
+				//
+
+				printf
+				(
+					"[MASKIVERSE] Complete! %zu bytes of flash will be used.\n",
+					run_count * sizeof(u8) + overflowed_runlengths.length * sizeof(u16)
+				);
+
+				//
+				// Clean up.
+				//
+
+				free(overflowed_runlengths.data);
+
+				close_file_writing_handle(c_source_handle);
+
+				for (i32 i = 0; i < countof(masks); i += 1)
+				{
+					free(masks[i].data);
+				}
+			} break;
+
 			case CLIProgram_COUNT:
 			default:
 			{

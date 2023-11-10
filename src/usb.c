@@ -865,58 +865,58 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 									if (starting_slot_pixel_coordinates.x + scanline_length == MASK_DIM)
 									{
-										//
-										// Count cleared bits if the row is eligible for row-reduction.
-										//
+									//	//
+									//	// Count cleared bits if the row is eligible for row-reduction.
+									//	//
 
-										u8 cleared_bits = 0;
+									//	u8 cleared_bits = 0;
 
-										if
-										(
-											starting_slot_pixel_coordinates.y < ROW_REDUCTION_SIZE ||
-											starting_slot_pixel_coordinates.y > (MASK_DIM - 1) - ROW_REDUCTION_SIZE
-										)
-										{
-											for (u8 i = 0; i < countof(_usb_ms_ocr_bits_of_a_single_row_of_pixels_for_a_single_slot); i += 1)
-											{
-												cleared_bits += count_cleared_bits(_usb_ms_ocr_bits_of_a_single_row_of_pixels_for_a_single_slot[i]);
-											}
-										}
+									//	if
+									//	(
+									//		starting_slot_pixel_coordinates.y < ROW_REDUCTION_SIZE ||
+									//		starting_slot_pixel_coordinates.y > (MASK_DIM - 1) - ROW_REDUCTION_SIZE
+									//	)
+									//	{
+									//		for (u8 i = 0; i < countof(_usb_ms_ocr_bits_of_a_single_row_of_pixels_for_a_single_slot); i += 1)
+									//		{
+									//			cleared_bits += count_cleared_bits(_usb_ms_ocr_bits_of_a_single_row_of_pixels_for_a_single_slot[i]);
+									//		}
+									//	}
 
-										//
-										// Give out points for each letter.
-										//
+									//	//
+									//	// Give out points for each letter.
+									//	//
 
-										for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
-										{
-											const u8* mask_data              = pgm_read_ptr(&ROW_REDUCED_MASK_ENTRIES[letter].data);
-											u8        mask_empty_bottom_rows = (pgm_u8(ROW_REDUCED_MASK_ENTRIES[letter].empty_rows) >> 0) & 0b0000'1111;
-											u8        mask_empty_top_rows    = (pgm_u8(ROW_REDUCED_MASK_ENTRIES[letter].empty_rows) >> 4) & 0b0000'1111;
-											u8        score_addend           = 0;
+									//	for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
+									//	{
+									//		const u8* mask_data              = pgm_read_ptr(&ROW_REDUCED_MASK_ENTRIES[letter].data);
+									//		u8        mask_empty_bottom_rows = (pgm_u8(ROW_REDUCED_MASK_ENTRIES[letter].empty_rows) >> 0) & 0b0000'1111;
+									//		u8        mask_empty_top_rows    = (pgm_u8(ROW_REDUCED_MASK_ENTRIES[letter].empty_rows) >> 4) & 0b0000'1111;
+									//		u8        score_addend           = 0;
 
-											if // This row of the mask has been reduced.
-											(
-												starting_slot_pixel_coordinates.y < mask_empty_bottom_rows ||
-												starting_slot_pixel_coordinates.y > MASK_DIM - 1 - mask_empty_top_rows
-											)
-											{
-												score_addend = cleared_bits;
-											}
-											else // Compare slot bits with mask.
-											{
-												for (u8 byte_index = 0; byte_index < MASK_DIM / 8; byte_index += 1)
-												{
-													score_addend +=
-														count_cleared_bits
-														(
-															_usb_ms_ocr_bits_of_a_single_row_of_pixels_for_a_single_slot[byte_index]
-															^ pgm_u8(mask_data[(starting_slot_pixel_coordinates.y - mask_empty_bottom_rows) * (MASK_DIM / 8) + byte_index])
-														);
-												}
-											}
+									//		if // This row of the mask has been reduced.
+									//		(
+									//			starting_slot_pixel_coordinates.y < mask_empty_bottom_rows ||
+									//			starting_slot_pixel_coordinates.y > MASK_DIM - 1 - mask_empty_top_rows
+									//		)
+									//		{
+									//			score_addend = cleared_bits;
+									//		}
+									//		else // Compare slot bits with mask.
+									//		{
+									//			for (u8 byte_index = 0; byte_index < MASK_DIM / 8; byte_index += 1)
+									//			{
+									//				score_addend +=
+									//					count_cleared_bits
+									//					(
+									//						_usb_ms_ocr_bits_of_a_single_row_of_pixels_for_a_single_slot[byte_index]
+									//						^ pgm_u8(mask_data[(starting_slot_pixel_coordinates.y - mask_empty_bottom_rows) * (MASK_DIM / 8) + byte_index])
+									//					);
+									//			}
+									//		}
 
-											_usb_ms_ocr_accumulated_scores_for_single_row_of_slots_in_board[slot_coords_on_board.x][letter] += score_addend;
-										}
+									//		_usb_ms_ocr_accumulated_scores_for_single_row_of_slots_in_board[slot_coords_on_board.x][letter] += score_addend;
+									//	}
 									}
 
 									//

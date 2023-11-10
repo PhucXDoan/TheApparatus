@@ -23,7 +23,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "defs.h"
-#include "Diplomat_masks.h"
+#include "W:/data/masks.h"
 #include "pin.c"
 #include "misc.c"
 #include "spi.c"
