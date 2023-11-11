@@ -1951,8 +1951,11 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	static volatile enum WordGameBoard usb_ms_ocr_wordgame_board = {0};
 	static volatile enum Letter        usb_ms_ocr_grid[WORDGAME_BOARD_MAX_DIM_Y][WORDGAME_BOARD_MAX_DIM_X] = {0};
 	static u32                         _usb_ms_ocr_pixels_processed = 0;
-	static u16                         _usb_ms_ocr_accumulated_scores_for_single_row_of_slots_in_board[WORDGAME_BOARD_MAX_DIM_X + 1][Letter_COUNT] = {0};
+	static u16                         _usb_ms_ocr_accumulated_scores_for_single_row_of_slots_in_board[WORDGAME_BOARD_MAX_DIM_X][Letter_COUNT] = {0};
 	static u8                          _usb_ms_ocr_bits_of_a_single_row_of_pixels_for_a_single_slot[MASK_DIM / 8] = {0};
+	static u16                         _usb_ms_ocr_mask_u8_stream_index                                           = 0;
+	static u16                         _usb_ms_ocr_mask_u16_stream_index                                          = 0;
+	static u16                         _usb_ms_ocr_runlength_remaining                                            = 0;
 
 	#if USB_MS_ENABLE
 		static struct USBMSCommandStatusWrapper _usb_ms_status      = { .dCSWSignature = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE };

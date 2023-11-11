@@ -1071,7 +1071,7 @@ main(int argc, char** argv)
 
 			case CLIProgram_maskiversev2:
 			{
-				struct CLIProgram_maskiversev2_t cli                 = cli_unknown.maskiversev2;
+				struct CLIProgram_maskiversev2_t cli = cli_unknown.maskiversev2;
 
 				//
 				// Load masks.
@@ -1081,7 +1081,7 @@ main(int argc, char** argv)
 				alloc_load_masks(masks, cli.dir_path.str);
 
 				//
-				//
+				// Generate stream data.
 				//
 
 				HANDLE c_source_handle = create_file_writing_handle(cli.output_file_path.str);
@@ -1093,7 +1093,7 @@ main(int argc, char** argv)
 
 				struct Dary_u16 overflowed_runlengths = {0};
 				i32_2           pos                   = { 0, MASK_DIM - 1 };
-				enum Letter     letter                = {1};
+				enum Letter     curr_letter           = {1};
 				i32             runlength             = 0;
 				i32             run_count             = 0;
 				while (true)
@@ -1101,14 +1101,18 @@ main(int argc, char** argv)
 					b32 flush    = false;
 					b32 finished = false;
 
+					//
+					// Check if the stream would end.
+					//
+
 					if (pos.x == MASK_DIM)
 					{
-						pos.x   = 0;
-						letter += 1;
+						pos.x        = 0;
+						curr_letter += 1;
 
-						if (letter == Letter_COUNT)
+						if (curr_letter == Letter_COUNT)
 						{
-							letter  = (enum Letter) {1};
+							curr_letter  = (enum Letter) {1};
 							pos.y  -= 1;
 
 							if (pos.y == -1)
@@ -1119,9 +1123,13 @@ main(int argc, char** argv)
 						}
 					}
 
+					//
+					// Increase runlength if pixel matches.
+					//
+
 					if (!finished)
 					{
-						if ((masks[letter].data[pos.y * MASK_DIM + pos.x].r & 1) == (run_count & 1))
+						if ((masks[curr_letter].data[pos.y * MASK_DIM + pos.x].r & 1) == (run_count & 1))
 						{
 							runlength += 1;
 							pos.x     += 1;
@@ -1131,6 +1139,10 @@ main(int argc, char** argv)
 							flush = true;
 						}
 					}
+
+					//
+					// Flush.
+					//
 
 					if (flush)
 					{
@@ -1155,6 +1167,10 @@ main(int argc, char** argv)
 						runlength  = 0;
 						run_count += 1;
 					}
+
+					//
+					// Finish.
+					//
 
 					if (finished)
 					{
@@ -1187,7 +1203,12 @@ main(int argc, char** argv)
 
 				printf
 				(
-					"[MASKIVERSE] Complete! %zu bytes of flash will be used.\n",
+					"[MASKIVERSE] Complete!\n"
+					"%zu bytes used for byte run-lengths.\n"
+					"%zu bytes used for word run-lengths.\n"
+					"%zu bytes of flash will be used total.\n",
+					run_count * sizeof(u8),
+					overflowed_runlengths.length * sizeof(u16),
 					run_count * sizeof(u8) + overflowed_runlengths.length * sizeof(u16)
 				);
 

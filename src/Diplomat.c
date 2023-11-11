@@ -28,8 +28,8 @@
 #include "misc.c"
 #include "spi.c"
 #include "sd.c"
-#include "usb.c"
 #include "lcd.c"
+#include "usb.c"
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE HaltSource_diplomat
 
@@ -373,7 +373,7 @@ main(void)
 							assert(usb_ms_ocr_state == USBMSOCRState_ready);
 							usb_ms_ocr_state          = USBMSOCRState_set;
 							usb_ms_ocr_wordgame_board = pgm_u8(WORDGAME_MAP_INFO[menu_main_selected_option].board);
-							menu = Menu_displaying;
+							menu                      = Menu_displaying;
 						} break;
 
 						case MenuChosenMapOption_datamine:
