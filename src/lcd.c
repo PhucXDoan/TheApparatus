@@ -130,7 +130,6 @@ lcd_refresh(void)
 	}
 }
 
-#define lcd_pgm_char(VALUE) lcd_char(pgm_u8(VALUE))
 static void
 lcd_char(char value)
 {

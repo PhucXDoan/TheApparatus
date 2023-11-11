@@ -1,20 +1,20 @@
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE HaltSource_usb
 
-#if USB_HID_ENABLE
-	// "HELD"   : Must evaluate to 0 or 1.
-	// "DEST_X" : Must be within [0, 127].
-	// "DEST_Y" : Must be within [0, 255].
-	// See: [Mouse Commands].
-	#define usb_mouse_command(HELD, DEST_X, DEST_Y) usb_mouse_command_((u16(HELD) << 15) | (u16(DEST_X) << 8) | u16(DEST_Y))
-	static void
-	usb_mouse_command_(u16 command)
-	{
-		while (_usb_mouse_command_writer_masked(1) == _usb_mouse_command_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
-		_usb_mouse_command_buffer[_usb_mouse_command_writer_masked(0)] = command;
-		_usb_mouse_command_writer += 1;
-	}
-#endif
+// "HELD"   : Must evaluate to 0 or 1.
+// "DEST_X" : Must be within [0, 127].
+// "DEST_Y" : Must be within [0, 255].
+// See: [Mouse Commands].
+#define usb_mouse_command(HELD, DEST_X, DEST_Y) usb_mouse_command_((u16(HELD) << 15) | (u16(DEST_X) << 8) | u16(DEST_Y))
+static void
+usb_mouse_command_(u16 command)
+{
+	#if USB_HID_ENABLE
+	while (_usb_mouse_command_writer_masked(1) == _usb_mouse_command_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
+	_usb_mouse_command_buffer[_usb_mouse_command_writer_masked(0)] = command;
+	_usb_mouse_command_writer += 1;
+	#endif
+}
 
 static void
 usb_init(void)
@@ -755,7 +755,13 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 							offset_in_sector_for_unprocessed_red_alpha_pairs = 0;
 							amount_of_unprocessed_red_alpha_pairs_remaining  = FAT32_SECTOR_SIZE / sizeof(struct BMPPixel);
 
-							u32 total_amount_of_pixels_remaining = wordgame_bmp_dim.x * wordgame_bmp_dim.y - _usb_ms_ocr_pixels_processed;
+
+							u32 total_amount_of_pixels_remaining = wordgame_bmp_dim.x * wordgame_bmp_dim.y -
+								(
+									(u32(_usb_ms_ocr_slot_topdown_board_coords.y) * u32(wordgame_compressed_slot_stride) + u32(_usb_ms_ocr_slot_topdown_pixel_coords.y)) * u32(wordgame_bmp_dim.x)
+										+ (u32(_usb_ms_ocr_slot_topdown_board_coords.x) * u32(wordgame_compressed_slot_stride) + u32(_usb_ms_ocr_slot_topdown_pixel_coords.x))
+								);
+
 							if (amount_of_unprocessed_red_alpha_pairs_remaining > total_amount_of_pixels_remaining)
 							{
 								amount_of_unprocessed_red_alpha_pairs_remaining = total_amount_of_pixels_remaining;
@@ -785,6 +791,8 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 						if (is_red_alpha_pairs_actually_pixel_data)
 						{
+							static u16 TEMP_crc = 0;
+
 							//
 							// "Process sector in scanlines".
 							//
@@ -795,26 +803,27 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 								// Determine scanline length.
 								//
 
-								u16   scanline_length                 = {0};
-								b8    scanline_is_for_slot            = false;
-								u16_2 starting_slot_pixel_coordinates =
-									{
-										(_usb_ms_ocr_pixels_processed % wordgame_bmp_dim.x) % wordgame_compressed_slot_stride,
-										(_usb_ms_ocr_pixels_processed / wordgame_bmp_dim.x) % wordgame_compressed_slot_stride,
-									};
-								starting_slot_pixel_coordinates.y = MASK_DIM - 1 - starting_slot_pixel_coordinates.y; // Purposely allow underflow.
+								u16   scanline_length      = {0};
+								b8    scanline_is_for_slot = false;
 
-								if (starting_slot_pixel_coordinates.y >= MASK_DIM) // Scanline beginning on BMP row that's just padding.
+								if (_usb_ms_ocr_slot_topdown_pixel_coords.y >= MASK_DIM) // Scanline beginning on BMP row that's just padding.
 								{
-									scanline_length = wordgame_bmp_dim.x - (_usb_ms_ocr_pixels_processed % wordgame_bmp_dim.x); // Try to go to end of the row of pixels.
+									if (_usb_ms_ocr_slot_topdown_board_coords.x == wordgame_board_dim.x - 1)
+									{
+										scanline_length = MASK_DIM - _usb_ms_ocr_slot_topdown_pixel_coords.x;
+									}
+									else
+									{
+										scanline_length = wordgame_compressed_slot_stride - _usb_ms_ocr_slot_topdown_pixel_coords.x;
+									}
 								}
-								else if (starting_slot_pixel_coordinates.x >= MASK_DIM) // Scanline beginning on BMP column that's just padding.
+								else if (_usb_ms_ocr_slot_topdown_pixel_coords.x >= MASK_DIM) // Scanline beginning on BMP column that's just padding.
 								{
-									scanline_length = wordgame_compressed_slot_stride - starting_slot_pixel_coordinates.x; // Try to go to the next slot.
+									scanline_length = wordgame_compressed_slot_stride - _usb_ms_ocr_slot_topdown_pixel_coords.x; // Try to go to the next slot.
 								}
 								else // Scanline beginning on BMP column that contains letters.
 								{
-									scanline_length      = MASK_DIM - starting_slot_pixel_coordinates.x; // Try to process all remaining pixels in the single row of pixels of this slot.
+									scanline_length      = MASK_DIM - _usb_ms_ocr_slot_topdown_pixel_coords.x; // Try to process all remaining pixels in the single row of pixels of this slot.
 									scanline_is_for_slot = true;
 								}
 
@@ -829,28 +838,21 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 								if (scanline_is_for_slot)
 								{
-									u8_2 slot_coords_on_board =
-										{
-											(_usb_ms_ocr_pixels_processed % wordgame_bmp_dim.x) / wordgame_compressed_slot_stride,
-											(_usb_ms_ocr_pixels_processed / wordgame_bmp_dim.x) / wordgame_compressed_slot_stride,
-										};
-									slot_coords_on_board.y = wordgame_board_dim.y - 1 - slot_coords_on_board.y;
-
 									//
 									// "Parse scanline of the slot".
 									//
 
 									for (u8 pixel_index = 0; pixel_index < scanline_length; pixel_index += 1)
 									{
-										u8 slot_pixel_x = starting_slot_pixel_coordinates.x + pixel_index;
+										u8 slot_pixel_x = _usb_ms_ocr_slot_topdown_pixel_coords.x + pixel_index;
 
 										if (sd_sector[offset_in_sector_for_unprocessed_red_alpha_pairs + pixel_index * sizeof(struct BMPPixel)] <= MASK_ACTIVATION_THRESHOLD)
 										{
-											_usb_ms_ocr_bits_of_a_single_row_of_pixels_for_a_single_slot[slot_pixel_x / 8] |= 1 << (slot_pixel_x % 8);
+											_usb_ms_ocr_single_row_of_pixels_for_a_single_slot.bits |= u64(1) << slot_pixel_x;
 										}
 										else
 										{
-											_usb_ms_ocr_bits_of_a_single_row_of_pixels_for_a_single_slot[slot_pixel_x / 8] &= ~(1 << (slot_pixel_x % 8));
+											_usb_ms_ocr_single_row_of_pixels_for_a_single_slot.bits &= ~(u64(1) << slot_pixel_x);
 										}
 									}
 
@@ -858,7 +860,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 									// "Add points."
 									//
 
-									if (starting_slot_pixel_coordinates.x + scanline_length == MASK_DIM)
+									if (_usb_ms_ocr_slot_topdown_pixel_coords.x + scanline_length == MASK_DIM)
 									{
 										//
 										// Give out points for each letter.
@@ -870,59 +872,90 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 										for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
 										{
-											u8 score_addend = 0;
+											//
+											// Grab bytes of mask row from the stream.
+											//
 
-											for (u8 byte_index = 0; byte_index < MASK_DIM / 8; byte_index += 1)
+											static_assert(MASK_DIM == 64);
+											union
+											{
+												u64 bits;
+												u8  bytes[MASK_DIM / 8];
+											} mask_row = {0};
+
+											u8 mask_bits_unfilled = MASK_DIM;
+											while (mask_bits_unfilled)
 											{
 												//
-												// Grab byte of a mask from the stream.
+												// Refill runlength.
 												//
 
-												u8 mask_byte = 0;
-
-												for (u8 mask_bit_index = 0; mask_bit_index < 8; mask_bit_index += 1)
+												if (!probing_runlength_remaining)
 												{
-													while (!probing_runlength_remaining)
+													//
+													// Read the next byte-sized run-length.
+													//
+
+													assert(probing_mask_u8_stream_index < countof(MASK_U8_STREAM));
+													probing_runlength_remaining   = pgm_u8(MASK_U8_STREAM[probing_mask_u8_stream_index]);
+													probing_mask_u8_stream_index += 1;
+
+													//
+													// If we read a zero, the run-length is then word-sized.
+													//
+
+													if (!probing_runlength_remaining)
 													{
-														//
-														// Read the next byte-sized run-length.
-														//
-
-														assert(probing_mask_u8_stream_index < countof(MASK_U8_STREAM));
-														probing_runlength_remaining   = pgm_u8(MASK_U8_STREAM[probing_mask_u8_stream_index]);
-														probing_mask_u8_stream_index += 1;
-
-														//
-														// If we read a zero, the run-length is then word-sized.
-														//
-
-														if (!probing_runlength_remaining)
-														{
-															assert(probing_mask_u16_stream_index < countof(MASK_U16_STREAM));
-															probing_runlength_remaining    = pgm_u16(MASK_U16_STREAM[probing_mask_u16_stream_index]);
-															probing_mask_u16_stream_index += 1;
-														}
+														assert(probing_mask_u16_stream_index < countof(MASK_U16_STREAM));
+														probing_runlength_remaining    = pgm_u16(MASK_U16_STREAM[probing_mask_u16_stream_index]);
+														probing_mask_u16_stream_index += 1;
 													}
-
-													mask_byte                   |= ((~probing_mask_u8_stream_index) & 1) << mask_bit_index;
-													probing_runlength_remaining -= 1;
 												}
 
 												//
-												// Compare.
+												// Shift in bits of mask.
 												//
 
-												score_addend += count_cleared_bits(_usb_ms_ocr_bits_of_a_single_row_of_pixels_for_a_single_slot[byte_index] ^ mask_byte);
+												u8 shift_amount =
+													mask_bits_unfilled < probing_runlength_remaining
+														? mask_bits_unfilled
+														: probing_runlength_remaining;
+
+												if (probing_mask_u8_stream_index & 1)
+												{
+													mask_row.bits = mask_row.bits >> shift_amount; // Shift in zeros.
+												}
+												else
+												{
+													mask_row.bits = ~(u64(~mask_row.bits) >> shift_amount); // Shift in ones.
+												}
+
+												mask_bits_unfilled          -= shift_amount;
+												probing_runlength_remaining -= shift_amount;
 											}
 
-											_usb_ms_ocr_accumulated_scores_for_single_row_of_slots_in_board[slot_coords_on_board.x][letter] += score_addend;
+											//
+											// Compare.
+											//
+
+											static_assert(MASK_DIM == 64);
+											#define UNROLL(N) _usb_ms_ocr_accumulated_scores_for_single_row_of_slots_in_board[_usb_ms_ocr_slot_topdown_board_coords.x][letter] += count_cleared_bits(_usb_ms_ocr_single_row_of_pixels_for_a_single_slot.bytes[N] ^ mask_row.bytes[N]);
+											UNROLL(0)
+											UNROLL(1)
+											UNROLL(2)
+											UNROLL(3)
+											UNROLL(4)
+											UNROLL(5)
+											UNROLL(6)
+											UNROLL(7)
+											#undef UNROLL
 										}
 
 										//
 										// If the slot is the last one in the row of slots on the board...
 										//
 
-										if (slot_coords_on_board.x == wordgame_board_dim.x - 1)
+										if (_usb_ms_ocr_slot_topdown_board_coords.x == wordgame_board_dim.x - 1)
 										{
 											//
 											// Update location in stream so we'll be comparing with the next set of rows in the masks now.
@@ -936,8 +969,16 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 											// If the finished processing the last row of pixels for this set of rows...
 											//
 
-											if (starting_slot_pixel_coordinates.y == 0)
+											if (_usb_ms_ocr_slot_topdown_pixel_coords.y == MASK_DIM - 1)
 											{
+												for (u8 slot_coord_x = 0; slot_coord_x < wordgame_board_dim.x; slot_coord_x += 1)
+												{
+													for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
+													{
+														TEMP_crc = _crc16_update(TEMP_crc, _usb_ms_ocr_accumulated_scores_for_single_row_of_slots_in_board[slot_coord_x][letter]);
+													}
+												}
+
 												//
 												// Pick the best matching letters.
 												//
@@ -950,8 +991,8 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 														u16 letter_score = _usb_ms_ocr_accumulated_scores_for_single_row_of_slots_in_board[slot_coord_x][letter];
 														if (highest_score < letter_score)
 														{
-															highest_score                                         = letter_score;
-															usb_ms_ocr_grid[slot_coords_on_board.y][slot_coord_x] = letter;
+															highest_score = letter_score;
+															usb_ms_ocr_grid[wordgame_board_dim.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y][slot_coord_x] = letter;
 														}
 													}
 												}
@@ -981,14 +1022,41 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 								amount_of_unprocessed_red_alpha_pairs_remaining  -= scanline_length;
 								offset_in_sector_for_unprocessed_red_alpha_pairs += scanline_length * sizeof(struct BMPPixel);
-								_usb_ms_ocr_pixels_processed                     += scanline_length;
-								assert(_usb_ms_ocr_pixels_processed <= wordgame_bmp_dim.x * wordgame_bmp_dim.y);
-							}
 
-							if (_usb_ms_ocr_pixels_processed == wordgame_bmp_dim.x * wordgame_bmp_dim.y)
-							{
-								usb_ms_ocr_state             = USBMSOCRState_ready;
-								_usb_ms_ocr_pixels_processed = 0;
+								_usb_ms_ocr_slot_topdown_pixel_coords.x += scanline_length;
+								if (_usb_ms_ocr_slot_topdown_pixel_coords.x == MASK_DIM && _usb_ms_ocr_slot_topdown_board_coords.x == wordgame_board_dim.x - 1)
+								{
+									_usb_ms_ocr_slot_topdown_pixel_coords.x  = 0;
+									_usb_ms_ocr_slot_topdown_board_coords.x  = 0;
+									_usb_ms_ocr_slot_topdown_pixel_coords.y += 1;
+									if (_usb_ms_ocr_slot_topdown_pixel_coords.y == MASK_DIM && _usb_ms_ocr_slot_topdown_board_coords.y == wordgame_board_dim.y - 1)
+									{
+										assert(amount_of_unprocessed_red_alpha_pairs_remaining == 0);
+
+										_usb_ms_ocr_slot_topdown_pixel_coords.y = 0;
+										_usb_ms_ocr_slot_topdown_board_coords.y = 0;
+
+										usb_ms_ocr_state = USBMSOCRState_ready;
+										debug_u16(TEMP_crc);
+
+										if (TEMP_crc != 0b1010'0101'1101'0110)
+										{
+											debug_u16(0xFFFF);
+										}
+
+										break;
+									}
+									else if (_usb_ms_ocr_slot_topdown_pixel_coords.y == wordgame_compressed_slot_stride)
+									{
+										_usb_ms_ocr_slot_topdown_pixel_coords.y  = 0;
+										_usb_ms_ocr_slot_topdown_board_coords.y += 1;
+									}
+								}
+								else if (_usb_ms_ocr_slot_topdown_pixel_coords.x == wordgame_compressed_slot_stride)
+								{
+									_usb_ms_ocr_slot_topdown_pixel_coords.x  = 0;
+									_usb_ms_ocr_slot_topdown_board_coords.x += 1;
+								}
 							}
 						}
 					}
@@ -2540,19 +2608,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 		- "Add points."
 
-			When we do have the entire single row of a single slot processed by testing the red
-			channel of each bit, we then iterate through the mask of each letter and determine
-			the amount of points that should be rewarded to the respective letter. So if the row
-			of a letter's mask and the row that we just finished parsing are identical, then that
-			letter will receive the maximum amount of points. Masks that differ will receive less
-			points. We also have to be considerate of empty rows since we perform row-reduction on
-			the masks to save flash memory.
-
-			It should be noted that after we finish adding points for this particular slot, the
-			next series of pixels will lead up to the next horizontally adjacent slot (if one
-			exists). This means that we have to remember the current score of each slot in the row
-			of the board until we have completely processed the entire rows of pixels in the single
-			row of slots in the board. Whew!
+			TODO
 
 		- "Pick winning letters."
 
@@ -2562,8 +2618,10 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 			repeat as necessary...
 
 	This OCR system is pretty harcore and I'm pretty proud of myself in managing to implement it
-	within a day. Of course, this relies on the presence of the mask of the letters being provided
+	within a day*. Of course, this relies on the presence of the mask of the letters being provided
 	somewhere. This is generated through microservices. See: "Microservices.c".
+
+	* Some later adjustments had to be made. Took days.
 */
 
 /* [Endpoint Sizes].

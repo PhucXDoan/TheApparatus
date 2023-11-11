@@ -80,6 +80,8 @@ static void
 sd_read(u32 abs_sector_address)
 { // See: Source(19) @ Section(7.2.3) @ AbsPage(107).
 
+	assert(abs_sector_address < FAT32_TOTAL_SECTOR_COUNT);
+
 	pin_low(PIN_SD_SS);
 
 	// "READ_SINGLE_BLOCK" uses the R1 format for the response.
@@ -103,6 +105,8 @@ sd_read(u32 abs_sector_address)
 static void
 sd_write(u32 abs_sector_address)
 { // See: Source(19) @ Section(7.2.4) @ AbsPage(108).
+
+	assert(abs_sector_address < FAT32_TOTAL_SECTOR_COUNT);
 
 	pin_low(PIN_SD_SS);
 
