@@ -691,7 +691,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 				b8   transaction_is_for_bmp  = false;
 				u16  curr_red_channel_offset = 0;
 				u8   compressed_slot_stride  = pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].compressed_slot_stride);
-				u8_2 board_dim_slots               =
+				u8_2 board_dim_slots         =
 					{
 						pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.x),
 						pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.y),
@@ -736,6 +736,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 							usb_ms_ocr_state        = USBMSOCRState_processing;
 							curr_red_channel_offset = sizeof(struct BMPFileHeader) + sizeof(struct BMPDIBHeader) + 2; // Color channels are ordered BGRA in memory; +2 skips blue and green bytes.
+							transaction_is_for_bmp  = true;
 						}
 					} break;
 
@@ -780,7 +781,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 						_usb_ms_sd_write_through(sector_address);
 					}
 
-					if (usb_ms_ocr_state == USBMSOCRState_processing) // [Mass Storage - OCR].
+					if (transaction_is_for_bmp && usb_ms_ocr_state == USBMSOCRState_processing) // [Mass Storage - OCR].
 					{
 						while (true)
 						{
