@@ -223,6 +223,40 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 	#endif
 }
 
+static void
+_usb_ms_sd_write_through(u32 sector_address) // Receive sector from host and writes it to the SD.
+{
+	u16 sector_byte_index = 0;
+	while (sector_byte_index < countof(sd_sector))
+	{
+		//
+		// Wait for chunk of the sector data from the host.
+		//
+
+		while (!(UEINTX & (1 << RXOUTI)));
+
+		//
+		// Copy the chunk of the sector data from host.
+		//
+
+		assert(UEBCX == USB_ENDPOINT_MS_OUT_SIZE); // Ensures that the payloads aren't varying in lengths.
+		while (UEINTX & (1 << RWAL))
+		{
+			sd_sector[sector_byte_index]  = UEDATX;
+			sector_byte_index            += 1;
+		}
+
+		//
+		// Flush the endpoint buffer.
+		//
+
+		UEINTX &= ~(1 << RXOUTI);
+		UEINTX &= ~(1 << FIFOCON);
+	}
+
+	sd_write(sector_address);
+}
+
 ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 {
 	#ifdef PIN_USB_BUSY
@@ -586,8 +620,8 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 			u8 group_number                  = command.CBWCB[6] & 0b11111;
 			u8 control                       = command.CBWCB[9];
 
-			u32 sector_count   = ((command.CBWCB[7] << 8) | command.CBWCB[8]);
-			u32 sector_address =
+			u32 transaction_sector_count         = ((command.CBWCB[7] << 8) | command.CBWCB[8]);
+			u32 transaction_sector_start_address =
 					(u32(command.CBWCB[2]) << 24) |
 					(u32(command.CBWCB[3]) << 16) |
 					(u32(command.CBWCB[4]) <<  8) |
@@ -596,7 +630,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 			if
 			(
 				!(
-					command.dCBWDataTransferLength == sector_count * FAT32_SECTOR_SIZE &&
+					command.dCBWDataTransferLength == transaction_sector_count * FAT32_SECTOR_SIZE &&
 					(command.CBWCB[0] == USBMSSCSIOpcode_read) == !!command.bmCBWFlags && // Ensures data transaction direction matches.
 					command.bCBWCBLength == 10
 				)
@@ -613,9 +647,9 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 			if (command.CBWCB[0] == USBMSSCSIOpcode_read)
 			{
 				UENUM = USB_ENDPOINT_MS_IN_INDEX;
-				for (u32 sector_index = 0; sector_index < sector_count; sector_index += 1)
+				for (u32 sector_index = 0; sector_index < transaction_sector_count; sector_index += 1)
 				{
-					sd_read(sector_address + sector_index);
+					sd_read(transaction_sector_start_address + sector_index);
 
 					u16 sector_byte_index = 0;
 					while (sector_byte_index < countof(sd_sector))
@@ -646,376 +680,340 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 					}
 				}
 			}
-			else
+			else if (transaction_sector_count)
 			{
-				u8   compressed_slot_stride = pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].compressed_slot_stride);
-				u8_2 board_dim_slots        =
+				_usb_ms_sd_write_through(transaction_sector_start_address);
+
+				//
+				// Determine whether or not we need to inspect the write transaction to do OCR.
+				//
+
+				b8   transaction_is_for_bmp  = false;
+				u16  curr_red_channel_offset = 0;
+				u8   compressed_slot_stride  = pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].compressed_slot_stride);
+				u8_2 board_dim_slots               =
 					{
 						pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.x),
 						pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.y),
 					};
 
-				for (u32 sector_index = 0; sector_index < sector_count; sector_index += 1)
+				switch (usb_ms_ocr_state)
 				{
-					//
-					// Write to SD.
-					//
-
-					u16 sector_byte_index = 0;
-					while (sector_byte_index < countof(sd_sector))
+					case USBMSOCRState_ready: // The main program is still setting up the OCR state or is reading the parsing results.
 					{
-						//
-						// Wait for chunk of the sector data from the host.
-						//
+					} break;
 
-						while (!(UEINTX & (1 << RXOUTI)));
-
-						//
-						// Copy the chunk of the sector data from host.
-						//
-
-						static_assert(USB_ENDPOINT_MS_OUT_SIZE == 64); // We want this transaction to be fast as possible, but the largest endpoint buffer size that Apple seems to support is 64.
-						assert(UEBCX == USB_ENDPOINT_MS_OUT_SIZE);     // Ensures that the payloads aren't varying in lengths.
-						while (UEINTX & (1 << RWAL))
-						{
-							sd_sector[sector_byte_index]  = UEDATX;
-							sector_byte_index            += 1;
-						}
-
-						//
-						// Flush the endpoint buffer.
-						//
-
-						UEINTX &= ~(1 << RXOUTI);
-						UEINTX &= ~(1 << FIFOCON);
-					}
-
-					sd_write(sector_address + sector_index);
-
-					/**************** [Mass Storage - OCR] ****************/
-
-					//
-					// "Determine range in sector to parse".
-					//
-
-					u16 unprocessed_red_alpha_pair_offset    = 0;
-					u8  unprocessed_red_alpha_pair_remaining = 0;
-
-					switch (usb_ms_ocr_state)
+					case USBMSOCRState_set: // Is this writing transaction the beginning of a BMP?
 					{
-						case USBMSOCRState_ready:
-						{
-							// The main program is setting up the OCR state or is reading the parsing results.
-						} break;
+						struct BMPFileHeader* bmp_file_header = (struct BMPFileHeader*)  sd_sector;
+						struct BMPDIBHeader*  bmp_dib_header  = (struct BMPDIBHeader* ) (sd_sector + sizeof(struct BMPFileHeader));
+						static_assert(sizeof(struct BMPFileHeader) + sizeof(struct BMPDIBHeader) <= sizeof(sd_sector));
 
-						case USBMSOCRState_set:
+						if
+						(
+							(transaction_sector_start_address >= FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT) &&
+							(transaction_sector_start_address - (FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT)) % FAT32_SECTORS_PER_CLUSTER == 0
+							&& bmp_file_header->bfType      == BMP_FILE_HEADER_SIGNATURE
+							&& bmp_file_header->bfOffBits   == sizeof(struct BMPFileHeader) + BMPDIBHEADER_MIN_SIZE_V5
+							&& bmp_dib_header->Size         == BMPDIBHEADER_MIN_SIZE_V5
+							&& bmp_dib_header->Planes       == 1
+							&& bmp_dib_header->BitCount     == 32
+							&& bmp_dib_header->Compression  == BMPCompression_BITFIELDS
+							&& bmp_dib_header->v2.RedMask   == 0x00'FF'00'00
+							&& bmp_dib_header->v2.GreenMask == 0x00'00'FF'00
+							&& bmp_dib_header->v2.BlueMask  == 0x00'00'00'FF
+							&& bmp_dib_header->v3.AlphaMask == 0xFF'00'00'00
+						)
 						{
-							struct BMPFileHeader* bmp_file_header = (struct BMPFileHeader*)  sd_sector;
-							struct BMPDIBHeader*  bmp_dib_header  = (struct BMPDIBHeader* ) (sd_sector + sizeof(struct BMPFileHeader));
-							static_assert(sizeof(struct BMPFileHeader) + sizeof(struct BMPDIBHeader) <= sizeof(sd_sector));
-
-							if // Sector is beginning of BMP?
+							if
 							(
-								sector_index == 0
-								&& (sector_address >= FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT)
-								&& (sector_address - (FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT)) % FAT32_SECTORS_PER_CLUSTER == 0
-								&& bmp_file_header->bfType      == BMP_FILE_HEADER_SIGNATURE
-								&& bmp_file_header->bfOffBits   == sizeof(struct BMPFileHeader) + BMPDIBHEADER_MIN_SIZE_V5
-								&& bmp_dib_header->Size         == BMPDIBHEADER_MIN_SIZE_V5
-								&& bmp_dib_header->Planes       == 1
-								&& bmp_dib_header->BitCount     == 32
-								&& bmp_dib_header->Compression  == BMPCompression_BITFIELDS
-								&& bmp_dib_header->v2.RedMask   == 0x00'FF'00'00
-								&& bmp_dib_header->v2.GreenMask == 0x00'00'FF'00
-								&& bmp_dib_header->v2.BlueMask  == 0x00'00'00'FF
-								&& bmp_dib_header->v3.AlphaMask == 0xFF'00'00'00
+								u32( bmp_dib_header->Width ) != u32(board_dim_slots.x - 1) * compressed_slot_stride + MASK_DIM ||
+								u32(-bmp_dib_header->Height) != u32(board_dim_slots.y - 1) * compressed_slot_stride + MASK_DIM
 							)
 							{
-								if
-								(
-									u32( bmp_dib_header->Width ) != u32(board_dim_slots.x - 1) * compressed_slot_stride + MASK_DIM ||
-									u32(-bmp_dib_header->Height) != u32(board_dim_slots.y - 1) * compressed_slot_stride + MASK_DIM
-								)
-								{
-									error(); // Received BMP is not conforming to the expect dimensions for the wordgame.
-								}
-
-								// Color channels are ordered BGRA in memory; +2 skips blue and green bytes.
-								unprocessed_red_alpha_pair_offset = sizeof(struct BMPFileHeader) + sizeof(struct BMPDIBHeader) + 2;
-
-								// First chunk of the sector is just BMP header stuff; there should be 93 red-alpha pairs remaining in the sector.
-								unprocessed_red_alpha_pair_remaining = (FAT32_SECTOR_SIZE - sizeof(struct BMPFileHeader) - sizeof(struct BMPDIBHeader)) / sizeof(struct BMPPixel);
-
-								usb_ms_ocr_state = USBMSOCRState_processing;
+								error(); // Received BMP is not conforming to the expect dimensions for the wordgame.
 							}
-						} break;
 
-						case USBMSOCRState_processing:
-						{
-							unprocessed_red_alpha_pair_offset    = 0;
-							unprocessed_red_alpha_pair_remaining = FAT32_SECTOR_SIZE / sizeof(struct BMPPixel);
+							usb_ms_ocr_state        = USBMSOCRState_processing;
+							curr_red_channel_offset = sizeof(struct BMPFileHeader) + sizeof(struct BMPDIBHeader) + 2; // Color channels are ordered BGRA in memory; +2 skips blue and green bytes.
+						}
+					} break;
 
-							u32 pixels_in_bmp_row_processed      = (u32(_usb_ms_ocr_slot_topdown_board_coords.x) * compressed_slot_stride + _usb_ms_ocr_slot_topdown_pixel_coords.x);
-							u32 bmp_width                        = (u32(board_dim_slots.x - 1) * compressed_slot_stride + MASK_DIM);
-							u32 total_amount_of_pixels_remaining = (u32(board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y) * compressed_slot_stride + MASK_DIM - _usb_ms_ocr_slot_topdown_pixel_coords.y) * bmp_width - pixels_in_bmp_row_processed;
-
-							if (unprocessed_red_alpha_pair_remaining > total_amount_of_pixels_remaining)
-							{
-								unprocessed_red_alpha_pair_remaining = total_amount_of_pixels_remaining;
-							}
-						} break;
-					}
-
-					//
-					// Process sector.
-					//
-
-					if (usb_ms_ocr_state == USBMSOCRState_processing)
+					case USBMSOCRState_processing: // Does this sector look like BMP pixel data?
 					{
-						//
-						// "Verify sector".
-						//
-
-						b8 sector_is_pixel_data = true;
-						for (u8 pair_index = 0; pair_index < unprocessed_red_alpha_pair_remaining; pair_index += 1)
+						u32 pixels_in_bmp_row_processed      = u32(_usb_ms_ocr_slot_topdown_board_coords.x) * compressed_slot_stride + _usb_ms_ocr_slot_topdown_pixel_coords.x;
+						u32 bmp_width                        = u32(board_dim_slots.x - 1) * compressed_slot_stride + MASK_DIM;
+						u32 total_amount_of_pixels_remaining = (u32(board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y) * compressed_slot_stride + MASK_DIM - _usb_ms_ocr_slot_topdown_pixel_coords.y) * bmp_width - pixels_in_bmp_row_processed;
+						u8  pixels_to_verify                 = FAT32_SECTOR_SIZE / sizeof(struct BMPPixel);
+						if (pixels_to_verify > total_amount_of_pixels_remaining)
 						{
-							if (sd_sector[unprocessed_red_alpha_pair_offset + pair_index * sizeof(struct BMPPixel) + 1] != 0xFF)
+							pixels_to_verify = total_amount_of_pixels_remaining;
+						}
+
+						transaction_is_for_bmp = true;
+						for (u8 pixel_index = 0; pixel_index < pixels_to_verify; pixel_index += 1)
+						{
+							if (sd_sector[pixel_index * sizeof(struct BMPPixel) + 1] != 0xFF) // Alpha should always be set.
 							{
-								sector_is_pixel_data = false;
+								transaction_is_for_bmp = false;
 								break;
 							}
 						}
+					} break;
+				}
 
-						if (sector_is_pixel_data)
+				//
+				// Perform write transaction.
+				//
+
+				static u16 TEMP_crc = 0;
+
+				for
+				(
+					u32 sector_address = transaction_sector_start_address;
+					sector_address < transaction_sector_start_address + transaction_sector_count;
+					sector_address += 1
+				)
+				{
+					if (sector_address != transaction_sector_start_address) // We already did the first write in order to inspect the sector.
+					{
+						_usb_ms_sd_write_through(sector_address);
+					}
+
+					if (usb_ms_ocr_state == USBMSOCRState_processing) // [Mass Storage - OCR].
+					{
+						while (true)
 						{
-							static u16 TEMP_crc = 0;
+							//
+							// Eat pixels.
+							//
 
-							while (unprocessed_red_alpha_pair_remaining)
+							if (_usb_ms_ocr_slot_topdown_pixel_coords.x < MASK_DIM && _usb_ms_ocr_slot_topdown_pixel_coords.y < MASK_DIM) // Eat slot pixels.
 							{
 								//
-								// Eat pixels.
+								// Extract activated slot pixels.
 								//
 
-								if (_usb_ms_ocr_slot_topdown_pixel_coords.x < MASK_DIM && _usb_ms_ocr_slot_topdown_pixel_coords.y < MASK_DIM) // Eat slot pixels.
+								while (_usb_ms_ocr_slot_topdown_pixel_coords.x < MASK_DIM && curr_red_channel_offset < FAT32_SECTOR_SIZE)
 								{
-									//
-									// Extract activated slot pixels.
-									//
+									u8* byte = &_usb_ms_ocr_slot_pixel_row[_usb_ms_ocr_slot_topdown_pixel_coords.x / 8];
+									u8  bit  =                  u64(1) << (_usb_ms_ocr_slot_topdown_pixel_coords.x % 8);
+									static_assert(MASK_DIM == 64);
 
-									while (_usb_ms_ocr_slot_topdown_pixel_coords.x < MASK_DIM && unprocessed_red_alpha_pair_remaining)
+									if (sd_sector[curr_red_channel_offset] <= MASK_ACTIVATION_THRESHOLD)
 									{
-										u8* byte = &_usb_ms_ocr_slot_pixel_row[_usb_ms_ocr_slot_topdown_pixel_coords.x / 8];
-										u8  bit  =                  u64(1) << (_usb_ms_ocr_slot_topdown_pixel_coords.x % 8);
-										static_assert(MASK_DIM == 64);
-
-										if (sd_sector[unprocessed_red_alpha_pair_offset] <= MASK_ACTIVATION_THRESHOLD)
-										{
-											*byte |= bit;
-										}
-										else
-										{
-											*byte &= ~bit;
-										}
-
-										unprocessed_red_alpha_pair_remaining    -= 1;
-										unprocessed_red_alpha_pair_offset       += sizeof(struct BMPPixel);
-										_usb_ms_ocr_slot_topdown_pixel_coords.x += 1;
+										*byte |= bit;
+									}
+									else
+									{
+										*byte &= ~bit;
 									}
 
+									curr_red_channel_offset                 += sizeof(struct BMPPixel);
+									_usb_ms_ocr_slot_topdown_pixel_coords.x += 1;
+								}
+
+								//
+								// Process the complete set of slot pixels.
+								//
+
+								if (_usb_ms_ocr_slot_topdown_pixel_coords.x == MASK_DIM)
+								{
 									//
-									// Process the complete set of slot pixels.
+									// Give out points for each letter.
 									//
 
-									if (_usb_ms_ocr_slot_topdown_pixel_coords.x == MASK_DIM)
+									u16 probing_mask_u8_stream_index  = _usb_ms_ocr_mask_u8_stream_index;
+									u16 probing_mask_u16_stream_index = _usb_ms_ocr_mask_u16_stream_index;
+									u16 probing_runlength_remaining   = _usb_ms_ocr_runlength_remaining;
+
+									for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
 									{
-										//
-										// Give out points for each letter.
-										//
-
-										u16 probing_mask_u8_stream_index  = _usb_ms_ocr_mask_u8_stream_index;
-										u16 probing_mask_u16_stream_index = _usb_ms_ocr_mask_u16_stream_index;
-										u16 probing_runlength_remaining   = _usb_ms_ocr_runlength_remaining;
-
-										for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
+										static_assert(MASK_DIM % 8 == 0);
+										for (u8 byte_index = 0; byte_index < MASK_DIM / 8; byte_index += 1)
 										{
-											static_assert(MASK_DIM % 8 == 0);
-											for (u8 byte_index = 0; byte_index < MASK_DIM / 8; byte_index += 1)
+											//
+											// Get mask byte.
+											//
+
+											u8 mask_byte          = 0;
+											u8 mask_bits_unfilled = 8;
+
+											while (mask_bits_unfilled)
 											{
 												//
-												// Get mask byte.
+												// Refill runlength.
 												//
 
-												u8 mask_byte          = 0;
-												u8 mask_bits_unfilled = 8;
-
-												while (mask_bits_unfilled)
+												if (!probing_runlength_remaining)
 												{
 													//
-													// Refill runlength.
+													// Read the next byte-sized run-length.
+													//
+
+													assert(probing_mask_u8_stream_index < countof(MASK_U8_STREAM));
+													probing_runlength_remaining   = pgm_u8(MASK_U8_STREAM[probing_mask_u8_stream_index]);
+													probing_mask_u8_stream_index += 1;
+
+													//
+													// If we read a zero, the run-length is then word-sized.
 													//
 
 													if (!probing_runlength_remaining)
 													{
-														//
-														// Read the next byte-sized run-length.
-														//
-
-														assert(probing_mask_u8_stream_index < countof(MASK_U8_STREAM));
-														probing_runlength_remaining   = pgm_u8(MASK_U8_STREAM[probing_mask_u8_stream_index]);
-														probing_mask_u8_stream_index += 1;
-
-														//
-														// If we read a zero, the run-length is then word-sized.
-														//
-
-														if (!probing_runlength_remaining)
-														{
-															assert(probing_mask_u16_stream_index < countof(MASK_U16_STREAM));
-															probing_runlength_remaining    = pgm_u16(MASK_U16_STREAM[probing_mask_u16_stream_index]);
-															probing_mask_u16_stream_index += 1;
-														}
+														assert(probing_mask_u16_stream_index < countof(MASK_U16_STREAM));
+														probing_runlength_remaining    = pgm_u16(MASK_U16_STREAM[probing_mask_u16_stream_index]);
+														probing_mask_u16_stream_index += 1;
 													}
-
-													//
-													// Shift in bits of mask.
-													//
-
-													u8 shift_amount =
-														mask_bits_unfilled < probing_runlength_remaining
-															? mask_bits_unfilled
-															: probing_runlength_remaining;
-
-													if (probing_mask_u8_stream_index & 1)
-													{
-														mask_byte = mask_byte >> shift_amount; // Shift in zeros.
-													}
-													else
-													{
-														mask_byte = ~(u8(~mask_byte) >> shift_amount); // Shift in ones.
-													}
-
-													mask_bits_unfilled          -= shift_amount;
-													probing_runlength_remaining -= shift_amount;
 												}
 
 												//
-												// Compare.
+												// Shift in bits of mask.
 												//
 
-												_usb_ms_ocr_accumulated_scores[_usb_ms_ocr_slot_topdown_board_coords.x][letter] += count_cleared_bits(_usb_ms_ocr_slot_pixel_row[byte_index] ^ mask_byte);
-											}
-										}
+												u8 shift_amount =
+													mask_bits_unfilled < probing_runlength_remaining
+														? mask_bits_unfilled
+														: probing_runlength_remaining;
 
-										//
-										// Update mask state.
-										//
-
-										if (_usb_ms_ocr_slot_topdown_board_coords.x == board_dim_slots.x - 1) // On last column of slots.
-										{
-											if (_usb_ms_ocr_slot_topdown_pixel_coords.y == MASK_DIM - 1) // On slots' last row of pixels.
-											{
-												for (u8 slot_coord_x = 0; slot_coord_x < board_dim_slots.x; slot_coord_x += 1)
+												if (probing_mask_u8_stream_index & 1)
 												{
-													for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
-													{
-														TEMP_crc = _crc16_update(TEMP_crc, _usb_ms_ocr_accumulated_scores[slot_coord_x][letter]);
-													}
+													mask_byte = mask_byte >> shift_amount; // Shift in zeros.
 												}
-
-												//
-												// Pick the best matching letters.
-												//
-
-												for (u8 slot_coord_x = 0; slot_coord_x < board_dim_slots.x; slot_coord_x += 1)
+												else
 												{
-													u16 highest_score = 0;
-													for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
-													{
-														u16 letter_score = _usb_ms_ocr_accumulated_scores[slot_coord_x][letter];
-														if (highest_score < letter_score)
-														{
-															highest_score = letter_score;
-															usb_ms_ocr_grid[board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y][slot_coord_x] = letter;
-														}
-													}
+													mask_byte = ~(u8(~mask_byte) >> shift_amount); // Shift in ones.
 												}
 
-												//
-												// Reset state to perform OCR again for the next row of slots in the board.
-												//
-
-												memset(_usb_ms_ocr_accumulated_scores, 0, sizeof(_usb_ms_ocr_accumulated_scores));
-
-												_usb_ms_ocr_mask_u8_stream_index  = 0;
-												_usb_ms_ocr_mask_u16_stream_index = 0;
-												_usb_ms_ocr_runlength_remaining   = 0;
-												assert(probing_mask_u8_stream_index  == countof(MASK_U8_STREAM));
-												assert(probing_mask_u16_stream_index == countof(MASK_U16_STREAM));
-												assert(probing_runlength_remaining   == 0);
+												mask_bits_unfilled          -= shift_amount;
+												probing_runlength_remaining -= shift_amount;
 											}
-											else // Update location in stream so we'll be comparing with the next set of rows in the masks now.
-											{
-												_usb_ms_ocr_mask_u8_stream_index  = probing_mask_u8_stream_index;
-												_usb_ms_ocr_mask_u16_stream_index = probing_mask_u16_stream_index;
-												_usb_ms_ocr_runlength_remaining   = probing_runlength_remaining;
-											}
+
+											//
+											// Compare.
+											//
+
+											_usb_ms_ocr_accumulated_scores[_usb_ms_ocr_slot_topdown_board_coords.x][letter] += count_cleared_bits(_usb_ms_ocr_slot_pixel_row[byte_index] ^ mask_byte);
 										}
 									}
-								}
-								else // Eat padding pixels.
-								{
-									u8 padding =
-										_usb_ms_ocr_slot_topdown_board_coords.x == board_dim_slots.x - 1 // On last column of slots?
-											? MASK_DIM               - _usb_ms_ocr_slot_topdown_pixel_coords.x
-											: compressed_slot_stride - _usb_ms_ocr_slot_topdown_pixel_coords.x;
 
-									if (padding > unprocessed_red_alpha_pair_remaining)
+									//
+									// Update mask state.
+									//
+
+									if (_usb_ms_ocr_slot_topdown_board_coords.x == board_dim_slots.x - 1) // On last column of slots.
 									{
-										padding = unprocessed_red_alpha_pair_remaining;
-									}
-
-									unprocessed_red_alpha_pair_remaining    -= padding;
-									unprocessed_red_alpha_pair_offset       += padding * sizeof(struct BMPPixel);
-									_usb_ms_ocr_slot_topdown_pixel_coords.x += padding;
-								}
-
-								//
-								// Update coordinates.
-								//
-
-								if (_usb_ms_ocr_slot_topdown_pixel_coords.x == compressed_slot_stride) // Move to the next horizontally adjacent slot.
-								{
-									_usb_ms_ocr_slot_topdown_board_coords.x += 1;
-									_usb_ms_ocr_slot_topdown_pixel_coords.x  = 0;
-								}
-								else if (_usb_ms_ocr_slot_topdown_pixel_coords.x == MASK_DIM && _usb_ms_ocr_slot_topdown_board_coords.x == board_dim_slots.x - 1) // On right side of BMP image.
-								{
-									_usb_ms_ocr_slot_topdown_board_coords.x  = 0;
-									_usb_ms_ocr_slot_topdown_pixel_coords.x  = 0;
-									_usb_ms_ocr_slot_topdown_pixel_coords.y += 1;
-
-									if (_usb_ms_ocr_slot_topdown_pixel_coords.y == compressed_slot_stride) // Move onto the next row of slots.
-									{
-										_usb_ms_ocr_slot_topdown_board_coords.y += 1;
-										_usb_ms_ocr_slot_topdown_pixel_coords.y  = 0;
-									}
-									else if (_usb_ms_ocr_slot_topdown_pixel_coords.y == MASK_DIM && _usb_ms_ocr_slot_topdown_board_coords.y == board_dim_slots.y - 1) // Finally, at the end of BMP image.
-									{
-										_usb_ms_ocr_slot_topdown_board_coords.y = 0;
-										_usb_ms_ocr_slot_topdown_pixel_coords.y = 0;
-
-										assert(unprocessed_red_alpha_pair_remaining == 0);
-										usb_ms_ocr_state = USBMSOCRState_ready;
-										debug_u16(TEMP_crc);
-										if (TEMP_crc != 0b1010'0101'1101'0110)
+										if (_usb_ms_ocr_slot_topdown_pixel_coords.y == MASK_DIM - 1) // On slots' last row of pixels.
 										{
-											debug_u16(0xFFFF);
+											for (u8 slot_coord_x = 0; slot_coord_x < board_dim_slots.x; slot_coord_x += 1)
+											{
+												for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
+												{
+													TEMP_crc = _crc16_update(TEMP_crc, _usb_ms_ocr_accumulated_scores[slot_coord_x][letter]);
+												}
+											}
+
+											//
+											// Pick the best matching letters.
+											//
+
+											for (u8 slot_coord_x = 0; slot_coord_x < board_dim_slots.x; slot_coord_x += 1)
+											{
+												u16 highest_score = 0;
+												for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
+												{
+													u16 letter_score = _usb_ms_ocr_accumulated_scores[slot_coord_x][letter];
+													if (highest_score < letter_score)
+													{
+														highest_score = letter_score;
+														usb_ms_ocr_grid[board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y][slot_coord_x] = letter;
+													}
+												}
+											}
+
+											//
+											// Reset state to perform OCR again for the next row of slots in the board.
+											//
+
+											memset(_usb_ms_ocr_accumulated_scores, 0, sizeof(_usb_ms_ocr_accumulated_scores));
+
+											_usb_ms_ocr_mask_u8_stream_index  = 0;
+											_usb_ms_ocr_mask_u16_stream_index = 0;
+											_usb_ms_ocr_runlength_remaining   = 0;
+											assert(probing_mask_u8_stream_index  == countof(MASK_U8_STREAM));
+											assert(probing_mask_u16_stream_index == countof(MASK_U16_STREAM));
+											assert(probing_runlength_remaining   == 0);
 										}
-										break;
+										else // Update location in stream so we'll be comparing with the next set of rows in the masks now.
+										{
+											_usb_ms_ocr_mask_u8_stream_index  = probing_mask_u8_stream_index;
+											_usb_ms_ocr_mask_u16_stream_index = probing_mask_u16_stream_index;
+											_usb_ms_ocr_runlength_remaining   = probing_runlength_remaining;
+										}
 									}
 								}
 							}
+							else // Eat padding pixels.
+							{
+								u8 padding =
+									_usb_ms_ocr_slot_topdown_board_coords.x == board_dim_slots.x - 1 // On last column of slots?
+										? MASK_DIM               - _usb_ms_ocr_slot_topdown_pixel_coords.x
+										: compressed_slot_stride - _usb_ms_ocr_slot_topdown_pixel_coords.x;
+
+								u8 remaining_unprocessed_pixels_in_sector = (FAT32_SECTOR_SIZE - curr_red_channel_offset) / sizeof(struct BMPPixel); // This math also happens to work for the first sector of the BMP!
+								if (padding > remaining_unprocessed_pixels_in_sector)
+								{
+									padding = remaining_unprocessed_pixels_in_sector;
+								}
+
+								curr_red_channel_offset                 += padding * sizeof(struct BMPPixel);
+								_usb_ms_ocr_slot_topdown_pixel_coords.x += padding;
+							}
+
+							//
+							// Update coordinates.
+							//
+
+							if (_usb_ms_ocr_slot_topdown_pixel_coords.x == compressed_slot_stride) // Move to the next horizontally adjacent slot.
+							{
+								_usb_ms_ocr_slot_topdown_board_coords.x += 1;
+								_usb_ms_ocr_slot_topdown_pixel_coords.x  = 0;
+							}
+							else if (_usb_ms_ocr_slot_topdown_pixel_coords.x == MASK_DIM && _usb_ms_ocr_slot_topdown_board_coords.x == board_dim_slots.x - 1) // On right side of BMP image.
+							{
+								_usb_ms_ocr_slot_topdown_board_coords.x  = 0;
+								_usb_ms_ocr_slot_topdown_pixel_coords.x  = 0;
+								_usb_ms_ocr_slot_topdown_pixel_coords.y += 1;
+
+								if (_usb_ms_ocr_slot_topdown_pixel_coords.y == compressed_slot_stride) // Move onto the next row of slots.
+								{
+									_usb_ms_ocr_slot_topdown_board_coords.y += 1;
+									_usb_ms_ocr_slot_topdown_pixel_coords.y  = 0;
+								}
+								else if (_usb_ms_ocr_slot_topdown_pixel_coords.y == MASK_DIM && _usb_ms_ocr_slot_topdown_board_coords.y == board_dim_slots.y - 1) // Finally, at the end of BMP image.
+								{
+									_usb_ms_ocr_slot_topdown_board_coords.y = 0;
+									_usb_ms_ocr_slot_topdown_pixel_coords.y = 0;
+
+									usb_ms_ocr_state = USBMSOCRState_ready;
+									debug_u16(TEMP_crc);
+									if (TEMP_crc != 0b1010'0101'1101'0110)
+									{
+										debug_u16(0xFFFF);
+									}
+
+									break;
+								}
+							}
+
+							assert(curr_red_channel_offset <= FAT32_SECTOR_SIZE);
+							if (curr_red_channel_offset == FAT32_SECTOR_SIZE)
+							{
+								break;
+							}
 						}
+
+						curr_red_channel_offset = 0;
 					}
 				}
 			}
@@ -1128,7 +1126,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 					b8 partial_medium_indicator = (command.CBWCB[8] & 1); // "PMI".
 					u8 control                  =  command.CBWCB[9];
 
-					u32 sector_address =
+					u32 sector_start_address =
 						(u32(command.CBWCB[2]) << 24) |
 						(u32(command.CBWCB[3]) << 16) |
 						(u32(command.CBWCB[4]) <<  8) |
@@ -1142,7 +1140,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 					if
 					(
 						!(
-							!sector_address &&
+							!sector_start_address &&
 							!partial_medium_indicator && // We send information about the last addressable logical block.
 							!control
 						)
