@@ -1955,24 +1955,22 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	// Buffer sizes must be a power of two for the "_usb_mouse_X_masked" macros.
 	static_assert(countof(_usb_mouse_command_buffer) && !(countof(_usb_mouse_command_buffer) & (countof(_usb_mouse_command_buffer) - 1)));
 
-	static_assert(MASK_DIM == 64);
-	static volatile enum USBMSOCRState      usb_ms_ocr_state          = {0};
-	static volatile enum WordGameBoard      usb_ms_ocr_wordgame_board = {0};
-	static volatile enum Letter             usb_ms_ocr_grid[WORDGAME_BOARD_MAX_DIM_Y][WORDGAME_BOARD_MAX_DIM_X] = {0};
-
 	#define MAKE(IDENTIFIER_NAME, PRINT_NAME, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, SLOT_DIM, UNCOMPRESSED_SLOT_STRIDE, COMPRESSED_SLOT_STRIDE, ...) \
-		static_assert(COMPRESSED_SLOT_STRIDE < 256);
+		static_assert(COMPRESSED_SLOT_STRIDE < 256); // To ensure _usb_ms_ocr_slot_topdown_pixel_coords stays byte-sized.
 	WORDGAME_BOARD_XMDT(MAKE)
 	#undef MAKE
 
-	static u8_2                             _usb_ms_ocr_slot_topdown_board_coords = {0};
-	static u8_2                             _usb_ms_ocr_slot_topdown_pixel_coords = {0};
+	static volatile enum USBMSOCRState usb_ms_ocr_state                                                    = {0};
+	static volatile enum WordGameBoard usb_ms_ocr_wordgame_board                                           = {0};
+	static volatile enum Letter        usb_ms_ocr_grid[WORDGAME_BOARD_MAX_DIM_Y][WORDGAME_BOARD_MAX_DIM_X] = {0};
 
-	static u16                              _usb_ms_ocr_accumulated_scores_for_single_row_of_slots_in_board[WORDGAME_BOARD_MAX_DIM_X][Letter_COUNT] = {0};
-	static union { u64 bits; u8 bytes[8]; } _usb_ms_ocr_single_row_of_pixels_for_a_single_slot = {0};
-	static u16                              _usb_ms_ocr_mask_u8_stream_index                             = 0;
-	static u16                              _usb_ms_ocr_mask_u16_stream_index                            = 0;
-	static u16                              _usb_ms_ocr_runlength_remaining                              = 0;
+	static u8_2 _usb_ms_ocr_slot_topdown_board_coords                                  = {0};
+	static u8_2 _usb_ms_ocr_slot_topdown_pixel_coords                                  = {0};
+	static u16  _usb_ms_ocr_accumulated_scores[WORDGAME_BOARD_MAX_DIM_X][Letter_COUNT] = {0};
+	static u8   _usb_ms_ocr_slot_pixel_row[MASK_DIM / 8]                               = {0};
+	static u16  _usb_ms_ocr_mask_u8_stream_index                                       = 0;
+	static u16  _usb_ms_ocr_mask_u16_stream_index                                      = 0;
+	static u16  _usb_ms_ocr_runlength_remaining                                        = 0;
 
 	#if USB_MS_ENABLE
 		static struct USBMSCommandStatusWrapper _usb_ms_status      = { .dCSWSignature = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE };

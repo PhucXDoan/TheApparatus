@@ -28,8 +28,8 @@
 #include "misc.c"
 #include "spi.c"
 #include "sd.c"
-#include "usb.c"
 #include "lcd.c"
+#include "usb.c"
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE HaltSource_diplomat
 
