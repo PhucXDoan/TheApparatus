@@ -643,7 +643,7 @@ main(int argc, char** argv)
 					{
 						printf
 						(
-							"Average Test Region RGB of %.*s%*s: Delta(%.4f, %.4f, %.4f) : Expected(%.4f, %.4f, %.4f) @ (%d, %d) (%dx%d).\n",
+							"Average Test Region RGB of %.*s%*s: Delta(%.4f, %.4f, %.4f) : Found(%.4f, %.4f, %.4f) : Expected(%.4f, %.4f, %.4f) @ (%d, %d) (%dx%d).\n",
 							i32(WORDGAME_BOARD_INFO[board].name.length), WORDGAME_BOARD_INFO[board].name.data,
 							i32(margin - WORDGAME_BOARD_INFO[board].name.length), "",
 							fabs(accumulated_unknown_game_test_region_rgbs[board].x / unknown_games - WORDGAME_BOARD_INFO[board].test_region_rgb.x),
@@ -652,6 +652,9 @@ main(int argc, char** argv)
 							accumulated_unknown_game_test_region_rgbs[board].x / unknown_games,
 							accumulated_unknown_game_test_region_rgbs[board].y / unknown_games,
 							accumulated_unknown_game_test_region_rgbs[board].z / unknown_games,
+							WORDGAME_BOARD_INFO[board].test_region_rgb.x,
+							WORDGAME_BOARD_INFO[board].test_region_rgb.y,
+							WORDGAME_BOARD_INFO[board].test_region_rgb.z,
 							WORDGAME_BOARD_INFO[board].test_region_pos.x,
 							WORDGAME_BOARD_INFO[board].test_region_pos.y,
 							WORDGAME_BOARD_INFO[board].test_region_dim.x,
@@ -733,6 +736,7 @@ main(int argc, char** argv)
 								{
 									for (i32 slot_coord_x = 0; slot_coord_x < WORDGAME_BOARD_INFO[board].dim_slots.x; slot_coord_x += 1)
 									{
+										b8 found_activated_pixel = false;
 										if (!slot_coord_excluded(board, slot_coord_x, slot_coord_y))
 										{
 											for (i32 compressed_slot_px_y = 0; compressed_slot_px_y < MASK_DIM; compressed_slot_px_y += 1)
@@ -741,8 +745,8 @@ main(int argc, char** argv)
 												{
 													i32_2 uncompressed_board_bmp_dim =
 														{
-															(WORDGAME_BOARD_INFO[board].dim_slots.x - 1) * WORDGAME_BOARD_INFO[board].uncompressed_slot_stride + WORDGAME_BOARD_INFO[board].slot_dim,
-															(WORDGAME_BOARD_INFO[board].dim_slots.y - 1) * WORDGAME_BOARD_INFO[board].uncompressed_slot_stride + WORDGAME_BOARD_INFO[board].slot_dim,
+															i32((WORDGAME_BOARD_INFO[board].dim_slots.x - 1) * WORDGAME_BOARD_INFO[board].uncompressed_slot_stride + WORDGAME_BOARD_INFO[board].slot_dim),
+															i32((WORDGAME_BOARD_INFO[board].dim_slots.y - 1) * WORDGAME_BOARD_INFO[board].uncompressed_slot_stride + WORDGAME_BOARD_INFO[board].slot_dim),
 														};
 													i32_2 compressed_slot_abs_px_pos =
 														{
@@ -766,37 +770,45 @@ main(int argc, char** argv)
 															+ WORDGAME_BOARD_INFO[board].pos.x + i32(uv.x * uncompressed_board_bmp_dim.x)
 														];
 
-													u8 value = pixel.r <= MASK_ACTIVATION_THRESHOLD ? 255 : 0;
+													u8 value = 0;
+													if (pixel.r <= MASK_ACTIVATION_THRESHOLD)
+													{
+														found_activated_pixel = true;
+														value                 = 255;
+													}
 													compressed_slot.data[compressed_slot_px_y * compressed_slot.dim.x + compressed_slot_px_x] =
 														(struct BMPPixel) { value, value, value, 255 };
 												}
 											}
 
-											struct StrBuf slot_file_path = StrBuf(256);
-											strbuf_str (&slot_file_path, cli.output_dir_path.str);
-											strbuf_char(&slot_file_path, '\\');
-											strbuf_str (&slot_file_path, WORDGAME_BOARD_INFO[board].name);
-											strbuf_cstr(&slot_file_path, " (");
-											strbuf_i64 (&slot_file_path, slot_coord_x);
-											strbuf_cstr(&slot_file_path, ", ");
-											strbuf_i64 (&slot_file_path, slot_coord_y);
-											strbuf_cstr(&slot_file_path, ") (");
-											for (i32 i = 0; i < 4; i += 1)
+											if (found_activated_pixel)
 											{
-												static const char CHARACTERS[] =
-													{
-														'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-														'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
-														'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-														'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
-														'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-														'-', '_'
-													};
-												strbuf_char(&slot_file_path, CHARACTERS[__rdtsc() % countof(CHARACTERS)]);
+												struct StrBuf slot_file_path = StrBuf(256);
+												strbuf_str (&slot_file_path, cli.output_dir_path.str);
+												strbuf_char(&slot_file_path, '\\');
+												strbuf_str (&slot_file_path, WORDGAME_BOARD_INFO[board].name);
+												strbuf_cstr(&slot_file_path, " (");
+												strbuf_i64 (&slot_file_path, slot_coord_x);
+												strbuf_cstr(&slot_file_path, ", ");
+												strbuf_i64 (&slot_file_path, slot_coord_y);
+												strbuf_cstr(&slot_file_path, ") (");
+												for (i32 i = 0; i < 4; i += 1)
+												{
+													static const char CHARACTERS[] =
+														{
+															'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+															'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+															'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+															'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+															'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+															'-', '_'
+														};
+													strbuf_char(&slot_file_path, CHARACTERS[__rdtsc() % countof(CHARACTERS)]);
+												}
+												strbuf_cstr(&slot_file_path, ") ");
+												strbuf_cstr(&slot_file_path, iterator_state.finder_data.cFileName);
+												bmp_export(compressed_slot, slot_file_path.str);
 											}
-											strbuf_cstr(&slot_file_path, ") ");
-											strbuf_cstr(&slot_file_path, iterator_state.finder_data.cFileName);
-											bmp_export(compressed_slot, slot_file_path.str);
 										}
 									}
 								}

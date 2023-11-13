@@ -767,8 +767,6 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 				// Perform write transaction.
 				//
 
-				static u16 TEMP_crc = 0;
-
 				for
 				(
 					u32 sector_address = transaction_sector_start_address;
@@ -829,6 +827,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 									u16 probing_runlength_remaining   = _usb_ms_ocr_runlength_remaining;
 
 									for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
+									//for (enum Letter letter = {1}; letter <= Letter_z; letter += 1)
 									{
 										static_assert(MASK_DIM % 8 == 0);
 										for (u8 byte_index = 0; byte_index < MASK_DIM / 8; byte_index += 1)
@@ -895,8 +894,42 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 											//
 
 											_usb_ms_ocr_accumulated_scores[_usb_ms_ocr_slot_topdown_board_coords.x][letter] += count_cleared_bits(_usb_ms_ocr_slot_pixel_row[byte_index] ^ mask_byte);
+
+											if (_usb_ms_ocr_slot_pixel_row[byte_index])
+											{
+												_usb_ms_ocr_activated_slot |= 1 << _usb_ms_ocr_slot_topdown_board_coords.x;
+											}
 										}
 									}
+
+									//{
+									//	u16 pixels_left = MASK_DIM * (Letter_COUNT - (Letter_z + 1));
+									//	while (pixels_left)
+									//	{
+									//		if (!probing_runlength_remaining)
+									//		{
+									//			assert(probing_mask_u8_stream_index < countof(MASK_U8_STREAM));
+									//			probing_runlength_remaining   = pgm_u8(MASK_U8_STREAM[probing_mask_u8_stream_index]);
+									//			probing_mask_u8_stream_index += 1;
+
+									//			if (!probing_runlength_remaining)
+									//			{
+									//				assert(probing_mask_u16_stream_index < countof(MASK_U16_STREAM));
+									//				probing_runlength_remaining    = pgm_u16(MASK_U16_STREAM[probing_mask_u16_stream_index]);
+									//				probing_mask_u16_stream_index += 1;
+									//			}
+									//		}
+
+									//		u16 shift_amount =
+									//			pixels_left < probing_runlength_remaining
+									//				? pixels_left
+									//				: probing_runlength_remaining;
+
+									//		pixels_left                 -= shift_amount;
+									//		probing_runlength_remaining -= shift_amount;
+									//	}
+									//}
+
 
 									//
 									// Update mask state.
@@ -906,30 +939,29 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 									{
 										if (_usb_ms_ocr_slot_topdown_pixel_coords.y == MASK_DIM - 1) // On slots' last row of pixels.
 										{
-											for (u8 slot_coord_x = 0; slot_coord_x < board_dim_slots.x; slot_coord_x += 1)
-											{
-												for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
-												{
-													TEMP_crc = _crc16_update(TEMP_crc, _usb_ms_ocr_accumulated_scores[slot_coord_x][letter]);
-												}
-											}
-
 											//
 											// Pick the best matching letters.
 											//
 
 											for (u8 slot_coord_x = 0; slot_coord_x < board_dim_slots.x; slot_coord_x += 1)
 											{
-												u16 highest_score = 0;
-												for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
+												enum Letter best_letter = Letter_null;
+
+												if (_usb_ms_ocr_activated_slot & (1 << slot_coord_x))
 												{
-													u16 letter_score = _usb_ms_ocr_accumulated_scores[slot_coord_x][letter];
-													if (highest_score < letter_score)
+													u16 highest_score = 0;
+													for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
 													{
-														highest_score = letter_score;
-														usb_ms_ocr_grid[board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y][slot_coord_x] = letter;
+														u16 letter_score = _usb_ms_ocr_accumulated_scores[slot_coord_x][letter];
+														if (highest_score < letter_score)
+														{
+															highest_score = letter_score;
+															best_letter   = letter;
+														}
 													}
 												}
+
+												usb_ms_ocr_grid[board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y][slot_coord_x] = best_letter;
 											}
 
 											//
@@ -937,7 +969,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 											//
 
 											memset(_usb_ms_ocr_accumulated_scores, 0, sizeof(_usb_ms_ocr_accumulated_scores));
-
+											_usb_ms_ocr_activated_slot        = 0;
 											_usb_ms_ocr_mask_u8_stream_index  = 0;
 											_usb_ms_ocr_mask_u16_stream_index = 0;
 											_usb_ms_ocr_runlength_remaining   = 0;
@@ -995,14 +1027,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 								{
 									_usb_ms_ocr_slot_topdown_board_coords.y = 0;
 									_usb_ms_ocr_slot_topdown_pixel_coords.y = 0;
-
-									usb_ms_ocr_state = USBMSOCRState_ready;
-									debug_u16(TEMP_crc);
-									if (TEMP_crc != 0b1010'0101'1101'0110)
-									{
-										debug_u16(0xFFFF);
-									}
-
+									usb_ms_ocr_state                        = USBMSOCRState_ready;
 									break;
 								}
 							}

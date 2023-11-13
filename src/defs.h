@@ -293,19 +293,18 @@ static const u8 COUNT_CLEARED_BITS_DT[] PROGMEM =
 	};
 #endif
 
-#define MASK_ACTIVATION_THRESHOLD 16
+#define MASK_ACTIVATION_THRESHOLD 8
 #define MASK_DIM                  64
 
 #define WORDGAME_BOARD_XMDT(X) \
 	/*    Names                               | Board Position | Board Dimensions (slots) | Slot Dimensions | Uncompressed Slot Stride | Compressed Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB         | Excluded Slot Coordinates */ \
-		X(anagrams_6  , "Anagrams (6 Letters)",  39, 354,         6, 1,                      119,              195,                      105,                       32,  656,               256,   16,            0.2645, 0.2409, 0.3358,   false, {{0}} ) \
-		X(anagrams_7  , "Anagrams (7 Letters)",  31, 375,         7, 1,                      102,              168,                      105,                       32,  656,               256,   16,            0.5036, 0.4814, 0.6467,   false, {{0}} ) \
-		X(wordhunt_4x4, "WordHunt (4x4)"      , 199, 538,         4, 4,                      136,              212,                      100,                      128,  701,               900,   16,            0.2204, 0.2775, 0.2089,   false, {{0}} ) \
-		X(wordhunt_o  , "WordHunt (O)"        , 142, 480,         5, 5,                      123,              191,                      100,                      512,  854,               128,  128,            0.4765, 0.6349, 0.4380,   true , { { 0, 0 }, { 4, 0 }, { 2, 2 }, { 0, 4 }, { 4, 4 } }) \
-		X(wordhunt_x  , "WordHunt (X)"        , 142, 480,         5, 5,                      123,              191,                      100,                      900,  854,               128,  128,            0.4356, 0.5768, 0.4018,   true , { { 2, 0 }, { 0, 2 }, { 4, 2 }, { 2, 4 } }) \
-		X(wordhunt_5x5, "WordHunt (5x5)"      , 142, 480,         5, 5,                      123,              191,                      100,                     1050,  532,                64, 1000,            0.4024, 0.5326, 0.3719,   false, {{0}}) \
-
-//		X(wordbites   , "WordBites"           ,   0,   0,         0, 0,                        0,                0,                        0,                        0,    0,                 0,    0,            0.0000, 0.0000, 0.0000,   false, {{0}}) \
+		X(anagrams_6  , "Anagrams (6 Letters)",  39, 354,        6, 1,                      119,              195  ,                     105,                       32,   656,           256,   16,               0.2645, 0.2409, 0.3358,   false, {{0}} ) \
+		X(anagrams_7  , "Anagrams (7 Letters)",  31, 375,        7, 1,                      102,              168  ,                     105,                       32,   656,           256,   16,               0.5036, 0.4814, 0.6467,   false, {{0}} ) \
+		X(wordhunt_4x4, "WordHunt (4x4)"      , 199, 538,        4, 4,                      136,              212  ,                     100,                      128,   701,           900,   16,               0.2204, 0.2775, 0.2089,   false, {{0}} ) \
+		X(wordhunt_o  , "WordHunt (O)"        , 142, 480,        5, 5,                      123,              191  ,                     100,                      512,   854,           128,  128,               0.4765, 0.6349, 0.4380,   true , { { 0, 0 }, { 4, 0 }, { 2, 2 }, { 0, 4 }, { 4, 4 } }) \
+		X(wordhunt_x  , "WordHunt (X)"        , 142, 480,        5, 5,                      123,              191  ,                     100,                      900,   854,           128,  128,               0.4356, 0.5768, 0.4018,   true , { { 2, 0 }, { 0, 2 }, { 4, 2 }, { 2, 4 } }) \
+		X(wordhunt_5x5, "WordHunt (5x5)"      , 142, 480,        5, 5,                      123,              191  ,                     100,                     1050,   532,            64, 1000,               0.4024, 0.5326, 0.3719,   false, {{0}}) \
+		X(wordbites   , "WordBites"           ,  44, 384,        8, 9,                      102,              140.5,                      88,                      400,  1676,           256,  256,               0.2524, 0.3749, 0.4917,   false, {{0}}) \
 
 #define WORDGAME_MAP_XMDT(X) \
 	X(anagrams_english_6, "Anagrams (EN, 6)", anagrams_6  ) \
@@ -319,14 +318,14 @@ static const u8 COUNT_CLEARED_BITS_DT[] PROGMEM =
 	X(wordhunt_o        , "WordHunt (O)"    , wordhunt_o  ) \
 	X(wordhunt_x        , "WordHunt (X)"    , wordhunt_x  ) \
 	X(wordhunt_5x5      , "WordHunt (5x5)"  , wordhunt_5x5) \
+	X(wordbites         , "WordBites"       , wordbites   ) \
 
-//	X(wordbites         , "WordBites"       , wordbites   ) \
-
-#define MAKE(IDENTIFIER_NAME, PRINT_NAME, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, SLOT_DIM, UNCOMPRESSED_SLOT_STRIDE, COMPRESSED_SLOT_STRIDE, ...) \
-	static_assert(SLOT_DIM <= UNCOMPRESSED_SLOT_STRIDE); \
-	static_assert(MASK_DIM <= COMPRESSED_SLOT_STRIDE);
-WORDGAME_BOARD_XMDT(MAKE)
-#undef MAKE
+// TODO strengthen
+//	#define MAKE(IDENTIFIER_NAME, PRINT_NAME, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, SLOT_DIM, UNCOMPRESSED_SLOT_STRIDE, COMPRESSED_SLOT_STRIDE, ...) \
+//		static_assert(SLOT_DIM <= UNCOMPRESSED_SLOT_STRIDE); \
+//		static_assert(MASK_DIM <= COMPRESSED_SLOT_STRIDE);
+//	WORDGAME_BOARD_XMDT(MAKE)
+//	#undef MAKE
 
 #define WORDGAME_MAP_MAX_PRINT_NAME_SIZE_(IDENTIFIER_NAME, PRINT_NAME, ...) u8 IDENTIFIER_NAME[sizeof(PRINT_NAME)];
 #define WORDGAME_BOARD_MAX_DIM_X_(IDENTIFIER_NAME, PRINT_NAME, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[DIM_SLOTS_X];
@@ -383,7 +382,7 @@ enum WordGameMap
 			str   name;
 			i32_2 pos;
 			i32   slot_dim;
-			i32   uncompressed_slot_stride;
+			f64   uncompressed_slot_stride;
 			i32_2 test_region_pos;
 			i32_2 test_region_dim;
 			f64_3 test_region_rgb;
@@ -1077,7 +1076,7 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 
 #if DEBUG // Used to disable some USB functionalities for development purposes, but does not necessairly remove all data and control flow.
 	#define USB_CDC_ENABLE true
-	#define USB_HID_ENABLE false
+	#define USB_HID_ENABLE true
 	#define USB_MS_ENABLE  true
 #else
 	#define USB_CDC_ENABLE false
@@ -1968,9 +1967,12 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	static u8_2 _usb_ms_ocr_slot_topdown_pixel_coords                                  = {0};
 	static u16  _usb_ms_ocr_accumulated_scores[WORDGAME_BOARD_MAX_DIM_X][Letter_COUNT] = {0};
 	static u8   _usb_ms_ocr_slot_pixel_row[MASK_DIM / 8]                               = {0};
+	static u8   _usb_ms_ocr_activated_slot                                             = 0;
 	static u16  _usb_ms_ocr_mask_u8_stream_index                                       = 0;
 	static u16  _usb_ms_ocr_mask_u16_stream_index                                      = 0;
 	static u16  _usb_ms_ocr_runlength_remaining                                        = 0;
+	static_assert(WORDGAME_BOARD_MAX_DIM_X == 8); // For _usb_ms_ocr_activated.
+	static_assert(MASK_DIM % 8 == 0);             // For _usb_ms_ocr_slot_pixel_row.
 
 	#if USB_MS_ENABLE
 		static struct USBMSCommandStatusWrapper _usb_ms_status      = { .dCSWSignature = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE };

@@ -196,6 +196,7 @@ main(void)
 	enum   MenuChosenMapOption menu_chosen_map_selected_option        = {0};
 	enum   MenuChosenMapOption menu_chosen_map_first_displayed_option = {0};
 	u16                        scroll_tick                            = 0;
+	u8                         scroll_y                               = 0;
 
 	//
 	// Loop.
@@ -487,7 +488,7 @@ main(void)
 												case WordGameMap_wordhunt_o         :
 												case WordGameMap_wordhunt_x         :
 												case WordGameMap_wordhunt_5x5       :
-//												case WordGameMap_wordbites          :
+												case WordGameMap_wordbites          :
 												case WordGameMap_COUNT              : error(); break;
 											}
 
@@ -531,7 +532,7 @@ main(void)
 												case WordGameMap_anagrams_german    :
 												case WordGameMap_anagrams_spanish   :
 												case WordGameMap_anagrams_italian   :
-//												case WordGameMap_wordbites          :
+												case WordGameMap_wordbites          :
 												case WordGameMap_COUNT              : error(); break;
 											}
 
@@ -542,13 +543,13 @@ main(void)
 										play_button_y = 212;
 									} break;
 
-//									case WordGameMap_wordbites:
-//									{
-//										CLICK(99, 238); // WordBites game.
-//										WAIT(350);
-//
-//										play_button_y = 212;
-//									} break;
+									case WordGameMap_wordbites:
+									{
+										CLICK(99, 238); // WordBites game.
+										WAIT(350);
+
+										play_button_y = 212;
+									} break;
 
 									case WordGameMap_COUNT:
 									{
@@ -655,16 +656,23 @@ main(void)
 							case WordGameBoard_wordhunt_o:
 							case WordGameBoard_wordhunt_x:
 							case WordGameBoard_wordhunt_5x5:
+							case WordGameBoard_wordbites:
 							{
-								u8 scroll_y = scroll_tick >> 11;
+								u8_2 board_dim =
+									{
+										pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.x),
+										pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.y),
+									};
+
+								scroll_tick += 1;
+								if (!(scroll_tick & 0b0000'0111'1111'1111))
+								{
+									scroll_y += 1;
+									scroll_y %= board_dim.y + 1;
+								}
+
 								for (u8 row = 0; row < LCD_DIM_Y; row += 1)
 								{
-									u8_2 board_dim =
-										{
-											pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.x),
-											pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.y),
-										};
-
 									if ((scroll_y + row) % (board_dim.y + 1) < board_dim.y)
 									{
 										u8 y = board_dim.y - 1 - (scroll_y + row) % (board_dim.y + 1);
@@ -672,7 +680,7 @@ main(void)
 										{
 											if (is_slot_excluded((u8_2) { x, y }))
 											{
-												lcd_char(' ');
+												lcd_char(pgm_u8(LETTER_LCD_CODES[Letter_null]));
 											}
 											else
 											{
@@ -683,13 +691,7 @@ main(void)
 
 									lcd_char('\n');
 								}
-
-								scroll_tick += 1;
 							} break;
-
-//							case WordGameBoard_wordbites:
-//							{
-//							} break;
 
 							case WordGameBoard_COUNT:
 							{
