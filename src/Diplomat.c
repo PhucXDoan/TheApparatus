@@ -36,13 +36,14 @@
 static b8
 is_slot_excluded(u8_2 coords)
 {
-	b8 slot_excluded = false;
-	for (u8 i = 0; i < pgm_read_byte(&WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].excluded_slot_coords_count); i += 1)
+	enum WordGameBoard wordgame_board = pgm_u8(WORDGAME_MAP_INFO[usb_ms_ocr_wordgame_map].board);
+	b8                 slot_excluded  = false;
+	for (u8 i = 0; i < pgm_read_byte(&WORDGAME_BOARD_INFO[wordgame_board].excluded_slot_coords_count); i += 1)
 	{
 		if
 		(
-			coords.x == pgm_read_byte(&WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].excluded_slot_coords[i].x) &&
-			coords.y == pgm_read_byte(&WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].excluded_slot_coords[i].y)
+			coords.x == pgm_read_byte(&WORDGAME_BOARD_INFO[wordgame_board].excluded_slot_coords[i].x) &&
+			coords.y == pgm_read_byte(&WORDGAME_BOARD_INFO[wordgame_board].excluded_slot_coords[i].y)
 		)
 		{
 			slot_excluded = true;
@@ -392,9 +393,9 @@ main(void)
 						case MenuChosenMapOption_on_guard:
 						{
 							assert(usb_ms_ocr_state == USBMSOCRState_ready);
-							usb_ms_ocr_state          = USBMSOCRState_set;
-							usb_ms_ocr_wordgame_board = pgm_u8(WORDGAME_MAP_INFO[menu_main_selected_option].board);
-							menu                      = Menu_displaying;
+							usb_ms_ocr_state        = USBMSOCRState_set;
+							usb_ms_ocr_wordgame_map = (enum WordGameMap) menu_main_selected_option;
+							menu                    = Menu_displaying;
 						} break;
 
 						case MenuChosenMapOption_datamine:
@@ -627,12 +628,14 @@ main(void)
 				// Render.
 				//
 
+				enum WordGameBoard wordgame_board = pgm_u8(WORDGAME_MAP_INFO[usb_ms_ocr_wordgame_map].board);
+
 				lcd_reset();
 				switch (usb_ms_ocr_state)
 				{
 					case USBMSOCRState_ready:
 					{
-						switch (usb_ms_ocr_wordgame_board)
+						switch (pgm_u8(WORDGAME_MAP_INFO[usb_ms_ocr_wordgame_map].board))
 						{
 							case WordGameBoard_anagrams_6:
 							case WordGameBoard_anagrams_7:
@@ -640,12 +643,12 @@ main(void)
 							{
 								for
 								(
-									i8 y = pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.y) - 1;
+									i8 y = pgm_u8(WORDGAME_BOARD_INFO[wordgame_board].dim_slots.y) - 1;
 									y >= 0;
 									y -= 1
 								)
 								{
-									for (u8 x = 0; x < pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.x); x += 1)
+									for (u8 x = 0; x < pgm_u8(WORDGAME_BOARD_INFO[wordgame_board].dim_slots.x); x += 1)
 									{
 										lcd_char(pgm_u8(LETTER_LCD_CODES[usb_ms_ocr_grid[y][x]]));
 									}
@@ -660,8 +663,8 @@ main(void)
 							{
 								u8_2 board_dim =
 									{
-										pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.x),
-										pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.y),
+										pgm_u8(WORDGAME_BOARD_INFO[wordgame_board].dim_slots.x),
+										pgm_u8(WORDGAME_BOARD_INFO[wordgame_board].dim_slots.y),
 									};
 
 								scroll_tick += 1;
@@ -676,7 +679,7 @@ main(void)
 									if ((scroll_y + row) % (board_dim.y + 1) < board_dim.y)
 									{
 										u8 y = board_dim.y - 1 - (scroll_y + row) % (board_dim.y + 1);
-										for (u8 x = 0; x < pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.x); x += 1)
+										for (u8 x = 0; x < pgm_u8(WORDGAME_BOARD_INFO[wordgame_board].dim_slots.x); x += 1)
 										{
 											if (is_slot_excluded((u8_2) { x, y }))
 											{

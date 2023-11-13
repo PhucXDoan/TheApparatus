@@ -486,7 +486,7 @@ enum WordGameMap
 	X(w           , 'W'                ) \
 	X(x           , 'X'                ) \
 	X(y           , 'Y'                ) \
-	X(z           , 'Z'                ) \
+	X(z           , 'Z'                ) /* English letters must be contiguous up to here for optimization reasons. \
 	X(boris       , 0b001              ) \
 	X(chelovek    , 0b010              ) \
 	X(dmitri      , 0b1101'1011        ) \
@@ -1089,6 +1089,13 @@ enum USBMSOCRState
 	USBMSOCRState_ready,      // Main program can set the OCR state.
 	USBMSOCRState_set,        // Main program has finished setting the OCR state and OCR now waits for BMP.
 	USBMSOCRState_processing, // OCR is currently processing BMP.
+};
+
+struct USBMSOCRMaskStreamState
+{
+	u16 index_u8;
+	u16 index_u16;
+	u16 runlength_remaining;
 };
 
 enum USBEndpointSizeCode // See: Source(1) @ Section(22.18.2) @ Page(287).
@@ -1960,17 +1967,16 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	#undef MAKE
 
 	static volatile enum USBMSOCRState usb_ms_ocr_state                                                    = {0};
-	static volatile enum WordGameBoard usb_ms_ocr_wordgame_board                                           = {0};
+	static volatile enum WordGameMap   usb_ms_ocr_wordgame_map                                             = {0};
 	static volatile enum Letter        usb_ms_ocr_grid[WORDGAME_BOARD_MAX_DIM_Y][WORDGAME_BOARD_MAX_DIM_X] = {0};
 
-	static u8_2 _usb_ms_ocr_slot_topdown_board_coords                                  = {0};
-	static u8_2 _usb_ms_ocr_slot_topdown_pixel_coords                                  = {0};
-	static u16  _usb_ms_ocr_accumulated_scores[WORDGAME_BOARD_MAX_DIM_X][Letter_COUNT] = {0};
-	static u8   _usb_ms_ocr_slot_pixel_row[MASK_DIM / 8]                               = {0};
-	static u8   _usb_ms_ocr_activated_slot                                             = 0;
-	static u16  _usb_ms_ocr_mask_u8_stream_index                                       = 0;
-	static u16  _usb_ms_ocr_mask_u16_stream_index                                      = 0;
-	static u16  _usb_ms_ocr_runlength_remaining                                        = 0;
+	static u8_2                            _usb_ms_ocr_slot_topdown_board_coords                                  = {0};
+	static u8_2                            _usb_ms_ocr_slot_topdown_pixel_coords                                  = {0};
+	static u16                             _usb_ms_ocr_accumulated_scores[WORDGAME_BOARD_MAX_DIM_X][Letter_COUNT] = {0};
+	static u8                              _usb_ms_ocr_slot_pixel_row[MASK_DIM / 8]                               = {0};
+	static u8                              _usb_ms_ocr_activated_slot                                             = 0;
+	static struct USBMSOCRMaskStreamState _usb_ms_ocr_curr_mask_stream_state                                      = {0};
+	static struct USBMSOCRMaskStreamState _usb_ms_ocr_next_mask_stream_state                                      = {0};
 	static_assert(WORDGAME_BOARD_MAX_DIM_X == 8); // For _usb_ms_ocr_activated.
 	static_assert(MASK_DIM % 8 == 0);             // For _usb_ms_ocr_slot_pixel_row.
 

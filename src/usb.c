@@ -688,13 +688,14 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 				// Determine whether or not we need to inspect the write transaction to do OCR.
 				//
 
-				b8   transaction_is_for_bmp  = false;
-				u16  curr_red_channel_offset = 0;
-				u8   compressed_slot_stride  = pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].compressed_slot_stride);
-				u8_2 board_dim_slots         =
+				b8                 transaction_is_for_bmp  = false;
+				u16                curr_red_channel_offset = 0;
+				enum WordGameBoard wordgame_board          = pgm_u8(WORDGAME_MAP_INFO[usb_ms_ocr_wordgame_map].board);
+				u8                 compressed_slot_stride  = pgm_u8(WORDGAME_BOARD_INFO[wordgame_board].compressed_slot_stride);
+				u8_2               board_dim_slots         =
 					{
-						pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.x),
-						pgm_u8(WORDGAME_BOARD_INFO[usb_ms_ocr_wordgame_board].dim_slots.y),
+						pgm_u8(WORDGAME_BOARD_INFO[wordgame_board].dim_slots.x),
+						pgm_u8(WORDGAME_BOARD_INFO[wordgame_board].dim_slots.y),
 					};
 
 				switch (usb_ms_ocr_state)
@@ -822,12 +823,29 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 									// Give out points for each letter.
 									//
 
-									u16 probing_mask_u8_stream_index  = _usb_ms_ocr_mask_u8_stream_index;
-									u16 probing_mask_u16_stream_index = _usb_ms_ocr_mask_u16_stream_index;
-									u16 probing_runlength_remaining   = _usb_ms_ocr_runlength_remaining;
+									struct USBMSOCRMaskStreamState probing_mask_stream_state = _usb_ms_ocr_curr_mask_stream_state;
 
-									for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
-									//for (enum Letter letter = {1}; letter <= Letter_z; letter += 1)
+									enum Letter letter_sentinel = {0};
+									switch (usb_ms_ocr_wordgame_map)
+									{
+										case WordGameMap_anagrams_english_6 :
+										case WordGameMap_anagrams_english_7 :
+										case WordGameMap_wordhunt_4x4       :
+										case WordGameMap_wordhunt_o         :
+										case WordGameMap_wordhunt_x         :
+										case WordGameMap_wordhunt_5x5       :
+										case WordGameMap_wordbites          : letter_sentinel = Letter_z + 1; break;
+
+										case WordGameMap_anagrams_russian   :
+										case WordGameMap_anagrams_french    :
+										case WordGameMap_anagrams_german    :
+										case WordGameMap_anagrams_spanish   :
+										case WordGameMap_anagrams_italian   : letter_sentinel = Letter_COUNT; break;
+
+										case WordGameMap_COUNT              : error(); break;
+									}
+
+									for (enum Letter letter = {1}; letter < letter_sentinel; letter += 1)
 									{
 										static_assert(MASK_DIM % 8 == 0);
 										for (u8 byte_index = 0; byte_index < MASK_DIM / 8; byte_index += 1)
@@ -845,25 +863,25 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 												// Refill runlength.
 												//
 
-												if (!probing_runlength_remaining)
+												if (!probing_mask_stream_state.runlength_remaining)
 												{
 													//
 													// Read the next byte-sized run-length.
 													//
 
-													assert(probing_mask_u8_stream_index < countof(MASK_U8_STREAM));
-													probing_runlength_remaining   = pgm_u8(MASK_U8_STREAM[probing_mask_u8_stream_index]);
-													probing_mask_u8_stream_index += 1;
+													assert(probing_mask_stream_state.index_u8 < countof(MASK_U8_STREAM));
+													probing_mask_stream_state.runlength_remaining   = pgm_u8(MASK_U8_STREAM[probing_mask_stream_state.index_u8]);
+													probing_mask_stream_state.index_u8 += 1;
 
 													//
 													// If we read a zero, the run-length is then word-sized.
 													//
 
-													if (!probing_runlength_remaining)
+													if (!probing_mask_stream_state.runlength_remaining)
 													{
-														assert(probing_mask_u16_stream_index < countof(MASK_U16_STREAM));
-														probing_runlength_remaining    = pgm_u16(MASK_U16_STREAM[probing_mask_u16_stream_index]);
-														probing_mask_u16_stream_index += 1;
+														assert(probing_mask_stream_state.index_u16 < countof(MASK_U16_STREAM));
+														probing_mask_stream_state.runlength_remaining    = pgm_u16(MASK_U16_STREAM[probing_mask_stream_state.index_u16]);
+														probing_mask_stream_state.index_u16 += 1;
 													}
 												}
 
@@ -872,11 +890,11 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 												//
 
 												u8 shift_amount =
-													mask_bits_unfilled < probing_runlength_remaining
+													mask_bits_unfilled < probing_mask_stream_state.runlength_remaining
 														? mask_bits_unfilled
-														: probing_runlength_remaining;
+														: probing_mask_stream_state.runlength_remaining;
 
-												if (probing_mask_u8_stream_index & 1)
+												if (probing_mask_stream_state.index_u8 & 1)
 												{
 													mask_byte = mask_byte >> shift_amount; // Shift in zeros.
 												}
@@ -886,7 +904,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 												}
 
 												mask_bits_unfilled          -= shift_amount;
-												probing_runlength_remaining -= shift_amount;
+												probing_mask_stream_state.runlength_remaining -= shift_amount;
 											}
 
 											//
@@ -902,34 +920,36 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 										}
 									}
 
-									//{
-									//	u16 pixels_left = MASK_DIM * (Letter_COUNT - (Letter_z + 1));
-									//	while (pixels_left)
-									//	{
-									//		if (!probing_runlength_remaining)
-									//		{
-									//			assert(probing_mask_u8_stream_index < countof(MASK_U8_STREAM));
-									//			probing_runlength_remaining   = pgm_u8(MASK_U8_STREAM[probing_mask_u8_stream_index]);
-									//			probing_mask_u8_stream_index += 1;
+									if (!_usb_ms_ocr_next_mask_stream_state.index_u8)
+									{
+										u16 pixels_left = MASK_DIM * (Letter_COUNT - letter_sentinel);
+										while (pixels_left)
+										{
+											if (!probing_mask_stream_state.runlength_remaining)
+											{
+												assert(probing_mask_stream_state.index_u8 < countof(MASK_U8_STREAM));
+												probing_mask_stream_state.runlength_remaining   = pgm_u8(MASK_U8_STREAM[probing_mask_stream_state.index_u8]);
+												probing_mask_stream_state.index_u8 += 1;
 
-									//			if (!probing_runlength_remaining)
-									//			{
-									//				assert(probing_mask_u16_stream_index < countof(MASK_U16_STREAM));
-									//				probing_runlength_remaining    = pgm_u16(MASK_U16_STREAM[probing_mask_u16_stream_index]);
-									//				probing_mask_u16_stream_index += 1;
-									//			}
-									//		}
+												if (!probing_mask_stream_state.runlength_remaining)
+												{
+													assert(probing_mask_stream_state.index_u16 < countof(MASK_U16_STREAM));
+													probing_mask_stream_state.runlength_remaining    = pgm_u16(MASK_U16_STREAM[probing_mask_stream_state.index_u16]);
+													probing_mask_stream_state.index_u16 += 1;
+												}
+											}
 
-									//		u16 shift_amount =
-									//			pixels_left < probing_runlength_remaining
-									//				? pixels_left
-									//				: probing_runlength_remaining;
+											u16 shift_amount =
+												pixels_left < probing_mask_stream_state.runlength_remaining
+													? pixels_left
+													: probing_mask_stream_state.runlength_remaining;
 
-									//		pixels_left                 -= shift_amount;
-									//		probing_runlength_remaining -= shift_amount;
-									//	}
-									//}
+											pixels_left                                   -= shift_amount;
+											probing_mask_stream_state.runlength_remaining -= shift_amount;
+										}
 
+										_usb_ms_ocr_next_mask_stream_state = probing_mask_stream_state;
+									}
 
 									//
 									// Update mask state.
@@ -969,20 +989,18 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 											//
 
 											memset(_usb_ms_ocr_accumulated_scores, 0, sizeof(_usb_ms_ocr_accumulated_scores));
-											_usb_ms_ocr_activated_slot        = 0;
-											_usb_ms_ocr_mask_u8_stream_index  = 0;
-											_usb_ms_ocr_mask_u16_stream_index = 0;
-											_usb_ms_ocr_runlength_remaining   = 0;
-											assert(probing_mask_u8_stream_index  == countof(MASK_U8_STREAM));
-											assert(probing_mask_u16_stream_index == countof(MASK_U16_STREAM));
-											assert(probing_runlength_remaining   == 0);
+											_usb_ms_ocr_activated_slot         = 0;
+											_usb_ms_ocr_curr_mask_stream_state = (struct USBMSOCRMaskStreamState) {0};
+											assert(_usb_ms_ocr_next_mask_stream_state.index_u8            == countof(MASK_U8_STREAM));
+											assert(_usb_ms_ocr_next_mask_stream_state.index_u16           == countof(MASK_U16_STREAM));
+											assert(_usb_ms_ocr_next_mask_stream_state.runlength_remaining == 0);
 										}
 										else // Update location in stream so we'll be comparing with the next set of rows in the masks now.
 										{
-											_usb_ms_ocr_mask_u8_stream_index  = probing_mask_u8_stream_index;
-											_usb_ms_ocr_mask_u16_stream_index = probing_mask_u16_stream_index;
-											_usb_ms_ocr_runlength_remaining   = probing_runlength_remaining;
+											_usb_ms_ocr_curr_mask_stream_state = _usb_ms_ocr_next_mask_stream_state;
 										}
+
+										_usb_ms_ocr_next_mask_stream_state = (struct USBMSOCRMaskStreamState) {0};
 									}
 								}
 							}
