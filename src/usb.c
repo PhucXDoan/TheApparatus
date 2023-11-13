@@ -784,14 +784,69 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 					{
 						while (true)
 						{
+							b8 process_for_slot_pixels = false;
+							if (_usb_ms_ocr_slot_topdown_pixel_coords.x < MASK_DIM && _usb_ms_ocr_slot_topdown_pixel_coords.y < MASK_DIM)
+							{
+								process_for_slot_pixels =
+									!is_slot_excluded
+									(
+										(u8_2)
+										{
+											_usb_ms_ocr_slot_topdown_board_coords.x,
+											board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y,
+										}
+									);
+
+								if (process_for_slot_pixels && usb_ms_ocr_wordgame_map == WordGameMap_wordbites && _usb_ms_ocr_slot_topdown_board_coords.y)
+								{
+									u8_2 coords =
+										{
+											_usb_ms_ocr_slot_topdown_board_coords.x,
+											board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y
+										};
+
+									process_for_slot_pixels &= // Up-left slot must be free.
+										implies
+										(
+											coords.x,
+											!usb_ms_ocr_grid[coords.y + 1][coords.x - 1]
+										);
+
+									process_for_slot_pixels &= // Up-right slot must be free.
+										implies
+										(
+											coords.x < board_dim_slots.x - 1,
+											!usb_ms_ocr_grid[coords.y + 1][coords.x + 1]
+										);
+
+									process_for_slot_pixels &= // Must not be below a vertical duo piece.
+										implies
+										(
+											coords.y + 2 < board_dim_slots.y,
+											!(
+												usb_ms_ocr_grid[coords.y + 2][coords.x] &&
+												usb_ms_ocr_grid[coords.y + 1][coords.x]
+											)
+										);
+
+									process_for_slot_pixels &= // We must encounter an activated pixel soon.
+										implies
+										(
+											!(_usb_ms_ocr_activated_slot & (1 << coords.x)),
+											_usb_ms_ocr_slot_topdown_pixel_coords.y < MASK_DIM / 4
+										);
+									static_assert(MASK_DIM == 64);
+								}
+							}
+
 							//
-							// Eat pixels.
+							//
 							//
 
-							if (_usb_ms_ocr_slot_topdown_pixel_coords.x < MASK_DIM && _usb_ms_ocr_slot_topdown_pixel_coords.y < MASK_DIM) // Eat slot pixels.
+							if (process_for_slot_pixels)
 							{
 								//
-								// Extract activated slot pixels.
+								//
 								//
 
 								while (_usb_ms_ocr_slot_topdown_pixel_coords.x < MASK_DIM && curr_red_channel_offset < FAT32_SECTOR_SIZE)
@@ -814,7 +869,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 								}
 
 								//
-								// Process the complete set of slot pixels.
+								//
 								//
 
 								if (_usb_ms_ocr_slot_topdown_pixel_coords.x == MASK_DIM)
@@ -920,6 +975,10 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 										}
 									}
 
+									//
+									//
+									//
+
 									if (!_usb_ms_ocr_next_mask_stream_state.index_u8)
 									{
 										u16 pixels_left = MASK_DIM * (Letter_COUNT - letter_sentinel);
@@ -950,75 +1009,23 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 										_usb_ms_ocr_next_mask_stream_state = probing_mask_stream_state;
 									}
-
-									//
-									// Update mask state.
-									//
-
-									if (_usb_ms_ocr_slot_topdown_board_coords.x == board_dim_slots.x - 1) // On last column of slots.
-									{
-										if (_usb_ms_ocr_slot_topdown_pixel_coords.y == MASK_DIM - 1) // On slots' last row of pixels.
-										{
-											//
-											// Pick the best matching letters.
-											//
-
-											for (u8 slot_coord_x = 0; slot_coord_x < board_dim_slots.x; slot_coord_x += 1)
-											{
-												enum Letter best_letter = Letter_null;
-
-												if (_usb_ms_ocr_activated_slot & (1 << slot_coord_x))
-												{
-													u16 highest_score = 0;
-													for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
-													{
-														u16 letter_score = _usb_ms_ocr_accumulated_scores[slot_coord_x][letter];
-														if (highest_score < letter_score)
-														{
-															highest_score = letter_score;
-															best_letter   = letter;
-														}
-													}
-												}
-
-												usb_ms_ocr_grid[board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y][slot_coord_x] = best_letter;
-											}
-
-											//
-											// Reset state to perform OCR again for the next row of slots in the board.
-											//
-
-											memset(_usb_ms_ocr_accumulated_scores, 0, sizeof(_usb_ms_ocr_accumulated_scores));
-											_usb_ms_ocr_activated_slot         = 0;
-											_usb_ms_ocr_curr_mask_stream_state = (struct USBMSOCRMaskStreamState) {0};
-											assert(_usb_ms_ocr_next_mask_stream_state.index_u8            == countof(MASK_U8_STREAM));
-											assert(_usb_ms_ocr_next_mask_stream_state.index_u16           == countof(MASK_U16_STREAM));
-											assert(_usb_ms_ocr_next_mask_stream_state.runlength_remaining == 0);
-										}
-										else // Update location in stream so we'll be comparing with the next set of rows in the masks now.
-										{
-											_usb_ms_ocr_curr_mask_stream_state = _usb_ms_ocr_next_mask_stream_state;
-										}
-
-										_usb_ms_ocr_next_mask_stream_state = (struct USBMSOCRMaskStreamState) {0};
-									}
 								}
 							}
-							else // Eat padding pixels.
+							else
 							{
-								u8 padding =
+								u8 skip_amount =
 									_usb_ms_ocr_slot_topdown_board_coords.x == board_dim_slots.x - 1 // On last column of slots?
 										? MASK_DIM               - _usb_ms_ocr_slot_topdown_pixel_coords.x
 										: compressed_slot_stride - _usb_ms_ocr_slot_topdown_pixel_coords.x;
 
 								u8 remaining_unprocessed_pixels_in_sector = (FAT32_SECTOR_SIZE - curr_red_channel_offset) / sizeof(struct BMPPixel); // This math also happens to work for the first sector of the BMP!
-								if (padding > remaining_unprocessed_pixels_in_sector)
+								if (skip_amount > remaining_unprocessed_pixels_in_sector)
 								{
-									padding = remaining_unprocessed_pixels_in_sector;
+									skip_amount = remaining_unprocessed_pixels_in_sector;
 								}
 
-								curr_red_channel_offset                 += padding * sizeof(struct BMPPixel);
-								_usb_ms_ocr_slot_topdown_pixel_coords.x += padding;
+								curr_red_channel_offset                 += skip_amount * sizeof(struct BMPPixel);
+								_usb_ms_ocr_slot_topdown_pixel_coords.x += skip_amount;
 							}
 
 							//
@@ -1032,9 +1039,48 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 							}
 							else if (_usb_ms_ocr_slot_topdown_pixel_coords.x == MASK_DIM && _usb_ms_ocr_slot_topdown_board_coords.x == board_dim_slots.x - 1) // On right side of BMP image.
 							{
+								_usb_ms_ocr_curr_mask_stream_state = _usb_ms_ocr_next_mask_stream_state;
+								_usb_ms_ocr_next_mask_stream_state = (struct USBMSOCRMaskStreamState) {0};
+
 								_usb_ms_ocr_slot_topdown_board_coords.x  = 0;
 								_usb_ms_ocr_slot_topdown_pixel_coords.x  = 0;
 								_usb_ms_ocr_slot_topdown_pixel_coords.y += 1;
+
+								if (_usb_ms_ocr_slot_topdown_pixel_coords.y == MASK_DIM)
+								{
+									//
+									// Pick the best matching letters.
+									//
+
+									for (u8 slot_coord_x = 0; slot_coord_x < board_dim_slots.x; slot_coord_x += 1)
+									{
+										enum Letter best_letter = Letter_null;
+
+										if (_usb_ms_ocr_activated_slot & (1 << slot_coord_x))
+										{
+											u16 highest_score = 0;
+											for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
+											{
+												u16 letter_score = _usb_ms_ocr_accumulated_scores[slot_coord_x][letter];
+												if (highest_score < letter_score)
+												{
+													highest_score = letter_score;
+													best_letter   = letter;
+												}
+											}
+										}
+
+										usb_ms_ocr_grid[board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y][slot_coord_x] = best_letter;
+									}
+
+									//
+									// Reset state to perform OCR again for the next row of slots in the board.
+									//
+
+									memset(_usb_ms_ocr_accumulated_scores, 0, sizeof(_usb_ms_ocr_accumulated_scores));
+									_usb_ms_ocr_activated_slot         = 0;
+									_usb_ms_ocr_curr_mask_stream_state = (struct USBMSOCRMaskStreamState) {0};
+								}
 
 								if (_usb_ms_ocr_slot_topdown_pixel_coords.y == compressed_slot_stride) // Move onto the next row of slots.
 								{

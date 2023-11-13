@@ -486,7 +486,7 @@ enum WordGameMap
 	X(w           , 'W'                ) \
 	X(x           , 'X'                ) \
 	X(y           , 'Y'                ) \
-	X(z           , 'Z'                ) /* English letters must be contiguous up to here for optimization reasons. \
+	X(z           , 'Z'                ) /* English letters must be contiguous up to here for optimization reasons. */ \
 	X(boris       , 0b001              ) \
 	X(chelovek    , 0b010              ) \
 	X(dmitri      , 0b1101'1011        ) \
@@ -1970,13 +1970,13 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	static volatile enum WordGameMap   usb_ms_ocr_wordgame_map                                             = {0};
 	static volatile enum Letter        usb_ms_ocr_grid[WORDGAME_BOARD_MAX_DIM_Y][WORDGAME_BOARD_MAX_DIM_X] = {0};
 
-	static u8_2                            _usb_ms_ocr_slot_topdown_board_coords                                  = {0};
-	static u8_2                            _usb_ms_ocr_slot_topdown_pixel_coords                                  = {0};
-	static u16                             _usb_ms_ocr_accumulated_scores[WORDGAME_BOARD_MAX_DIM_X][Letter_COUNT] = {0};
-	static u8                              _usb_ms_ocr_slot_pixel_row[MASK_DIM / 8]                               = {0};
-	static u8                              _usb_ms_ocr_activated_slot                                             = 0;
-	static struct USBMSOCRMaskStreamState _usb_ms_ocr_curr_mask_stream_state                                      = {0};
-	static struct USBMSOCRMaskStreamState _usb_ms_ocr_next_mask_stream_state                                      = {0};
+	static u8_2                           _usb_ms_ocr_slot_topdown_board_coords                                  = {0};
+	static u8_2                           _usb_ms_ocr_slot_topdown_pixel_coords                                  = {0};
+	static u16                            _usb_ms_ocr_accumulated_scores[WORDGAME_BOARD_MAX_DIM_X][Letter_COUNT] = {0};
+	static u8                             _usb_ms_ocr_slot_pixel_row[MASK_DIM / 8]                               = {0};
+	static u8                             _usb_ms_ocr_activated_slot                                             = 0;
+	static struct USBMSOCRMaskStreamState _usb_ms_ocr_curr_mask_stream_state                                     = {0};
+	static struct USBMSOCRMaskStreamState _usb_ms_ocr_next_mask_stream_state                                     = {0};
 	static_assert(WORDGAME_BOARD_MAX_DIM_X == 8); // For _usb_ms_ocr_activated.
 	static_assert(MASK_DIM % 8 == 0);             // For _usb_ms_ocr_slot_pixel_row.
 

@@ -360,3 +360,25 @@ to_lower(char c)
 		} \
 		while (false)
 #endif
+
+#if PROGRAM_DIPLOMAT
+	static b8
+	is_slot_excluded(u8_2 coords)
+	{
+		enum WordGameBoard wordgame_board = pgm_u8(WORDGAME_MAP_INFO[usb_ms_ocr_wordgame_map].board);
+		b8                 slot_excluded  = false;
+		for (u8 i = 0; i < pgm_read_byte(&WORDGAME_BOARD_INFO[wordgame_board].excluded_slot_coords_count); i += 1)
+		{
+			if
+			(
+				coords.x == pgm_read_byte(&WORDGAME_BOARD_INFO[wordgame_board].excluded_slot_coords[i].x) &&
+				coords.y == pgm_read_byte(&WORDGAME_BOARD_INFO[wordgame_board].excluded_slot_coords[i].y)
+			)
+			{
+				slot_excluded = true;
+				break;
+			}
+		}
+		return slot_excluded;
+	}
+#endif
