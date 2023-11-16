@@ -361,24 +361,38 @@ to_lower(char c)
 		while (false)
 #endif
 
-#if PROGRAM_DIPLOMAT
-	static b8
-	is_slot_excluded(u8_2 coords)
+static b8
+is_slot_excluded(enum WordGame wordgame, u8 x, u8 y)
+{
+	b8 result = false;
+
+	switch (wordgame)
 	{
-		enum WordGameBoard wordgame_board = pgm_u8(WORDGAME_MAP_INFO[usb_ms_ocr_wordgame_map].board);
-		b8                 slot_excluded  = false;
-		for (u8 i = 0; i < pgm_read_byte(&WORDGAME_BOARD_INFO[wordgame_board].excluded_slot_coords_count); i += 1)
-		{
-			if
-			(
-				coords.x == pgm_read_byte(&WORDGAME_BOARD_INFO[wordgame_board].excluded_slot_coords[i].x) &&
-				coords.y == pgm_read_byte(&WORDGAME_BOARD_INFO[wordgame_board].excluded_slot_coords[i].y)
-			)
-			{
-				slot_excluded = true;
-				break;
-			}
-		}
-		return slot_excluded;
+		#define MAKE_TEST(EXCLUDED_SLOT_COORD_X, EXCLUDED_SLOT_COORD_Y) || (x == (EXCLUDED_SLOT_COORD_X) && y == (EXCLUDED_SLOT_COORD_Y))
+		#define MAKE_CASE( \
+			IDENTIFIER_NAME, \
+			PRINT_NAME, \
+			SENTINEL_LETTER, \
+			POS_X, POS_Y, \
+			DIM_SLOTS_X, DIM_SLOTS_Y, \
+			SLOT_DIM, \
+			UNCOMPRESSED_SLOT_STRIDE, \
+			COMPRESSED_SLOT_STRIDE, \
+			TEST_REGION_POS_X, TEST_REGION_POS_Y, \
+			TEST_REGION_DIM_X, TEST_REGION_DIM_Y, \
+			TEST_REGION_R, TEST_REGION_G, TEST_REGION_B, \
+			... \
+		) \
+			case WordGame_##IDENTIFIER_NAME: \
+			{ \
+				result = false __VA_ARGS__; \
+			} break;
+		WORDGAME_XMDT(MAKE_CASE, MAKE_TEST)
+		#undef MAKE_CASE
+		#undef MAKE_TEST
+
+		case WordGame_COUNT: break;
 	}
-#endif
+
+	return result;
+}

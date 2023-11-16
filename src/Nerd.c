@@ -1,6 +1,6 @@
 #define F_CPU 16'000'000
-#define PROGRAM_NERD   true
-#define BOARD_MEGA2560 true
+#define PROGRAM_NERD         true
+#define BOARD_MEGA_2560_REV3 true
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>

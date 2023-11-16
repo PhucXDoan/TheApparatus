@@ -149,7 +149,7 @@ static_assert(LITTLE_ENDIAN);
 	static char lcd_display[LCD_DIM_Y][LCD_DIM_X] = {0};
 	static u8_2 lcd_cursor_pos                    = {0};
 
-	// Character code assumes the LCD display has ROM code of 0xA00.  See: Source(25) @ Table(4) @ Page(16).
+	// Character code assumes the LCD display has ROM code of 0xA00. See: Source(25) @ Table(4) @ Page(16).
 	#define LCD_RIGHT_ARROW 0b0111'1110
 	#define LCD_LEFT_ARROW  0b0111'1111
 
@@ -244,219 +244,33 @@ static_assert(LITTLE_ENDIAN);
 					0b00000,
 				},
 		};
-	static_assert(countof(LCD_CUSTOM_CHAR_PATTERNS) <= 8);
+	static_assert(countof(LCD_CUSTOM_CHAR_PATTERNS) <= 8); // Maximum of eight custom characters are supported by the LCD.
 #endif
 
 //
 // Miscellaneous.
 //
 
-#define ASSISTIVE_TOUCH_X 9
-#define ASSISTIVE_TOUCH_Y 9
-
-#if PROGRAM_DIPLOMAT
-#define count_cleared_bits(...) pgm_read_byte(&COUNT_CLEARED_BITS_DT[(u8) { __VA_ARGS__ }])
-static const u8 COUNT_CLEARED_BITS_DT[] PROGMEM =
-	{
-		[0b00000000] = 8, [0b00000001] = 7, [0b00000010] = 7, [0b00000011] = 6, [0b00000100] = 7, [0b00000101] = 6, [0b00000110] = 6, [0b00000111] = 5,
-		[0b00001000] = 7, [0b00001001] = 6, [0b00001010] = 6, [0b00001011] = 5, [0b00001100] = 6, [0b00001101] = 5, [0b00001110] = 5, [0b00001111] = 4,
-		[0b00010000] = 7, [0b00010001] = 6, [0b00010010] = 6, [0b00010011] = 5, [0b00010100] = 6, [0b00010101] = 5, [0b00010110] = 5, [0b00010111] = 4,
-		[0b00011000] = 6, [0b00011001] = 5, [0b00011010] = 5, [0b00011011] = 4, [0b00011100] = 5, [0b00011101] = 4, [0b00011110] = 4, [0b00011111] = 3,
-		[0b00100000] = 7, [0b00100001] = 6, [0b00100010] = 6, [0b00100011] = 5, [0b00100100] = 6, [0b00100101] = 5, [0b00100110] = 5, [0b00100111] = 4,
-		[0b00101000] = 6, [0b00101001] = 5, [0b00101010] = 5, [0b00101011] = 4, [0b00101100] = 5, [0b00101101] = 4, [0b00101110] = 4, [0b00101111] = 3,
-		[0b00110000] = 6, [0b00110001] = 5, [0b00110010] = 5, [0b00110011] = 4, [0b00110100] = 5, [0b00110101] = 4, [0b00110110] = 4, [0b00110111] = 3,
-		[0b00111000] = 5, [0b00111001] = 4, [0b00111010] = 4, [0b00111011] = 3, [0b00111100] = 4, [0b00111101] = 3, [0b00111110] = 3, [0b00111111] = 2,
-		[0b01000000] = 7, [0b01000001] = 6, [0b01000010] = 6, [0b01000011] = 5, [0b01000100] = 6, [0b01000101] = 5, [0b01000110] = 5, [0b01000111] = 4,
-		[0b01001000] = 6, [0b01001001] = 5, [0b01001010] = 5, [0b01001011] = 4, [0b01001100] = 5, [0b01001101] = 4, [0b01001110] = 4, [0b01001111] = 3,
-		[0b01010000] = 6, [0b01010001] = 5, [0b01010010] = 5, [0b01010011] = 4, [0b01010100] = 5, [0b01010101] = 4, [0b01010110] = 4, [0b01010111] = 3,
-		[0b01011000] = 5, [0b01011001] = 4, [0b01011010] = 4, [0b01011011] = 3, [0b01011100] = 4, [0b01011101] = 3, [0b01011110] = 3, [0b01011111] = 2,
-		[0b01100000] = 6, [0b01100001] = 5, [0b01100010] = 5, [0b01100011] = 4, [0b01100100] = 5, [0b01100101] = 4, [0b01100110] = 4, [0b01100111] = 3,
-		[0b01101000] = 5, [0b01101001] = 4, [0b01101010] = 4, [0b01101011] = 3, [0b01101100] = 4, [0b01101101] = 3, [0b01101110] = 3, [0b01101111] = 2,
-		[0b01110000] = 5, [0b01110001] = 4, [0b01110010] = 4, [0b01110011] = 3, [0b01110100] = 4, [0b01110101] = 3, [0b01110110] = 3, [0b01110111] = 2,
-		[0b01111000] = 4, [0b01111001] = 3, [0b01111010] = 3, [0b01111011] = 2, [0b01111100] = 3, [0b01111101] = 2, [0b01111110] = 2, [0b01111111] = 1,
-		[0b10000000] = 7, [0b10000001] = 6, [0b10000010] = 6, [0b10000011] = 5, [0b10000100] = 6, [0b10000101] = 5, [0b10000110] = 5, [0b10000111] = 4,
-		[0b10001000] = 6, [0b10001001] = 5, [0b10001010] = 5, [0b10001011] = 4, [0b10001100] = 5, [0b10001101] = 4, [0b10001110] = 4, [0b10001111] = 3,
-		[0b10010000] = 6, [0b10010001] = 5, [0b10010010] = 5, [0b10010011] = 4, [0b10010100] = 5, [0b10010101] = 4, [0b10010110] = 4, [0b10010111] = 3,
-		[0b10011000] = 5, [0b10011001] = 4, [0b10011010] = 4, [0b10011011] = 3, [0b10011100] = 4, [0b10011101] = 3, [0b10011110] = 3, [0b10011111] = 2,
-		[0b10100000] = 6, [0b10100001] = 5, [0b10100010] = 5, [0b10100011] = 4, [0b10100100] = 5, [0b10100101] = 4, [0b10100110] = 4, [0b10100111] = 3,
-		[0b10101000] = 5, [0b10101001] = 4, [0b10101010] = 4, [0b10101011] = 3, [0b10101100] = 4, [0b10101101] = 3, [0b10101110] = 3, [0b10101111] = 2,
-		[0b10110000] = 5, [0b10110001] = 4, [0b10110010] = 4, [0b10110011] = 3, [0b10110100] = 4, [0b10110101] = 3, [0b10110110] = 3, [0b10110111] = 2,
-		[0b10111000] = 4, [0b10111001] = 3, [0b10111010] = 3, [0b10111011] = 2, [0b10111100] = 3, [0b10111101] = 2, [0b10111110] = 2, [0b10111111] = 1,
-		[0b11000000] = 6, [0b11000001] = 5, [0b11000010] = 5, [0b11000011] = 4, [0b11000100] = 5, [0b11000101] = 4, [0b11000110] = 4, [0b11000111] = 3,
-		[0b11001000] = 5, [0b11001001] = 4, [0b11001010] = 4, [0b11001011] = 3, [0b11001100] = 4, [0b11001101] = 3, [0b11001110] = 3, [0b11001111] = 2,
-		[0b11010000] = 5, [0b11010001] = 4, [0b11010010] = 4, [0b11010011] = 3, [0b11010100] = 4, [0b11010101] = 3, [0b11010110] = 3, [0b11010111] = 2,
-		[0b11011000] = 4, [0b11011001] = 3, [0b11011010] = 3, [0b11011011] = 2, [0b11011100] = 3, [0b11011101] = 2, [0b11011110] = 2, [0b11011111] = 1,
-		[0b11100000] = 5, [0b11100001] = 4, [0b11100010] = 4, [0b11100011] = 3, [0b11100100] = 4, [0b11100101] = 3, [0b11100110] = 3, [0b11100111] = 2,
-		[0b11101000] = 4, [0b11101001] = 3, [0b11101010] = 3, [0b11101011] = 2, [0b11101100] = 3, [0b11101101] = 2, [0b11101110] = 2, [0b11101111] = 1,
-		[0b11110000] = 4, [0b11110001] = 3, [0b11110010] = 3, [0b11110011] = 2, [0b11110100] = 3, [0b11110101] = 2, [0b11110110] = 2, [0b11110111] = 1,
-		[0b11111000] = 3, [0b11111001] = 2, [0b11111010] = 2, [0b11111011] = 1, [0b11111100] = 2, [0b11111101] = 1, [0b11111110] = 1, [0b11111111] = 0,
-	};
-#endif
-
-#define MASK_ACTIVATION_THRESHOLD 8
+#define ASSISTIVE_TOUCH_X         9
+#define ASSISTIVE_TOUCH_Y         9
+#define MASK_ACTIVATION_THRESHOLD 8  // Applied to red channel.
 #define MASK_DIM                  64
 
-#define WORDGAME_BOARD_XMDT(X) \
-	/*    Names                               | Board Position | Board Dimensions (slots) | Slot Dimensions | Uncompressed Slot Stride | Compressed Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB         | Excluded Slot Coordinates */ \
-		X(anagrams_6  , "Anagrams (6 Letters)",  39, 354,        6, 1,                      119,              195  ,                     105,                       32,   656,           256,   16,               0.2645, 0.2409, 0.3358,   false, {{0}} ) \
-		X(anagrams_7  , "Anagrams (7 Letters)",  31, 375,        7, 1,                      102,              168  ,                     105,                       32,   656,           256,   16,               0.5036, 0.4814, 0.6467,   false, {{0}} ) \
-		X(wordhunt_4x4, "WordHunt (4x4)"      , 199, 538,        4, 4,                      136,              212  ,                     100,                      128,   701,           900,   16,               0.2204, 0.2775, 0.2089,   false, {{0}} ) \
-		X(wordhunt_o  , "WordHunt (O)"        , 142, 480,        5, 5,                      123,              191  ,                     100,                      512,   854,           128,  128,               0.4765, 0.6349, 0.4380,   true , { { 0, 0 }, { 4, 0 }, { 2, 2 }, { 0, 4 }, { 4, 4 } }) \
-		X(wordhunt_x  , "WordHunt (X)"        , 142, 480,        5, 5,                      123,              191  ,                     100,                      900,   854,           128,  128,               0.4356, 0.5768, 0.4018,   true , { { 2, 0 }, { 0, 2 }, { 4, 2 }, { 2, 4 } }) \
-		X(wordhunt_5x5, "WordHunt (5x5)"      , 142, 480,        5, 5,                      123,              191  ,                     100,                     1050,   532,            64, 1000,               0.4024, 0.5326, 0.3719,   false, {{0}}) \
-		X(wordbites   , "WordBites"           ,  44, 384,        8, 9,                      102,              140.5,                      88,                      400,  1676,           256,  256,               0.2524, 0.3749, 0.4917,   false, {{0}}) \
-
-#define WORDGAME_MAP_XMDT(X) \
-	X(anagrams_english_6, "Anagrams (EN, 6)", anagrams_6  ) \
-	X(anagrams_english_7, "Anagrams (EN, 7)", anagrams_7  ) \
-	X(anagrams_russian  , "Anagrams (RU)"   , anagrams_6  ) \
-	X(anagrams_french   , "Anagrams (FR)"   , anagrams_6  ) \
-	X(anagrams_german   , "Anagrams (DE)"   , anagrams_6  ) \
-	X(anagrams_spanish  , "Anagrams (ES)"   , anagrams_6  ) \
-	X(anagrams_italian  , "Anagrams (IT)"   , anagrams_6  ) \
-	X(wordhunt_4x4      , "WordHunt (4x4)"  , wordhunt_4x4) \
-	X(wordhunt_o        , "WordHunt (O)"    , wordhunt_o  ) \
-	X(wordhunt_x        , "WordHunt (X)"    , wordhunt_x  ) \
-	X(wordhunt_5x5      , "WordHunt (5x5)"  , wordhunt_5x5) \
-	X(wordbites         , "WordBites"       , wordbites   ) \
-
-// TODO strengthen
-//	#define MAKE(IDENTIFIER_NAME, PRINT_NAME, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, SLOT_DIM, UNCOMPRESSED_SLOT_STRIDE, COMPRESSED_SLOT_STRIDE, ...) \
-//		static_assert(SLOT_DIM <= UNCOMPRESSED_SLOT_STRIDE); \
-//		static_assert(MASK_DIM <= COMPRESSED_SLOT_STRIDE);
-//	WORDGAME_BOARD_XMDT(MAKE)
-//	#undef MAKE
-
-#define WORDGAME_MAP_MAX_PRINT_NAME_SIZE_(IDENTIFIER_NAME, PRINT_NAME, ...) u8 IDENTIFIER_NAME[sizeof(PRINT_NAME)];
-#define WORDGAME_BOARD_MAX_DIM_X_(IDENTIFIER_NAME, PRINT_NAME, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[DIM_SLOTS_X];
-#define WORDGAME_BOARD_MAX_DIM_Y_(IDENTIFIER_NAME, PRINT_NAME, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[DIM_SLOTS_Y];
-
-#define WORDGAME_MAP_MAX_PRINT_NAME_SIZE sizeof(union { WORDGAME_MAP_XMDT(WORDGAME_MAP_MAX_PRINT_NAME_SIZE_) })
-#define WORDGAME_BOARD_MAX_DIM_X         sizeof(union { WORDGAME_BOARD_XMDT(WORDGAME_BOARD_MAX_DIM_X_) })
-#define WORDGAME_BOARD_MAX_DIM_Y         sizeof(union { WORDGAME_BOARD_XMDT(WORDGAME_BOARD_MAX_DIM_Y_) })
-
-enum WordGameBoard
-{
-	#define MAKE(IDENTIFIER_NAME, ...) WordGameBoard_##IDENTIFIER_NAME,
-	WORDGAME_BOARD_XMDT(MAKE)
-	#undef MAKE
-	WordGameBoard_COUNT,
-};
-
-enum WordGameMap
-{
-	#define MAKE(IDENTIFIER_NAME, ...) WordGameMap_##IDENTIFIER_NAME,
-	WORDGAME_MAP_XMDT(MAKE)
-	#undef MAKE
-	WordGameMap_COUNT,
-};
-
-#if PROGRAM_DIPLOMAT
-	struct WordGameMapInfo
-	{
-		char               print_name_cstr[WORDGAME_MAP_MAX_PRINT_NAME_SIZE];
-		enum WordGameBoard board;
-	};
-
-	static const struct WordGameMapInfo WORDGAME_MAP_INFO[] PROGMEM =
-		{
-			#define MAKE(IDENTIFIER_NAME, PRINT_NAME, BOARD) \
-				{ \
-					.print_name_cstr = PRINT_NAME, \
-					.board           = WordGameBoard_##BOARD, \
-				},
-			WORDGAME_MAP_XMDT(MAKE)
-			#undef MAKE
-		};
-#endif
-
-#if PROGRAM_MICROSERVICES || PROGRAM_DIPLOMAT
-	struct WordGameBoardInfo
-	{
-		u8_2 dim_slots;
-		u8_2 excluded_slot_coords[5];
-		u8   excluded_slot_coords_count;
-		u8   compressed_slot_stride;
-
-		#if PROGRAM_MICROSERVICES
-			str   name;
-			i32_2 pos;
-			i32   slot_dim;
-			f64   uncompressed_slot_stride;
-			i32_2 test_region_pos;
-			i32_2 test_region_dim;
-			f64_3 test_region_rgb;
-		#endif
-	};
-
-	#if PROGRAM_DIPLOMAT
-		static const struct WordGameBoardInfo WORDGAME_BOARD_INFO[] PROGMEM =
-			{
-				#define MAKE( \
-					IDENTIFIER_NAME, \
-					PRINT_NAME, \
-					POS_X, POS_Y, \
-					DIM_SLOTS_X, DIM_SLOTS_Y, \
-					SLOT_DIM, \
-					UNCOMPRESSED_SLOT_STRIDE, \
-					COMPRESSED_SLOT_STRIDE, \
-					TEST_REGION_POS_X, TEST_REGION_POS_Y, \
-					TEST_REGION_DIM_X, TEST_REGION_DIM_Y, \
-					TEST_REGION_R, TEST_REGION_G, TEST_REGION_B, \
-					HAS_EXCLUDED_SLOTS, \
-					... \
-				) \
-					{ \
-						.dim_slots.x                = DIM_SLOTS_X, \
-						.dim_slots.y                = DIM_SLOTS_Y, \
-						.excluded_slot_coords       = __VA_ARGS__, \
-						.excluded_slot_coords_count = HAS_EXCLUDED_SLOTS ? countof((u8[][2]) __VA_ARGS__) : 0, \
-						.compressed_slot_stride     = COMPRESSED_SLOT_STRIDE, \
-					},
-				WORDGAME_BOARD_XMDT(MAKE)
-				#undef MAKE
-			};
-	#else
-		static const struct WordGameBoardInfo WORDGAME_BOARD_INFO[] =
-			{
-				#define MAKE( \
-					IDENTIFIER_NAME, \
-					PRINT_NAME, \
-					POS_X, POS_Y, \
-					DIM_SLOTS_X, DIM_SLOTS_Y, \
-					SLOT_DIM, \
-					UNCOMPRESSED_SLOT_STRIDE, \
-					COMPRESSED_SLOT_STRIDE, \
-					TEST_REGION_POS_X, TEST_REGION_POS_Y, \
-					TEST_REGION_DIM_X, TEST_REGION_DIM_Y, \
-					TEST_REGION_R, TEST_REGION_G, TEST_REGION_B, \
-					HAS_EXCLUDED_SLOTS, \
-					... \
-				) \
-					{ \
-						.name                       = STR(PRINT_NAME), \
-						.pos.x                      = POS_X, \
-						.pos.y                      = POS_Y, \
-						.dim_slots.x                = DIM_SLOTS_X, \
-						.dim_slots.y                = DIM_SLOTS_Y, \
-						.slot_dim                   = SLOT_DIM, \
-						.uncompressed_slot_stride   = UNCOMPRESSED_SLOT_STRIDE, \
-						.compressed_slot_stride     = COMPRESSED_SLOT_STRIDE, \
-						.test_region_pos.x          = TEST_REGION_POS_X, \
-						.test_region_pos.y          = TEST_REGION_POS_Y, \
-						.test_region_dim.x          = TEST_REGION_DIM_X, \
-						.test_region_dim.y          = TEST_REGION_DIM_Y, \
-						.test_region_rgb.x          = TEST_REGION_R, \
-						.test_region_rgb.y          = TEST_REGION_G, \
-						.test_region_rgb.z          = TEST_REGION_B, \
-						.excluded_slot_coords       = __VA_ARGS__, \
-						.excluded_slot_coords_count = HAS_EXCLUDED_SLOTS ? countof((u8[][2]) __VA_ARGS__) : 0, \
-					},
-				WORDGAME_BOARD_XMDT(MAKE)
-				#undef MAKE
-			};
-	#endif
-#endif
+#define ANAGRAMS_GENERIC_6_PRINT_NAME "Anagrams (6)"
+#define WORDGAME_XMDT(X, Y) /* There's no good way to determine the language of Anagrams perfectly, so we will always assume it's English and have the test region all be zero. */ \
+	/*    Names                                     | Sentinel Letter | Board Position | Board Dim (slots) | Slot Dim | Uncompressed Slot Stride | Compressed Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB       | Excluded Slot Coordinates */ \
+		X(anagrams_english_6, "Anagrams (EN, 6)"    , Letter_z + 1    ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,   32,   656          , 256,   16              , 0.2645, 0.2409, 0.3358                                         ) \
+		X(anagrams_english_7, "Anagrams (EN, 7)"    , Letter_z + 1    ,  31, 375       , 7, 1              , 102      , 168                      , 105                    ,   32,   656          , 256,   16              , 0.5036, 0.4814, 0.6467                                         ) \
+		X(anagrams_russian  , "Anagrams (RU)"       , Letter_COUNT    ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,    0,     0          ,   0,    0              ,      0,      0,      0                                         ) \
+		X(anagrams_french   , "Anagrams (FR)"       , Letter_z + 1    ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,    0,     0          ,   0,    0              ,      0,      0,      0                                         ) \
+		X(anagrams_german   , "Anagrams (DE)"       , Letter_COUNT    ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,    0,     0          ,   0,    0              ,      0,      0,      0                                         ) \
+		X(anagrams_spanish  , "Anagrams (ES)"       , Letter_ene + 1  ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,    0,     0          ,   0,    0              ,      0,      0,      0                                         ) \
+		X(anagrams_italian  , "Anagrams (IT)"       , Letter_z + 1    ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,    0,     0          ,   0,    0              ,      0,      0,      0                                         ) \
+		X(wordhunt_4x4      , "WordHunt (4x4)"      , Letter_z + 1    , 199, 538       , 4, 4              , 136      , 212                      , 100                    ,  128,   701          , 900,   16              , 0.2204, 0.2775, 0.2089                                         ) \
+		X(wordhunt_o        , "WordHunt (O)"        , Letter_z + 1    , 142, 480       , 5, 5              , 123      , 191                      , 100                    ,  512,   854          , 128,  128              , 0.4765, 0.6349, 0.4380, Y(0, 0) Y(0, 4) Y(4, 0) Y(4, 4) Y(2, 2)) \
+		X(wordhunt_x        , "WordHunt (X)"        , Letter_z + 1    , 142, 480       , 5, 5              , 123      , 191                      , 100                    ,  900,   854          , 128,  128              , 0.4356, 0.5768, 0.4018, Y(0, 2) Y(2, 0) Y(4, 2) Y(2, 4)        ) \
+		X(wordhunt_5x5      , "WordHunt (5x5)"      , Letter_z + 1    , 142, 480       , 5, 5              , 123      , 191                      , 100                    , 1050,   532          ,  64, 1000              , 0.4024, 0.5326, 0.3719                                         ) \
+		X(wordbites         , "WordBites"           , Letter_z + 1    ,  44, 384       , 8, 9              , 102      , 140.5                    ,  88                    ,  400,  1676          , 256,  256              , 0.2524, 0.3749, 0.4917                                         )
 
 #define LETTER_XMDT(X) \
 	/* Name       | LCD Character Code */ \
@@ -486,7 +300,8 @@ enum WordGameMap
 	X(w           , 'W'                ) \
 	X(x           , 'X'                ) \
 	X(y           , 'Y'                ) \
-	X(z           , 'Z'                ) /* English letters must be contiguous up to here for optimization reasons. */ \
+	X(z           , 'Z'                ) /* English letters must be contiguous up to prune out foreign letters that don't need to be processed. */ \
+	X(ene         , 0b1110'1110        ) /* Spanish alphabet essentially consists the basic 26 Latin letters plus N with tilde. */ \
 	X(boris       , 0b001              ) \
 	X(chelovek    , 0b010              ) \
 	X(dmitri      , 0b1101'1011        ) \
@@ -503,11 +318,18 @@ enum WordGameMap
 	X(zhenya      , 0b111              ) \
 	X(zinaida     , '3'                ) \
 	X(a_umlaut    , 0b1110'0001        ) \
-	X(o_umlaut    , 0b1110'1111        ) \
-	X(ene         , 0b1110'1110        )
+	X(o_umlaut    , 0b1110'1111        )
 
-#define LETTER_MAX_NAME_LENGTH_(IDENTIFIER_NAME, ...) u8 IDENTIFIER_NAME[sizeof(#IDENTIFIER_NAME) - 1];
-#define LETTER_MAX_NAME_LENGTH i32(sizeof(union { LETTER_XMDT(LETTER_MAX_NAME_LENGTH_) }))
+#define WORDGAME_MAX_PRINT_NAME_SIZE_(IDENTIFIER_NAME, PRINT_NAME, ...)                                     u8 IDENTIFIER_NAME[sizeof(PRINT_NAME)];
+#define WORDGAME_MAX_DIM_SLOTS_X_(IDENTIFIER_NAME, PRINT_NAME, SENTINEL_LETTER, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[DIM_SLOTS_X];
+#define WORDGAME_MAX_DIM_SLOTS_Y_(IDENTIFIER_NAME, PRINT_NAME, SENTINEL_LETTER, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[DIM_SLOTS_Y];
+#define WORDGAME_MAX_PRINT_NAME_LENGTH_(IDENTIFIER_NAME, PRINT_NAME, ...)                                   u8 IDENTIFIER_NAME[sizeof(PRINT_NAME)];
+#define LETTER_MAX_NAME_LENGTH_(IDENTIFIER_NAME, ...)                                                       u8 IDENTIFIER_NAME[sizeof(#IDENTIFIER_NAME) - 1];
+#define WORDGAME_MAX_PRINT_NAME_SIZE    sizeof(union { WORDGAME_XMDT(WORDGAME_MAX_PRINT_NAME_SIZE_,) })
+#define WORDGAME_MAX_DIM_SLOTS_X        sizeof(union { WORDGAME_XMDT(WORDGAME_MAX_DIM_SLOTS_X_,) })
+#define WORDGAME_MAX_DIM_SLOTS_Y        sizeof(union { WORDGAME_XMDT(WORDGAME_MAX_DIM_SLOTS_Y_,) })
+#define WORDGAME_MAX_PRINT_NAME_LENGTH (sizeof(union { WORDGAME_XMDT(WORDGAME_MAX_PRINT_NAME_LENGTH_,) }) - 1)
+#define LETTER_MAX_NAME_LENGTH          sizeof(union { LETTER_XMDT(LETTER_MAX_NAME_LENGTH_) })
 
 enum Letter
 {
@@ -517,8 +339,98 @@ enum Letter
 	Letter_COUNT,
 };
 
+enum WordGame
+{
+	#define MAKE(IDENTIFIER_NAME, ...) WordGame_##IDENTIFIER_NAME,
+	WORDGAME_XMDT(MAKE,)
+	#undef MAKE
+	WordGame_COUNT,
+};
+
+struct WordGameInfo
+{
+	char        print_name_cstr[WORDGAME_MAX_PRINT_NAME_SIZE];
+	enum Letter sentinel_letter;
+	u8_2        dim_slots;
+	u8          compressed_slot_stride;
+
+	#if PROGRAM_MICROSERVICES
+		str   print_name;
+		i32_2 pos;
+		i32   slot_dim;
+		f64   uncompressed_slot_stride;
+		i32_2 test_region_pos;
+		i32_2 test_region_dim;
+		f64_3 test_region_rgb;
+	#endif
+};
+
 #if PROGRAM_DIPLOMAT
-	static const u8 LETTER_LCD_CODES[] PROGMEM =
+	#define count_cleared_bits(...) pgm_u8(COUNT_CLEARED_BITS_DT_[(u8) { __VA_ARGS__ }])
+	static const u8 COUNT_CLEARED_BITS_DT_[] PROGMEM =
+		{
+			[0b00000000] = 8, [0b00000001] = 7, [0b00000010] = 7, [0b00000011] = 6, [0b00000100] = 7, [0b00000101] = 6, [0b00000110] = 6, [0b00000111] = 5,
+			[0b00001000] = 7, [0b00001001] = 6, [0b00001010] = 6, [0b00001011] = 5, [0b00001100] = 6, [0b00001101] = 5, [0b00001110] = 5, [0b00001111] = 4,
+			[0b00010000] = 7, [0b00010001] = 6, [0b00010010] = 6, [0b00010011] = 5, [0b00010100] = 6, [0b00010101] = 5, [0b00010110] = 5, [0b00010111] = 4,
+			[0b00011000] = 6, [0b00011001] = 5, [0b00011010] = 5, [0b00011011] = 4, [0b00011100] = 5, [0b00011101] = 4, [0b00011110] = 4, [0b00011111] = 3,
+			[0b00100000] = 7, [0b00100001] = 6, [0b00100010] = 6, [0b00100011] = 5, [0b00100100] = 6, [0b00100101] = 5, [0b00100110] = 5, [0b00100111] = 4,
+			[0b00101000] = 6, [0b00101001] = 5, [0b00101010] = 5, [0b00101011] = 4, [0b00101100] = 5, [0b00101101] = 4, [0b00101110] = 4, [0b00101111] = 3,
+			[0b00110000] = 6, [0b00110001] = 5, [0b00110010] = 5, [0b00110011] = 4, [0b00110100] = 5, [0b00110101] = 4, [0b00110110] = 4, [0b00110111] = 3,
+			[0b00111000] = 5, [0b00111001] = 4, [0b00111010] = 4, [0b00111011] = 3, [0b00111100] = 4, [0b00111101] = 3, [0b00111110] = 3, [0b00111111] = 2,
+			[0b01000000] = 7, [0b01000001] = 6, [0b01000010] = 6, [0b01000011] = 5, [0b01000100] = 6, [0b01000101] = 5, [0b01000110] = 5, [0b01000111] = 4,
+			[0b01001000] = 6, [0b01001001] = 5, [0b01001010] = 5, [0b01001011] = 4, [0b01001100] = 5, [0b01001101] = 4, [0b01001110] = 4, [0b01001111] = 3,
+			[0b01010000] = 6, [0b01010001] = 5, [0b01010010] = 5, [0b01010011] = 4, [0b01010100] = 5, [0b01010101] = 4, [0b01010110] = 4, [0b01010111] = 3,
+			[0b01011000] = 5, [0b01011001] = 4, [0b01011010] = 4, [0b01011011] = 3, [0b01011100] = 4, [0b01011101] = 3, [0b01011110] = 3, [0b01011111] = 2,
+			[0b01100000] = 6, [0b01100001] = 5, [0b01100010] = 5, [0b01100011] = 4, [0b01100100] = 5, [0b01100101] = 4, [0b01100110] = 4, [0b01100111] = 3,
+			[0b01101000] = 5, [0b01101001] = 4, [0b01101010] = 4, [0b01101011] = 3, [0b01101100] = 4, [0b01101101] = 3, [0b01101110] = 3, [0b01101111] = 2,
+			[0b01110000] = 5, [0b01110001] = 4, [0b01110010] = 4, [0b01110011] = 3, [0b01110100] = 4, [0b01110101] = 3, [0b01110110] = 3, [0b01110111] = 2,
+			[0b01111000] = 4, [0b01111001] = 3, [0b01111010] = 3, [0b01111011] = 2, [0b01111100] = 3, [0b01111101] = 2, [0b01111110] = 2, [0b01111111] = 1,
+			[0b10000000] = 7, [0b10000001] = 6, [0b10000010] = 6, [0b10000011] = 5, [0b10000100] = 6, [0b10000101] = 5, [0b10000110] = 5, [0b10000111] = 4,
+			[0b10001000] = 6, [0b10001001] = 5, [0b10001010] = 5, [0b10001011] = 4, [0b10001100] = 5, [0b10001101] = 4, [0b10001110] = 4, [0b10001111] = 3,
+			[0b10010000] = 6, [0b10010001] = 5, [0b10010010] = 5, [0b10010011] = 4, [0b10010100] = 5, [0b10010101] = 4, [0b10010110] = 4, [0b10010111] = 3,
+			[0b10011000] = 5, [0b10011001] = 4, [0b10011010] = 4, [0b10011011] = 3, [0b10011100] = 4, [0b10011101] = 3, [0b10011110] = 3, [0b10011111] = 2,
+			[0b10100000] = 6, [0b10100001] = 5, [0b10100010] = 5, [0b10100011] = 4, [0b10100100] = 5, [0b10100101] = 4, [0b10100110] = 4, [0b10100111] = 3,
+			[0b10101000] = 5, [0b10101001] = 4, [0b10101010] = 4, [0b10101011] = 3, [0b10101100] = 4, [0b10101101] = 3, [0b10101110] = 3, [0b10101111] = 2,
+			[0b10110000] = 5, [0b10110001] = 4, [0b10110010] = 4, [0b10110011] = 3, [0b10110100] = 4, [0b10110101] = 3, [0b10110110] = 3, [0b10110111] = 2,
+			[0b10111000] = 4, [0b10111001] = 3, [0b10111010] = 3, [0b10111011] = 2, [0b10111100] = 3, [0b10111101] = 2, [0b10111110] = 2, [0b10111111] = 1,
+			[0b11000000] = 6, [0b11000001] = 5, [0b11000010] = 5, [0b11000011] = 4, [0b11000100] = 5, [0b11000101] = 4, [0b11000110] = 4, [0b11000111] = 3,
+			[0b11001000] = 5, [0b11001001] = 4, [0b11001010] = 4, [0b11001011] = 3, [0b11001100] = 4, [0b11001101] = 3, [0b11001110] = 3, [0b11001111] = 2,
+			[0b11010000] = 5, [0b11010001] = 4, [0b11010010] = 4, [0b11010011] = 3, [0b11010100] = 4, [0b11010101] = 3, [0b11010110] = 3, [0b11010111] = 2,
+			[0b11011000] = 4, [0b11011001] = 3, [0b11011010] = 3, [0b11011011] = 2, [0b11011100] = 3, [0b11011101] = 2, [0b11011110] = 2, [0b11011111] = 1,
+			[0b11100000] = 5, [0b11100001] = 4, [0b11100010] = 4, [0b11100011] = 3, [0b11100100] = 4, [0b11100101] = 3, [0b11100110] = 3, [0b11100111] = 2,
+			[0b11101000] = 4, [0b11101001] = 3, [0b11101010] = 3, [0b11101011] = 2, [0b11101100] = 3, [0b11101101] = 2, [0b11101110] = 2, [0b11101111] = 1,
+			[0b11110000] = 4, [0b11110001] = 3, [0b11110010] = 3, [0b11110011] = 2, [0b11110100] = 3, [0b11110101] = 2, [0b11110110] = 2, [0b11110111] = 1,
+			[0b11111000] = 3, [0b11111001] = 2, [0b11111010] = 2, [0b11111011] = 1, [0b11111100] = 2, [0b11111101] = 1, [0b11111110] = 1, [0b11111111] = 0,
+		};
+
+	static const struct WordGameInfo WORDGAME_INFO[] PROGMEM =
+		{
+			#define MAKE( \
+				IDENTIFIER_NAME, \
+				PRINT_NAME, \
+				SENTINEL_LETTER, \
+				POS_X, POS_Y, \
+				DIM_SLOTS_X, DIM_SLOTS_Y, \
+				SLOT_DIM, \
+				UNCOMPRESSED_SLOT_STRIDE, \
+				COMPRESSED_SLOT_STRIDE, \
+				TEST_REGION_POS_X, TEST_REGION_POS_Y, \
+				TEST_REGION_DIM_X, TEST_REGION_DIM_Y, \
+				TEST_REGION_R, TEST_REGION_G, TEST_REGION_B, \
+				... \
+			) \
+				{ \
+					.print_name_cstr        = PRINT_NAME, \
+					.sentinel_letter        = SENTINEL_LETTER, \
+					.dim_slots.x            = DIM_SLOTS_X, \
+					.dim_slots.y            = DIM_SLOTS_Y, \
+					.compressed_slot_stride = COMPRESSED_SLOT_STRIDE, \
+				},
+			WORDGAME_XMDT(MAKE,)
+			#undef MAKE
+		};
+
+	static const u8 LETTER_LCD_CODES[] PROGMEM = // TODO Combine with LETTER_NAMES?
 		{
 			#define MAKE(NAME, LCD_CODE) LCD_CODE,
 			LETTER_XMDT(MAKE)
@@ -527,6 +439,45 @@ enum Letter
 #endif
 
 #if PROGRAM_MICROSERVICES
+	static const struct WordGameInfo WORDGAME_INFO[] =
+		{
+			#define MAKE( \
+				IDENTIFIER_NAME, \
+				PRINT_NAME, \
+				SENTINEL_LETTER, \
+				POS_X, POS_Y, \
+				DIM_SLOTS_X, DIM_SLOTS_Y, \
+				SLOT_DIM, \
+				UNCOMPRESSED_SLOT_STRIDE, \
+				COMPRESSED_SLOT_STRIDE, \
+				TEST_REGION_POS_X, TEST_REGION_POS_Y, \
+				TEST_REGION_DIM_X, TEST_REGION_DIM_Y, \
+				TEST_REGION_R, TEST_REGION_G, TEST_REGION_B, \
+				... \
+			) \
+				{ \
+					.print_name_cstr          = PRINT_NAME, \
+					.print_name               = STR(PRINT_NAME), \
+					.sentinel_letter          = SENTINEL_LETTER, \
+					.pos.x                    = POS_X, \
+					.pos.y                    = POS_Y, \
+					.dim_slots.x              = DIM_SLOTS_X, \
+					.dim_slots.y              = DIM_SLOTS_Y, \
+					.slot_dim                 = SLOT_DIM, \
+					.uncompressed_slot_stride = UNCOMPRESSED_SLOT_STRIDE, \
+					.compressed_slot_stride   = COMPRESSED_SLOT_STRIDE, \
+					.test_region_pos.x        = TEST_REGION_POS_X, \
+					.test_region_pos.y        = TEST_REGION_POS_Y, \
+					.test_region_dim.x        = TEST_REGION_DIM_X, \
+					.test_region_dim.y        = TEST_REGION_DIM_Y, \
+					.test_region_rgb.x        = TEST_REGION_R, \
+					.test_region_rgb.y        = TEST_REGION_G, \
+					.test_region_rgb.z        = TEST_REGION_B, \
+				},
+			WORDGAME_XMDT(MAKE,)
+			#undef MAKE
+		};
+
 	static const str LETTER_NAMES[] =
 		{
 			#define MAKE(NAME, ...) STR(#NAME),
@@ -539,7 +490,7 @@ enum Letter
 // "string.c"
 //
 
-#if PROGRAM_MICROSERVICES
+#if PROGRAM_MICROSERVICES // TODO Maybe just make this a "primitive".
 	#define StrBuf(SIZE) ((struct StrBuf) { .data = (char[SIZE]) {0}, .size = (SIZE) })
 	struct StrBuf
 	{
@@ -698,13 +649,17 @@ struct BMPDIBHeader // "BITMAPCOREHEADER" not supported.
 // "Microservices.c".
 //
 
+#define SCREENSHOT_DIM_X        1170
+#define SCREENSHOT_DIM_Y        2532
+#define TEST_REGION_RGB_EPSILON 0.015
+
 #define CLI_EXE_NAME "Microservices.exe"
 #define CLI_EXE_DESC "Microservices to help you bring change to the world."
 #define CLI_PROGRAM_XMDT(X) \
-	X(eaglepeek   , "Identify the Game Pigeon word game shown in screenshots."   ) \
-	X(extractorv2 , "Create standard mask sized BMP of each slot in screenshots of Game Pigeon word games.") \
-	X(collectune  , "Copy BMPs into folder with the closest matching mask.") \
-	X(maskiversev2, "Format masks into streaming data to be included into C compilation.") \
+	X(eaglepeek   , "Identify the Game Pigeon word game shown in screenshots.") \
+	X(extractorv2 , "Create mask-sized monochrome BMP of each slot in screenshots of Game Pigeon word games.") \
+	X(collectune  , "Copy and sort BMPs into the folder with the closest matching mask.") \
+	X(maskiversev2, "Format masks into streaming data to be included into C compilation.")
 
 #define CLI_PROGRAM_eaglepeek_FIELD_XMDT(X, ...) \
 	X(input_dir_paths, dary_string, "screenshot-dir-path...", "Directory path of the screenshots to identify.",##__VA_ARGS__) \
@@ -729,26 +684,46 @@ struct BMPDIBHeader // "BITMAPCOREHEADER" not supported.
 	X(dary_string, struct Dary_CLIFieldTyping_string_t) \
 	X(b32        , b32)
 
+#define CLI_PROGRAM_MAX_FIELDS__(PROGRAM_NAME, ...) +1
+#define CLI_PROGRAM_MAX_FIELDS_(PROGRAM_NAME, ...) u8 IDENTIFIER_NAME[CLI_PROGRAM_##PROGRAM_NAME##_FIELD_XMDT(CLI_PROGRAM_MAX_FIELDS__)];
+#define CLI_PROGRAM_MAX_FIELDS sizeof(union { CLI_PROGRAM_XMDT(LETTER_MAX_NAME_LENGTH_) })
+
+enum CLIFieldTyping
+{
+	#define MAKE(TYPING_NAME, TYPING_TYPE) CLIFieldTyping_##TYPING_NAME,
+	CLI_TYPING_XMDT(MAKE)
+	#undef MAKE
+};
+
+enum CLIProgram
+{
+	#define MAKE(PROGRAM_NAME, PROGRAM_DESC) CLIProgram_##PROGRAM_NAME,
+	CLI_PROGRAM_XMDT(MAKE)
+	#undef MAKE
+	CLIProgram_COUNT,
+};
+
 #if PROGRAM_MICROSERVICES
-	enum CLIFieldTyping
+	struct CLIFieldInfo
 	{
-		#define MAKE(TYPING_NAME, TYPING_TYPE) CLIFieldTyping_##TYPING_NAME,
-		CLI_TYPING_XMDT(MAKE)
-		#undef MAKE
+		i64                 offset;
+		enum CLIFieldTyping typing;
+		str                 pattern;
+		str                 desc;
+	};
+
+	struct CLIProgramInfo
+	{
+		str                 name;
+		str                 desc;
+		struct CLIFieldInfo fields[CLI_PROGRAM_MAX_FIELDS];
+		i32                 field_count;
 	};
 
 	#define MAKE(TYPING_NAME, TYPING_TYPE) typedef TYPING_TYPE CLIFieldTyping_##TYPING_NAME##_t;
 	CLI_TYPING_XMDT(MAKE)
 	#undef MAKE
 	Dary_def(CLIFieldTyping_string_t);
-
-	enum CLIProgram
-	{
-		#define MAKE(PROGRAM_NAME, PROGRAM_DESC) CLIProgram_##PROGRAM_NAME,
-		CLI_PROGRAM_XMDT(MAKE)
-		#undef MAKE
-		CLIProgram_COUNT,
-	};
 
 	#define MAKE_CLI_FIELD(PROGRAM_NAME, PROGRAM_DESC) \
 		enum CLIField_##PROGRAM_NAME \
@@ -776,22 +751,6 @@ struct BMPDIBHeader // "BITMAPCOREHEADER" not supported.
 		#undef MAKE_CLI_PROGRAM
 	};
 
-	struct CLIFieldInfo
-	{
-		i64                 offset;
-		enum CLIFieldTyping typing;
-		str                 pattern;
-		str                 desc;
-	};
-
-	struct CLIProgramInfo
-	{
-		str                 name;
-		str                 desc;
-		struct CLIFieldInfo fields[8];
-		i32                 field_count;
-	};
-
 	static const struct CLIProgramInfo CLI_PROGRAM_INFO[] =
 		{
 			#define MAKE_PROGRAM_INFO(PROGRAM_NAME, PROGRAM_DESC) \
@@ -817,11 +776,6 @@ struct BMPDIBHeader // "BITMAPCOREHEADER" not supported.
 		};
 #endif
 
-#define SCREENSHOT_DIM_X 1170
-#define SCREENSHOT_DIM_Y 2532
-
-#define EXTRACTOR_RGB_EPSILON 0.015
-
 //
 // "pin.c"
 //
@@ -834,42 +788,41 @@ enum HaltSource
 	HaltSource_sd       = 3,
 };
 
-#if __AVR_ATmega32U4__
-	#if BOARD_LEONARDO
-		#define PIN_XMDT(X) /* See: Source(3). */ \
-			X(0 , D, 2) X(1 , D, 3) X(2 , D, 1) X(3 , D, 0) X(4 , D, 4) X(5 , C, 6) X(6 , D, 7) \
-			X(7 , E, 6) X(8 , B, 4) X(9 , B, 5) X(10, B, 6) X(11, B, 7) X(12, D, 6) X(13, C, 7) \
-			X(A0, F, 7) X(A1, F, 6) X(A2, F, 5) X(A3, F, 4) X(A4, F, 1) X(A5, F, 0) \
-			X(SPI_SS, B, 0) X(SPI_CLK, B, 1) X(SPI_MOSI, B, 2) X(SPI_MISO, B, 3) \
-			X(HALT, D, 5)
-	#endif
-
-	#if BOARD_PRO_MICRO
-		#define PIN_XMDT(X) /* Pin assignments are pretty similar to the Arduino Leonardo. */ \
-			X(2     , D, 1) X(3      , D, 0) X(4       , D, 4) X(5       , C, 6) \
-			X(6     , D, 7) X(7      , E, 6) X(8       , B, 4) X(9       , B, 5) \
-			X(10    , B, 6) X(14     , B, 3) X(15      , B, 1) X(16      , B, 2) \
-			X(A0    , F, 7) X(A1     , F, 6) X(A2      , F, 5) X(A3      , F, 4) \
-			X(SPI_SS, B, 0) X(SPI_CLK, B, 1) X(SPI_MOSI, B, 2) X(SPI_MISO, B, 3) \
-			X(HALT  , D, 5)
-	#endif
+#if BOARD_LEONARDO
+	static_assert(__AVR_ATmega32U4__);
+	#define PIN_XMDT(X) /* See: Source(3). */ \
+		X(0     , D, 2) X(1      , D, 3) X(2       , D, 1) X(3       , D, 0) X(4 , D, 4) X(5 , C, 6) X(6 , D, 7) \
+		X(7     , E, 6) X(8      , B, 4) X(9       , B, 5) X(10      , B, 6) X(11, B, 7) X(12, D, 6) X(13, C, 7) \
+		X(A0    , F, 7) X(A1     , F, 6) X(A2      , F, 5) X(A3      , F, 4) X(A4, F, 1) X(A5, F, 0) \
+		X(SPI_SS, B, 0) X(SPI_CLK, B, 1) X(SPI_MOSI, B, 2) X(SPI_MISO, B, 3) \
+		X(HALT  , D, 5)
 #endif
 
-#if __AVR_ATmega2560__
-	#if BOARD_MEGA2560
-		#define PIN_XMDT(X) /* See: Source(18). */ \
-			X(0 , E, 0) X(1 , E, 1) X(2 , E, 4) X(3 , E, 5) X( 4, G, 5) X(5 , E, 3) \
-			X(6 , H, 3) X(7 , H, 4) X(8 , H, 5) X(9 , H, 6) X(10, B, 4) X(11, B, 5) \
-			X(12, B, 6) X(13, B, 7) X(14, J, 1) X(15, J, 0) X(16, H, 1) X(17, H, 0) \
-			X(18, D, 3) X(19, D, 2) X(20, D, 1) X(21, D, 0) X(22, A, 0) X(23, A, 1) \
-			X(24, A, 2) X(25, A, 3) X(26, A, 4) X(27, A, 5) X(28, A, 6) X(29, A, 7) \
-			X(30, C, 7) X(31, C, 6) X(32, C, 5) X(33, C, 4) X(34, C, 3) X(35, C, 2) \
-			X(36, C, 1) X(37, C, 0) X(38, D, 7) X(39, G, 2) X(40, G, 1) X(41, G, 0) \
-			X(42, L, 7) X(43, L, 6) X(44, L, 5) X(45, L, 4) X(46, L, 3) X(47, L, 2) \
-			X(48, L, 1) X(49, L, 0) X(50, B, 3) X(51, B, 2) X(52, B, 1) X(53, B, 0) \
-			X(SPI_SS, B, 0) X(SPI_CLK, B, 1) X(SPI_MOSI, B, 2) X(SPI_MISO, B, 3) \
-			X(HALT, B, 7)
-	#endif
+#if BOARD_PRO_MICRO
+	static_assert(__AVR_ATmega32U4__);
+	#define PIN_XMDT(X) /* Pin assignments are pretty similar to the Arduino Leonardo. */ \
+		X(2     , D, 1) X(3      , D, 0) X(4       , D, 4) X(5       , C, 6) \
+		X(6     , D, 7) X(7      , E, 6) X(8       , B, 4) X(9       , B, 5) \
+		X(10    , B, 6) X(14     , B, 3) X(15      , B, 1) X(16      , B, 2) \
+		X(A0    , F, 7) X(A1     , F, 6) X(A2      , F, 5) X(A3      , F, 4) \
+		X(SPI_SS, B, 0) X(SPI_CLK, B, 1) X(SPI_MOSI, B, 2) X(SPI_MISO, B, 3) \
+		X(HALT  , D, 5)
+#endif
+
+#if BOARD_MEGA_2560_REV3
+	static_assert(__AVR_ATmega2560__);
+	#define PIN_XMDT(X) /* See: Source(18). */ \
+		X(0     , E, 0) X(1      , E, 1) X(2       , E, 4) X(3       , E, 5) X( 4, G, 5) X(5 , E, 3) \
+		X(6     , H, 3) X(7      , H, 4) X(8       , H, 5) X(9       , H, 6) X(10, B, 4) X(11, B, 5) \
+		X(12    , B, 6) X(13     , B, 7) X(14      , J, 1) X(15      , J, 0) X(16, H, 1) X(17, H, 0) \
+		X(18    , D, 3) X(19     , D, 2) X(20      , D, 1) X(21      , D, 0) X(22, A, 0) X(23, A, 1) \
+		X(24    , A, 2) X(25     , A, 3) X(26      , A, 4) X(27      , A, 5) X(28, A, 6) X(29, A, 7) \
+		X(30    , C, 7) X(31     , C, 6) X(32      , C, 5) X(33      , C, 4) X(34, C, 3) X(35, C, 2) \
+		X(36    , C, 1) X(37     , C, 0) X(38      , D, 7) X(39      , G, 2) X(40, G, 1) X(41, G, 0) \
+		X(42    , L, 7) X(43     , L, 6) X(44      , L, 5) X(45      , L, 4) X(46, L, 3) X(47, L, 2) \
+		X(48    , L, 1) X(49     , L, 0) X(50      , B, 3) X(51      , B, 2) X(52, B, 1) X(53, B, 0) \
+		X(SPI_SS, B, 0) X(SPI_CLK, B, 1) X(SPI_MOSI, B, 2) X(SPI_MISO, B, 3) \
+		X(HALT  , B, 7)
 #endif
 
 //
@@ -903,6 +856,8 @@ enum TimerPrescaler // Prescalers for Timer0's TCCR0B register. See: Source(1) @
 // "spi.c"
 //
 
+#define SPI_PRESCALER SPIPrescaler_2
+
 enum SPIPrescaler // See: Source(1) @ Table(17-5) @ Page(186).
 {
 	//                   "SPI2X" bit in "SPSR".
@@ -919,8 +874,6 @@ enum SPIPrescaler // See: Source(1) @ Table(17-5) @ Page(186).
 	SPIPrescaler_32  = 0b1'1'0,
 	SPIPrescaler_64_ = 0b1'1'1, // Equivalent to SPIPrescaler_64 (0b0'1'0).
 };
-
-#define SPI_PRESCALER SPIPrescaler_2
 
 //
 // FAT32.
@@ -1021,7 +974,7 @@ struct FAT32FileStructureInfo // See: Source(15) @ Page(21-22).
 			.FSI_TrailSig   = 0xAA550000,
 		};
 
-	static const u32 FAT32_TABLE[128] PROGMEM = // Most significant nibbles are reserved. See: Source(15) @ Section(4) @ Page(16).
+	static const u32 FAT32_TABLE[FAT32_SECTOR_SIZE / sizeof(u32)] PROGMEM = // Most significant nibbles are reserved. See: Source(15) @ Section(4) @ Page(16).
 		{
 			[0]                  = 0x0'FFFFF'00 | FAT32_MEDIA_TYPE, // See: Source(15) @ Section(4.2) @ Page(19).
 			[1]                  = 0xF'FFFFFFF,                     // For format utilities. Seems to be commonly always all set. See: Source(15) @ Section(4.2) @ Page(19).
@@ -1073,6 +1026,8 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 //
 // "usb.c"
 //
+
+#define USB_MOUSE_CALIBRATIONS_REQUIRED 128
 
 #if DEBUG // Used to disable some USB functionalities for development purposes, but does not necessairly remove all data and control flow.
 	#define USB_CDC_ENABLE true
@@ -1935,8 +1890,6 @@ struct USBConfig // This layout is defined uniquely for our device application.
 		};
 #endif
 
-#define USB_MOUSE_CALIBRATIONS_REQUIRED 128
-
 #if PROGRAM_DIPLOMAT
 	// Only the interrupt can read and write these.
 	static u8 _usb_mouse_calibrations = 0;
@@ -1961,23 +1914,23 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	// Buffer sizes must be a power of two for the "_usb_mouse_X_masked" macros.
 	static_assert(countof(_usb_mouse_command_buffer) && !(countof(_usb_mouse_command_buffer) & (countof(_usb_mouse_command_buffer) - 1)));
 
-	#define MAKE(IDENTIFIER_NAME, PRINT_NAME, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, SLOT_DIM, UNCOMPRESSED_SLOT_STRIDE, COMPRESSED_SLOT_STRIDE, ...) \
+	#define MAKE(IDENTIFIER_NAME, PRINT_NAME, SENTINEL_LETTER, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, SLOT_DIM, UNCOMPRESSED_SLOT_STRIDE, COMPRESSED_SLOT_STRIDE, ...) \
 		static_assert(COMPRESSED_SLOT_STRIDE < 256); // To ensure _usb_ms_ocr_slot_topdown_pixel_coords stays byte-sized.
-	WORDGAME_BOARD_XMDT(MAKE)
+	WORDGAME_XMDT(MAKE,)
 	#undef MAKE
 
 	static volatile enum USBMSOCRState usb_ms_ocr_state                                                    = {0};
-	static volatile enum WordGameMap   usb_ms_ocr_wordgame_map                                             = {0};
-	static volatile enum Letter        usb_ms_ocr_grid[WORDGAME_BOARD_MAX_DIM_Y][WORDGAME_BOARD_MAX_DIM_X] = {0};
+	static volatile enum WordGame      usb_ms_ocr_wordgame                                                 = {0};
+	static volatile enum Letter        usb_ms_ocr_grid[WORDGAME_MAX_DIM_SLOTS_Y][WORDGAME_MAX_DIM_SLOTS_X] = {0};
 
 	static u8_2                           _usb_ms_ocr_slot_topdown_board_coords                                  = {0};
 	static u8_2                           _usb_ms_ocr_slot_topdown_pixel_coords                                  = {0};
-	static u16                            _usb_ms_ocr_accumulated_scores[WORDGAME_BOARD_MAX_DIM_X][Letter_COUNT] = {0};
+	static u16                            _usb_ms_ocr_accumulated_scores[WORDGAME_MAX_DIM_SLOTS_X][Letter_COUNT] = {0}; // TODO Perhaps keep track of differences instead?
 	static u8                             _usb_ms_ocr_slot_pixel_row[MASK_DIM / 8]                               = {0};
 	static u8                             _usb_ms_ocr_activated_slot                                             = 0;
 	static struct USBMSOCRMaskStreamState _usb_ms_ocr_curr_mask_stream_state                                     = {0};
 	static struct USBMSOCRMaskStreamState _usb_ms_ocr_next_mask_stream_state                                     = {0};
-	static_assert(WORDGAME_BOARD_MAX_DIM_X == 8); // For _usb_ms_ocr_activated.
+	static_assert(WORDGAME_MAX_DIM_SLOTS_X == 8); // For _usb_ms_ocr_activated.
 	static_assert(MASK_DIM % 8 == 0);             // For _usb_ms_ocr_slot_pixel_row.
 
 	#if USB_MS_ENABLE
@@ -1985,36 +1938,34 @@ struct USBConfig // This layout is defined uniquely for our device application.
 		static b8                               _usb_ms_send_status = false;
 	#endif
 
-	#if USB_CDC_ENABLE
-		#if DEBUG
-			static volatile u8 debug_usb_cdc_in_buffer [USB_ENDPOINT_CDC_IN_SIZE ] = {0};
-			static volatile u8 debug_usb_cdc_out_buffer[USB_ENDPOINT_CDC_OUT_SIZE] = {0};
+	#if USB_CDC_ENABLE && DEBUG
+		static volatile u8 debug_usb_cdc_in_buffer [USB_ENDPOINT_CDC_IN_SIZE ] = {0};
+		static volatile u8 debug_usb_cdc_out_buffer[USB_ENDPOINT_CDC_OUT_SIZE] = {0};
 
-			static volatile u8 debug_usb_cdc_in_writer  = 0; // Main program writes.
-			static volatile u8 debug_usb_cdc_in_reader  = 0; // Interrupt routine reads.
-			static volatile u8 debug_usb_cdc_out_writer = 0; // Interrupt routine writes.
-			static volatile u8 debug_usb_cdc_out_reader = 0; // Main program reads.
+		static volatile u8 debug_usb_cdc_in_writer  = 0; // Main program writes.
+		static volatile u8 debug_usb_cdc_in_reader  = 0; // Interrupt routine reads.
+		static volatile u8 debug_usb_cdc_out_writer = 0; // Interrupt routine writes.
+		static volatile u8 debug_usb_cdc_out_reader = 0; // Main program reads.
 
-			#define debug_usb_cdc_in_writer_masked(OFFSET)  ((debug_usb_cdc_in_writer  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
-			#define debug_usb_cdc_in_reader_masked(OFFSET)  ((debug_usb_cdc_in_reader  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
-			#define debug_usb_cdc_out_writer_masked(OFFSET) ((debug_usb_cdc_out_writer + (OFFSET)) & (countof(debug_usb_cdc_out_buffer) - 1))
-			#define debug_usb_cdc_out_reader_masked(OFFSET) ((debug_usb_cdc_out_reader + (OFFSET)) & (countof(debug_usb_cdc_out_buffer) - 1))
+		#define debug_usb_cdc_in_writer_masked(OFFSET)  ((debug_usb_cdc_in_writer  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
+		#define debug_usb_cdc_in_reader_masked(OFFSET)  ((debug_usb_cdc_in_reader  + (OFFSET)) & (countof(debug_usb_cdc_in_buffer ) - 1))
+		#define debug_usb_cdc_out_writer_masked(OFFSET) ((debug_usb_cdc_out_writer + (OFFSET)) & (countof(debug_usb_cdc_out_buffer) - 1))
+		#define debug_usb_cdc_out_reader_masked(OFFSET) ((debug_usb_cdc_out_reader + (OFFSET)) & (countof(debug_usb_cdc_out_buffer) - 1))
 
-			// A read/write index with a size greater than a byte makes "atomic" read/write operations difficult to guarantee; it can be done, but probably not worthwhile.
-			static_assert(sizeof(debug_usb_cdc_in_writer) == 1 && sizeof(debug_usb_cdc_in_reader) == 1 && sizeof(debug_usb_cdc_out_writer) == 1 && sizeof(debug_usb_cdc_out_reader) == 1);
+		// A read/write index with a size greater than a byte makes "atomic" read/write operations difficult to guarantee; it can be done, but probably not worthwhile.
+		static_assert(sizeof(debug_usb_cdc_in_writer) == 1 && sizeof(debug_usb_cdc_in_reader) == 1 && sizeof(debug_usb_cdc_out_writer) == 1 && sizeof(debug_usb_cdc_out_reader) == 1);
 
-			// The read/write indices must be able to address any element in the corresponding buffer.
-			static_assert(countof(debug_usb_cdc_in_buffer ) <= (u64(1) << bitsof(debug_usb_cdc_in_reader )));
-			static_assert(countof(debug_usb_cdc_in_buffer ) <= (u64(1) << bitsof(debug_usb_cdc_in_writer )));
-			static_assert(countof(debug_usb_cdc_out_buffer) <= (u64(1) << bitsof(debug_usb_cdc_out_reader)));
-			static_assert(countof(debug_usb_cdc_out_buffer) <= (u64(1) << bitsof(debug_usb_cdc_out_writer)));
+		// The read/write indices must be able to address any element in the corresponding buffer.
+		static_assert(countof(debug_usb_cdc_in_buffer ) <= (u64(1) << bitsof(debug_usb_cdc_in_reader )));
+		static_assert(countof(debug_usb_cdc_in_buffer ) <= (u64(1) << bitsof(debug_usb_cdc_in_writer )));
+		static_assert(countof(debug_usb_cdc_out_buffer) <= (u64(1) << bitsof(debug_usb_cdc_out_reader)));
+		static_assert(countof(debug_usb_cdc_out_buffer) <= (u64(1) << bitsof(debug_usb_cdc_out_writer)));
 
-			// Buffer sizes must be a power of two for the "debug_usb_cdc_X_Y_masked" macros.
-			static_assert(countof(debug_usb_cdc_in_buffer ) && !(countof(debug_usb_cdc_in_buffer ) & (countof(debug_usb_cdc_in_buffer ) - 1)));
-			static_assert(countof(debug_usb_cdc_out_buffer) && !(countof(debug_usb_cdc_out_buffer) & (countof(debug_usb_cdc_out_buffer) - 1)));
+		// Buffer sizes must be a power of two for the "debug_usb_cdc_X_Y_masked" macros.
+		static_assert(countof(debug_usb_cdc_in_buffer ) && !(countof(debug_usb_cdc_in_buffer ) & (countof(debug_usb_cdc_in_buffer ) - 1)));
+		static_assert(countof(debug_usb_cdc_out_buffer) && !(countof(debug_usb_cdc_out_buffer) & (countof(debug_usb_cdc_out_buffer) - 1)));
 
-			static b8 debug_usb_is_on_host_machine = false;
-		#endif
+		static b8 debug_usb_is_on_host_machine = false;
 	#endif
 #endif
 

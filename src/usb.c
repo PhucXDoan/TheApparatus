@@ -688,14 +688,13 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 				// Determine whether or not we need to inspect the write transaction to do OCR.
 				//
 
-				b8                 transaction_is_for_bmp  = false;
-				u16                curr_red_channel_offset = 0;
-				enum WordGameBoard wordgame_board          = pgm_u8(WORDGAME_MAP_INFO[usb_ms_ocr_wordgame_map].board);
-				u8                 compressed_slot_stride  = pgm_u8(WORDGAME_BOARD_INFO[wordgame_board].compressed_slot_stride);
-				u8_2               board_dim_slots         =
+				b8   transaction_is_for_bmp  = false;
+				u16  curr_red_channel_offset = 0;
+				u8   compressed_slot_stride  = pgm_u8(WORDGAME_INFO[usb_ms_ocr_wordgame].compressed_slot_stride);
+				u8_2 board_dim_slots         =
 					{
-						pgm_u8(WORDGAME_BOARD_INFO[wordgame_board].dim_slots.x),
-						pgm_u8(WORDGAME_BOARD_INFO[wordgame_board].dim_slots.y),
+						pgm_u8(WORDGAME_INFO[usb_ms_ocr_wordgame].dim_slots.x),
+						pgm_u8(WORDGAME_INFO[usb_ms_ocr_wordgame].dim_slots.y),
 					};
 
 				switch (usb_ms_ocr_state)
@@ -790,14 +789,12 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 								process_for_slot_pixels =
 									!is_slot_excluded
 									(
-										(u8_2)
-										{
-											_usb_ms_ocr_slot_topdown_board_coords.x,
-											board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y,
-										}
+										usb_ms_ocr_wordgame,
+										_usb_ms_ocr_slot_topdown_board_coords.x,
+										board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y
 									);
 
-								if (process_for_slot_pixels && usb_ms_ocr_wordgame_map == WordGameMap_wordbites && _usb_ms_ocr_slot_topdown_board_coords.y)
+								if (process_for_slot_pixels && usb_ms_ocr_wordgame == WordGame_wordbites && _usb_ms_ocr_slot_topdown_board_coords.y)
 								{
 									u8_2 coords =
 										{
@@ -880,27 +877,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 									struct USBMSOCRMaskStreamState probing_mask_stream_state = _usb_ms_ocr_curr_mask_stream_state;
 
-									enum Letter letter_sentinel = {0};
-									switch (usb_ms_ocr_wordgame_map)
-									{
-										case WordGameMap_anagrams_english_6 :
-										case WordGameMap_anagrams_english_7 :
-										case WordGameMap_wordhunt_4x4       :
-										case WordGameMap_wordhunt_o         :
-										case WordGameMap_wordhunt_x         :
-										case WordGameMap_wordhunt_5x5       :
-										case WordGameMap_wordbites          : letter_sentinel = Letter_z + 1; break;
-
-										case WordGameMap_anagrams_russian   :
-										case WordGameMap_anagrams_french    :
-										case WordGameMap_anagrams_german    :
-										case WordGameMap_anagrams_spanish   :
-										case WordGameMap_anagrams_italian   : letter_sentinel = Letter_COUNT; break;
-
-										case WordGameMap_COUNT              : error(); break;
-									}
-
-									for (enum Letter letter = {1}; letter < letter_sentinel; letter += 1)
+									for (enum Letter letter = {1}; letter < pgm_u8(WORDGAME_INFO[usb_ms_ocr_wordgame].sentinel_letter); letter += 1)
 									{
 										static_assert(MASK_DIM % 8 == 0);
 										for (u8 byte_index = 0; byte_index < MASK_DIM / 8; byte_index += 1)
@@ -981,7 +958,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 									if (!_usb_ms_ocr_next_mask_stream_state.index_u8)
 									{
-										u16 pixels_left = MASK_DIM * (Letter_COUNT - letter_sentinel);
+										u16 pixels_left = MASK_DIM * (Letter_COUNT - pgm_u8(WORDGAME_INFO[usb_ms_ocr_wordgame].sentinel_letter));
 										while (pixels_left)
 										{
 											if (!probing_mask_stream_state.runlength_remaining)
@@ -1059,7 +1036,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 										if (_usb_ms_ocr_activated_slot & (1 << slot_coord_x))
 										{
 											u16 highest_score = 0;
-											for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
+											for (enum Letter letter = {1}; letter < pgm_u8(WORDGAME_INFO[usb_ms_ocr_wordgame].sentinel_letter); letter += 1)
 											{
 												u16 letter_score = _usb_ms_ocr_accumulated_scores[slot_coord_x][letter];
 												if (highest_score < letter_score)
