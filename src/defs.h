@@ -133,6 +133,21 @@ typedef struct { b64 x; b64 y; b64 z; b64 w; } b64_4;
 	typedef struct { char* data; i64 length; } str;
 	#define str(STRLIT) (str) { (STRLIT), sizeof(STRLIT) - 1 }
 	#define STR(STRLIT)       { (STRLIT), sizeof(STRLIT) - 1 }
+
+	#define strbuf(SIZE) ((strbuf) { .data = (char[SIZE]) {0}, .size = (SIZE) })
+	typedef struct
+	{
+		union
+		{
+			struct
+			{
+				char* data;
+				i64   length;
+				i64   size;
+			};
+			str str;
+		};
+	} strbuf;
 #endif
 
 static_assert(LITTLE_ENDIAN);
@@ -301,7 +316,7 @@ static_assert(LITTLE_ENDIAN);
 	X(x           , 'X'                ) \
 	X(y           , 'Y'                ) \
 	X(z           , 'Z'                ) /* English letters must be contiguous up to prune out foreign letters that don't need to be processed. */ \
-	X(ene         , 0b1110'1110        ) /* Spanish alphabet essentially consists the basic 26 Latin letters plus N with tilde. */ \
+	X(ene         , 0b1110'1110        ) /* Same reason as above; Spanish alphabet essentially consists the basic 26 Latin letters plus N with tilde. */ \
 	X(boris       , 0b001              ) \
 	X(chelovek    , 0b010              ) \
 	X(dmitri      , 0b1101'1011        ) \
@@ -320,11 +335,11 @@ static_assert(LITTLE_ENDIAN);
 	X(a_umlaut    , 0b1110'0001        ) \
 	X(o_umlaut    , 0b1110'1111        )
 
-#define WORDGAME_MAX_PRINT_NAME_SIZE_(IDENTIFIER_NAME, PRINT_NAME, ...)                                     u8 IDENTIFIER_NAME[sizeof(PRINT_NAME)];
+#define WORDGAME_MAX_PRINT_NAME_SIZE_(IDENTIFIER_NAME, PRINT_NAME, ...) u8 IDENTIFIER_NAME[sizeof(PRINT_NAME)];
 #define WORDGAME_MAX_DIM_SLOTS_X_(IDENTIFIER_NAME, PRINT_NAME, SENTINEL_LETTER, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[DIM_SLOTS_X];
 #define WORDGAME_MAX_DIM_SLOTS_Y_(IDENTIFIER_NAME, PRINT_NAME, SENTINEL_LETTER, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[DIM_SLOTS_Y];
-#define WORDGAME_MAX_PRINT_NAME_LENGTH_(IDENTIFIER_NAME, PRINT_NAME, ...)                                   u8 IDENTIFIER_NAME[sizeof(PRINT_NAME)];
-#define LETTER_MAX_NAME_LENGTH_(IDENTIFIER_NAME, ...)                                                       u8 IDENTIFIER_NAME[sizeof(#IDENTIFIER_NAME) - 1];
+#define WORDGAME_MAX_PRINT_NAME_LENGTH_(IDENTIFIER_NAME, PRINT_NAME, ...) u8 IDENTIFIER_NAME[sizeof(PRINT_NAME)];
+#define LETTER_MAX_NAME_LENGTH_(IDENTIFIER_NAME, ...) u8 IDENTIFIER_NAME[sizeof(#IDENTIFIER_NAME) - 1];
 #define WORDGAME_MAX_PRINT_NAME_SIZE    sizeof(union { WORDGAME_XMDT(WORDGAME_MAX_PRINT_NAME_SIZE_,) })
 #define WORDGAME_MAX_DIM_SLOTS_X        sizeof(union { WORDGAME_XMDT(WORDGAME_MAX_DIM_SLOTS_X_,) })
 #define WORDGAME_MAX_DIM_SLOTS_Y        sizeof(union { WORDGAME_XMDT(WORDGAME_MAX_DIM_SLOTS_Y_,) })
@@ -337,6 +352,15 @@ enum Letter
 	LETTER_XMDT(MAKE)
 	#undef MAKE
 	Letter_COUNT,
+};
+
+struct LetterInfo
+{
+	u8 lcd_character_code;
+
+	#if PROGRAM_MICROSERVICES
+		str name;
+	#endif
 };
 
 enum WordGame
@@ -430,9 +454,12 @@ struct WordGameInfo
 			#undef MAKE
 		};
 
-	static const u8 LETTER_LCD_CODES[] PROGMEM = // TODO Combine with LETTER_NAMES?
+	static const struct LetterInfo LETTER_INFO[] PROGMEM =
 		{
-			#define MAKE(NAME, LCD_CODE) LCD_CODE,
+			#define MAKE(NAME, LCD_CHARACTER_CODE) \
+				{ \
+					.lcd_character_code = LCD_CHARACTER_CODE, \
+				},
 			LETTER_XMDT(MAKE)
 			#undef MAKE
 		};
@@ -478,33 +505,16 @@ struct WordGameInfo
 			#undef MAKE
 		};
 
-	static const str LETTER_NAMES[] =
+	static const struct LetterInfo LETTER_INFO[] =
 		{
-			#define MAKE(NAME, ...) STR(#NAME),
+			#define MAKE(NAME, LCD_CHARACTER_CODE) \
+				{ \
+					.lcd_character_code = LCD_CHARACTER_CODE, \
+					.name               = STR(#NAME), \
+				},
 			LETTER_XMDT(MAKE)
 			#undef MAKE
 		};
-#endif
-
-//
-// "string.c"
-//
-
-#if PROGRAM_MICROSERVICES // TODO Maybe just make this a "primitive".
-	#define StrBuf(SIZE) ((struct StrBuf) { .data = (char[SIZE]) {0}, .size = (SIZE) })
-	struct StrBuf
-	{
-		union
-		{
-			struct
-			{
-				char* data;
-				i64   length;
-				i64   size;
-			};
-			str str;
-		};
-	};
 #endif
 
 //
@@ -1422,9 +1432,9 @@ enum USBMSSCSIOpcode
 	USBMSSCSIOpcode_mode_sense      = 0x1A,
 
 	// Non-exhaustive. See: Source(14) @ Table(10) @ Page(31-33).
-	USBMSSCSIOpcode_read_capacity                = 0x25, // 10-byte version.
-	USBMSSCSIOpcode_read                         = 0x28, // 10-byte version.
-	USBMSSCSIOpcode_write                        = 0x2A, // 10-byte version.
+	USBMSSCSIOpcode_read_capacity = 0x25, // 10-byte version.
+	USBMSSCSIOpcode_read          = 0x28, // 10-byte version.
+	USBMSSCSIOpcode_write         = 0x2A, // 10-byte version.
 };
 
 enum USBConfigInterface // These interfaces are defined uniquely for our device application.
@@ -1919,19 +1929,19 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	WORDGAME_XMDT(MAKE,)
 	#undef MAKE
 
-	static volatile enum USBMSOCRState usb_ms_ocr_state                                                    = {0};
-	static volatile enum WordGame      usb_ms_ocr_wordgame                                                 = {0};
-	static volatile enum Letter        usb_ms_ocr_grid[WORDGAME_MAX_DIM_SLOTS_Y][WORDGAME_MAX_DIM_SLOTS_X] = {0};
+	static volatile enum USBMSOCRState usb_ms_ocr_state                                                     = {0};
+	static volatile enum WordGame      usb_ms_ocr_wordgame                                                  = {0};
+	static volatile enum Letter        usb_ms_ocr_board[WORDGAME_MAX_DIM_SLOTS_Y][WORDGAME_MAX_DIM_SLOTS_X] = {0};
 
 	static u8_2                           _usb_ms_ocr_slot_topdown_board_coords                                  = {0};
 	static u8_2                           _usb_ms_ocr_slot_topdown_pixel_coords                                  = {0};
-	static u16                            _usb_ms_ocr_accumulated_scores[WORDGAME_MAX_DIM_SLOTS_X][Letter_COUNT] = {0}; // TODO Perhaps keep track of differences instead?
-	static u8                             _usb_ms_ocr_slot_pixel_row[MASK_DIM / 8]                               = {0};
-	static u8                             _usb_ms_ocr_activated_slot                                             = 0;
+	static u16                            _usb_ms_ocr_accumulated_scores[WORDGAME_MAX_DIM_SLOTS_X][Letter_COUNT] = {0};
+	static u8                             _usb_ms_ocr_packed_slot_pixels[MASK_DIM / 8]                           = {0};
+	static u8                             _usb_ms_ocr_packed_activated_slots                                     = 0;
 	static struct USBMSOCRMaskStreamState _usb_ms_ocr_curr_mask_stream_state                                     = {0};
 	static struct USBMSOCRMaskStreamState _usb_ms_ocr_next_mask_stream_state                                     = {0};
-	static_assert(WORDGAME_MAX_DIM_SLOTS_X == 8); // For _usb_ms_ocr_activated.
-	static_assert(MASK_DIM % 8 == 0);             // For _usb_ms_ocr_slot_pixel_row.
+	static_assert(WORDGAME_MAX_DIM_SLOTS_X == 8); // For _usb_ms_ocr_packed_activated_slots.
+	static_assert(MASK_DIM % 8 == 0);             // For _usb_ms_ocr_packed_slot_pixels.
 
 	#if USB_MS_ENABLE
 		static struct USBMSCommandStatusWrapper _usb_ms_status      = { .dCSWSignature = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE };

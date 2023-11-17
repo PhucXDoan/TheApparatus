@@ -53,10 +53,10 @@ alloc_load_masks(struct BMP* dst_masks, str dir_path)
 	dst_masks[0] = (struct BMP) {0};
 	for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
 	{
-		struct StrBuf mask_file_path = StrBuf(256);
+		strbuf mask_file_path = strbuf(256);
 		strbuf_str (&mask_file_path, dir_path);
 		strbuf_char(&mask_file_path, '\\');
-		strbuf_str (&mask_file_path, LETTER_NAMES[letter]);
+		strbuf_str (&mask_file_path, LETTER_INFO[letter].name);
 		strbuf_cstr(&mask_file_path, ".bmp");
 		dst_masks[letter] = bmp_alloc_read_file(mask_file_path.str);
 
@@ -224,7 +224,7 @@ print_cli_program_help(str exe_name, enum CLIProgram program)
 	}
 }
 
-struct DirBMPIteratorState
+struct DirBMPIterator
 {
 	str              dir_path;
 	struct BMP       bmp;
@@ -233,7 +233,7 @@ struct DirBMPIteratorState
 	b32              inited;
 };
 static b32 // Found BMP.
-iterate_bmp_in_dir(struct DirBMPIteratorState* state)
+iterate_bmp_in_dir(struct DirBMPIterator* iterator)
 {
 	b32 found_bmp = false;
 
@@ -241,15 +241,15 @@ iterate_bmp_in_dir(struct DirBMPIteratorState* state)
 	// Initialize.
 	//
 
-	if (!state->inited)
+	if (!iterator->inited)
 	{
-		struct StrBuf wildcard_path = StrBuf(256);
-		strbuf_str (&wildcard_path, state->dir_path);
+		strbuf wildcard_path = strbuf(256);
+		strbuf_str (&wildcard_path, iterator->dir_path);
 		strbuf_cstr(&wildcard_path, "\\*");
 		strbuf_char(&wildcard_path, '\0');
 
-		state->finder_handle = FindFirstFileA(wildcard_path.data, &state->finder_data);
-		if (state->finder_handle == INVALID_HANDLE_VALUE && GetLastError() != ERROR_FILE_NOT_FOUND)
+		iterator->finder_handle = FindFirstFileA(wildcard_path.data, &iterator->finder_data);
+		if (iterator->finder_handle == INVALID_HANDLE_VALUE && GetLastError() != ERROR_FILE_NOT_FOUND)
 		{
 			error("`FindFirstFileA` failed on \"%s\".", wildcard_path.data);
 		}
@@ -259,9 +259,9 @@ iterate_bmp_in_dir(struct DirBMPIteratorState* state)
 	// Iterate.
 	//
 
-	if (state->finder_handle != INVALID_HANDLE_VALUE)
+	if (iterator->finder_handle != INVALID_HANDLE_VALUE)
 	{
-		free(state->bmp.data);
+		free(iterator->bmp.data);
 
 		while (true)
 		{
@@ -269,16 +269,16 @@ iterate_bmp_in_dir(struct DirBMPIteratorState* state)
 			// Find next file.
 			//
 
-			if (state->inited)
+			if (iterator->inited)
 			{
-				if (!FindNextFileA(state->finder_handle, &state->finder_data))
+				if (!FindNextFileA(iterator->finder_handle, &iterator->finder_data))
 				{
 					if (GetLastError() != ERROR_NO_MORE_FILES)
 					{
 						error("`FindNextFileA` failed.");
 					}
 
-					if (!FindClose(state->finder_handle))
+					if (!FindClose(iterator->finder_handle))
 					{
 						error("`FindClose` failed.");
 					}
@@ -288,7 +288,7 @@ iterate_bmp_in_dir(struct DirBMPIteratorState* state)
 			}
 			else
 			{
-				state->inited = true;
+				iterator->inited = true;
 			}
 
 			//
@@ -297,16 +297,16 @@ iterate_bmp_in_dir(struct DirBMPIteratorState* state)
 
 			if
 			(
-				!(state->finder_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
-				str_ends_with_caseless(str_cstr(state->finder_data.cFileName), str(".bmp"))
+				!(iterator->finder_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
+				str_ends_with_caseless(str_cstr(iterator->finder_data.cFileName), str(".bmp"))
 			)
 			{
-				struct StrBuf file_path = StrBuf(256);
-				strbuf_str (&file_path, state->dir_path);
+				strbuf file_path = strbuf(256);
+				strbuf_str (&file_path, iterator->dir_path);
 				strbuf_char(&file_path, '\\');
-				strbuf_cstr(&file_path, state->finder_data.cFileName);
+				strbuf_cstr(&file_path, iterator->finder_data.cFileName);
 
-				state->bmp = bmp_alloc_read_file(file_path.str);
+				iterator->bmp = bmp_alloc_read_file(file_path.str);
 
 				found_bmp = true;
 				break;
@@ -559,17 +559,17 @@ main(int argc, char** argv)
 					// Iterate each screenshot in directory.
 					//
 
-					struct DirBMPIteratorState iterator_state = { .dir_path = input_dir_path.str };
-					while (iterate_bmp_in_dir(&iterator_state))
+					struct DirBMPIterator iterator = { .dir_path = input_dir_path.str };
+					while (iterate_bmp_in_dir(&iterator))
 					{
-						if (iterator_state.bmp.dim.x == SCREENSHOT_DIM_X && iterator_state.bmp.dim.y == SCREENSHOT_DIM_Y)
+						if (iterator.bmp.dim.x == SCREENSHOT_DIM_X && iterator.bmp.dim.y == SCREENSHOT_DIM_Y)
 						{
 							//
 							// Identify wordgame.
 							//
 
 							f64_3         unknown_wordgame_test_region_rgbs[WordGame_COUNT] = {0};
-							enum WordGame identified_wordgame = identify_wordgame(iterator_state.bmp, unknown_wordgame_test_region_rgbs);
+							enum WordGame identified_wordgame = identify_wordgame(iterator.bmp, unknown_wordgame_test_region_rgbs);
 
 							//
 							// Accumulate result.
@@ -613,7 +613,7 @@ main(int argc, char** argv)
 								"[EaglePeek] % 4d : %.*s : \"%s\".\n",
 								examined_screenshots,
 								i32(identified_wordgame_name.length), identified_wordgame_name.data,
-								iterator_state.finder_data.cFileName
+								iterator.finder_data.cFileName
 							);
 						}
 					}
@@ -722,16 +722,16 @@ main(int argc, char** argv)
 						input_dir_path.cstr
 					);
 
-					struct DirBMPIteratorState iterator_state = { .dir_path = input_dir_path.str };
-					while (iterate_bmp_in_dir(&iterator_state))
+					struct DirBMPIterator iterator = { .dir_path = input_dir_path.str };
+					while (iterate_bmp_in_dir(&iterator))
 					{
-						if (iterator_state.bmp.dim.x == SCREENSHOT_DIM_X && iterator_state.bmp.dim.y == SCREENSHOT_DIM_Y)
+						if (iterator.bmp.dim.x == SCREENSHOT_DIM_X && iterator.bmp.dim.y == SCREENSHOT_DIM_Y)
 						{
 							//
 							// Determine wordgame.
 							//
 
-							enum WordGame wordgame = identify_wordgame(iterator_state.bmp, 0);
+							enum WordGame wordgame = identify_wordgame(iterator.bmp, 0);
 							if (wordgame != WordGame_COUNT)
 							{
 								//
@@ -775,9 +775,9 @@ main(int argc, char** argv)
 															f64(compressed_slot_abs_px_pos.y) / f64(compressed_game.y),
 														};
 													struct BMPPixel pixel =
-														iterator_state.bmp.data
+														iterator.bmp.data
 														[
-															( WORDGAME_INFO[wordgame].pos.y + i32(uv.y * uncompressed_bmp_dim.y)) * iterator_state.bmp.dim.x
+															( WORDGAME_INFO[wordgame].pos.y + i32(uv.y * uncompressed_bmp_dim.y)) * iterator.bmp.dim.x
 															+ WORDGAME_INFO[wordgame].pos.x + i32(uv.x * uncompressed_bmp_dim.x)
 														];
 
@@ -797,7 +797,7 @@ main(int argc, char** argv)
 
 											if (found_activated_pixel)
 											{
-												struct StrBuf slot_file_path = StrBuf(256);
+												strbuf slot_file_path = strbuf(256);
 												strbuf_str (&slot_file_path, cli.output_dir_path.str);
 												strbuf_char(&slot_file_path, '\\');
 												strbuf_cstr(&slot_file_path, (char*) WORDGAME_INFO[wordgame].print_name_cstr);
@@ -820,7 +820,7 @@ main(int argc, char** argv)
 													strbuf_char(&slot_file_path, CHARACTERS[__rdtsc() % countof(CHARACTERS)]);
 												}
 												strbuf_cstr(&slot_file_path, ") ");
-												strbuf_cstr(&slot_file_path, iterator_state.finder_data.cFileName);
+												strbuf_cstr(&slot_file_path, iterator.finder_data.cFileName);
 												bmp_export(compressed_slot, slot_file_path.str);
 
 												extracted_slots += 1;
@@ -856,7 +856,7 @@ main(int argc, char** argv)
 								"[extractorv2] % 4d : %.*s : \"%s\".\n",
 								examined_screenshots,
 								i32(wordgame_name.length), wordgame_name.data,
-								iterator_state.finder_data.cFileName
+								iterator.finder_data.cFileName
 							);
 						}
 					}
@@ -933,10 +933,10 @@ main(int argc, char** argv)
 
 				for (enum Letter letter = {1}; letter < Letter_COUNT; letter += 1)
 				{
-					struct StrBuf letter_dir_path = StrBuf(256);
+					strbuf letter_dir_path = strbuf(256);
 					strbuf_str (&letter_dir_path, cli.output_dir_path.str);
 					strbuf_char(&letter_dir_path, '\\');
-					strbuf_str (&letter_dir_path, LETTER_NAMES[letter]);
+					strbuf_str (&letter_dir_path, LETTER_INFO[letter].name);
 					create_dir(letter_dir_path.str, cli.clear_output_dir);
 				}
 
@@ -944,10 +944,10 @@ main(int argc, char** argv)
 				// Iterate through each image that needs to be sorted.
 				//
 
-				struct DirBMPIteratorState iterator_state = { .dir_path = cli.unsorted_dir_path.str };
-				while (iterate_bmp_in_dir(&iterator_state))
+				struct DirBMPIterator iterator = { .dir_path = cli.unsorted_dir_path.str };
+				while (iterate_bmp_in_dir(&iterator))
 				{
-					if (!is_mask_compliant(iterator_state.bmp))
+					if (!is_mask_compliant(iterator.bmp))
 					{
 						error("BMP found to have the wrong properties; Must be %dx%d and monochrome.\n", MASK_DIM, MASK_DIM);
 					}
@@ -964,7 +964,7 @@ main(int argc, char** argv)
 						i32 score = 0;
 						for (i32 i = 0; i < MASK_DIM * MASK_DIM; i += 1)
 						{
-							score += (~(iterator_state.bmp.data[i].r ^ masks[letter].data[i].r)) & 1;
+							score += (~(iterator.bmp.data[i].r ^ masks[letter].data[i].r)) & 1;
 						}
 
 						if (best_matching_score < score)
@@ -983,24 +983,24 @@ main(int argc, char** argv)
 					matched_letter_counts[best_matching_letter] += 1;
 					for (i32 i = 0; i < MASK_DIM * MASK_DIM; i += 1)
 					{
-						accumulated_mask_pixels[MASK_DIM * MASK_DIM * best_matching_letter + i] += iterator_state.bmp.data[i].r & 1;
+						accumulated_mask_pixels[MASK_DIM * MASK_DIM * best_matching_letter + i] += iterator.bmp.data[i].r & 1;
 					}
 
 					//
 					// Copy BMP into the appropriate subfolder of the letter.
 					//
 
-					struct StrBuf file_path = StrBuf(256);
+					strbuf file_path = strbuf(256);
 					strbuf_str (&file_path, cli.output_dir_path.str);
 					strbuf_char(&file_path, '\\');
-					strbuf_str (&file_path, LETTER_NAMES[best_matching_letter]);
+					strbuf_str (&file_path, LETTER_INFO[best_matching_letter].name);
 					strbuf_char(&file_path, '\\');
-					strbuf_cstr(&file_path, iterator_state.finder_data.cFileName);
-					bmp_export(iterator_state.bmp, file_path.str);
+					strbuf_cstr(&file_path, iterator.finder_data.cFileName);
+					bmp_export(iterator.bmp, file_path.str);
 
 					processed_images += 1;
 
-					printf("[CollecTune(TM)] % 4d : \"%s\".\n", processed_images, iterator_state.finder_data.cFileName);
+					printf("[CollecTune(TM)] % 4d : \"%s\".\n", processed_images, iterator.finder_data.cFileName);
 				}
 
 				//
@@ -1024,10 +1024,10 @@ main(int argc, char** argv)
 								: (struct BMPPixel) { 0, 0, 0, 255 };
 					}
 
-					struct StrBuf file_path = StrBuf(256);
+					strbuf file_path = strbuf(256);
 					strbuf_str (&file_path, cli.output_dir_path.str);
 					strbuf_char(&file_path, '\\');
-					strbuf_str (&file_path, LETTER_NAMES[letter]);
+					strbuf_str (&file_path, LETTER_INFO[letter].name);
 					strbuf_cstr(&file_path, ".bmp");
 					bmp_export(new_avg_mask, file_path.str);
 				}
@@ -1083,8 +1083,8 @@ main(int argc, char** argv)
 				// Generate stream data.
 				//
 
-				HANDLE        c_source_handle = create_file_writing_handle(cli.output_file_path.str);
-				struct StrBuf output_buf      = StrBuf(256);
+				HANDLE c_source_handle = create_file_writing_handle(cli.output_file_path.str);
+				strbuf output_buf      = strbuf(256);
 
 				strbuf_cstr(&output_buf, "static const u8 MASK_U8_STREAM[] PROGMEM = { ");
 				write_flush_strbuf(c_source_handle, &output_buf);
@@ -1195,6 +1195,18 @@ main(int argc, char** argv)
 				strbuf_cstr(&output_buf, " };\n");
 				write_flush_strbuf(c_source_handle, &output_buf);
 
+				strbuf_cstr(&output_buf, "\n");
+				strbuf_cstr(&output_buf, "// ");
+				strbuf_u64 (&output_buf, run_count * sizeof(u8));
+				strbuf_cstr(&output_buf, " bytes for byte-sized run-lengths.\n");
+				strbuf_cstr(&output_buf, "// ");
+				strbuf_u64 (&output_buf, overflowed_runlengths.length * sizeof(u16));
+				strbuf_cstr(&output_buf, " bytes for word-sized run-lengths.\n");
+				strbuf_cstr(&output_buf, "// ");
+				strbuf_u64 (&output_buf, run_count * sizeof(u8) + overflowed_runlengths.length * sizeof(u16));
+				strbuf_cstr(&output_buf, " bytes total.\n");
+				write_flush_strbuf(c_source_handle, &output_buf);
+
 				//
 				// Report results.
 				//
@@ -1257,12 +1269,12 @@ main(int argc, char** argv)
 
 	Now this part is kinda tricky, because what exactly are the bounding boxes of the slots in the
 	word games? We want it to be as tight as possible, so that bounding box will contain the most
-	amount of information it could about what letter that slot could contain, but if it's too
+	amount of information it can about what letter that slot could contain, but if it's too
 	small, or too off centered, then we risk misidentifying. So what ended up happening is that I
 	first took a guess at the bounding box, use that to extract each slot of the screenshot BMP,
 	and then adjusted the bounding box again to make sure no letters were getting cropped or
 	getting too off-centered. In the end, I don't think it really matters all that much if the
-	bounding box, say, cropped the letter A slightly, but better safe than sorry!
+	bounding box, say, cropped the letter 'A' slightly, but better safe than sorry!
 
 	Once we determine the bounding box of a slot in a wordgame, we then determine the bounding box
 	of the entire wordgame board. A board is just the area where all the letters will be found in,
@@ -1308,7 +1320,7 @@ main(int argc, char** argv)
 	alphabet. Now, I don't know a lot of Russian (as in none) but it appears that some letters are
 	just not used at all. I've collected gigabytes of screenshots of Russian Anagrams and not once
 	a particular character appeared. Some are so rare that I literally only have one screenshot of
-	it! This applies to German too, and even in English where Q doesn't seem to appear at all, but
+	it! This applies to German too, and even in English where 'Q' doesn't seem to appear at all, but
 	does for the 7-letter version. Strange. I highly suspect that Game Pigeon is doing some weird
 	RNG stuff to get a good set of letters that'll be enjoyable to play.
 

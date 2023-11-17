@@ -1,7 +1,7 @@
 static b32 // Directory is empty.
 create_dir(str dir_path, b32 delete_content)
 {
-	struct StrBuf formatted_dir_path = StrBuf(256);
+	strbuf formatted_dir_path = strbuf(256);
 	for (i32 i = 0; i < dir_path.length; i += 1)
 	{
 		if (dir_path.data[i] == '/')
@@ -24,7 +24,7 @@ create_dir(str dir_path, b32 delete_content)
 	b32 empty = PathIsDirectoryEmptyA(formatted_dir_path.data);
 	if (!empty && delete_content)
 	{
-		struct StrBuf double_nullterminated_output_dir_path = StrBuf(256);
+		strbuf double_nullterminated_output_dir_path = strbuf(256);
 		strbuf_str (&double_nullterminated_output_dir_path, dir_path);
 		strbuf_char(&double_nullterminated_output_dir_path, '\0');
 		strbuf_char(&double_nullterminated_output_dir_path, '\0');
@@ -99,7 +99,7 @@ write_raw_data(HANDLE file_writing_handle, void* data, i64 size)
 }
 
 static void
-write_flush_strbuf(HANDLE file_writing_handle, struct StrBuf* buf)
+write_flush_strbuf(HANDLE file_writing_handle, strbuf* buf)
 {
 	write_raw_data(file_writing_handle, buf->data, buf->length);
 	buf->length = 0;

@@ -680,7 +680,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 					}
 				}
 			}
-			else if (transaction_sector_count)
+			else if (transaction_sector_count) // [Mass Storage - OCR].
 			{
 				_usb_ms_sd_write_through(transaction_sector_start_address);
 
@@ -697,70 +697,72 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 						pgm_u8(WORDGAME_INFO[usb_ms_ocr_wordgame].dim_slots.y),
 					};
 
-				switch (usb_ms_ocr_state)
+				if (transaction_sector_start_address >= FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT) // In data region?
 				{
-					case USBMSOCRState_ready: // The main program is still setting up the OCR state or is reading the parsing results.
+					switch (usb_ms_ocr_state)
 					{
-					} break;
-
-					case USBMSOCRState_set: // Is this writing transaction the beginning of a BMP?
-					{
-						struct BMPFileHeader* bmp_file_header = (struct BMPFileHeader*)  sd_sector;
-						struct BMPDIBHeader*  bmp_dib_header  = (struct BMPDIBHeader* ) (sd_sector + sizeof(struct BMPFileHeader));
-						static_assert(sizeof(struct BMPFileHeader) + sizeof(struct BMPDIBHeader) <= sizeof(sd_sector));
-
-						if
-						(
-							(transaction_sector_start_address >= FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT) &&
-							(transaction_sector_start_address - (FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT)) % FAT32_SECTORS_PER_CLUSTER == 0
-							&& bmp_file_header->bfType      == BMP_FILE_HEADER_SIGNATURE
-							&& bmp_file_header->bfOffBits   == sizeof(struct BMPFileHeader) + BMPDIBHEADER_MIN_SIZE_V5
-							&& bmp_dib_header->Size         == BMPDIBHEADER_MIN_SIZE_V5
-							&& bmp_dib_header->Planes       == 1
-							&& bmp_dib_header->BitCount     == 32
-							&& bmp_dib_header->Compression  == BMPCompression_BITFIELDS
-							&& bmp_dib_header->v2.RedMask   == 0x00'FF'00'00
-							&& bmp_dib_header->v2.GreenMask == 0x00'00'FF'00
-							&& bmp_dib_header->v2.BlueMask  == 0x00'00'00'FF
-							&& bmp_dib_header->v3.AlphaMask == 0xFF'00'00'00
-						)
+						case USBMSOCRState_ready: // The main program is still setting up the OCR state or is reading the parsing results.
 						{
+						} break;
+
+						case USBMSOCRState_set: // Is this writing transaction the beginning of a BMP?
+						{
+							struct BMPFileHeader* bmp_file_header = (struct BMPFileHeader*)  sd_sector;
+							struct BMPDIBHeader*  bmp_dib_header  = (struct BMPDIBHeader* ) (sd_sector + sizeof(struct BMPFileHeader));
+							static_assert(sizeof(struct BMPFileHeader) + sizeof(struct BMPDIBHeader) <= sizeof(sd_sector));
+
 							if
 							(
-								u32( bmp_dib_header->Width ) != u32(board_dim_slots.x - 1) * compressed_slot_stride + MASK_DIM ||
-								u32(-bmp_dib_header->Height) != u32(board_dim_slots.y - 1) * compressed_slot_stride + MASK_DIM
+								(transaction_sector_start_address - (FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT)) % FAT32_SECTORS_PER_CLUSTER == 0 // Cluster-aligned?
+								&& bmp_file_header->bfType == BMP_FILE_HEADER_SIGNATURE
+								&& bmp_file_header->bfOffBits   == sizeof(struct BMPFileHeader) + BMPDIBHEADER_MIN_SIZE_V5
+								&& bmp_dib_header->Size         == BMPDIBHEADER_MIN_SIZE_V5
+								&& bmp_dib_header->Planes       == 1
+								&& bmp_dib_header->BitCount     == 32
+								&& bmp_dib_header->Compression  == BMPCompression_BITFIELDS
+								&& bmp_dib_header->v2.RedMask   == 0x00'FF'00'00
+								&& bmp_dib_header->v2.GreenMask == 0x00'00'FF'00
+								&& bmp_dib_header->v2.BlueMask  == 0x00'00'00'FF
+								&& bmp_dib_header->v3.AlphaMask == 0xFF'00'00'00
 							)
 							{
-								error(); // Received BMP is not conforming to the expect dimensions for the wordgame.
+								if
+								(
+									u32( bmp_dib_header->Width ) != u32(board_dim_slots.x - 1) * compressed_slot_stride + MASK_DIM ||
+									u32(-bmp_dib_header->Height) != u32(board_dim_slots.y - 1) * compressed_slot_stride + MASK_DIM
+								)
+								{
+									error(); // Received BMP is not conforming to the expect dimensions for the wordgame.
+								}
+
+								usb_ms_ocr_state        = USBMSOCRState_processing;
+								curr_red_channel_offset = sizeof(struct BMPFileHeader) + sizeof(struct BMPDIBHeader) + 2; // Color channels are ordered BGRA in memory; +2 skips blue and green bytes.
+								transaction_is_for_bmp  = true;
 							}
+						} break;
 
-							usb_ms_ocr_state        = USBMSOCRState_processing;
-							curr_red_channel_offset = sizeof(struct BMPFileHeader) + sizeof(struct BMPDIBHeader) + 2; // Color channels are ordered BGRA in memory; +2 skips blue and green bytes.
-							transaction_is_for_bmp  = true;
-						}
-					} break;
-
-					case USBMSOCRState_processing: // Does this sector look like BMP pixel data?
-					{
-						u32 pixels_in_bmp_row_processed      = u32(_usb_ms_ocr_slot_topdown_board_coords.x) * compressed_slot_stride + _usb_ms_ocr_slot_topdown_pixel_coords.x;
-						u32 bmp_width                        = u32(board_dim_slots.x - 1) * compressed_slot_stride + MASK_DIM;
-						u32 total_amount_of_pixels_remaining = (u32(board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y) * compressed_slot_stride + MASK_DIM - _usb_ms_ocr_slot_topdown_pixel_coords.y) * bmp_width - pixels_in_bmp_row_processed;
-						u8  pixels_to_verify                 = FAT32_SECTOR_SIZE / sizeof(struct BMPPixel);
-						if (pixels_to_verify > total_amount_of_pixels_remaining)
+						case USBMSOCRState_processing: // Does this sector look like BMP pixel data?
 						{
-							pixels_to_verify = total_amount_of_pixels_remaining;
-						}
-
-						transaction_is_for_bmp = true;
-						for (u8 pixel_index = 0; pixel_index < pixels_to_verify; pixel_index += 1)
-						{
-							if (sd_sector[pixel_index * sizeof(struct BMPPixel) + 1] != 0xFF) // Alpha should always be set.
+							u32 pixels_in_bmp_row_processed      = u32(_usb_ms_ocr_slot_topdown_board_coords.x) * compressed_slot_stride + _usb_ms_ocr_slot_topdown_pixel_coords.x;
+							u32 bmp_width                        = u32(board_dim_slots.x - 1) * compressed_slot_stride + MASK_DIM;
+							u32 total_amount_of_pixels_remaining = (u32(board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y) * compressed_slot_stride + MASK_DIM - _usb_ms_ocr_slot_topdown_pixel_coords.y) * bmp_width - pixels_in_bmp_row_processed;
+							u8  pixels_to_verify                 = FAT32_SECTOR_SIZE / sizeof(struct BMPPixel);
+							if (pixels_to_verify > total_amount_of_pixels_remaining)
 							{
-								transaction_is_for_bmp = false;
-								break;
+								pixels_to_verify = total_amount_of_pixels_remaining;
 							}
-						}
-					} break;
+
+							transaction_is_for_bmp = true;
+							for (u8 pixel_index = 0; pixel_index < pixels_to_verify; pixel_index += 1)
+							{
+								if (sd_sector[pixel_index * sizeof(struct BMPPixel) + 1] != 0xFF) // Alpha should always be set.
+								{
+									transaction_is_for_bmp = false;
+									break;
+								}
+							}
+						} break;
+					}
 				}
 
 				//
@@ -779,14 +781,19 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 						_usb_ms_sd_write_through(sector_address);
 					}
 
-					if (transaction_is_for_bmp && usb_ms_ocr_state == USBMSOCRState_processing) // [Mass Storage - OCR].
+					if (transaction_is_for_bmp && usb_ms_ocr_state == USBMSOCRState_processing)
 					{
-						while (true)
+						while (curr_red_channel_offset < FAT32_SECTOR_SIZE && usb_ms_ocr_state == USBMSOCRState_processing)
 						{
-							b8 process_for_slot_pixels = false;
+							//
+							// Determine if we should be OCRing for a letter, or should we just skip the pixels.
+							//
+
+							b8 should_process = false;
+
 							if (_usb_ms_ocr_slot_topdown_pixel_coords.x < MASK_DIM && _usb_ms_ocr_slot_topdown_pixel_coords.y < MASK_DIM)
 							{
-								process_for_slot_pixels =
+								should_process =
 									!is_slot_excluded
 									(
 										usb_ms_ocr_wordgame,
@@ -794,7 +801,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 										board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y
 									);
 
-								if (process_for_slot_pixels && usb_ms_ocr_wordgame == WordGame_wordbites && _usb_ms_ocr_slot_topdown_board_coords.y)
+								if (should_process && usb_ms_ocr_wordgame == WordGame_wordbites && _usb_ms_ocr_slot_topdown_board_coords.y)
 								{
 									u8_2 coords =
 										{
@@ -802,34 +809,34 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 											board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y
 										};
 
-									process_for_slot_pixels &= // Up-left slot must be free.
+									should_process &= // Up-left slot must be free.
 										implies
 										(
 											coords.x,
-											!usb_ms_ocr_grid[coords.y + 1][coords.x - 1]
+											!usb_ms_ocr_board[coords.y + 1][coords.x - 1]
 										);
 
-									process_for_slot_pixels &= // Up-right slot must be free.
+									should_process &= // Up-right slot must be free.
 										implies
 										(
 											coords.x < board_dim_slots.x - 1,
-											!usb_ms_ocr_grid[coords.y + 1][coords.x + 1]
+											!usb_ms_ocr_board[coords.y + 1][coords.x + 1]
 										);
 
-									process_for_slot_pixels &= // Must not be below a vertical duo piece.
+									should_process &= // Must not be below a vertical duo piece.
 										implies
 										(
 											coords.y + 2 < board_dim_slots.y,
 											!(
-												usb_ms_ocr_grid[coords.y + 2][coords.x] &&
-												usb_ms_ocr_grid[coords.y + 1][coords.x]
+												usb_ms_ocr_board[coords.y + 2][coords.x] &&
+												usb_ms_ocr_board[coords.y + 1][coords.x]
 											)
 										);
 
-									process_for_slot_pixels &= // We must encounter an activated pixel soon.
+									should_process &= // We must have already encountered an activated pixel at some point.
 										implies
 										(
-											!(_usb_ms_ocr_activated_slot & (1 << coords.x)),
+											!(_usb_ms_ocr_packed_activated_slots & (1 << coords.x)),
 											_usb_ms_ocr_slot_topdown_pixel_coords.y < MASK_DIM / 4
 										);
 									static_assert(MASK_DIM == 64);
@@ -837,42 +844,32 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 							}
 
 							//
-							//
+							// Process pixels, or just skip.
 							//
 
-							if (process_for_slot_pixels)
+							if (should_process)
 							{
 								//
-								//
+								// Extract activated pixels.
 								//
 
 								while (_usb_ms_ocr_slot_topdown_pixel_coords.x < MASK_DIM && curr_red_channel_offset < FAT32_SECTOR_SIZE)
 								{
-									u8* byte = &_usb_ms_ocr_slot_pixel_row[_usb_ms_ocr_slot_topdown_pixel_coords.x / 8];
-									u8  bit  =                  u64(1) << (_usb_ms_ocr_slot_topdown_pixel_coords.x % 8);
-									static_assert(MASK_DIM == 64);
-
-									if (sd_sector[curr_red_channel_offset] <= MASK_ACTIVATION_THRESHOLD)
-									{
-										*byte |= bit;
-									}
-									else
-									{
-										*byte &= ~bit;
-									}
+									_usb_ms_ocr_packed_slot_pixels[_usb_ms_ocr_slot_topdown_pixel_coords.x / 8] |=
+										(sd_sector[curr_red_channel_offset] <= MASK_ACTIVATION_THRESHOLD) << (_usb_ms_ocr_slot_topdown_pixel_coords.x % 8);
 
 									curr_red_channel_offset                 += sizeof(struct BMPPixel);
 									_usb_ms_ocr_slot_topdown_pixel_coords.x += 1;
 								}
 
 								//
-								//
+								// [OCR - Mask Stream].
 								//
 
 								if (_usb_ms_ocr_slot_topdown_pixel_coords.x == MASK_DIM)
 								{
 									//
-									// Give out points for each letter.
+									// Go through a bit of the mask stream to compare the activated pixels we've found.
 									//
 
 									struct USBMSOCRMaskStreamState probing_mask_stream_state = _usb_ms_ocr_curr_mask_stream_state;
@@ -887,7 +884,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 											//
 
 											u8 mask_byte          = 0;
-											u8 mask_bits_unfilled = 8;
+											u8 mask_bits_unfilled = bitsof(mask_byte);
 
 											while (mask_bits_unfilled)
 											{
@@ -902,18 +899,18 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 													//
 
 													assert(probing_mask_stream_state.index_u8 < countof(MASK_U8_STREAM));
-													probing_mask_stream_state.runlength_remaining   = pgm_u8(MASK_U8_STREAM[probing_mask_stream_state.index_u8]);
-													probing_mask_stream_state.index_u8 += 1;
+													probing_mask_stream_state.runlength_remaining  = pgm_u8(MASK_U8_STREAM[probing_mask_stream_state.index_u8]);
+													probing_mask_stream_state.index_u8            += 1;
 
 													//
-													// If we read a zero, the run-length is then word-sized.
+													// If we read a zero, then run-length is word-sized.
 													//
 
 													if (!probing_mask_stream_state.runlength_remaining)
 													{
 														assert(probing_mask_stream_state.index_u16 < countof(MASK_U16_STREAM));
-														probing_mask_stream_state.runlength_remaining    = pgm_u16(MASK_U16_STREAM[probing_mask_stream_state.index_u16]);
-														probing_mask_stream_state.index_u16 += 1;
+														probing_mask_stream_state.runlength_remaining  = pgm_u16(MASK_U16_STREAM[probing_mask_stream_state.index_u16]);
+														probing_mask_stream_state.index_u16           += 1;
 													}
 												}
 
@@ -926,16 +923,16 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 														? mask_bits_unfilled
 														: probing_mask_stream_state.runlength_remaining;
 
-												if (probing_mask_stream_state.index_u8 & 1)
+												if (probing_mask_stream_state.index_u8 & 1) // Shift in zeros?
 												{
-													mask_byte = mask_byte >> shift_amount; // Shift in zeros.
+													mask_byte = mask_byte >> shift_amount;
 												}
-												else
+												else // Shift in ones.
 												{
 													mask_byte = ~(u8(~mask_byte) >> shift_amount); // Shift in ones.
 												}
 
-												mask_bits_unfilled          -= shift_amount;
+												mask_bits_unfilled                            -= shift_amount;
 												probing_mask_stream_state.runlength_remaining -= shift_amount;
 											}
 
@@ -943,44 +940,55 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 											// Compare.
 											//
 
-											_usb_ms_ocr_accumulated_scores[_usb_ms_ocr_slot_topdown_board_coords.x][letter] += count_cleared_bits(_usb_ms_ocr_slot_pixel_row[byte_index] ^ mask_byte);
+											_usb_ms_ocr_accumulated_scores[_usb_ms_ocr_slot_topdown_board_coords.x][letter] +=
+												count_cleared_bits(_usb_ms_ocr_packed_slot_pixels[byte_index] ^ mask_byte);
 
-											if (_usb_ms_ocr_slot_pixel_row[byte_index])
+											if (_usb_ms_ocr_packed_slot_pixels[byte_index]) // Make note that we found an activated pixel in this slot.
 											{
-												_usb_ms_ocr_activated_slot |= 1 << _usb_ms_ocr_slot_topdown_board_coords.x;
+												_usb_ms_ocr_packed_activated_slots |= 1 << _usb_ms_ocr_slot_topdown_board_coords.x;
 											}
 										}
 									}
 
+									memset(_usb_ms_ocr_packed_slot_pixels, 0, sizeof(_usb_ms_ocr_packed_slot_pixels));
+
 									//
-									//
+									// Make note of where the next row of mask data will be in the mask stream.
 									//
 
 									if (!_usb_ms_ocr_next_mask_stream_state.index_u8)
 									{
-										u16 pixels_left = MASK_DIM * (Letter_COUNT - pgm_u8(WORDGAME_INFO[usb_ms_ocr_wordgame].sentinel_letter));
-										while (pixels_left)
+										u16 remaining_mask_row_pixels = MASK_DIM * (Letter_COUNT - pgm_u8(WORDGAME_INFO[usb_ms_ocr_wordgame].sentinel_letter));
+										while (remaining_mask_row_pixels)
 										{
 											if (!probing_mask_stream_state.runlength_remaining)
 											{
+												//
+												// Read the next byte-sized run-length.
+												//
+
 												assert(probing_mask_stream_state.index_u8 < countof(MASK_U8_STREAM));
-												probing_mask_stream_state.runlength_remaining   = pgm_u8(MASK_U8_STREAM[probing_mask_stream_state.index_u8]);
-												probing_mask_stream_state.index_u8 += 1;
+												probing_mask_stream_state.runlength_remaining  = pgm_u8(MASK_U8_STREAM[probing_mask_stream_state.index_u8]);
+												probing_mask_stream_state.index_u8            += 1;
+
+												//
+												// If we read a zero, then run-length is word-sized.
+												//
 
 												if (!probing_mask_stream_state.runlength_remaining)
 												{
 													assert(probing_mask_stream_state.index_u16 < countof(MASK_U16_STREAM));
-													probing_mask_stream_state.runlength_remaining    = pgm_u16(MASK_U16_STREAM[probing_mask_stream_state.index_u16]);
-													probing_mask_stream_state.index_u16 += 1;
+													probing_mask_stream_state.runlength_remaining  = pgm_u16(MASK_U16_STREAM[probing_mask_stream_state.index_u16]);
+													probing_mask_stream_state.index_u16           += 1;
 												}
 											}
 
 											u16 shift_amount =
-												pixels_left < probing_mask_stream_state.runlength_remaining
-													? pixels_left
+												remaining_mask_row_pixels < probing_mask_stream_state.runlength_remaining
+													? remaining_mask_row_pixels
 													: probing_mask_stream_state.runlength_remaining;
 
-											pixels_left                                   -= shift_amount;
+											remaining_mask_row_pixels                     -= shift_amount;
 											probing_mask_stream_state.runlength_remaining -= shift_amount;
 										}
 
@@ -988,7 +996,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 									}
 								}
 							}
-							else
+							else // Skip pixels.
 							{
 								u8 skip_amount =
 									_usb_ms_ocr_slot_topdown_board_coords.x == board_dim_slots.x - 1 // On last column of slots?
@@ -1014,16 +1022,15 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 								_usb_ms_ocr_slot_topdown_board_coords.x += 1;
 								_usb_ms_ocr_slot_topdown_pixel_coords.x  = 0;
 							}
-							else if (_usb_ms_ocr_slot_topdown_pixel_coords.x == MASK_DIM && _usb_ms_ocr_slot_topdown_board_coords.x == board_dim_slots.x - 1) // On right side of BMP image.
+							else if (_usb_ms_ocr_slot_topdown_pixel_coords.x == MASK_DIM && _usb_ms_ocr_slot_topdown_board_coords.x == board_dim_slots.x - 1) // On right edge of BMP.
 							{
-								_usb_ms_ocr_curr_mask_stream_state = _usb_ms_ocr_next_mask_stream_state;
-								_usb_ms_ocr_next_mask_stream_state = (struct USBMSOCRMaskStreamState) {0};
-
 								_usb_ms_ocr_slot_topdown_board_coords.x  = 0;
 								_usb_ms_ocr_slot_topdown_pixel_coords.x  = 0;
 								_usb_ms_ocr_slot_topdown_pixel_coords.y += 1;
+								_usb_ms_ocr_curr_mask_stream_state       = _usb_ms_ocr_next_mask_stream_state;
+								_usb_ms_ocr_next_mask_stream_state       = (struct USBMSOCRMaskStreamState) {0};
 
-								if (_usb_ms_ocr_slot_topdown_pixel_coords.y == MASK_DIM)
+								if (_usb_ms_ocr_slot_topdown_pixel_coords.y == MASK_DIM) // Went through every pixel row of the slots?
 								{
 									//
 									// Pick the best matching letters.
@@ -1033,50 +1040,42 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 									{
 										enum Letter best_letter = Letter_null;
 
-										if (_usb_ms_ocr_activated_slot & (1 << slot_coord_x))
+										if (_usb_ms_ocr_packed_activated_slots & (1 << slot_coord_x)) // Was this slot actually processed?
 										{
 											u16 highest_score = 0;
 											for (enum Letter letter = {1}; letter < pgm_u8(WORDGAME_INFO[usb_ms_ocr_wordgame].sentinel_letter); letter += 1)
 											{
-												u16 letter_score = _usb_ms_ocr_accumulated_scores[slot_coord_x][letter];
-												if (highest_score < letter_score)
+												if (highest_score < _usb_ms_ocr_accumulated_scores[slot_coord_x][letter])
 												{
-													highest_score = letter_score;
+													highest_score = _usb_ms_ocr_accumulated_scores[slot_coord_x][letter];
 													best_letter   = letter;
 												}
 											}
 										}
 
-										usb_ms_ocr_grid[board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y][slot_coord_x] = best_letter;
+										usb_ms_ocr_board[board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y][slot_coord_x] = best_letter;
 									}
 
-									//
-									// Reset state to perform OCR again for the next row of slots in the board.
-									//
-
-									memset(_usb_ms_ocr_accumulated_scores, 0, sizeof(_usb_ms_ocr_accumulated_scores));
-									_usb_ms_ocr_activated_slot         = 0;
+									_usb_ms_ocr_packed_activated_slots = 0;
 									_usb_ms_ocr_curr_mask_stream_state = (struct USBMSOCRMaskStreamState) {0};
-								}
+									memset(_usb_ms_ocr_accumulated_scores, 0, sizeof(_usb_ms_ocr_accumulated_scores));
 
-								if (_usb_ms_ocr_slot_topdown_pixel_coords.y == compressed_slot_stride) // Move onto the next row of slots.
+									//
+									// Finally, at the end of BMP!
+									//
+
+									if (_usb_ms_ocr_slot_topdown_board_coords.y == board_dim_slots.y - 1)
+									{
+										_usb_ms_ocr_slot_topdown_board_coords.y = 0;
+										_usb_ms_ocr_slot_topdown_pixel_coords.y = 0;
+										usb_ms_ocr_state                        = USBMSOCRState_ready;
+									}
+								}
+								else if (_usb_ms_ocr_slot_topdown_pixel_coords.y == compressed_slot_stride) // Move onto the next row of slots.
 								{
 									_usb_ms_ocr_slot_topdown_board_coords.y += 1;
 									_usb_ms_ocr_slot_topdown_pixel_coords.y  = 0;
 								}
-								else if (_usb_ms_ocr_slot_topdown_pixel_coords.y == MASK_DIM && _usb_ms_ocr_slot_topdown_board_coords.y == board_dim_slots.y - 1) // Finally, at the end of BMP image.
-								{
-									_usb_ms_ocr_slot_topdown_board_coords.y = 0;
-									_usb_ms_ocr_slot_topdown_pixel_coords.y = 0;
-									usb_ms_ocr_state                        = USBMSOCRState_ready;
-									break;
-								}
-							}
-
-							assert(curr_red_channel_offset <= FAT32_SECTOR_SIZE);
-							if (curr_red_channel_offset == FAT32_SECTOR_SIZE)
-							{
-								break;
 							}
 						}
 
@@ -1692,7 +1691,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 */
 
 /* [USB Endpoint Interrupt Routine].
-	This interrupt routine is where the meat of all the enumeration is taken place. It handles
+	This interrupt routine is where the meat of all the enumeration takes place. It handles
 	any events related to endpoints, all listed in (1):
 		- An endpoint's buffer is ready to be filled with data to be sent to the host.
 		- An endpoint's buffer is filled with data sent by the host.
@@ -1702,7 +1701,13 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 		- An isochronous endpoint underwent overflow/underflow of data.
 		- An endpoint replied with a NACK-HANDSHAKE packet.
 
-	But this is pretty much just for endpoint 0's SETUP-transactions.
+	The first half is where endpoint 0's SETUP-transactions are handled to get the USB device all
+	set up and configured. The other half is for the mass storage functionality. The reason why
+	it's here and not in the other interrupt routine with the CDC and HID is so we can handle
+	the transactions as fast as possible. In fact, the entire mass storage transaction of receiving
+	a command, sending/receiving data, and then sending the status is all usually done in one go
+	here. This reduces the amount of cycles wasted in having to do a context switch between an
+	interrupt routine and the main program.
 
 	(1) "USB Device Controller Endpoint Interrupt System" @ Source(1) @ Figure(22-5) @ Page(280).
 */
@@ -2554,96 +2559,179 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 */
 
 /* [Mass Storage - OCR].
-	The OCR is pretty gnarly here! The concept is fairly simple: given a BMP image of the game's
-	board, compare each slot with a mask of each letter and pick the one with the fewest
-	differences. That's it... except that we have to do each of the following very carefully...
+	When the phone send the screenshot BMP to us, we must process it as it is being received as
+	there is no way on god's green earth will it be possible to have the entire image in memory.
+	But this is not exactly trivial, since all we see on our side is just what sectors the host
+	wants to write to and what the bytes are, and these sectors will not necessarily be related to
+	the BMP (it could just be some file system junk). Luckily, we have ways to circumvent this
+	issue, first with some reasonable assumptions:
 
-		- "Determine range in sector to parse".
+		1. BMP data will be written linearly.
 
-			We actually have no idea when the host actually sends us a BMP image! We could try
-			to walk through the FAT32 file system and find it, but this is obviously stupid slow.
-			Luckily, all BMPs begin with the same magic characters: 'B' followed by 'M'. Checking
-			for this along with a couple other fields helps us determine that the host has began
-			to send us a BMP image.  We also have to ensure that the image's dimensions are what
-			we expect. Since the host is going to essentially be pumping a continious stream of
-			pixel data to us, we have to be sure of our current position in the image. It also
-			doesn't help with the fact that Apple generate their BMP top-down!
+			All BMPs will begin with the magic characters 'B' and 'M'. Checking this along with
+			some other fields, we will be able to determine the exact starting sector of the BMP
+			data, and all following BMP data will be described in future sectors.
 
-			Furthermore, when we receive the beginning sector of the BMP image, part of it will be
-			the file header in combination with the DIB header, but the rest of the sector will
-			contain some pixel data. Consequently, we have to begin parsing the pixel data
-			awkwardly in the middle of the sector! Similar thing happens again when we reach the
-			end of the entire BMP pixel data where the last sector may not be entirely filled with
-			meaningful information.
+			However, there's nothing really stopping the host from just sending the entire BMP
+			in reverse order! That is, write the last sector, then second to last, and all the way
+			to the very first sector. This is stupid of course, but this is exactly what happens,
+			well not exactly, but Windows File Explorer seems to do the funky thing of writing BMP
+			data out-of-order. It'd initially begin at the start, but after the first couple
+			clusters, it'll begin at the second half of the BMP or so, finish up, and then jump
+			back. This makes doing OCR pretty much impractical on Windows when uploading the BMP
+			via File Explorer, but TeraCopy, and more importantly Apple, seem to actually write the
+			BMP linearly, which is fortunate.
 
-			On top of that, we aren't actually examining the entire pixel of the receiving image,
-			since this isn't really necessary. It's sufficient to just look at the red channel of
-			the pixel and determine whether or not that pixel is "activated" or not. This move,
-			while great for performance, was also probably necessary since the pixels themselves
-			are not sector-aligned. That is, one half of a pixel is described in one sector, but
-			the other half will be in the next sector. Absolute nightmare to handle that.
-			Fortunately, the file and DIB header of the BMP are perfectly sized so that sectors
-			(except for the starting one) will begin with the red channel of a pixel. Neat how
-			things just work out!
+		2. Initial BMP data is cluster-aligned.
 
-		- "Verify sector".
+			To actually determine when the BMP data has begun as decribed in (1.), we could check
+			each and every sector that will be written, but this is pretty slow and
+			actually overcompensating, since the BMP is just a file in the FAT32 file system,
+			it'll have to start at some particular cluster. This fact also plays into helping us
+			determine the starting BMP sector, as it won't be somewhere like in the middle of a
+			cluster.
 
-			When we receive the initial BMP sector, every sector after that may or may not actually
-			be related to the BMP pixel data itself. What could actually happen is that the driver
-			writes a small chunk of the entire BMP file to a couple clusters, and then write to
-			some other system file for housekeeping or something, and then continue writing the
-			BMP file. In other words, we're still dealing with sectors here! Who knows what we're
-			dealing with!
+			Interestingly though, this assumption does not seem to hold for the rest of the BMP
+			data. I don't have proof of it, but I believe Apple will do a partial cluster write,
+			and not one in its entirety in one command; works fine on Windows though. In other
+			words, we can assume the the start of the BMP data is cluster-aligned, but not much
+			else.
 
-			But as luck would have it, we can somewhat determine if a sector actually contains
-			pixel data, or if it is just some random junk that OS is wanting to write to our SD
-			card, by checking all of the bytes where the alpha channel of the pixels would be at.
-			If they're all 0xFF, then good chance that we're looking at a sector of pixel data of
-			the BMP. Otherwise, it's just junk we should ignore.
+		3. Transactions are exclusive.
 
-			Now this isn't exactly comprehensive. There's nothing stopping the driver from doing
-			something extremely uncharacteristic like write an entire cluster sector-by-sector
-			**backwards**, or write to a file wheree the sectors of that file would just be all
-			0xFF, and we then mistake this for a sector of pixel data. By god's fortunes though,
-			these little things don't seem to really occur at all!
+			We assume entire transactions are exclusively reserved for the BMP or not, and nothing
+			in between. In other words, we will not be expecting for the host to send a single
+			write command that updates the FAT while somehow simultaneously send BMP data in that
+			same series of sectors that are being sent.
 
-		- "Process sector in scanlines".
+		3. BMP pixel data is uniquely determined by the alpha channel.
 
-			Now this is probably the most difficult aspect of this problem: the fact that we are
-			receiving BMP pixel data in terms of rows, top-down, that are not sector-aligned. In
-			other words, the sector that we have on hand that we got from the host could be
-			describing a small slice of a slot on the board, could span onto the next row of the
-			BMP, or just be padding pixels that we don't care about, and so on and on. It's
-			absolutely bananas how complicated this really is...! Thus, to make it all managable,
-			we break the pixels that are in the sector into chunks of scanlines. A scanline could
-			be part of a single row of a single slot, be padding between two horizontally adjacent
-			slots, etc, etc. A scanline is just essentially something that we can process entirely
-			in a coherent manner without having to worry about all the alignment issues.
+			For some strange reason, it's pretty frequent for the host to send a small portion
+			of BMP data, but then send some file system junk, and then some more BMP data. For the
+			most part, this won't be an issue, as we can check the alpha channel of the pixels
+			(or where they'd at least be) in the sector. If we find that they're not all 0xFF, then
+			the sector is likely junk that's unrelated to BMP pixel data. If they are all 0xFF,
+			then high chances it's pixel data. This only works at all because the screenshot BMP
+			doesn't make any sort of transparency, and these 0xFF bytes are pretty much for
+			padding.
 
-		- "Parse scanline of the slot".
+			Of course there's a chance of a false positive, if the host happens to send us a sector
+			consisting of entirely 0xFF, but something like this doesn't seem to ever happen, so
+			good for us! The only thing that'd get close to this is the FAT region, but because of
+			(2.), this is not in the data region of the file system, so we wouldn't intercept this
+			writing transaction for BMP data anyways.
 
-			When we have a scanline of a single row of a single slot (which may not be the entire
-			row actually, since it could be truncated and the rest of the row will be described in
-			the next sector that we receive), we look at the red channel of each pixel and
-			determine the active and inactive bits. We have to store these bits somewhere, since
-			it may take two scanlines to parse the entire single row of this one slot we're at.
+			Also because of (3.), we will only check the first sector of the transaction to see if
+			it's likely pixel data, and assume the rest of the sectors in the transaction will
+			follow suit. This stems from the idea that if we receive a sector that appears like
+			pixel data, but it is only until sector #300 of that transaction that it turns out it's
+			not, then we would have to roll back all of our processing work to the very start. This
+			case can possibly happen by all means, but in practice does not.
 
-		- "Add points."
+	With these assumptions, we can decide whether or not we should intercept the write transaction
+	to do OCR. When we do intercept the transaction, we can process the sectors one at a time and
+	eventually figure out each letter of the slots within the image.
 
-			TODO
+	Of course, when we do have the sectors that we're confident contains BMP pixels, process them
+	to get slot pixels overall is tricky. Firstly, we receive the entire image top-down from Apple.
+	It's not a huge deal honestly, but makes things needlessly more not so simple when I have
+	everything else be bottom-up. Second, the pixel data themselves are not exactly aligned, that
+	is, each sector of BMP data (except for the first which contains the headers) begins with the
+	latter half of a pixel that the previous BMP data sector truncated at the end. This is only a
+	thing because of the BMP header from the very first sector offsets the whole pixel data by
+	some bytes.
 
-		- "Pick winning letters."
+	In other words, instead of the pixel data looking like:
 
-			After we have processed and accumulated points for each slot in the row of the board,
-			we iterate through each slot and determine the best matching letter. Doing this, we
-			have essentially performed OCR on a single row of the wordgame's board. Rinse and
-			repeat as necessary...
+		BGRA - BGRA - BGRA - BGRA - ... -  BGRA - BGRA - BGRA - BGRA,
 
-	This OCR system is pretty harcore and I'm pretty proud of myself in managing to implement it
-	within a day*. Of course, this relies on the presence of the mask of the letters being provided
-	somewhere. This is generated through microservices. See: "Microservices.c".
+	It's instead:
 
-	* Some later adjustments had to be made. Took days.
+		RA - BGRA - BGRA - BGRA - ... -  BGRA - BGRA - BGRA - BG.
+
+	Ugly! But whatever. At least the positions of the pixel channels doesn't shift around
+	sector-to-sector!
+
+	The next thign to note is that the BMP data, because of assumption (1.) and the fact that
+	Apple makes BMP top-down, we essentially receive a stream of pixels going left to right from
+	the top to the bottom. Thus, we can't singly OCR a slot on its own; we have to do it for an
+	entire row of slots in the wordgame! If we don't, then we are discarding pixels of another
+	slot, and there's no way to have those be resent, unless the entire image is resent again, but
+	that's absolutely stupid to do, so must make use of all the data that we receive efficiently
+	and effectively.
+
+	As for how the OCR process actually goes, we collect all the pixels that we receive from the
+	sectors the host sends us until we have an entire pixel row of a single slot. We can then
+	compare this row of pixels to each mask (see: [OCR - Mask Stream]) and add points to each
+	respective letter. If the row of pixels of the slot from the screenshot matches perfectly with
+	a row of pixels of a mask, the letter of that mask will receive the most points. Any
+	differences will reduce the score added.
+
+	But as stated earlier, we can't conclude what that slot's letter is until we have completely
+	compared all of the pixel rows, but the next series of pixels will usually be the next
+	horizontally adjacent slot! So we repeat again and again, until we reach the bottom of all of
+	those slots. It is only then can we determine the most likely letter of each of those slots.
+
+	There's also padding pixels between each slot that needs to be accounted for, but it's not too
+	big of a deal.
+
+	Overall the OCR is pretty damn fast. The wordgame that takes the longest is WordBites, since
+	it's a 8x9 grid of slots. Unoptimized, it took about 23 seconds to determine the letters and
+	their positions on the board. But with some observations, every WordBites piece are never in
+	direct adjacency with another piece, thus we can avoid having to extract activated pixels and
+	perform comparisons of a lot of slots since we know for a fact they'll just be empty space.
+	Simple exits like these cuts the processing time of WordBites around half, to 13 seconds total.
+*/
+
+/* [OCR - Mask Stream].
+	If there are 44 letters and MASK_DIM = 64, then having a packed monochrome MASK_DIM x MASK_DIM
+	BMP mask of each of those letters will take 44*64*64/8 = 22,528 bytes of flash. This is
+	obviously way too much, so what we have to do is perform some sort of compression on it to get
+	it down to acceptable levels.
+
+	My first attempt at compression was through "row-reduction" where I mark the amount of empty
+	rows from the top and bottom of a letter's mask. Thus by having a single byte where the nibbles
+	represents amount of empty rows, quite a bit of space could be saved, but was still
+	insufficient. Can't remember exact numbers, but it probably dropped the original 22KB to ~17KB,
+	which didn't leave enough space for the rest of the program.
+
+	Then I thought about maybe reducing the mask size, but we have to then consider the tradeoffs
+	between that and accuracy. Obviously if we reduce MASK_DIM to something smaller like 32, then
+	the mask image quality will also be reduced. To a human, the letters are still quite
+	distinguishable, but the key issue with this is the fact that it's not very error-tolerant.
+	The screenshot BMP that contains the letters that we need to process will not perfectly line up
+	with our masks. For the most part, this is fine, we just pick whatever mask fits the letter
+	the most; there'll just be an "edge" of error surrounding the letter is all. But if we half
+	MASK_DIM from 64 to 32, then the ratio of the error around the perimeter with the area of
+	matching pixels will be 4, that is, the error will quadruple if we cut MASK_DIM by half, per
+	inverse square law. This effect is quite apparent when a slot's letter and its corresponding
+	mask have a small rectangle of mismatch that is just big enough to fool the OCR into thinking
+	it's the incorrect letter.
+
+	So in short, it's important that we have a large MASK_DIM, bigger the better, as it'll reduce
+	the amount of relative error. The only downside to this is it'll take up more flash memory and
+	more time to process. Because of this, reducing mask size is not really an option. It'll make
+	the OCR too unreliable.
+
+	Alright then, so I thought about maybe representing each row of the individual masks with some
+	sort of run-length encoding. For letters like 'W', a row may need up to 5/6 bytes to indicate
+	the amount of white/black pixels there are in a row. This was never implemented, mainly cause
+	it was pretty sucky.
+
+	But the crucial insight then came to me when I realized how the OCR was actually accessing the
+	mask data. As described in [Mass Storage - OCR], a single slot is never processed at a time,
+	but an entire row, specifically from the top to the bottom. So rather than store each letter's
+	mask BMP individually, we instead store it by sorting all the top rows of the masks in
+	sequence, followed by the second row from the top, and on and on until the very bottom rows.
+	From there, we can then perform a straight-forward run-length compression on it. Each
+	run-length is assumed to be byte-sized, but if it's zero, then we pop a word-sized run-length
+	from a separate place. This is to handle long stretches of empty rows, but have it not be
+	incredibly inefficient since most run-lengths are only a dozen pixels or so. Since the masks
+	are monochrome, it's obvious that the run-lengths will alternate in color/activation, where the
+	first run-length represents black/inactive pixels.
+
+	Thus we have a stream of run-lengths that the OCR can decode easily to get bytes of masks to
+	compare slots against, going from 22,528 bytes to ~7,299 bytes, ~33% of original size!
 */
 
 /* [Endpoint Sizes].

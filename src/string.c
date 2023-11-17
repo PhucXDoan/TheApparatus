@@ -1,7 +1,3 @@
-//
-// Primitive Strings.
-//
-
 static str
 str_cstr(char* cstr)
 {
@@ -54,14 +50,10 @@ str_eq(str lhs, str rhs)
 	return result;
 }
 
-//
-// String Buffers.
-//
-
 #define error_capacity() error("`%s` reached maximum capacity.", __func__)
 
 static void
-strbuf_char(struct StrBuf* buf, char value)
+strbuf_char(strbuf* buf, char value)
 {
 	if (buf->length + 1 <= buf->size)
 	{
@@ -76,7 +68,7 @@ strbuf_char(struct StrBuf* buf, char value)
 
 #define strbuf_strbuf(STRBUF_PTR, STRBUF) strbuf_str((STRBUF_PTR), (STRBUF).str)
 static void
-strbuf_str(struct StrBuf* buf, str value)
+strbuf_str(strbuf* buf, str value)
 {
 	if (buf->length + value.length <= buf->size)
 	{
@@ -90,13 +82,13 @@ strbuf_str(struct StrBuf* buf, str value)
 }
 
 static void
-strbuf_cstr(struct StrBuf* buf, char* value)
+strbuf_cstr(strbuf* buf, char* value)
 {
 	strbuf_str(buf, (str) { value, strlen(value) });
 }
 
 static void
-strbuf_u64(struct StrBuf* buf, u64 value) // Remaining space of at least 20 will handle all values.
+strbuf_u64(strbuf* buf, u64 value) // Remaining space of at least 20 will handle all values.
 {
 	char serialized_buffer[20] = {0};
 	i32  serialized_length     = serialize_u64(serialized_buffer, sizeof(serialized_buffer), value);
@@ -104,7 +96,7 @@ strbuf_u64(struct StrBuf* buf, u64 value) // Remaining space of at least 20 will
 }
 
 static void
-strbuf_i64(struct StrBuf* buf, i64 value) // Remaining space of at least 20 will handle all values.
+strbuf_i64(strbuf* buf, i64 value) // Remaining space of at least 20 will handle all values.
 {
 	char serialized_buffer[20] = {0};
 	i32  serialized_length     = serialize_i64(serialized_buffer, sizeof(serialized_buffer), value);
@@ -112,7 +104,7 @@ strbuf_i64(struct StrBuf* buf, i64 value) // Remaining space of at least 20 will
 }
 
 static void
-strbuf_8b(struct StrBuf* buf, u8 value)
+strbuf_8b(strbuf* buf, u8 value)
 {
 	char digits[8] = {0};
 	for (i32 i = 0; i < countof(digits); i += 1)
@@ -123,7 +115,7 @@ strbuf_8b(struct StrBuf* buf, u8 value)
 }
 
 static void
-strbuf_char_n(struct StrBuf* buf, char value, i64 count)
+strbuf_char_n(strbuf* buf, char value, i64 count)
 {
 	assert(count >= 0);
 
