@@ -1240,25 +1240,45 @@ main(int argc, char** argv)
 			{
 				struct CLIProgram_wordy_t cli = cli_unknown.wordy;
 
-				strbuf dictionary_file_path = strbuf(256);
-				strbuf_str (&dictionary_file_path, cli.dir_path.str);
-				strbuf_char(&dictionary_file_path, '/');
-				strbuf_str (&dictionary_file_path, LANGUAGE_INFO[Language_english].name);
-				strbuf_cstr(&dictionary_file_path, ".txt");
+				for (enum Language language = {0}; language < Language_COUNT; language += 1)
+				{
+					strbuf dictionary_file_path = strbuf(256);
+					strbuf_str (&dictionary_file_path, cli.dir_path.str);
+					strbuf_char(&dictionary_file_path, '/');
+					strbuf_str (&dictionary_file_path, LANGUAGE_INFO[language].name);
+					strbuf_cstr(&dictionary_file_path, ".txt");
 
-				strbuf output_file_path = strbuf(256);
-				strbuf_str (&output_file_path, cli.dir_path.str);
-				strbuf_char(&output_file_path, '/');
-				strbuf_str (&output_file_path, LANGUAGE_INFO[Language_english].name);
-				strbuf_cstr(&output_file_path, ".dat");
+					strbuf output_file_path = strbuf(256);
+					strbuf_str (&output_file_path, cli.dir_path.str);
+					strbuf_char(&output_file_path, '/');
+					strbuf_str (&output_file_path, LANGUAGE_INFO[language].name);
+					strbuf_cstr(&output_file_path, ".dat");
 
-				HANDLE output_handle = create_file_writing_handle(output_file_path.str);
-				strbuf output_buf    = strbuf(256);
+					HANDLE output_handle = create_file_writing_handle(output_file_path.str);
+					strbuf output_buf    = strbuf(256);
 
-				strbuf_cstr(&output_buf, "meow");
-				write_flush_strbuf(output_handle, &output_buf);
+					for (i32 i = 0; i < LANGUAGE_INFO[language].alphabet_length; i += 1)
+					{
+						struct LetterInfo letter_info = LETTER_INFO[LANGUAGE_INFO[language].alphabet[i]];
 
-				close_file_writing_handle(output_handle);
+						for (i32 byte_index = 0; byte_index < sizeof(letter_info.unicode); byte_index += 1)
+						{
+							u8 byte = (letter_info.unicode >> (byte_index * 8)) & 0xFF;
+							if (byte_index && !byte)
+							{
+								break;
+							}
+							else
+							{
+								strbuf_char(&output_buf, byte);
+							}
+						}
+
+						write_flush_strbuf(output_handle, &output_buf);
+					}
+
+					close_file_writing_handle(output_handle);
+				}
 
 				debug_halt();
 			} break;
