@@ -288,63 +288,73 @@ static_assert(LITTLE_ENDIAN);
 		X(wordbites         , "WordBites"           , Letter_z + 1    ,  44, 384       , 8, 9              , 102      , 140.5                    ,  88                    ,  400,  1676          , 256,  256              , 0.2524, 0.3749, 0.4917                                         )
 
 #define LETTER_XMDT(X) \
-	/* Name       | LCD Character Code */ \
-	X(null        , 0b1111'1111        ) \
-	X(a           , 'A'                ) \
-	X(b           , 'B'                ) \
-	X(c           , 'C'                ) \
-	X(d           , 'D'                ) \
-	X(e           , 'E'                ) \
-	X(f           , 'F'                ) \
-	X(g           , 'G'                ) \
-	X(h           , 'H'                ) \
-	X(i           , 'I'                ) \
-	X(j           , 'J'                ) \
-	X(k           , 'K'                ) \
-	X(l           , 'L'                ) \
-	X(m           , 'M'                ) \
-	X(n           , 'N'                ) \
-	X(o           , 'O'                ) \
-	X(p           , 'P'                ) \
-	X(q           , 'Q'                ) \
-	X(r           , 'R'                ) \
-	X(s           , 'S'                ) \
-	X(t           , 'T'                ) \
-	X(u           , 'U'                ) \
-	X(v           , 'V'                ) \
-	X(w           , 'W'                ) \
-	X(x           , 'X'                ) \
-	X(y           , 'Y'                ) \
-	X(z           , 'Z'                ) /* English letters must be contiguous up to prune out foreign letters that don't need to be processed. */ \
-	X(ene         , 0b1110'1110        ) /* Same reason as above; Spanish alphabet essentially consists the basic 26 Latin letters plus N with tilde. */ \
-	X(boris       , 0b001              ) \
-	X(chelovek    , 0b010              ) \
-	X(dmitri      , 0b1101'1011        ) \
-	X(fyodor      , '0'                ) \
-	X(gregory     , 'r'                ) \
-	X(ivan        , 0b011              ) \
-	X(ivan_kratkiy, 0b100              ) \
-	X(leonid      , 0b1011'0110        ) \
-	X(myagkiy_znak, 'b'                ) \
-	X(pavel       , 0b1111'0111        ) \
-	X(shura       , 0b101              ) \
-	X(ulyana      , 'y'                ) \
-	X(yery        , 0b110              ) \
-	X(zhenya      , 0b111              ) \
-	X(zinaida     , '3'                ) \
-	X(a_umlaut    , 0b1110'0001        ) \
-	X(o_umlaut    , 0b1110'1111        )
+	/* Name       | LCD Character Code | Unicode */ \
+	X(null        , 0b1111'1111        , 0x00, 0x00) \
+	X(a           , 'A'                , 'A' , 0x00) \
+	X(b           , 'B'                , 'B' , 0x00) \
+	X(c           , 'C'                , 'C' , 0x00) \
+	X(d           , 'D'                , 'D' , 0x00) \
+	X(e           , 'E'                , 'E' , 0x00) \
+	X(f           , 'F'                , 'F' , 0x00) \
+	X(g           , 'G'                , 'G' , 0x00) \
+	X(h           , 'H'                , 'H' , 0x00) \
+	X(i           , 'I'                , 'I' , 0x00) \
+	X(j           , 'J'                , 'J' , 0x00) \
+	X(k           , 'K'                , 'K' , 0x00) \
+	X(l           , 'L'                , 'L' , 0x00) \
+	X(m           , 'M'                , 'M' , 0x00) \
+	X(n           , 'N'                , 'N' , 0x00) \
+	X(o           , 'O'                , 'O' , 0x00) \
+	X(p           , 'P'                , 'P' , 0x00) \
+	X(q           , 'Q'                , 'Q' , 0x00) \
+	X(r           , 'R'                , 'R' , 0x00) \
+	X(s           , 'S'                , 'S' , 0x00) \
+	X(t           , 'T'                , 'T' , 0x00) \
+	X(u           , 'U'                , 'U' , 0x00) \
+	X(v           , 'V'                , 'V' , 0x00) \
+	X(w           , 'W'                , 'W' , 0x00) \
+	X(x           , 'X'                , 'X' , 0x00) \
+	X(y           , 'Y'                , 'Y' , 0x00) \
+	X(z           , 'Z'                , 'Z' , 0x00) /* English letters must be contiguous up to prune out foreign letters that don't need to be processed. */ \
+	X(ene         , 0b1110'1110        , 0xD1, 0x00) /* Same reason as above; Spanish alphabet essentially consists the basic 26 Latin letters plus N with tilde. */ \
+	X(boris       , 0b001              , 0x11, 0x04) \
+	X(chelovek    , 0b010              , 0x16, 0x04) \
+	X(dmitri      , 0b1101'1011        , 0x27, 0x04) \
+	X(fyodor      , '0'                , 0x24, 0x04) \
+	X(gregory     , 'r'                , 0x13, 0x04) \
+	X(ivan        , 0b011              , 0x18, 0x04) \
+	X(ivan_kratkiy, 0b100              , 0x19, 0x04) \
+	X(leonid      , 0b1011'0110        , 0x1B, 0x04) \
+	X(myagkiy_znak, 'b'                , 0x2C, 0x04) \
+	X(pavel       , 0b1111'0111        , 0x41, 0x04) \
+	X(shura       , 0b101              , 0x28, 0x04) \
+	X(ulyana      , 'y'                , 0x23, 0x04) \
+	X(yery        , 0b110              , 0x2B, 0x04) \
+	X(zhenya      , 0b111              , 0x16, 0x04) \
+	X(zinaida     , '3'                , 0x17, 0x04) \
+	X(a_umlaut    , 0b1110'0001        , 0xD2, 0x04) \
+	X(o_umlaut    , 0b1110'1111        , 0xE6, 0x04)
+
+#define LANGUAGE_XMDT(X) \
+	X(english, Letter_a, Letter_b       , Letter_c, Letter_d      , Letter_e     , Letter_f     , Letter_g      , Letter_h   , Letter_i           , Letter_j    , Letter_k, Letter_l, Letter_m     , Letter_n     , Letter_o, Letter_p       , Letter_q       , Letter_r   , Letter_s           , Letter_t, Letter_u, Letter_v, Letter_w, Letter_x                                          ) \
+	X(russian, Letter_a, Letter_boris   , Letter_b, Letter_gregory, Letter_dmitri, Letter_zhenya, Letter_zinaida, Letter_ivan, Letter_ivan_kratkiy, Letter_pavel, Letter_c, Letter_t, Letter_ulyana, Letter_fyodor, Letter_x, Letter_chelovek, Letter_shura   , Letter_yery, Letter_myagkiy_znak                                                                                            ) /* No records of e_umlaut, shchuka, tvyordiy_znak, echo, yuri, or yakov. */ \
+	X(french , Letter_a, Letter_b       , Letter_c, Letter_d      , Letter_e     , Letter_f     , Letter_g      , Letter_h   , Letter_i           , Letter_j    , Letter_k, Letter_l, Letter_m     , Letter_n     , Letter_o, Letter_p       , Letter_q       , Letter_r   , Letter_s           , Letter_t, Letter_u, Letter_v, Letter_w, Letter_x, Letter_y, Letter_z                      ) \
+	X(german , Letter_a, Letter_a_umlaut, Letter_b, Letter_c      , Letter_d     , Letter_e     , Letter_f      , Letter_g   , Letter_h           , Letter_i    , Letter_j, Letter_k, Letter_l     , Letter_m     , Letter_n, Letter_o       , Letter_o_umlaut, Letter_p   , Letter_q           , Letter_r, Letter_s, Letter_t, Letter_u, Letter_v, Letter_w, Letter_x, Letter_y  , Letter_z) /* No records of eszett or u_umlaut. */ \
+	X(spanish, Letter_a, Letter_b       , Letter_c, Letter_d      , Letter_e     , Letter_f     , Letter_g      , Letter_h   , Letter_i           , Letter_j    , Letter_k, Letter_l, Letter_m     , Letter_n     , Letter_o, Letter_p       , Letter_q       , Letter_r   , Letter_s           , Letter_t, Letter_u, Letter_v, Letter_w, Letter_x, Letter_y, Letter_z, Letter_ene          ) \
+	X(italian, Letter_a, Letter_b       , Letter_c, Letter_d      , Letter_e     , Letter_f     , Letter_g      , Letter_h   , Letter_i           , Letter_l    , Letter_m, Letter_n, Letter_o     , Letter_p     , Letter_q, Letter_r       , Letter_s       , Letter_t   , Letter_u           , Letter_v, Letter_z                                                                        )
 
 #define WORDGAME_MAX_PRINT_NAME_SIZE_(IDENTIFIER_NAME, PRINT_NAME, ...) u8 IDENTIFIER_NAME[sizeof(PRINT_NAME)];
 #define WORDGAME_MAX_DIM_SLOTS_X_(IDENTIFIER_NAME, PRINT_NAME, SENTINEL_LETTER, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[DIM_SLOTS_X];
 #define WORDGAME_MAX_DIM_SLOTS_Y_(IDENTIFIER_NAME, PRINT_NAME, SENTINEL_LETTER, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[DIM_SLOTS_Y];
 #define WORDGAME_MAX_PRINT_NAME_LENGTH_(IDENTIFIER_NAME, PRINT_NAME, ...) u8 IDENTIFIER_NAME[sizeof(PRINT_NAME)];
 #define LETTER_MAX_NAME_LENGTH_(IDENTIFIER_NAME, ...) u8 IDENTIFIER_NAME[sizeof(#IDENTIFIER_NAME) - 1];
+#define LANGUAGE_MAX_LETTERS_(NAME, ...) u8 NAME[countof((enum Letter[]) { __VA_ARGS__ })];
 #define WORDGAME_MAX_PRINT_NAME_SIZE    sizeof(union { WORDGAME_XMDT(WORDGAME_MAX_PRINT_NAME_SIZE_,) })
 #define WORDGAME_MAX_DIM_SLOTS_X        sizeof(union { WORDGAME_XMDT(WORDGAME_MAX_DIM_SLOTS_X_,) })
 #define WORDGAME_MAX_DIM_SLOTS_Y        sizeof(union { WORDGAME_XMDT(WORDGAME_MAX_DIM_SLOTS_Y_,) })
 #define WORDGAME_MAX_PRINT_NAME_LENGTH (sizeof(union { WORDGAME_XMDT(WORDGAME_MAX_PRINT_NAME_LENGTH_,) }) - 1)
 #define LETTER_MAX_NAME_LENGTH          sizeof(union { LETTER_XMDT(LETTER_MAX_NAME_LENGTH_) })
+#define LANGUAGE_MAX_LETTERS            sizeof(union { LANGUAGE_XMDT(LANGUAGE_MAX_LETTERS_) })
 
 enum Letter
 {
@@ -360,7 +370,25 @@ struct LetterInfo
 
 	#if PROGRAM_MICROSERVICES
 		str name;
+		u8  unicode_bytes[2];
 	#endif
+};
+
+struct LanguageInfo
+{
+	u8 letter_mappings[LANGUAGE_MAX_LETTERS];
+
+	#if PROGRAM_MICROSERVICES
+		str name;
+	#endif
+};
+
+enum Language
+{
+	#define MAKE(NAME, ...) Language_##NAME,
+	LANGUAGE_XMDT(MAKE)
+	#undef MAKE
+	Language_COUNT,
 };
 
 enum WordGame
@@ -456,7 +484,7 @@ struct WordGameInfo
 
 	static const struct LetterInfo LETTER_INFO[] PROGMEM =
 		{
-			#define MAKE(NAME, LCD_CHARACTER_CODE) \
+			#define MAKE(NAME, LCD_CHARACTER_CODE, ...) \
 				{ \
 					.lcd_character_code = LCD_CHARACTER_CODE, \
 				},
@@ -507,12 +535,24 @@ struct WordGameInfo
 
 	static const struct LetterInfo LETTER_INFO[] =
 		{
-			#define MAKE(NAME, LCD_CHARACTER_CODE) \
+			#define MAKE(NAME, LCD_CHARACTER_CODE, UNICODE_LOW_BYTE, UNICODE_HIGH_BYTE) \
 				{ \
 					.lcd_character_code = LCD_CHARACTER_CODE, \
 					.name               = STR(#NAME), \
+					.unicode_bytes      = { UNICODE_LOW_BYTE, UNICODE_HIGH_BYTE }, \
 				},
 			LETTER_XMDT(MAKE)
+			#undef MAKE
+		};
+
+	static const struct LanguageInfo LANGUAGE_INFO[] =
+		{
+			#define MAKE(NAME, ...) \
+				{ \
+					.letter_mappings = { __VA_ARGS__ }, \
+					.name            = STR(#NAME), \
+				},
+			LANGUAGE_XMDT(MAKE)
 			#undef MAKE
 		};
 #endif
@@ -669,7 +709,8 @@ struct BMPDIBHeader // "BITMAPCOREHEADER" not supported.
 	X(eaglepeek   , "Identify the Game Pigeon word game shown in screenshots.") \
 	X(extractorv2 , "Create mask-sized monochrome BMP of each slot in screenshots of Game Pigeon word games.") \
 	X(collectune  , "Copy and sort BMPs into the folder with the closest matching mask.") \
-	X(maskiversev2, "Format masks into streaming data to be included into C compilation.")
+	X(maskiversev2, "Format masks into streaming data to be included into C compilation.") \
+	X(wordy       , "Compress dictionary text files.")
 
 #define CLI_PROGRAM_eaglepeek_FIELD_XMDT(X, ...) \
 	X(input_dir_paths, dary_string, "screenshot-dir-path...", "Directory path of the screenshots to identify.",##__VA_ARGS__) \
@@ -688,6 +729,9 @@ struct BMPDIBHeader // "BITMAPCOREHEADER" not supported.
 #define CLI_PROGRAM_maskiversev2_FIELD_XMDT(X, ...) \
 	X(output_file_path, string, "output-file-path", "File path of the formatted data.",##__VA_ARGS__) \
 	X(dir_path        , string, "mask-dir-path"   , "Directory path of the mask BMPs.",##__VA_ARGS__)
+
+#define CLI_PROGRAM_wordy_FIELD_XMDT(X, ...) \
+	X(dir_path, string, "dir-path", "Directory path of the dictionary text files.",##__VA_ARGS__) \
 
 #define CLI_TYPING_XMDT(X) \
 	X(string     , union { struct { char* data; i64 length; }; char* cstr; str str; }) \

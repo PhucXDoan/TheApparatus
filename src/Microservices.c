@@ -1236,6 +1236,33 @@ main(int argc, char** argv)
 				}
 			} break;
 
+			case CLIProgram_wordy:
+			{
+				struct CLIProgram_wordy_t cli = cli_unknown.wordy;
+
+				strbuf dictionary_file_path = strbuf(256);
+				strbuf_str (&dictionary_file_path, cli.dir_path.str);
+				strbuf_char(&dictionary_file_path, '/');
+				strbuf_str (&dictionary_file_path, LANGUAGE_INFO[Language_english].name);
+				strbuf_cstr(&dictionary_file_path, ".txt");
+
+				strbuf output_file_path = strbuf(256);
+				strbuf_str (&output_file_path, cli.dir_path.str);
+				strbuf_char(&output_file_path, '/');
+				strbuf_str (&output_file_path, LANGUAGE_INFO[Language_english].name);
+				strbuf_cstr(&output_file_path, ".dat");
+
+				HANDLE output_handle = create_file_writing_handle(output_file_path.str);
+				strbuf output_buf    = strbuf(256);
+
+				strbuf_cstr(&output_buf, "meow");
+				write_flush_strbuf(output_handle, &output_buf);
+
+				close_file_writing_handle(output_handle);
+
+				debug_halt();
+			} break;
+
 			case CLIProgram_COUNT:
 			default:
 			{
