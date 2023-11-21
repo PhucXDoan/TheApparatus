@@ -104,3 +104,55 @@ write_flush_strbuf(HANDLE file_writing_handle, strbuf* buf)
 	write_raw_data(file_writing_handle, buf->data, buf->length);
 	buf->length = 0;
 }
+
+static str
+alloc_read_file(str file_path)
+{
+	str file_content = {0};
+
+	char file_path_cstr[256] = {0};
+	if (file_path.length >= countof(file_path_cstr))
+	{
+		error("File path too long.");
+	}
+	memmove(file_path_cstr, file_path.data, file_path.length);
+
+	FILE* file = fopen(file_path_cstr, "rb");
+	if (!file)
+	{
+		error("`fopen` failed. Does the file \"%s\" exist?", file_path_cstr);
+	}
+
+	if (fseek(file, 0, SEEK_END))
+	{
+		error("`fseek` failed.");
+	}
+
+	file_content.length = ftell(file);
+	if (file_content.length == -1)
+	{
+		error("`ftell` failed.");
+	}
+
+	if (file_content.length)
+	{
+		alloc(&file_content.data, file_content.length);
+
+		if (fseek(file, 0, SEEK_SET))
+		{
+			error("`fseek` failed.");
+		}
+
+		if (fread(file_content.data, file_content.length, 1, file) != 1)
+		{
+			error("`fread` failed.");
+		}
+	}
+
+	if (fclose(file))
+	{
+		error("`fclose` failed.");
+	}
+
+	return file_content;
+}

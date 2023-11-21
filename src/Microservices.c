@@ -1240,47 +1240,203 @@ main(int argc, char** argv)
 			{
 				struct CLIProgram_wordy_t cli = cli_unknown.wordy;
 
+				//
+				// Process each language's dictionary file.
+				//
+
 				for (enum Language language = {0}; language < Language_COUNT; language += 1)
 				{
+					//
+					// Load input/output files.
+					//
+
 					strbuf dictionary_file_path = strbuf(256);
 					strbuf_str (&dictionary_file_path, cli.dir_path.str);
 					strbuf_char(&dictionary_file_path, '/');
 					strbuf_str (&dictionary_file_path, LANGUAGE_INFO[language].name);
 					strbuf_cstr(&dictionary_file_path, ".txt");
+					str dictionary_file_content = alloc_read_file(dictionary_file_path.str);
 
 					strbuf output_file_path = strbuf(256);
 					strbuf_str (&output_file_path, cli.dir_path.str);
 					strbuf_char(&output_file_path, '/');
 					strbuf_str (&output_file_path, LANGUAGE_INFO[language].name);
 					strbuf_cstr(&output_file_path, ".dat");
-
 					HANDLE output_handle = create_file_writing_handle(output_file_path.str);
 					strbuf output_buf    = strbuf(256);
 
-					for (i32 i = 0; i < LANGUAGE_INFO[language].alphabet_length; i += 1)
-					{
-						struct LetterInfo letter_info = LETTER_INFO[LANGUAGE_INFO[language].alphabet[i]];
+					//
+					// Parse dictionary for words.
+					//
 
-						for (i32 byte_index = 0; byte_index < sizeof(letter_info.unicode); byte_index += 1)
+					i64 processed_amount = 0;
+					while (processed_amount < dictionary_file_content.length)
+					{
+						//
+						// Get word's letters.
+						//
+
+						enum Letter word_buffer[MAX_WORD_LENGTH] = {0};
+						i32         word_length                  = 0;
+						b32         has_blacklisted_codepoint    = false;
+
+						while (true)
 						{
-							u8 byte = (letter_info.unicode >> (byte_index * 8)) & 0xFF;
-							if (byte_index && !byte)
+							if (processed_amount == dictionary_file_content.length)
 							{
+								break;
+							}
+							else if (dictionary_file_content.data[processed_amount] == '\n')
+							{
+								processed_amount += 1;
+								break;
+							}
+							else if
+							(
+								processed_amount + 1 < dictionary_file_content.length &&
+								dictionary_file_content.data[processed_amount    ] == '\r' &&
+								dictionary_file_content.data[processed_amount + 1] == '\n'
+							)
+							{
+								processed_amount += 2;
 								break;
 							}
 							else
 							{
-								strbuf_char(&output_buf, byte);
+								//
+								// Get codepoint.
+								//
+
+								u8 codepoint_length = 0;
+								u8 initial_mask     = 0;
+
+								if ((dictionary_file_content.data[processed_amount] & 0b1000'0000) == 0b0000'0000)
+								{
+									codepoint_length = 1;
+									initial_mask     = 0b0111'1111;
+								}
+								else if ((dictionary_file_content.data[processed_amount] & 0b1110'0000) == 0b1100'0000)
+								{
+									codepoint_length = 2;
+									initial_mask     = 0b0001'1111;
+								}
+								else if ((dictionary_file_content.data[processed_amount] & 0b1111'0000) == 0b1110'0000)
+								{
+									codepoint_length = 3;
+									initial_mask     = 0b0000'1111;
+								}
+								else if ((dictionary_file_content.data[processed_amount] & 0b1111'1000) == 0b1111'0000)
+								{
+									codepoint_length = 4;
+									initial_mask     = 0b0000'0111;
+								}
+								else
+								{
+									error("Unknown unicode byte 0x%2X.", (u32) (u8) dictionary_file_content.data[processed_amount]);
+								}
+
+								if (processed_amount + codepoint_length > dictionary_file_content.length)
+								{
+									error("Not enough bytes remaining for last UTF-8 codepoint.");
+								}
+
+								u32 codepoint = dictionary_file_content.data[processed_amount] & initial_mask;
+								processed_amount += 1;
+								for
+								(
+									i32 byte_index = 1;
+									byte_index < codepoint_length;
+									byte_index += 1
+								)
+								{
+									codepoint        <<= 6;
+									codepoint         |= dictionary_file_content.data[processed_amount] & 0b0011'1111;
+									processed_amount  += 1;
+								}
+
+								//
+								// Determine letter of codepoint.
+								//
+
+								enum Letter codepoint_letter = {0};
+								for
+								(
+									enum Letter letter = {1};
+									letter < Letter_COUNT && !codepoint_letter;
+									letter += 1
+								)
+								{
+									for
+									(
+										i32 letter_codepoint_index = 0;
+										letter_codepoint_index < countof(LETTER_INFO[letter].codepoints) && LETTER_INFO[letter].codepoints[letter_codepoint_index];
+										letter_codepoint_index += 1
+									)
+									{
+										if (LETTER_INFO[letter].codepoints[letter_codepoint_index] == codepoint)
+										{
+											codepoint_letter = letter;
+											break;
+										}
+									}
+								}
+
+								//
+								// Determine if letter is blacklisted.
+								//
+
+								if (!codepoint_letter)
+								{
+									b32 blacklisted = false;
+									for (i32 i = 0; i < countof(BLACKLISTED_CODEPOINTS); i += 1)
+									{
+										if (BLACKLISTED_CODEPOINTS[i] == codepoint)
+										{
+											blacklisted               = true;
+											has_blacklisted_codepoint = true;
+											break;
+										}
+									}
+									if (!blacklisted)
+									{
+										//error("Unhandled codepoint 0x%X.", codepoint);
+										printf("Unhandled codepoint 0x%X.\n", codepoint);
+									}
+								}
+
+								//
+								// Append letter to word buffer.
+								//
+
+								if (word_length < countof(word_buffer))
+								{
+									word_buffer[word_length] = codepoint_letter;
+								}
+								word_length += 1;
 							}
 						}
 
-						write_flush_strbuf(output_handle, &output_buf);
+						//
+						//
+						//
+
+						if (!has_blacklisted_codepoint && MIN_WORD_LENGTH <= word_length && word_length <= countof(word_buffer))
+						{
+							for (i32 i = 0; i < word_length; i += 1)
+							{
+								printf("%.*s ", i32(LETTER_INFO[word_buffer[i]].name.length), LETTER_INFO[word_buffer[i]].name.data);
+							}
+							printf("\n");
+						}
 					}
 
+					//
+					// Clean up.
+					//
+
+					free(dictionary_file_content.data);
 					close_file_writing_handle(output_handle);
 				}
-
-				debug_halt();
 			} break;
 
 			case CLIProgram_COUNT:
@@ -1291,6 +1447,7 @@ main(int argc, char** argv)
 		}
 	}
 
+	debug_halt();
 	return 0;
 }
 
