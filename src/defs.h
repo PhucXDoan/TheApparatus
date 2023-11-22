@@ -338,12 +338,12 @@ static_assert(LITTLE_ENDIAN);
 	X(o_umlaut    , 0b1110'1111        , 0x04E6, 0x00F6, 0x00D6, 0x00F6                                                                                    )
 
 #define LANGUAGE_XMDT(X) \
-	X(english, Letter_a, Letter_b       , Letter_c, Letter_d      , Letter_e     , Letter_f     , Letter_g      , Letter_h   , Letter_i           , Letter_j    , Letter_k, Letter_l, Letter_m     , Letter_n     , Letter_o, Letter_p       , Letter_q       , Letter_r   , Letter_s           , Letter_t, Letter_u, Letter_v, Letter_w, Letter_x, Letter_y, Letter_z                      ) \
-	X(russian, Letter_a, Letter_boris   , Letter_b, Letter_gregory, Letter_dmitri, Letter_zhenya, Letter_zinaida, Letter_ivan, Letter_ivan_kratkiy, Letter_pavel, Letter_c, Letter_t, Letter_ulyana, Letter_fyodor, Letter_x, Letter_chelovek, Letter_shura   , Letter_yery, Letter_myagkiy_znak                                                                                            ) /* No records of e_umlaut, tsaplya, shchuka, tvyordiy_znak, echo, yuri, or yakov. */ \
-	X(french , Letter_a, Letter_b       , Letter_c, Letter_d      , Letter_e     , Letter_f     , Letter_g      , Letter_h   , Letter_i           , Letter_j    , Letter_k, Letter_l, Letter_m     , Letter_n     , Letter_o, Letter_p       , Letter_q       , Letter_r   , Letter_s           , Letter_t, Letter_u, Letter_v, Letter_w, Letter_x, Letter_y, Letter_z                      ) \
-	X(german , Letter_a, Letter_a_umlaut, Letter_b, Letter_c      , Letter_d     , Letter_e     , Letter_f      , Letter_g   , Letter_h           , Letter_i    , Letter_j, Letter_k, Letter_l     , Letter_m     , Letter_n, Letter_o       , Letter_o_umlaut, Letter_p   , Letter_q           , Letter_r, Letter_s, Letter_t, Letter_u, Letter_v, Letter_w, Letter_x, Letter_y  , Letter_z) /* No records of eszett or u_umlaut. */ \
-	X(spanish, Letter_a, Letter_b       , Letter_c, Letter_d      , Letter_e     , Letter_f     , Letter_g      , Letter_h   , Letter_i           , Letter_j    , Letter_k, Letter_l, Letter_m     , Letter_n     , Letter_o, Letter_p       , Letter_q       , Letter_r   , Letter_s           , Letter_t, Letter_u, Letter_v, Letter_w, Letter_x, Letter_y, Letter_z, Letter_ene          ) \
-	X(italian, Letter_a, Letter_b       , Letter_c, Letter_d      , Letter_e     , Letter_f     , Letter_g      , Letter_h   , Letter_i           , Letter_l    , Letter_m, Letter_n, Letter_o     , Letter_p     , Letter_q, Letter_r       , Letter_s       , Letter_t   , Letter_u           , Letter_v, Letter_z                                                                        )
+	X(english, Letter_a, Letter_b       , Letter_c, Letter_d      , Letter_e     , Letter_f, Letter_g     , Letter_h      , Letter_i   , Letter_j           , Letter_k, Letter_l     , Letter_m, Letter_n, Letter_o, Letter_p    , Letter_q       , Letter_r, Letter_s, Letter_t     , Letter_u     , Letter_v, Letter_w       , Letter_x    , Letter_y   , Letter_z                      ) \
+	X(russian, Letter_a, Letter_boris   , Letter_b, Letter_gregory, Letter_dmitri, Letter_e, Letter_zhenya, Letter_zinaida, Letter_ivan, Letter_ivan_kratkiy, Letter_k, Letter_leonid, Letter_m, Letter_h, Letter_o, Letter_pavel, Letter_p       , Letter_c, Letter_t, Letter_ulyana, Letter_fyodor, Letter_x, Letter_chelovek, Letter_shura, Letter_yery, Letter_myagkiy_znak           ) /* No records of e_umlaut, tsaplya, shchuka, tvyordiy_znak, echo, yuri, or yakov. */ \
+	X(french , Letter_a, Letter_b       , Letter_c, Letter_d      , Letter_e     , Letter_f, Letter_g     , Letter_h      , Letter_i   , Letter_j           , Letter_k, Letter_l     , Letter_m, Letter_n, Letter_o, Letter_p    , Letter_q       , Letter_r, Letter_s, Letter_t     , Letter_u     , Letter_v, Letter_w       , Letter_x    , Letter_y   , Letter_z                      ) \
+	X(german , Letter_a, Letter_a_umlaut, Letter_b, Letter_c      , Letter_d     , Letter_e, Letter_f     , Letter_g      , Letter_h   , Letter_i           , Letter_j, Letter_k     , Letter_l, Letter_m, Letter_n, Letter_o    , Letter_o_umlaut, Letter_p, Letter_q, Letter_r     , Letter_s     , Letter_t, Letter_u       , Letter_v    , Letter_w   , Letter_x, Letter_y  , Letter_z) /* No records of eszett or u_umlaut. */ \
+	X(spanish, Letter_a, Letter_b       , Letter_c, Letter_d      , Letter_e     , Letter_f, Letter_g     , Letter_h      , Letter_i   , Letter_j           , Letter_k, Letter_l     , Letter_m, Letter_n, Letter_o, Letter_p    , Letter_q       , Letter_r, Letter_s, Letter_t     , Letter_u     , Letter_v, Letter_w       , Letter_x    , Letter_y   , Letter_z, Letter_ene          ) \
+	X(italian, Letter_a, Letter_b       , Letter_c, Letter_d      , Letter_e     , Letter_f, Letter_g     , Letter_h      , Letter_i   , Letter_l           , Letter_m, Letter_n     , Letter_o, Letter_p, Letter_q, Letter_r    , Letter_s       , Letter_t, Letter_u, Letter_v     , Letter_z                                                                                           )
 
 #if PROGRAM_MICROSERVICES
 	static const u32 BLACKLISTED_CODEPOINTS[] =
@@ -607,7 +607,16 @@ struct Dary_void
 	}
 #define Dary_def(TYPE) Dary_define(TYPE, TYPE)
 
+Dary_def(u8 );
 Dary_def(u16);
+Dary_def(u32);
+Dary_def(u64);
+Dary_def(i8 );
+Dary_def(i16);
+Dary_def(i32);
+Dary_def(i64);
+
+Dary_define(letter, enum Letter);
 
 //
 // "Microservices_bmp.c"

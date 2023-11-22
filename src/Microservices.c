@@ -1245,10 +1245,9 @@ main(int argc, char** argv)
 				//
 
 				for (enum Language language = {0}; language < Language_COUNT; language += 1)
+				//enum Language language = Language_russian;
 				{
-					//
-					// Load input/output files.
-					//
+					struct Dary_u32 wordset[MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1][Letter_COUNT] = {0};
 
 					strbuf dictionary_file_path = strbuf(256);
 					strbuf_str (&dictionary_file_path, cli.dir_path.str);
@@ -1276,9 +1275,9 @@ main(int argc, char** argv)
 						// Get word's letters.
 						//
 
-						enum Letter word_buffer[MAX_WORD_LENGTH] = {0};
-						i32         word_length                  = 0;
-						b32         has_blacklisted_codepoint    = false;
+						enum Letter parsed_word_buffer[MAX_WORD_LENGTH] = {0};
+						i32         parsed_word_length                  = 0;
+						b32         has_blacklisted_codepoint           = false;
 
 						while (true)
 						{
@@ -1359,13 +1358,15 @@ main(int argc, char** argv)
 								//
 
 								enum Letter codepoint_letter = {0};
+
 								for
 								(
-									enum Letter letter = {1};
-									letter < Letter_COUNT && !codepoint_letter;
-									letter += 1
+									i32 alphabet_index = 0;
+									alphabet_index < LANGUAGE_INFO[language].alphabet_length && !codepoint_letter;
+									alphabet_index += 1
 								)
 								{
+									enum Letter letter = LANGUAGE_INFO[language].alphabet[alphabet_index];
 									for
 									(
 										i32 letter_codepoint_index = 0;
@@ -1408,31 +1409,227 @@ main(int argc, char** argv)
 								// Append letter to word buffer.
 								//
 
-								if (word_length < countof(word_buffer))
+								if (parsed_word_length < countof(parsed_word_buffer))
 								{
-									word_buffer[word_length] = codepoint_letter;
+									parsed_word_buffer[parsed_word_length] = codepoint_letter;
 								}
-								word_length += 1;
+								parsed_word_length += 1;
 							}
 						}
 
 						//
-						//
+						// Process word.
 						//
 
-						if (!has_blacklisted_codepoint && MIN_WORD_LENGTH <= word_length && word_length <= countof(word_buffer))
+						if (!has_blacklisted_codepoint && MIN_WORD_LENGTH <= parsed_word_length && parsed_word_length <= countof(parsed_word_buffer))
 						{
-							for (i32 i = 0; i < word_length; i += 1)
+							static_assert(MIN_WORD_LENGTH > 0);
+
+							b32 skip     = false;
+							u32 subwords = 0;
+
+							//
+							// Search for parenting word.
+							//
+
+							for
+							(
+								i32 parenting_word_length = MAX_WORD_LENGTH;
+								parenting_word_length > parsed_word_length;
+								parenting_word_length -= 1
+							)
 							{
-								printf("%.*s ", i32(LETTER_INFO[word_buffer[i]].name.length), LETTER_INFO[word_buffer[i]].name.data);
+								assert(wordset[MAX_WORD_LENGTH - parenting_word_length][parsed_word_buffer[0]].length % parenting_word_length == 0);
+								for
+								(
+									i32 parenting_word_index = 0;
+									parenting_word_index < wordset[MAX_WORD_LENGTH - parenting_word_length][parsed_word_buffer[0]].length / parenting_word_length;
+									parenting_word_index += 1
+								)
+								{
+									u32* parenting_word = wordset[MAX_WORD_LENGTH - parenting_word_length][parsed_word_buffer[0]].data + parenting_word_index * parenting_word_length;
+									if
+									(
+										!memcmp
+										(
+											parenting_word + 1,
+											parsed_word_buffer + 1,
+											(parsed_word_length - 1) * sizeof(parsed_word_buffer[0])
+										)
+									)
+									{
+										skip               = true;
+										parenting_word[0] |= 1 << (parsed_word_length - MIN_WORD_LENGTH);
+									}
+								}
 							}
-							printf("\n");
+
+							//
+							// Search for duplicate.
+							//
+
+							if (!skip)
+							{
+								assert(wordset[MAX_WORD_LENGTH - parsed_word_length][parsed_word_buffer[0]].length % parsed_word_length == 0);
+								for
+								(
+									i32 duplicate_word_index = 0;
+									duplicate_word_index < wordset[MAX_WORD_LENGTH - parsed_word_length][parsed_word_buffer[0]].length / parsed_word_length;
+									duplicate_word_index += 1
+								)
+								{
+									u32* duplicate_word = wordset[MAX_WORD_LENGTH - parsed_word_length][parsed_word_buffer[0]].data + duplicate_word_index * parsed_word_length;
+									if
+									(
+										!memcmp
+										(
+											duplicate_word + 1,
+											parsed_word_buffer + 1,
+											(parsed_word_length - 1) * sizeof(parsed_word_buffer[0])
+										)
+									)
+									{
+										skip = true;
+									}
+								}
+							}
+
+							//
+							// Search for children.
+							//
+
+							for
+							(
+								i32 child_word_length = parsed_word_length - 1;
+								child_word_length >= MIN_WORD_LENGTH;
+								child_word_length -= 1
+							)
+							{
+								assert(wordset[MAX_WORD_LENGTH - child_word_length][parsed_word_buffer[0]].length % child_word_length == 0);
+
+								i32 child_word_index = 0;
+								while (child_word_index < wordset[MAX_WORD_LENGTH - child_word_length][parsed_word_buffer[0]].length / child_word_length)
+								{
+									u32* child_word = wordset[MAX_WORD_LENGTH - child_word_length][parsed_word_buffer[0]].data + child_word_index * child_word_length;
+									if
+									(
+										!memcmp
+										(
+											parsed_word_buffer + 1,
+											child_word + 1,
+											(child_word_length - 1) * sizeof(child_word[0])
+										)
+									)
+									{
+										memmove
+										(
+											child_word,
+											wordset[MAX_WORD_LENGTH - child_word_length][parsed_word_buffer[0]].data + wordset[MAX_WORD_LENGTH - child_word_length][parsed_word_buffer[0]].length - child_word_length,
+											child_word_length * sizeof(child_word[0])
+										);
+										wordset[MAX_WORD_LENGTH - child_word_length][parsed_word_buffer[0]].length -= child_word_length;
+										subwords                                                                   |= 1 << (child_word_length - MIN_WORD_LENGTH);
+									}
+									else
+									{
+										child_word_index += 1;
+									}
+								}
+							}
+
+							//
+							// Add word to set.
+							//
+
+							if (!skip)
+							{
+								static_assert(sizeof(parsed_word_buffer[0]) == sizeof(wordset[0][0].data[0]));
+								dary_push(&wordset[MAX_WORD_LENGTH - parsed_word_length][parsed_word_buffer[0]], &subwords);
+								dary_push_n
+								(
+									&wordset[MAX_WORD_LENGTH - parsed_word_length][parsed_word_buffer[0]],
+									(u32*) (parsed_word_buffer + 1),
+									parsed_word_length - 1
+								);
+							}
+						}
+					}
+
+					//
+					//
+					//
+
+					for
+					(
+						i32 word_length = MAX_WORD_LENGTH;
+						word_length >= MIN_WORD_LENGTH;
+						word_length -= 1
+					)
+					{
+						for (i32 alphabet_index = 0; alphabet_index < LANGUAGE_INFO[language].alphabet_length; alphabet_index += 1)
+						{
+							enum Letter word_initial = LANGUAGE_INFO[language].alphabet[alphabet_index];
+
+							for
+							(
+								i32 word_index = 0;
+								word_index < wordset[MAX_WORD_LENGTH - word_length][word_initial].length / word_length;
+								word_index += 1
+							)
+							{
+								u32* word = wordset[MAX_WORD_LENGTH - word_length][word_initial].data + word_index * word_length;
+
+								printf("%.*s", i32(LETTER_INFO[word_initial].name.length), LETTER_INFO[word_initial].name.data);
+								for
+								(
+									i32 i = 1;
+									i < word_length;
+									i += 1
+								)
+								{
+									printf(" %.*s", i32(LETTER_INFO[word[i]].name.length), LETTER_INFO[word[i]].name.data);
+								}
+								printf("\n");
+
+								for
+								(
+									i32 subword_length = MIN_WORD_LENGTH;
+									subword_length < word_length;
+									subword_length += 1
+								)
+								{
+									if (word[0] & (1 << (subword_length - MIN_WORD_LENGTH)))
+									{
+										printf("\t- %.*s", i32(LETTER_INFO[word_initial].name.length), LETTER_INFO[word_initial].name.data);
+										for
+										(
+											i32 i = 1;
+											i < subword_length;
+											i += 1
+										)
+										{
+											printf(" %.*s", i32(LETTER_INFO[word[i]].name.length), LETTER_INFO[word[i]].name.data);
+										}
+										printf("\n");
+									}
+								}
+							}
 						}
 					}
 
 					//
 					// Clean up.
 					//
+
+					debug_halt();
+
+					for (i32 word_length = 0; word_length < countof(wordset); word_length += 1)
+					{
+						for (i32 word_initial = 0; word_initial < LANGUAGE_INFO[language].alphabet_length; word_initial += 1)
+						{
+							free(wordset[word_length][word_initial].data);
+						}
+					}
 
 					free(dictionary_file_content.data);
 					close_file_writing_handle(output_handle);
