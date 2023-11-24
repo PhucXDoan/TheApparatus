@@ -3,7 +3,7 @@
 		(false ? (DARY_PTR)->data : (SRC_PTR)), \
 		dary_push_(&(DARY_PTR)->dary_void, (SRC_PTR), sizeof(*(SRC_PTR)), (SRC_COUNT)) \
 	)
-#define dary_push(DARY_PTR, SRC_PTR) dary_push_n((DARY_PTR), (SRC_PTR), 1)
+#define dary_push(DARY_PTR, ...) dary_push_n((DARY_PTR), (__VA_ARGS__), 1)
 static void
 dary_push_(struct Dary_void* dary, void* src, i64 src_elem_size, i64 src_count)
 {

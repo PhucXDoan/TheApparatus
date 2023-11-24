@@ -1,13 +1,16 @@
-#define false            0
-#define true             1
-#define stringify_(X)    #X
-#define stringify(X)     stringify_(X)
-#define concat_(X, Y)    X##Y
-#define concat(X, Y)     concat_(X, Y)
-#define countof(...)     (sizeof(__VA_ARGS__) / sizeof((__VA_ARGS__)[0]))
-#define bitsof(...)      (sizeof(__VA_ARGS__) * 8)
-#define implies(P, Q)    (!(P) || (Q))
-#define static_assert(X) _Static_assert((X), #X)
+#define false               0
+#define true                1
+#define stringify_(X)       #X
+#define stringify(X)        stringify_(X)
+#define concat_(X, Y)       X##Y
+#define concat(X, Y)        concat_(X, Y)
+#define countof(...)        (sizeof(__VA_ARGS__) / sizeof((__VA_ARGS__)[0]))
+#define bitsof(...)         (sizeof(__VA_ARGS__) * 8)
+#define implies(P, Q)       (!(P) || (Q))
+#define static_assert(X)    _Static_assert((X), #X)
+#define fori(TYPE, X, N)        for (TYPE        X = 0   ; X <        (N)        ; X += 1)
+#define forptr(TYPE, X, XS)     for (TYPE const* X = (XS); X < (XS) + countof(XS); X += 1)
+#define forptrn(TYPE, X, XS, N) for (TYPE const* X = (XS); X < (XS) + (N)        ; X += 1)
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
@@ -397,8 +400,8 @@ struct LetterInfo
 
 struct LanguageInfo
 {
-	u8 alphabet[LANGUAGE_MAX_LETTERS];
-	u8 alphabet_length;
+	enum Letter alphabet[LANGUAGE_MAX_LETTERS];
+	u8          alphabet_length;
 
 	#if PROGRAM_MICROSERVICES
 		str name;
@@ -615,6 +618,15 @@ Dary_def(i8 );
 Dary_def(i16);
 Dary_def(i32);
 Dary_def(i64);
+
+Dary_def(u8_2 );
+Dary_def(u16_2);
+Dary_def(u32_2);
+Dary_def(u64_2);
+Dary_def(i8_2 );
+Dary_def(i16_2);
+Dary_def(i32_2);
+Dary_def(i64_2);
 
 Dary_define(letter, enum Letter);
 
