@@ -4,18 +4,45 @@
 #include <Windows.h>
 #include <shlwapi.h>
 #include <dbghelp.h>
+#include <intrin.h>
 #pragma warning(pop)
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <conio.h>
 #include "defs.h"
 #include "misc.c"
 #include "string.c"
 #include "dary.c"
 #include "Microservices_fs.c"
 #include "Microservices_bmp.c"
+
+static i32
+index_of_letter_in_alphabet(enum Language language, enum Letter letter) // TODO Slow and dumb.
+{
+	i32 result = -1;
+	fori (i32, i, LANGUAGE_INFO[language].alphabet_length)
+	{
+		if (letter == LANGUAGE_INFO[language].alphabet[i])
+		{
+			result = i;
+			break;
+		}
+	}
+	assert(result != -1);
+	return result;
+}
+
+static i32
+calc_min_part(u16 min_part_info)
+{
+	i32 result =
+		(min_part_info & ~(1 << (bitsof(min_part_info) - 1))) + 1 // dest partition and partitions before it.
+			+ (min_part_info >> (bitsof(min_part_info) - 1));     // There is or will be a partition between dest and src.
+	return result;
+}
 
 static b32
 is_mask_compliant(struct BMP bmp)
@@ -1236,7 +1263,7 @@ main(int argc, char** argv)
 				}
 			} break;
 
-			case CLIProgram_wordy:
+			case CLIProgram_wordy: // See: [Terms & Definitions].
 			{
 				struct CLIProgram_wordy_t cli = cli_unknown.wordy;
 
@@ -1251,7 +1278,10 @@ main(int argc, char** argv)
 					// Parse dictionary for words.
 					//
 
-					struct Dary_u32 wordsets[MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1][Letter_COUNT] = {0};
+					static_assert(MIN_WORD_LENGTH > 0); // Zero-lengthed words doesn't make sense!
+
+					struct Dary_u16 wordsets[MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1][LANGUAGE_MAX_LETTERS] = {0};
+					i32             word_makeup_count = 0;
 					{
 						strbuf dictionary_file_path = strbuf(256);
 						strbuf_str (&dictionary_file_path, cli.dir_path.str);
@@ -1269,9 +1299,9 @@ main(int argc, char** argv)
 							// Get word's letters.
 							//
 
-							enum Letter parsed_word_buffer[MAX_WORD_LENGTH] = {0};
-							i32         parsed_word_length                  = 0;
-							b32         has_unhandled_codepoint             = false;
+							u16 parsed_word_buffer[MAX_WORD_LENGTH] = {0};
+							i32 parsed_word_length                  = 0;
+							b32 parsed_word_should_be_ignored       = false;
 
 							while (true)
 							{
@@ -1322,7 +1352,6 @@ main(int argc, char** argv)
 									{
 										error("Unknown unicode byte 0x%2X.", (u32) (u8) reader[0]);
 									}
-
 									if (reader + codepoint_bytes > stream.data + stream.length)
 									{
 										error("Not enough bytes remaining for last UTF-8 codepoint.");
@@ -1353,14 +1382,14 @@ main(int argc, char** argv)
 									}
 
 									//
-									// Determine letter of codepoint.
+									// Determine alphabet index of codepoint.
 									//
 
-									enum Letter codepoint_letter = {0};
+									i32 codepoint_alphabet_index = -1;
 
-									forptrn (enum Letter, alphabet_letter, LANGUAGE_INFO[language].alphabet, LANGUAGE_INFO[language].alphabet_length)
+									fori (i32, alphabet_index, LANGUAGE_INFO[language].alphabet_length)
 									{
-										forptr (u32, alphabet_codepoint, LETTER_INFO[*alphabet_letter].codepoints)
+										forptr (const u32, alphabet_codepoint, LETTER_INFO[LANGUAGE_INFO[language].alphabet[alphabet_index]].codepoints)
 										{
 											if (!*alphabet_codepoint)
 											{
@@ -1368,48 +1397,67 @@ main(int argc, char** argv)
 											}
 											else if (*alphabet_codepoint == codepoint)
 											{
-												codepoint_letter = *alphabet_letter;
+												codepoint_alphabet_index = alphabet_index;
+												break;
 											}
 										}
-
-										if (codepoint_letter)
+										if (codepoint_alphabet_index != -1)
 										{
 											break;
 										}
 									}
 
 									//
-									// Determine if letter is unhandled.
+									// Determine if codepoint is blacklisted or unknown.
 									//
 
-									if (!codepoint_letter)
+									if (codepoint_alphabet_index == -1)
 									{
-										has_unhandled_codepoint = true;
+										parsed_word_should_be_ignored = true;
 
-										b32 is_blacklisted = false;
-										forptr (u32, blacklisted_codepoint, BLACKLISTED_CODEPOINTS)
+										//
+										// Is the codepoint blacklisted?
+										//
+
+										forptr (const u32, blacklisted_codepoint, BLACKLISTED_CODEPOINTS)
 										{
 											if (*blacklisted_codepoint == codepoint)
 											{
-												is_blacklisted = true;
-												break;
+												goto NOT_UNKNOWN;
 											}
 										}
-										if (!is_blacklisted)
+
+										//
+										// Does a letter have this codepoint?
+										//
+
+										fori (enum Letter, letter, Letter_COUNT)
 										{
-											printf("\tUnhandled codepoint 0x%X!\n", codepoint);
+											forptr (const u32, letter_codepoint, LETTER_INFO[letter].codepoints)
+											{
+												if (*letter_codepoint)
+												{
+													break;
+												}
+												else if (*letter_codepoint == codepoint)
+												{
+													goto NOT_UNKNOWN;
+												}
+											}
 										}
+
+										printf("\tUnknown codepoint 0x%X!\n", codepoint);
+
+										NOT_UNKNOWN:;
 									}
-
-									//
-									// Append letter to word buffer.
-									//
-
-									if (parsed_word_length < countof(parsed_word_buffer))
+									else // Append alphabet index to word buffer.
 									{
-										parsed_word_buffer[parsed_word_length] = codepoint_letter;
+										if (parsed_word_length < countof(parsed_word_buffer))
+										{
+											parsed_word_buffer[parsed_word_length] = (u16) codepoint_alphabet_index;
+										}
+										parsed_word_length += 1;
 									}
-									parsed_word_length += 1;
 								}
 							}
 
@@ -1417,10 +1465,10 @@ main(int argc, char** argv)
 							// Process word.
 							//
 
-							if (!has_unhandled_codepoint && MIN_WORD_LENGTH <= parsed_word_length && parsed_word_length <= countof(parsed_word_buffer))
+							if (!parsed_word_should_be_ignored && MIN_WORD_LENGTH <= parsed_word_length && parsed_word_length <= countof(parsed_word_buffer))
 							{
-								b32 redundant_word  = false;
-								u32 subword_pattern = 0;
+								b32 skip_appending   = false;
+								u16 subword_bitfield = 0;
 
 								//
 								// Search for parenting word.
@@ -1433,27 +1481,24 @@ main(int argc, char** argv)
 									parenting_word_length -= 1
 								)
 								{
-									static_assert(MIN_WORD_LENGTH > 0);
-									struct Dary_u32 parenting_wordset = wordsets[MAX_WORD_LENGTH - parenting_word_length][parsed_word_buffer[0]];
-
-									assert(parenting_wordset.length % parenting_word_length == 0);
+									struct Dary_u16 parenting_wordset = wordsets[MAX_WORD_LENGTH - parenting_word_length][parsed_word_buffer[0]];
 									fori (i32, parenting_word_makeup_index, parenting_wordset.length / parenting_word_length)
 									{
-										u32* parenting_word_makeup = parenting_wordset.data + parenting_word_makeup_index * parenting_word_length;
+										u16* parenting_word_makeup = parenting_wordset.data + parenting_word_makeup_index * parenting_word_length;
 
 										static_assert(sizeof(parsed_word_buffer[0]) == sizeof(parenting_word_makeup[0]));
 										if
 										(
 											!memcmp
 											(
-												(parenting_word_makeup + 1),
-												(parsed_word_buffer    + 1),
+												(parenting_word_makeup + 1), // Skipping subword bitfield.
+												(parsed_word_buffer    + 1), // Skipping word's initial letter.
 												(parsed_word_length    - 1) * sizeof(parsed_word_buffer[0])
 											)
 										)
 										{
-											redundant_word            = true;
-											parenting_word_makeup[0] |= 1 << (parsed_word_length - MIN_WORD_LENGTH);
+											skip_appending            = true;                                        // The word already has a parent.
+											parenting_word_makeup[0] |= 1 << (parsed_word_length - MIN_WORD_LENGTH); // Set bit in the parent's subword bitfield.
 										}
 									}
 								}
@@ -1462,31 +1507,34 @@ main(int argc, char** argv)
 								// Search for duplicate.
 								//
 
-								if (!redundant_word)
+								if (!skip_appending)
 								{
-									static_assert(MIN_WORD_LENGTH > 0);
-									struct Dary_u32 goppelganger_wordset = wordsets[MAX_WORD_LENGTH - parsed_word_length][parsed_word_buffer[0]];
-
-									assert(goppelganger_wordset.length % parsed_word_length == 0);
-									fori (i32, doppelganger_word_index, goppelganger_wordset.length / parsed_word_length)
+									struct Dary_u16 doppelganger_wordset = wordsets[MAX_WORD_LENGTH - parsed_word_length][parsed_word_buffer[0]];
+									fori (i32, doppelganger_word_index, doppelganger_wordset.length / parsed_word_length)
 									{
-										static_assert(sizeof(goppelganger_wordset.data[0]) == sizeof(parsed_word_buffer[0]));
+										u16* doppelganger_word_makeup = doppelganger_wordset.data + doppelganger_word_index * parsed_word_length;
+
+										static_assert(sizeof(doppelganger_wordset.data[0]) == sizeof(parsed_word_buffer[0]));
 										if
 										(
 											!memcmp
 											(
-												(goppelganger_wordset.data + doppelganger_word_index * parsed_word_length + 1),
-												(parsed_word_buffer + 1),
-												(parsed_word_length - 1) * sizeof(parsed_word_buffer[0])
+												(doppelganger_word_makeup + 1), // Skipping subword field.
+												(parsed_word_buffer       + 1), // Skipping word's initial letter.
+												(parsed_word_length       - 1) * sizeof(parsed_word_buffer[0])
 											)
 										)
 										{
-											redundant_word = true;
+											skip_appending = true; // Avoid having duplicated words. This may occur in German where lowercase/uppercase have meaning.
 										}
 									}
 								}
 
-								if (!redundant_word)
+								//
+								// Introduce word into the set.
+								//
+
+								if (!skip_appending)
 								{
 									//
 									// Search for subwords.
@@ -1494,63 +1542,63 @@ main(int argc, char** argv)
 
 									for
 									(
-										i32 child_word_length = parsed_word_length - 1;
-										child_word_length >= MIN_WORD_LENGTH;
-										child_word_length -= 1
+										i32 subword_length = parsed_word_length - 1;
+										subword_length >= MIN_WORD_LENGTH;
+										subword_length -= 1
 									)
 									{
-										static_assert(MIN_WORD_LENGTH > 0);
-										struct Dary_u32* child_wordset = &wordsets[MAX_WORD_LENGTH - child_word_length][parsed_word_buffer[0]];
+										struct Dary_u16* subword_wordset = &wordsets[MAX_WORD_LENGTH - subword_length][parsed_word_buffer[0]];
 
-										assert(child_wordset->length % child_word_length == 0);
-										i32 child_word_makeup_index = 0;
-										while (child_word_makeup_index < child_wordset->length / child_word_length)
+										for
+										(
+											i32 subword_makeup_index = 0;
+											subword_makeup_index < subword_wordset->length / subword_length;
+										)
 										{
-											u32* child_word_makeup = child_wordset->data + child_word_makeup_index * child_word_length;
+											u16* subword_makeup = subword_wordset->data + subword_makeup_index * subword_length;
 
-											static_assert(sizeof(child_word_makeup[0]) == sizeof(parsed_word_buffer[0]));
+											static_assert(sizeof(subword_makeup[0]) == sizeof(parsed_word_buffer[0]));
 											if
 											(
 												!memcmp
 												(
 													(parsed_word_buffer + 1),
-													(child_word_makeup  + 1),
-													(child_word_length  - 1) * sizeof(child_word_makeup[0])
+													(subword_makeup     + 1),
+													(subword_length     - 1) * sizeof(subword_makeup[0])
 												)
 											)
 											{
-												subword_pattern |= 1 << (child_word_length - MIN_WORD_LENGTH);
-												subword_pattern |= child_word_makeup[0];
+												subword_bitfield |= 1 << (subword_length - MIN_WORD_LENGTH);
+												subword_bitfield |= subword_makeup[0]; // In case the subword had its own subwords.
 												memmove
 												(
-													child_word_makeup,
-													child_wordset->data + child_wordset->length - child_word_length,
-													child_word_length * sizeof(child_word_makeup[0])
+													subword_makeup,
+													subword_wordset->data + subword_wordset->length - subword_length,
+													subword_length * sizeof(subword_makeup[0])
 												);
-												child_wordset->length -= child_word_length;
+												subword_wordset->length -= subword_length;
+												word_makeup_count       -= 1;
 											}
 											else
 											{
-												child_word_makeup_index += 1;
+												subword_makeup_index += 1;
 											}
 										}
 									}
-								}
 
-								//
-								// Add word to set.
-								//
+									//
+									// Add word to set.
+									//
 
-								if (!redundant_word)
-								{
 									static_assert(sizeof(parsed_word_buffer[0]) == sizeof(wordsets[0][0].data[0]));
-									dary_push(&wordsets[MAX_WORD_LENGTH - parsed_word_length][parsed_word_buffer[0]], &subword_pattern);
+									dary_push(&wordsets[MAX_WORD_LENGTH - parsed_word_length][parsed_word_buffer[0]], &subword_bitfield);
 									dary_push_n
 									(
 										&wordsets[MAX_WORD_LENGTH - parsed_word_length][parsed_word_buffer[0]],
-										(u32*) (parsed_word_buffer + 1),
+										parsed_word_buffer + 1,
 										parsed_word_length - 1
 									);
+									word_makeup_count += 1;
 								}
 							}
 						}
@@ -1559,18 +1607,387 @@ main(int argc, char** argv)
 					}
 
 					//
+					// Generate betabets.
+					//
+
+					struct Dary_u32 betabets = {0};
+
+					static_assert(LANGUAGE_MAX_LETTERS + 1 <= bitsof(betabets.data[0])); // +1 to allow space for a bit to indicate a used value for the partitioning algorithm.
+					{
+						i32 word_length                 = MAX_WORD_LENGTH;
+						i32 word_initial_alphabet_index = 0;
+						i32 word_index                  = 0;
+						while (true)
+						{
+							//
+							// Grab word-makeup.
+							//
+
+							// Skip empty wordsets by initials.
+							while (word_length >= MIN_WORD_LENGTH && word_index * word_length == wordsets[MAX_WORD_LENGTH - word_length][word_initial_alphabet_index].length)
+							{
+								word_index                   = 0;
+								word_initial_alphabet_index += 1;
+
+								// Skip empty wordsets by length.
+								if (word_initial_alphabet_index == LANGUAGE_INFO[language].alphabet_length)
+								{
+									word_initial_alphabet_index  = 0;
+									word_length                 -= 1;
+								}
+							}
+
+							//
+							// Process word-makeup.
+							//
+
+							if (word_length >= MIN_WORD_LENGTH)
+							{
+								u16* word_makeup = wordsets[MAX_WORD_LENGTH - word_length][word_initial_alphabet_index].data + word_length * word_index;
+
+								//
+								// Make betabet.
+								//
+
+								u32 new_betabet = 1 << word_initial_alphabet_index;
+								forptrn (u16, alphabet_index, word_makeup + 1, word_length - 1)
+								{
+									new_betabet |= 1 << *alphabet_index;
+								}
+
+								//
+								// Check subsetting-nature of betabet.
+								//
+
+								b32 should_push = true;
+								for
+								(
+									i32 past_betabet_index = 0;
+									past_betabet_index < betabets.length;
+								)
+								{
+									if ((new_betabet & betabets.data[past_betabet_index]) == new_betabet) // New betabet is just a subset.
+									{
+										should_push = false;
+										break;
+									}
+									else if ((new_betabet & betabets.data[past_betabet_index]) == betabets.data[past_betabet_index]) // New betabet is a superset.
+									{
+										betabets.data[past_betabet_index]  = betabets.data[betabets.length - 1]; // Remove past betabet since it's now just a subset.
+										betabets.length                   -= 1;
+									}
+									else
+									{
+										past_betabet_index += 1;
+									}
+								}
+
+								//
+								// Push betabet.
+								//
+
+								if (should_push)
+								{
+									dary_push(&betabets, &new_betabet);
+								}
+
+								word_index += 1;
+							}
+							else // No more word-makeups to consider.
+							{
+								break;
+							}
+						}
+					}
+
+					//
+					// Begin iterating through partitions of betabets to generate sigmabets.
+					//
+
+					struct MergePoint // Serves as a checkpoint that the algorithm can use to jump back to a point in time where a merge occured.
+					{
+						u32 dest_old_value; // Used to restore the original value at dest_index before it was merged with src_index.
+						u16 dest_index;
+						u16 src_index;
+						u16 min_part_info;  // MSb indicates there is or will be a value between dest and src. Non-MSb is amount of partitions before dest.
+					};
+					static_assert(LANGUAGE_MAX_LETTERS + 1 <= bitsof(((struct MergePoint*) 0)->dest_old_value));  // old_dest_value must be able to alias to the original value and also have a bit to indicate a used state.
+					assert(betabets.length <= (u64(1) << (bitsof(((struct MergePoint*) 0)->min_part_info) - 1))); // Non-MSb must be able to describe the most granular scenario of partitions.
+					assert(betabets.length <= (u64(1) <<  bitsof(((struct MergePoint*) 0)->dest_index   )     )); // Index must be able to span the set.
+					assert(betabets.length <= (u64(1) <<  bitsof(((struct MergePoint*) 0)->src_index    )     )); // Index must be able to span the set.
+
+					struct MergePoint  curr_merge_point          = {0};
+					struct MergePoint* saved_merge_points        = 0;
+					i32                saved_merge_points_length = 0;
+					u32*               sigmabets                 = 0;
+					i32                sigmabets_length          = 0;
+					alloc(&saved_merge_points, betabets.length - 1);
+					alloc(&sigmabets         , betabets.length    );
+
+					LARGE_INTEGER counter_frequency = {0};
+					LARGE_INTEGER counter_start     = {0};
+					QueryPerformanceFrequency(&counter_frequency);
+					QueryPerformanceCounter(&counter_start);
+
+					#define USED_FLAG (1 << (bitsof(((struct MergePoint*) 0)->dest_old_value) - 1))
+					b32 found_optimal = false;
+					i64 iterations    = 0;
+					while (!found_optimal)
+					{
+						b32 revert_merge_point = false;
+
+						if (sigmabets_length && calc_min_part(curr_merge_point.min_part_info) >= sigmabets_length) // The minimum partitioning is not any smaller than the current best partitioning.
+						{
+							revert_merge_point = true;
+						}
+						else
+						{
+							//
+							// Examine mergability of all values after src.
+							//
+
+							i32 fst_subsetting_index = 0; // 0 is never a valid src index.
+							i32 fst_mergable_index   = 0; // 0 is never a valid src index; will not be filled out if a subsetting value is found first.
+							i32 fst_unmergable_index = 0; // 0 is never a valid src index; will not be filled out if a subsetting value is found first.
+							for
+							(
+								i32 scanning_index = curr_merge_point.src_index + 1;
+								scanning_index < betabets.length;
+								scanning_index += 1
+							)
+							{
+								if (!(betabets.data[scanning_index] & USED_FLAG))
+								{
+									if // Subsetting values?
+									(
+										(betabets.data[curr_merge_point.dest_index] & betabets.data[scanning_index]) == betabets.data[curr_merge_point.dest_index] ||
+										(betabets.data[curr_merge_point.dest_index] & betabets.data[scanning_index]) == betabets.data[scanning_index             ]
+									)
+									{
+										fst_subsetting_index = scanning_index;
+										break; // Prioritize merging with this subsetting value first.
+									}
+									else if (__popcnt(betabets.data[curr_merge_point.dest_index] | betabets.data[scanning_index]) <= MAX_SIGMABET_BITS) // Mergable value?
+									{
+										if (!fst_mergable_index)
+										{
+											fst_mergable_index = scanning_index;
+										}
+									}
+									else if (!fst_unmergable_index) // First unmergable value?
+									{
+										fst_unmergable_index            = scanning_index;
+										curr_merge_point.min_part_info |= 1 << (bitsof(curr_merge_point.min_part_info) - 1); // There'll be a partition between dest and src in the future.
+
+										if (sigmabets_length && calc_min_part(curr_merge_point.min_part_info) >= sigmabets_length)
+										{
+											revert_merge_point = true;
+											break; // No matter what, we're not going to find a better partitioning.
+										}
+									}
+								}
+							}
+
+							//
+							// Merge or move dest forward.
+							//
+
+							if (!revert_merge_point)
+							{
+								if (fst_subsetting_index) // Merge with subsetting value, but still continue with same dest and src indices.
+								{
+									struct MergePoint subsetting_merge_point =
+										{
+											.dest_old_value = betabets.data[curr_merge_point.dest_index],
+											.dest_index     = curr_merge_point.dest_index,
+											.src_index      = (u16) fst_subsetting_index,
+											.min_part_info  = {0}, // Doesn't actually matter, since we will pop another merge point after this one since this one is subsetting.
+										};
+									betabets.data[curr_merge_point.dest_index]    |= betabets.data[fst_subsetting_index];
+									betabets.data[fst_subsetting_index]           |= USED_FLAG;
+									saved_merge_points[saved_merge_points_length]  = subsetting_merge_point;
+									saved_merge_points_length                     += 1;
+								}
+								else if (fst_mergable_index) // Merge with src and make merge point.
+								{
+									curr_merge_point.src_index                     = (u16) fst_mergable_index;
+									curr_merge_point.dest_old_value                = betabets.data[curr_merge_point.dest_index];
+									betabets.data[curr_merge_point.dest_index]    |= betabets.data[curr_merge_point.src_index ];
+									betabets.data[curr_merge_point.src_index ]    |= USED_FLAG;
+									saved_merge_points[saved_merge_points_length]  = curr_merge_point;
+									saved_merge_points_length                     += 1;
+								}
+								else // No src to merge with?
+								{
+									//
+									// Move dest forward.
+									//
+
+									curr_merge_point.min_part_info &= ~(1 << (bitsof(curr_merge_point.min_part_info) - 1));
+									curr_merge_point.min_part_info += 1;
+									do
+									{
+										curr_merge_point.dest_index += 1;
+									}
+									while
+									(
+										curr_merge_point.dest_index < betabets.length &&         // Reached end of values.
+										(betabets.data[curr_merge_point.dest_index] & USED_FLAG) // Skip over used values.
+									);
+									curr_merge_point.src_index = curr_merge_point.dest_index;
+
+									//
+									// Dest is at end.
+									//
+
+									if (curr_merge_point.dest_index == betabets.length)
+									{
+										if (!sigmabets_length || i32(betabets.length) - saved_merge_points_length < sigmabets_length) // Partitioning better than the one we have currently?
+										{
+											sigmabets_length = 0;
+											forptrn (u32, betabet, betabets.data, betabets.length)
+											{
+												if (!((*betabet) & USED_FLAG))
+												{
+													sigmabets[sigmabets_length]  = *betabet;
+													sigmabets_length            += 1;
+												}
+											}
+											assert(sigmabets_length == i32(betabets.length) - saved_merge_points_length);
+
+											printf("%16lld Iterations | %4d Partitions |", iterations, sigmabets_length);
+											forptrn (u32, sigmabet, sigmabets, sigmabets_length)
+											{
+												printf(" %08X", *sigmabet);
+											}
+											printf("\n");
+										}
+										revert_merge_point = true;
+									}
+								}
+							}
+						}
+
+						//
+						// Revert back to past merge points.
+						//
+
+						if (revert_merge_point)
+						{
+							while (revert_merge_point)
+							{
+								if (saved_merge_points_length)
+								{
+									curr_merge_point                            = saved_merge_points[saved_merge_points_length - 1];
+									saved_merge_points_length                   -= 1;
+									betabets.data[curr_merge_point.dest_index]  = curr_merge_point.dest_old_value;
+									betabets.data[curr_merge_point.src_index ] &= ~USED_FLAG;
+									curr_merge_point.min_part_info             |= 1 << (bitsof(curr_merge_point.min_part_info) - 1); // Since we're back at the merge point and going to skip it, there'll be a value between src and dest.
+									revert_merge_point                          =
+										calc_min_part(curr_merge_point.min_part_info) >= sigmabets_length ||
+										(betabets.data[curr_merge_point.dest_index] & betabets.data[curr_merge_point.src_index ]) == betabets.data[curr_merge_point.src_index ] ||
+										(betabets.data[curr_merge_point.src_index ] & betabets.data[curr_merge_point.dest_index]) == betabets.data[curr_merge_point.dest_index];
+								}
+								else
+								{
+									revert_merge_point = false;
+									found_optimal      = true;
+								}
+							}
+						}
+
+						//
+						// Print progress.
+						//
+
+						if (iterations % (1 << 18))
+						{
+							LARGE_INTEGER counter_current = {0};
+							QueryPerformanceCounter(&counter_current);
+
+							if (counter_current.QuadPart - counter_start.QuadPart >= counter_frequency.QuadPart) // A second has passed?
+							{
+								counter_start = counter_current;
+
+								if (_kbhit()) // Stop search?
+								{
+									while (true)
+									{
+										printf("Stop? (Y/N): ");
+
+										char buffer[8] = {0};
+										i32  length    = 0;
+										while (true)
+										{
+											i32 input = getchar();
+											if (input == EOF || input == '\n')
+											{
+												break;
+											}
+											else if (input >= 32 && length < countof(buffer))
+											{
+												buffer[length]  = (char) input;
+												length         += 1;
+											}
+										}
+
+										if (feof(stdin) || (length == 1 && to_upper(buffer[0]) == 'Y'))
+										{
+											found_optimal = true;
+											break;
+										}
+										else if (length == 1 && to_upper(buffer[0]) == 'N')
+										{
+											break;
+										}
+									}
+								}
+								else // Show progress.
+								{
+									printf("%16lld Iterations | %4d Partitions | %4d Merges Deep", iterations, sigmabets_length, saved_merge_points_length);
+									for
+									(
+										struct MergePoint* merge_point = saved_merge_points_length >= 8 ? saved_merge_points + saved_merge_points_length - 8 : saved_merge_points;
+										merge_point < saved_merge_points + saved_merge_points_length;
+										merge_point += 1
+									)
+									{
+										printf(" |  %04d %04d ", merge_point->dest_index, merge_point->src_index);
+									}
+									printf(" | <%04d %04d>\n", curr_merge_point.dest_index, curr_merge_point.src_index);
+								}
+							}
+						}
+						iterations += 1;
+					}
+					#undef USED_FLAG
+
+					printf
+					(
+						"\n"
+						"After %lld iterations, there will be %d sigmabets :",
+						iterations, sigmabets_length
+					);
+					forptrn (u32, sigmabet, sigmabets, sigmabets_length)
+					{
+						printf(" %08X", *sigmabet);
+					}
+					printf("\n");
+
+					//
 					//
 					//
 
-					strbuf output_file_path = strbuf(256);
-					strbuf_str (&output_file_path, cli.dir_path.str);
-					strbuf_char(&output_file_path, '/');
-					strbuf_str (&output_file_path, LANGUAGE_INFO[language].name);
-					strbuf_cstr(&output_file_path, ".dat");
-					HANDLE output_handle = create_file_writing_handle(output_file_path.str);
-					strbuf output_buf    = strbuf(256);
+					// strbuf output_file_path = strbuf(256);
+					// strbuf_str (&output_file_path, cli.dir_path.str);
+					// strbuf_char(&output_file_path, '/');
+					// strbuf_str (&output_file_path, LANGUAGE_INFO[language].name);
+					// strbuf_cstr(&output_file_path, ".dat");
+					// HANDLE output_handle = create_file_writing_handle(output_file_path.str);
+					// strbuf output_buf    = strbuf(256);
 
 					// printf("Processing \"%.*s\"...\n", i32(LANGUAGE_INFO[language].name.length), LANGUAGE_INFO[language].name.data);
+					// close_file_writing_handle(output_handle);
 
 					//
 					// Clean up.
@@ -1578,15 +1995,16 @@ main(int argc, char** argv)
 
 					debug_halt();
 
+					free(sigmabets);
+					free(saved_merge_points);
+					free(betabets.data);
 					fori (i32, i, countof(wordsets))
 					{
-						forptr (struct Dary_u32, dary, wordsets[i])
+						forptr (struct Dary_u16, dary, wordsets[i])
 						{
 							free(dary->data);
 						}
 					}
-
-					close_file_writing_handle(output_handle);
 				}
 			} break;
 
@@ -1705,4 +2123,54 @@ main(int argc, char** argv)
 	And that's it! Somethings could be improved and made less sloppy, I'll agree with that. But
 	overall the data-processing of this should essentially only be done "once", so it doesn't
 	matter if things are a bit slow.
+*/
+
+/* [Terms & Definitions].
+
+	(SUBWORD)
+		A word is considered a subword of a parenting word if the parenting word can be truncated
+		on the right-side to make the subword.
+
+		Examples:
+			Parenting Word | Subwords
+			---------------|--------------------
+			Treehouses     | Treehouse, Tree
+			Processing     | Process
+			Collections    | Collection, Collect
+			Sacks          | Sack, Sac
+			Ice            | (none)
+
+	(WORD-MAKEUP)
+		Describes the letters of a word (except its initial letter) and its uniquely assigned
+		subwords.
+
+		[0]   : Subword bitfield.
+		[1]   : Index into the current language's alphabet that describes the word's second letter.
+		[2]   : Index into the current language's alphabet that describes the word's third letter.
+		[...] : ...
+		[N]   : Index into the current language's alphabet that describes the word's Nth letter.
+
+		The subword bitfield is where if bit M-MIN_WORD_LENGTH is set, then truncating the word to
+		M letters is also a valid word. A subword will always be assigned to a single parenting
+		word.
+
+		Example: "APPLES" with subwords "APP" and "APPLES" would have a word-makeup of { 5, 15, 15, 11, 4, 18 }.
+
+	(WORDSETS)
+		Collection of word-makeups where words are organized from longest to shortest and alphabetically according to the language.
+		Since word-makeups are sorted length-wise and alphabetically, information on the length of the word and its initial letter is therefore implicit.
+
+	(BETABETS)
+		A betabet is a bitfield of a word's usage of letters (excluding the initial) in the
+		language's alphabet. If bit N is set, then the (N+1)th letter of the alphabet is used. That
+		is, 'A' maps to 0, 'B' to 2, 'C' to 4, etc. in the English alphabet. The first letter of
+		the word is not considered, since the compression algorithm makes the initial letter
+		implicit already.
+
+		Example: "APPLES" has betabet of 0x48810.
+
+	(SIGMABETS)
+		A sigmabet is just betabets bitwise OR'd together where the amount of bits set is no
+		greater than some upper limit (e.g. 16). A collection of sigmabets must be disjoint from
+		one another, that is, no sigmabet can be a subset of the other sigmabet in the collection.
 */

@@ -1,16 +1,16 @@
-#define false               0
-#define true                1
-#define stringify_(X)       #X
-#define stringify(X)        stringify_(X)
-#define concat_(X, Y)       X##Y
-#define concat(X, Y)        concat_(X, Y)
-#define countof(...)        (sizeof(__VA_ARGS__) / sizeof((__VA_ARGS__)[0]))
-#define bitsof(...)         (sizeof(__VA_ARGS__) * 8)
-#define implies(P, Q)       (!(P) || (Q))
-#define static_assert(X)    _Static_assert((X), #X)
-#define fori(TYPE, X, N)        for (TYPE        X = 0   ; X <        (N)        ; X += 1)
-#define forptr(TYPE, X, XS)     for (TYPE const* X = (XS); X < (XS) + countof(XS); X += 1)
-#define forptrn(TYPE, X, XS, N) for (TYPE const* X = (XS); X < (XS) + (N)        ; X += 1)
+#define false                   0
+#define true                    1
+#define stringify_(X)           #X
+#define stringify(X)            stringify_(X)
+#define concat_(X, Y)           X##Y
+#define concat(X, Y)            concat_(X, Y)
+#define countof(...)            (sizeof(__VA_ARGS__) / sizeof((__VA_ARGS__)[0]))
+#define bitsof(...)             (sizeof(__VA_ARGS__) * 8)
+#define implies(P, Q)           (!(P) || (Q))
+#define static_assert(X)        _Static_assert((X), #X)
+#define fori(TYPE, X, N)        for (TYPE  X = 0   ; X <        (N)        ; X += 1)
+#define forptr(TYPE, X, XS)     for (TYPE* X = (XS); X < (XS) + countof(XS); X += 1)
+#define forptrn(TYPE, X, XS, N) for (TYPE* X = (XS); X < (XS) + (N)        ; X += 1)
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
@@ -275,6 +275,7 @@ static_assert(LITTLE_ENDIAN);
 #define MASK_DIM                  64
 #define MAX_WORD_LENGTH           16
 #define MIN_WORD_LENGTH           3
+#define MAX_SIGMABET_BITS         16
 
 #define ANAGRAMS_GENERIC_6_PRINT_NAME "Anagrams (6)"
 #define WORDGAME_XMDT(X, Y) /* There's no good way to determine the language of Anagrams perfectly, so we will always assume it's English and have the test region all be zero. */ \
@@ -628,7 +629,7 @@ Dary_def(i16_2);
 Dary_def(i32_2);
 Dary_def(i64_2);
 
-Dary_define(letter, enum Letter);
+Dary_define(Letter, enum Letter);
 
 //
 // "Microservices_bmp.c"
