@@ -383,6 +383,8 @@ is_slot_excluded(enum WordGame wordgame, u8 x, u8 y)
 		#define MAKE_CASE( \
 			IDENTIFIER_NAME, \
 			PRINT_NAME, \
+			LANGUAGE, \
+			MAX_WORD_LENGTH, \
 			SENTINEL_LETTER, \
 			POS_X, POS_Y, \
 			DIM_SLOTS_X, DIM_SLOTS_Y, \

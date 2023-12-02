@@ -273,25 +273,24 @@ static_assert(LITTLE_ENDIAN);
 #define ASSISTIVE_TOUCH_Y         9
 #define MASK_ACTIVATION_THRESHOLD 8  // Applied to red channel.
 #define MASK_DIM                  64
-#define MAX_WORD_LENGTH           16
 #define MIN_WORD_LENGTH           3
 #define MAX_SIGMABET_BITS         16
 
 #define ANAGRAMS_GENERIC_6_PRINT_NAME "Anagrams (6)"
 #define WORDGAME_XMDT(X, Y) /* There's no good way to determine the language of Anagrams perfectly, so we will always assume it's English and have the test region all be zero. */ \
-	/*    Names                                     | Sentinel Letter | Board Position | Board Dim (slots) | Slot Dim | Uncompressed Slot Stride | Compressed Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB       | Excluded Slot Coordinates */ \
-		X(anagrams_english_6, "Anagrams (EN, 6)"    , Letter_z + 1    ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,   32,   656          , 256,   16              , 0.2645, 0.2409, 0.3358                                         ) \
-		X(anagrams_english_7, "Anagrams (EN, 7)"    , Letter_z + 1    ,  31, 375       , 7, 1              , 102      , 168                      , 105                    ,   32,   656          , 256,   16              , 0.5036, 0.4814, 0.6467                                         ) \
-		X(anagrams_russian  , "Anagrams (RU)"       , Letter_COUNT    ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,    0,     0          ,   0,    0              ,      0,      0,      0                                         ) \
-		X(anagrams_french   , "Anagrams (FR)"       , Letter_z + 1    ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,    0,     0          ,   0,    0              ,      0,      0,      0                                         ) \
-		X(anagrams_german   , "Anagrams (DE)"       , Letter_COUNT    ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,    0,     0          ,   0,    0              ,      0,      0,      0                                         ) \
-		X(anagrams_spanish  , "Anagrams (ES)"       , Letter_ene + 1  ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,    0,     0          ,   0,    0              ,      0,      0,      0                                         ) \
-		X(anagrams_italian  , "Anagrams (IT)"       , Letter_z + 1    ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,    0,     0          ,   0,    0              ,      0,      0,      0                                         ) \
-		X(wordhunt_4x4      , "WordHunt (4x4)"      , Letter_z + 1    , 199, 538       , 4, 4              , 136      , 212                      , 100                    ,  128,   701          , 900,   16              , 0.2204, 0.2775, 0.2089                                         ) \
-		X(wordhunt_o        , "WordHunt (O)"        , Letter_z + 1    , 142, 480       , 5, 5              , 123      , 191                      , 100                    ,  512,   854          , 128,  128              , 0.4765, 0.6349, 0.4380, Y(0, 0) Y(0, 4) Y(4, 0) Y(4, 4) Y(2, 2)) \
-		X(wordhunt_x        , "WordHunt (X)"        , Letter_z + 1    , 142, 480       , 5, 5              , 123      , 191                      , 100                    ,  900,   854          , 128,  128              , 0.4356, 0.5768, 0.4018, Y(0, 2) Y(2, 0) Y(4, 2) Y(2, 4)        ) \
-		X(wordhunt_5x5      , "WordHunt (5x5)"      , Letter_z + 1    , 142, 480       , 5, 5              , 123      , 191                      , 100                    , 1050,   532          ,  64, 1000              , 0.4024, 0.5326, 0.3719                                         ) \
-		X(wordbites         , "WordBites"           , Letter_z + 1    ,  44, 384       , 8, 9              , 102      , 140.5                    ,  88                    ,  400,  1676          , 256,  256              , 0.2524, 0.3749, 0.4917                                         )
+	/*    Names                                     | Language | Max Word Length | Sentinel Letter | Board Position | Board Dim (slots) | Slot Dim | Uncompressed Slot Stride | Compressed Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB       | Excluded Slot Coordinates */ \
+		X(anagrams_english_6, "Anagrams (EN, 6)"    , english  , 6               , Letter_z + 1    ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,   32,   656          , 256,   16              , 0.2645, 0.2409, 0.3358                                         ) \
+		X(anagrams_english_7, "Anagrams (EN, 7)"    , english  , 7               , Letter_z + 1    ,  31, 375       , 7, 1              , 102      , 168                      , 105                    ,   32,   656          , 256,   16              , 0.5036, 0.4814, 0.6467                                         ) \
+		X(anagrams_russian  , "Anagrams (RU)"       , russian  , 6               , Letter_COUNT    ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,    0,     0          ,   0,    0              ,      0,      0,      0                                         ) \
+		X(anagrams_french   , "Anagrams (FR)"       , french   , 6               , Letter_z + 1    ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,    0,     0          ,   0,    0              ,      0,      0,      0                                         ) \
+		X(anagrams_german   , "Anagrams (DE)"       , german   , 6               , Letter_COUNT    ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,    0,     0          ,   0,    0              ,      0,      0,      0                                         ) \
+		X(anagrams_spanish  , "Anagrams (ES)"       , spanish  , 6               , Letter_ene + 1  ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,    0,     0          ,   0,    0              ,      0,      0,      0                                         ) \
+		X(anagrams_italian  , "Anagrams (IT)"       , italian  , 6               , Letter_z + 1    ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,    0,     0          ,   0,    0              ,      0,      0,      0                                         ) \
+		X(wordhunt_4x4      , "WordHunt (4x4)"      , english  , 16              , Letter_z + 1    , 199, 538       , 4, 4              , 136      , 212                      , 100                    ,  128,   701          , 900,   16              , 0.2204, 0.2775, 0.2089                                         ) \
+		X(wordhunt_o        , "WordHunt (O)"        , english  , 16              , Letter_z + 1    , 142, 480       , 5, 5              , 123      , 191                      , 100                    ,  512,   854          , 128,  128              , 0.4765, 0.6349, 0.4380, Y(0, 0) Y(0, 4) Y(4, 0) Y(4, 4) Y(2, 2)) \
+		X(wordhunt_x        , "WordHunt (X)"        , english  , 16              , Letter_z + 1    , 142, 480       , 5, 5              , 123      , 191                      , 100                    ,  900,   854          , 128,  128              , 0.4356, 0.5768, 0.4018, Y(0, 2) Y(2, 0) Y(4, 2) Y(2, 4)        ) \
+		X(wordhunt_5x5      , "WordHunt (5x5)"      , english  , 16              , Letter_z + 1    , 142, 480       , 5, 5              , 123      , 191                      , 100                    , 1050,   532          ,  64, 1000              , 0.4024, 0.5326, 0.3719                                         ) \
+		X(wordbites         , "WordBites"           , english  , 9               , Letter_z + 1    ,  44, 384       , 8, 9              , 102      , 140.5                    ,  88                    ,  400,  1676          , 256,  256              , 0.2524, 0.3749, 0.4917                                         )
 
 #define LETTER_XMDT(X) \
 	/* Name       | LCD Character Code | Unicode Codepoints */ \
@@ -366,12 +365,13 @@ static_assert(LITTLE_ENDIAN);
 #endif
 
 #define WORDGAME_MAX_PRINT_NAME_SIZE_(IDENTIFIER_NAME, PRINT_NAME, ...) u8 IDENTIFIER_NAME[sizeof(PRINT_NAME)];
-#define WORDGAME_MAX_DIM_SLOTS_X_(IDENTIFIER_NAME, PRINT_NAME, SENTINEL_LETTER, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[DIM_SLOTS_X];
-#define WORDGAME_MAX_DIM_SLOTS_Y_(IDENTIFIER_NAME, PRINT_NAME, SENTINEL_LETTER, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[DIM_SLOTS_Y];
+#define WORDGAME_MAX_DIM_SLOTS_X_(IDENTIFIER_NAME, PRINT_NAME, LANGUAGE, MAX_WORD_LENGTH, SENTINEL_LETTER, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[DIM_SLOTS_X];
+#define WORDGAME_MAX_DIM_SLOTS_Y_(IDENTIFIER_NAME, PRINT_NAME, LANGUAGE, MAX_WORD_LENGTH, SENTINEL_LETTER, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[DIM_SLOTS_Y];
 #define WORDGAME_MAX_PRINT_NAME_LENGTH_(IDENTIFIER_NAME, PRINT_NAME, ...) u8 IDENTIFIER_NAME[sizeof(PRINT_NAME)];
 #define LETTER_MAX_NAME_LENGTH_(NAME, ...) u8 NAME[sizeof(#NAME) - 1];
 #define LETTER_MAX_CODEPOINTS_(NAME, LCD_CHARACTER_CODE, ...) u8 NAME[countof((u16[]) { __VA_ARGS__ })];
-#define LANGUAGE_MAX_LETTERS_(NAME, ...) u8 NAME[countof((enum Letter[]) { __VA_ARGS__ })];
+#define MAX_ALPHABET_LENGTH_(NAME, ...) u8 NAME[countof((enum Letter[]) { __VA_ARGS__ })];
+#define ABSOLUTE_MAX_WORD_LENGTH_(IDENTIFIER_NAME, PRINT_NAME, LANGUAGE, MAX_WORD_LENGTH, ...) u8 IDENTIFIER_NAME[MAX_WORD_LENGTH];
 
 #define WORDGAME_MAX_PRINT_NAME_SIZE    sizeof(union { WORDGAME_XMDT(WORDGAME_MAX_PRINT_NAME_SIZE_,) })
 #define WORDGAME_MAX_DIM_SLOTS_X        sizeof(union { WORDGAME_XMDT(WORDGAME_MAX_DIM_SLOTS_X_,) })
@@ -379,7 +379,8 @@ static_assert(LITTLE_ENDIAN);
 #define WORDGAME_MAX_PRINT_NAME_LENGTH (sizeof(union { WORDGAME_XMDT(WORDGAME_MAX_PRINT_NAME_LENGTH_,) }) - 1)
 #define LETTER_MAX_NAME_LENGTH          sizeof(union { LETTER_XMDT(LETTER_MAX_NAME_LENGTH_) })
 #define LETTER_MAX_CODEPOINTS           sizeof(union { LETTER_XMDT(LETTER_MAX_CODEPOINTS_) })
-#define LANGUAGE_MAX_LETTERS            sizeof(union { LANGUAGE_XMDT(LANGUAGE_MAX_LETTERS_) })
+#define MAX_ALPHABET_LENGTH             sizeof(union { LANGUAGE_XMDT(MAX_ALPHABET_LENGTH_) })
+#define ABSOLUTE_MAX_WORD_LENGTH        sizeof(union { WORDGAME_XMDT(ABSOLUTE_MAX_WORD_LENGTH_,) })
 
 enum Letter
 {
@@ -401,7 +402,7 @@ struct LetterInfo
 
 struct LanguageInfo
 {
-	enum Letter alphabet[LANGUAGE_MAX_LETTERS];
+	enum Letter alphabet[MAX_ALPHABET_LENGTH];
 	u8          alphabet_length;
 
 	#if PROGRAM_MICROSERVICES
@@ -433,13 +434,15 @@ struct WordGameInfo
 	u8          compressed_slot_stride;
 
 	#if PROGRAM_MICROSERVICES
-		str   print_name;
-		i32_2 pos;
-		i32   slot_dim;
-		f64   uncompressed_slot_stride;
-		i32_2 test_region_pos;
-		i32_2 test_region_dim;
-		f64_3 test_region_rgb;
+		enum Language language;
+		i32           max_word_length;
+		str           print_name;
+		i32_2         pos;
+		i32           slot_dim;
+		f64           uncompressed_slot_stride;
+		i32_2         test_region_pos;
+		i32_2         test_region_dim;
+		f64_3         test_region_rgb;
 	#endif
 };
 
@@ -486,6 +489,8 @@ struct WordGameInfo
 			#define MAKE( \
 				IDENTIFIER_NAME, \
 				PRINT_NAME, \
+				LANGUAGE, \
+				MAX_WORD_LENGTH, \
 				SENTINEL_LETTER, \
 				POS_X, POS_Y, \
 				DIM_SLOTS_X, DIM_SLOTS_Y, \
@@ -525,6 +530,8 @@ struct WordGameInfo
 			#define MAKE( \
 				IDENTIFIER_NAME, \
 				PRINT_NAME, \
+				LANGUAGE, \
+				MAX_WORD_LENGTH, \
 				SENTINEL_LETTER, \
 				POS_X, POS_Y, \
 				DIM_SLOTS_X, DIM_SLOTS_Y, \
@@ -539,6 +546,8 @@ struct WordGameInfo
 				{ \
 					.print_name_cstr          = PRINT_NAME, \
 					.print_name               = STR(PRINT_NAME), \
+					.language                 = Language_##LANGUAGE, \
+					.max_word_length          = MAX_WORD_LENGTH, \
 					.sentinel_letter          = SENTINEL_LETTER, \
 					.pos.x                    = POS_X, \
 					.pos.y                    = POS_Y, \
@@ -2013,7 +2022,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	// Buffer sizes must be a power of two for the "_usb_mouse_X_masked" macros.
 	static_assert(countof(_usb_mouse_command_buffer) && !(countof(_usb_mouse_command_buffer) & (countof(_usb_mouse_command_buffer) - 1)));
 
-	#define MAKE(IDENTIFIER_NAME, PRINT_NAME, SENTINEL_LETTER, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, SLOT_DIM, UNCOMPRESSED_SLOT_STRIDE, COMPRESSED_SLOT_STRIDE, ...) \
+	#define MAKE(IDENTIFIER_NAME, PRINT_NAME, LANGUAGE, MAX_WORD_LENGTH, SENTINEL_LETTER, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, SLOT_DIM, UNCOMPRESSED_SLOT_STRIDE, COMPRESSED_SLOT_STRIDE, ...) \
 		static_assert(COMPRESSED_SLOT_STRIDE < 256); // To ensure _usb_ms_ocr_slot_topdown_pixel_coords stays byte-sized.
 	WORDGAME_XMDT(MAKE,)
 	#undef MAKE

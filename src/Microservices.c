@@ -19,20 +19,55 @@
 #include "Microservices_fs.c"
 #include "Microservices_bmp.c"
 
-static i32
-index_of_letter_in_alphabet(enum Language language, enum Letter letter) // TODO Slow and dumb.
+struct IterateWordsetState
 {
-	i32 result = -1;
-	fori (i32, i, LANGUAGE_INFO[language].alphabet_length)
+	enum Language language;
+	i32           word_length;
+	i32           word_initial_alphabet_index;
+	i32           word_index;
+	u16*          word_makeup;
+	struct Dary_u16 (*wordsets)[ABSOLUTE_MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1][MAX_ALPHABET_LENGTH];
+};
+
+static b32
+iterate_wordset(struct IterateWordsetState* iterator)
+{
+	b32 found = false;
+	while (true)
 	{
-		if (letter == LANGUAGE_INFO[language].alphabet[i])
+		// Skip empty wordsets by initials.
+		while
+		(
+			iterator->word_length >= MIN_WORD_LENGTH &&
+			iterator->word_index * iterator->word_length == (*iterator->wordsets)[ABSOLUTE_MAX_WORD_LENGTH - iterator->word_length][iterator->word_initial_alphabet_index].length
+		)
 		{
-			result = i;
+			iterator->word_index                   = 0;
+			iterator->word_initial_alphabet_index += 1;
+
+			// Skip empty wordsets by length.
+			if (iterator->word_initial_alphabet_index == LANGUAGE_INFO[iterator->language].alphabet_length)
+			{
+				iterator->word_initial_alphabet_index  = 0;
+				iterator->word_length                 -= 1;
+			}
+		}
+
+		if (iterator->word_length >= MIN_WORD_LENGTH)
+		{
+			found                 = true;
+			iterator->word_makeup =
+				(*iterator->wordsets)[ABSOLUTE_MAX_WORD_LENGTH - iterator->word_length][iterator->word_initial_alphabet_index].data
+					+ iterator->word_length * iterator->word_index;
+			iterator->word_index += 1;
+			break;
+		}
+		else
+		{
 			break;
 		}
 	}
-	assert(result != -1);
-	return result;
+	return found;
 }
 
 static i32
@@ -1274,13 +1309,22 @@ main(int argc, char** argv)
 				//for (enum Language language = {0}; language < Language_COUNT; language += 1)
 				enum Language language = Language_english;
 				{
+					i32 max_word_length = 0;
+					forptr (const struct WordGameInfo, info, WORDGAME_INFO)
+					{
+						if (info->language == language && max_word_length < info->max_word_length)
+						{
+							max_word_length = info->max_word_length;
+						}
+					}
+
 					//
 					// Parse dictionary for words.
 					//
 
 					static_assert(MIN_WORD_LENGTH > 0); // Zero-lengthed words doesn't make sense!
 
-					struct Dary_u16 wordsets[MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1][LANGUAGE_MAX_LETTERS] = {0};
+					struct Dary_u16 wordsets[ABSOLUTE_MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1][MAX_ALPHABET_LENGTH] = {0};
 					i32             word_makeup_count = 0;
 					{
 						strbuf dictionary_file_path = strbuf(256);
@@ -1299,9 +1343,9 @@ main(int argc, char** argv)
 							// Get word's letters.
 							//
 
-							u16 parsed_word_buffer[MAX_WORD_LENGTH] = {0};
-							i32 parsed_word_length                  = 0;
-							b32 parsed_word_should_be_ignored       = false;
+							u16 parsed_word_buffer[ABSOLUTE_MAX_WORD_LENGTH] = {0};
+							i32 parsed_word_length                           = 0;
+							b32 parsed_word_should_be_ignored                = false;
 
 							while (true)
 							{
@@ -1435,7 +1479,7 @@ main(int argc, char** argv)
 										{
 											forptr (const u32, letter_codepoint, LETTER_INFO[letter].codepoints)
 											{
-												if (*letter_codepoint)
+												if (!*letter_codepoint)
 												{
 													break;
 												}
@@ -1465,10 +1509,10 @@ main(int argc, char** argv)
 							// Process word.
 							//
 
-							if (!parsed_word_should_be_ignored && MIN_WORD_LENGTH <= parsed_word_length && parsed_word_length <= countof(parsed_word_buffer))
+							if (!parsed_word_should_be_ignored && MIN_WORD_LENGTH <= parsed_word_length && parsed_word_length <= max_word_length)
 							{
 								b32 skip_appending   = false;
-								u16 subword_bitfield = 0;
+								u16 subword_bitfield = 1 << (parsed_word_length - MIN_WORD_LENGTH);
 
 								//
 								// Search for parenting word.
@@ -1476,12 +1520,12 @@ main(int argc, char** argv)
 
 								for
 								(
-									i32 parenting_word_length = MAX_WORD_LENGTH;
+									i32 parenting_word_length = max_word_length;
 									parenting_word_length > parsed_word_length;
 									parenting_word_length -= 1
 								)
 								{
-									struct Dary_u16 parenting_wordset = wordsets[MAX_WORD_LENGTH - parenting_word_length][parsed_word_buffer[0]];
+									struct Dary_u16 parenting_wordset = wordsets[ABSOLUTE_MAX_WORD_LENGTH - parenting_word_length][parsed_word_buffer[0]];
 									fori (i32, parenting_word_makeup_index, parenting_wordset.length / parenting_word_length)
 									{
 										u16* parenting_word_makeup = parenting_wordset.data + parenting_word_makeup_index * parenting_word_length;
@@ -1509,7 +1553,7 @@ main(int argc, char** argv)
 
 								if (!skip_appending)
 								{
-									struct Dary_u16 doppelganger_wordset = wordsets[MAX_WORD_LENGTH - parsed_word_length][parsed_word_buffer[0]];
+									struct Dary_u16 doppelganger_wordset = wordsets[ABSOLUTE_MAX_WORD_LENGTH - parsed_word_length][parsed_word_buffer[0]];
 									fori (i32, doppelganger_word_index, doppelganger_wordset.length / parsed_word_length)
 									{
 										u16* doppelganger_word_makeup = doppelganger_wordset.data + doppelganger_word_index * parsed_word_length;
@@ -1547,7 +1591,7 @@ main(int argc, char** argv)
 										subword_length -= 1
 									)
 									{
-										struct Dary_u16* subword_wordset = &wordsets[MAX_WORD_LENGTH - subword_length][parsed_word_buffer[0]];
+										struct Dary_u16* subword_wordset = &wordsets[ABSOLUTE_MAX_WORD_LENGTH - subword_length][parsed_word_buffer[0]];
 
 										for
 										(
@@ -1591,10 +1635,10 @@ main(int argc, char** argv)
 									//
 
 									static_assert(sizeof(parsed_word_buffer[0]) == sizeof(wordsets[0][0].data[0]));
-									dary_push(&wordsets[MAX_WORD_LENGTH - parsed_word_length][parsed_word_buffer[0]], &subword_bitfield);
+									dary_push(&wordsets[ABSOLUTE_MAX_WORD_LENGTH - parsed_word_length][parsed_word_buffer[0]], &subword_bitfield);
 									dary_push_n
 									(
-										&wordsets[MAX_WORD_LENGTH - parsed_word_length][parsed_word_buffer[0]],
+										&wordsets[ABSOLUTE_MAX_WORD_LENGTH - parsed_word_length][parsed_word_buffer[0]],
 										parsed_word_buffer + 1,
 										parsed_word_length - 1
 									);
@@ -1605,52 +1649,32 @@ main(int argc, char** argv)
 
 						free(stream.data);
 					}
+					printf("%d word makeups.\n", word_makeup_count);
 
 					//
-					// Generate betabets.
+					// Generate betabets and bottom-fields.
 					//
 
-					struct Dary_u32 betabets = {0};
+					struct Dary_u32 betabets      = {0};
+					struct Dary_u16 bottom_fields = {0};
 
-					static_assert(LANGUAGE_MAX_LETTERS + 1 <= bitsof(betabets.data[0])); // +1 to allow space for a bit to indicate a used value for the partitioning algorithm.
+					static_assert(MAX_ALPHABET_LENGTH + 1 <= bitsof(betabets.data[0])); // +1 to allow space for a bit to indicate a used value for the partitioning algorithm.
 					{
-						i32 word_length                 = MAX_WORD_LENGTH;
-						i32 word_initial_alphabet_index = 0;
-						i32 word_index                  = 0;
-						while (true)
+						struct IterateWordsetState iterator =
+							{
+								.language    = language,
+								.word_length = max_word_length,
+								.wordsets    = &wordsets,
+							};
+						while (iterate_wordset(&iterator))
 						{
 							//
-							// Grab word-makeup.
+							// Make betabet.
 							//
 
-							// Skip empty wordsets by initials.
-							while (word_length >= MIN_WORD_LENGTH && word_index * word_length == wordsets[MAX_WORD_LENGTH - word_length][word_initial_alphabet_index].length)
 							{
-								word_index                   = 0;
-								word_initial_alphabet_index += 1;
-
-								// Skip empty wordsets by length.
-								if (word_initial_alphabet_index == LANGUAGE_INFO[language].alphabet_length)
-								{
-									word_initial_alphabet_index  = 0;
-									word_length                 -= 1;
-								}
-							}
-
-							//
-							// Process word-makeup.
-							//
-
-							if (word_length >= MIN_WORD_LENGTH)
-							{
-								u16* word_makeup = wordsets[MAX_WORD_LENGTH - word_length][word_initial_alphabet_index].data + word_length * word_index;
-
-								//
-								// Make betabet.
-								//
-
-								u32 new_betabet = 1 << word_initial_alphabet_index;
-								forptrn (u16, alphabet_index, word_makeup + 1, word_length - 1)
+								u32 new_betabet = 0;
+								forptrn (u16, alphabet_index, iterator.word_makeup + 1, iterator.word_length - 1)
 								{
 									new_betabet |= 1 << *alphabet_index;
 								}
@@ -1690,15 +1714,56 @@ main(int argc, char** argv)
 								{
 									dary_push(&betabets, &new_betabet);
 								}
-
-								word_index += 1;
 							}
-							else // No more word-makeups to consider.
+
+							//
+							// Make bottom-field.
+							//
+
 							{
-								break;
+								b32 should_push = true;
+								forptrn (u16, bottom_field, bottom_fields.data, bottom_fields.length) // See if the subword-field would subset a bottom-field.
+								{
+									// The current word will never be longer than any word that was processed so far in the bottom-fields, since
+									// we are iterating through wordsets sorted in such a way that longer words would be processed first anyways.
+									u16 common_mask = ((1 << (15 - __lzcnt16(iterator.word_makeup[0]))) - 1);
+									if ((iterator.word_makeup[0] & common_mask) == ((*bottom_field) & common_mask))
+									{
+										should_push = false;
+										break;
+									}
+								}
+
+								if (should_push)
+								{
+									dary_push(&bottom_fields, &iterator.word_makeup[0]);
+								}
 							}
 						}
 					}
+					printf
+					(
+						"%lld betabets.\n"
+						"%lld bottom-fields.\n"
+						"\n",
+						betabets.length,
+						bottom_fields.length
+					);
+
+					i32 TEMP[ABSOLUTE_MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1] = {0};
+
+					struct IterateWordsetState iterator =
+						{
+							.language    = language,
+							.word_length = max_word_length,
+							.wordsets    = &wordsets,
+						};
+					while (iterate_wordset(&iterator))
+					{
+						TEMP[ABSOLUTE_MAX_WORD_LENGTH - iterator.word_length] += 1;
+					}
+
+					debug_halt();
 
 					//
 					// Begin iterating through partitions of betabets to generate sigmabets.
@@ -1711,10 +1776,10 @@ main(int argc, char** argv)
 						u16 src_index;
 						u16 min_part_info;  // MSb indicates there is or will be a value between dest and src. Non-MSb is amount of partitions before dest.
 					};
-					static_assert(LANGUAGE_MAX_LETTERS + 1 <= bitsof(((struct MergePoint*) 0)->dest_old_value));  // old_dest_value must be able to alias to the original value and also have a bit to indicate a used state.
-					assert(betabets.length <= (u64(1) << (bitsof(((struct MergePoint*) 0)->min_part_info) - 1))); // Non-MSb must be able to describe the most granular scenario of partitions.
-					assert(betabets.length <= (u64(1) <<  bitsof(((struct MergePoint*) 0)->dest_index   )     )); // Index must be able to span the set.
-					assert(betabets.length <= (u64(1) <<  bitsof(((struct MergePoint*) 0)->src_index    )     )); // Index must be able to span the set.
+					static_assert(MAX_ALPHABET_LENGTH + 1 <= bitsof(((struct MergePoint*) 0)->dest_old_value)); // old_dest_value must be able to alias to the original value and also have a bit to indicate a used state.
+					assert(betabets.length <= (u64(1) << (bitsof(((struct MergePoint*) 0)->min_part_info) - 1)));        // Non-MSb must be able to describe the most granular scenario of partitions.
+					assert(betabets.length <= (u64(1) <<  bitsof(((struct MergePoint*) 0)->dest_index   )     ));        // Index must be able to span the set.
+					assert(betabets.length <= (u64(1) <<  bitsof(((struct MergePoint*) 0)->src_index    )     ));        // Index must be able to span the set.
 
 					struct MergePoint  curr_merge_point          = {0};
 					struct MergePoint* saved_merge_points        = 0;
@@ -1978,6 +2043,12 @@ main(int argc, char** argv)
 					//
 					//
 
+					assert(0 < sigmabets_length && sigmabets_length < 256); // TODO Make error.
+
+					//
+					//
+					//
+
 					// strbuf output_file_path = strbuf(256);
 					// strbuf_str (&output_file_path, cli.dir_path.str);
 					// strbuf_char(&output_file_path, '/');
@@ -1997,6 +2068,7 @@ main(int argc, char** argv)
 
 					free(sigmabets);
 					free(saved_merge_points);
+					free(bottom_fields.data);
 					free(betabets.data);
 					fori (i32, i, countof(wordsets))
 					{
@@ -2129,22 +2201,25 @@ main(int argc, char** argv)
 
 	(SUBWORD)
 		A word is considered a subword of a parenting word if the parenting word can be truncated
-		on the right-side to make the subword.
+		on the right-side to make the subword. The parenting word is considered to be its own
+		subword. The collection of subwords can be represented as a bitfield with respect to the
+		parenting word where a valid subword of length N would have bit N-MIN_WORD_LENGTH set in
+		the bitfield.
 
-		Examples:
-			Parenting Word | Subwords
-			---------------|--------------------
-			Treehouses     | Treehouse, Tree
-			Processing     | Process
-			Collections    | Collection, Collect
-			Sacks          | Sack, Sac
-			Ice            | (none)
+		Examples (MIN_WORD_LENGTH=3):
+			Parenting Word | Subwords                          | Bitfield
+			---------------|-----------------------------------|------------
+			Treehouses     | Treehouses, Treehouse, Tree       |   1100'0010
+			Processing     | Processing, Process               |   1001'0000
+			Collections    | Collections, Collection, Collect  | 1'1001'0000
+			Sacks          | Sacks, Sack, Sac                  |        0111
+			Ice            | Ice                               |        0001
 
 	(WORD-MAKEUP)
 		Describes the letters of a word (except its initial letter) and its uniquely assigned
 		subwords.
 
-		[0]   : Subword bitfield.
+		[0]   : Subword-bitfield.
 		[1]   : Index into the current language's alphabet that describes the word's second letter.
 		[2]   : Index into the current language's alphabet that describes the word's third letter.
 		[...] : ...
@@ -2173,4 +2248,32 @@ main(int argc, char** argv)
 		A sigmabet is just betabets bitwise OR'd together where the amount of bits set is no
 		greater than some upper limit (e.g. 16). A collection of sigmabets must be disjoint from
 		one another, that is, no sigmabet can be a subset of the other sigmabet in the collection.
+
+	(BOTTOM-FIELDS)
+		A bottom-field is just a subword-field, but it would be used in such a manner that it
+		allows for it to be able to represent multiple subword-fields simultaneously. Bottom-fields
+		rely on the fact that a word of length N would only need N-MIN_WORD_LENGTH bits for the
+		subword-field (since length N is already known, the word can obviously be spelt with N
+		letters). If more bits were provided than N-MIN_WORD_LENGTH, then this wouldn't make much
+		sense (5-lettered word with a subword of 8 letters?), but if we make the choice of ignoring
+		the excess bits, then a single subword-field can be reused multiple times for distinct
+		words.
+
+		Example:
+
+			Consider the two words, their subwords, and their subword-bitfields (MIN_WORD_LENGTH=3).
+
+				"ELECTIONEER" -> "ELECTIONEER", "ELECTION", "ELECT" -> 1'0010'0100
+				"CIVILIAN"    ->                "CIVILIAN", "CIVIL" ->     10'0100
+
+			Since "CIVILIAN" has subwords of the same length that of "ELECTIONEER"'s last subwords,
+			we can use "ELECTIONEER"'s subword-field as a bottom-field to represent both
+			"ELECTIONEER" and "CIVILIAN"'s subwords.
+
+			Bottom-field:   0000'0001'0010'0100
+			"ELECTIONEER" + ****'****'0010'0100 -> "ELECTIONEER", "ELECTION", "ELECT"
+			"CIVILIAN"    + ****'****'***0'0100 -> "CIVILIAN", "CIVIL"
+
+			Since "CIVILIAN" is only 8 letters long, it would only use the bottom 8-MIN_WORD_LENGTH
+			bits of the bottom-field to reconstruct each proper subword.
 */
