@@ -37,6 +37,15 @@
 int
 main(void)
 {
+	pin_output(13);
+	while (true)
+	{
+		pin_high(13);
+		_delay_ms(1000.0);
+		pin_low(13);
+		_delay_ms(1000.0);
+	}
+
 //	sei();
 //
 //	uart_init();

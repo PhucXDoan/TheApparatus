@@ -223,39 +223,41 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 	#endif
 }
 
-static void
-_usb_ms_sd_write_through(u32 sector_address) // Receive sector from host and writes it to the SD.
-{
-	u16 sector_byte_index = 0;
-	while (sector_byte_index < countof(sd_sector))
+#if USB_MS_ENABLE
+	static void
+	_usb_ms_sd_write_through(u32 sector_address) // Receive sector from host and writes it to the SD.
 	{
-		//
-		// Wait for chunk of the sector data from the host.
-		//
-
-		while (!(UEINTX & (1 << RXOUTI)));
-
-		//
-		// Copy the chunk of the sector data from host.
-		//
-
-		assert(UEBCX == USB_ENDPOINT_MS_OUT_SIZE); // Ensures that the payloads aren't varying in lengths.
-		while (UEINTX & (1 << RWAL))
+		u16 sector_byte_index = 0;
+		while (sector_byte_index < countof(sd_sector))
 		{
-			sd_sector[sector_byte_index]  = UEDATX;
-			sector_byte_index            += 1;
+			//
+			// Wait for chunk of the sector data from the host.
+			//
+
+			while (!(UEINTX & (1 << RXOUTI)));
+
+			//
+			// Copy the chunk of the sector data from host.
+			//
+
+			assert(UEBCX == USB_ENDPOINT_MS_OUT_SIZE); // Ensures that the payloads aren't varying in lengths.
+			while (UEINTX & (1 << RWAL))
+			{
+				sd_sector[sector_byte_index]  = UEDATX;
+				sector_byte_index            += 1;
+			}
+
+			//
+			// Flush the endpoint buffer.
+			//
+
+			UEINTX &= ~(1 << RXOUTI);
+			UEINTX &= ~(1 << FIFOCON);
 		}
 
-		//
-		// Flush the endpoint buffer.
-		//
-
-		UEINTX &= ~(1 << RXOUTI);
-		UEINTX &= ~(1 << FIFOCON);
+		sd_write(sector_address);
 	}
-
-	sd_write(sector_address);
-}
+#endif
 
 ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 {

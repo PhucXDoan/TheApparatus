@@ -1052,7 +1052,7 @@ main(int argc, char** argv)
 				{
 					printf
 					(
-						"No images were monochromized! :(\n"
+						"No images were collectune'd! :(\n"
 						"\n"
 					);
 				}
@@ -1964,7 +1964,7 @@ main(int argc, char** argv)
 	matter if things are a bit slow.
 */
 
-/* [Terms & Definitions].
+/* [Terms & Definitions]. // TODO Explain
 
 	(SUBWORD)
 		A word is considered a subword of a parenting word if the parenting word can be truncated

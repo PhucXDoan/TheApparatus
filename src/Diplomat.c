@@ -409,6 +409,14 @@ main(void)
 								} \
 								while (false)
 
+							usb_mouse_command(false, 0, 0);
+
+							CLICK(6, 163); // Show iMessage apps.
+							WAIT(350);
+
+							CLICK(14, 167); // Game Pigeon icon on iMessage bar.
+							WAIT(350);
+
 							u16 screenshot_count = 0;
 							while (true)
 							{
@@ -427,13 +435,8 @@ main(void)
 								);
 								lcd_refresh();
 
-								usb_mouse_command(false, 0, 0);
-
-								CLICK(45, 185); // Game Pigeon icon on iMessage bar.
-								WAIT(350);
-
-								CLICK(14, 255); // Word Games category.
-								WAIT(350);
+								CLICK(14, 245); // Word Games category.
+								WAIT(375);
 
 								u8 play_button_y = {0};
 								switch ((enum WordGame) menu_main_selected_option)
@@ -446,14 +449,14 @@ main(void)
 									case WordGame_anagrams_spanish:
 									case WordGame_anagrams_italian:
 									{
-										CLICK(30, 238); // Anagrams game.
-										WAIT(350);
+										CLICK(30, 227); // Anagrams game.
+										WAIT(375);
 
 										if (!screenshot_count)
 										{
 											// TODO Explain.
-											CLICK(8, 250); // Language menu.
-											WAIT(350);
+											CLICK(8, 240); // Language menu.
+											WAIT(375);
 
 											// TODO Language enum.
 											u8 language_index = {0};
@@ -474,20 +477,20 @@ main(void)
 												case WordGame_COUNT              : error(); break;
 											}
 
-											CLICK(22 + language_index * 17, 255);
-											WAIT(350);
+											CLICK(22 + language_index * 17, 240);
+											WAIT(375);
 
 											if ((enum WordGame) menu_main_selected_option == WordGame_anagrams_english_6)
 											{
-												CLICK(67, 255);
+												CLICK(67, 240);
 											}
 											else if ((enum WordGame) menu_main_selected_option == WordGame_anagrams_english_7)
 											{
-												CLICK(103, 255);
+												CLICK(103, 240);
 											}
 										}
 
-										play_button_y = 200;
+										play_button_y = 190;
 									} break;
 
 									case WordGame_wordhunt_4x4:
@@ -495,8 +498,8 @@ main(void)
 									case WordGame_wordhunt_x:
 									case WordGame_wordhunt_5x5:
 									{
-										CLICK(64, 238); // Wordhunt games.
-										WAIT(350);
+										CLICK(64, 227); // Wordhunt games.
+										WAIT(375);
 
 										if (!screenshot_count)
 										{
@@ -518,19 +521,19 @@ main(void)
 												case WordGame_COUNT              : error(); break;
 											}
 
-											CLICK(24 + 27 * layout_index, 255);
-											WAIT(350);
+											CLICK(24 + 27 * layout_index, 240);
+											WAIT(375);
 										}
 
-										play_button_y = 212;
+										play_button_y = 202;
 									} break;
 
 									case WordGame_wordbites:
 									{
-										CLICK(99, 238); // WordBites game.
-										WAIT(350);
+										CLICK(99, 227); // WordBites game.
+										WAIT(375);
 
-										play_button_y = 212;
+										play_button_y = 202;
 									} break;
 
 									case WordGame_COUNT:
@@ -539,14 +542,14 @@ main(void)
 									} break;
 								}
 
-								CLICK(121, 168); // Send.
+								CLICK(121, 164); // Send.
 								WAIT(1000);
 
 								CLICK(64, 120); // Open game.
-								WAIT(500);
+								WAIT(1250);
 
 								CLICK(64, play_button_y); // Start.
-								WAIT(500);
+								WAIT(750);
 
 								// Double tap AssistiveTouch.
 								usb_mouse_command(false, ASSISTIVE_TOUCH_X, ASSISTIVE_TOUCH_Y);
@@ -561,15 +564,21 @@ main(void)
 								screenshot_count += 1;
 								WAIT(750);
 
-								CLICK(122, 25); // Close game.
-								WAIT(750);
+								// Close game.
+								usb_mouse_command(false, 64, 20);
+								WAIT(500);
+								usb_mouse_command(true, 64, 100);
+								WAIT(200);
+								usb_mouse_command(false, 64, 100);
+								WAIT(200);
 
 								// Swipe away screenshot.
 								usb_mouse_command(false, 25, 255);
 								WAIT(500);
 								usb_mouse_command(true, 0, 255);
-								WAIT(100);
+								WAIT(200);
 								usb_mouse_command(false, 0, 255);
+								WAIT(200);
 							}
 							BREAK_DATAMINING:;
 							lcd_reset();
