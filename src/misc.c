@@ -43,7 +43,7 @@ serialize_u64(char* dst, u16 dst_size, u64 value) // "dst_size" of at least 20 w
 	u8 result = countof(aux_buffer) - aux_writer;
 	if (result > dst_size)
 	{
-		result = u8(dst_size); // Safe to cast since "result" is bigger than "dst_size".
+		result = (u8) dst_size; // Safe to cast since "result" is bigger than "dst_size".
 	}
 
 	memcpy(dst, aux_buffer + aux_writer, result);
@@ -61,12 +61,12 @@ serialize_i64(char* dst, u16 dst_size, i64 value) // "dst_size" of at least 20 w
 		if (dst_size)
 		{
 			dst[0] = '-';
-			result = 1 + serialize_u64(dst + 1, dst_size - 1, ~u64(value) + u64(1));
+			result = 1 + serialize_u64(dst + 1, dst_size - 1, ~((u64) value) + 1);
 		}
 	}
 	else
 	{
-		result = serialize_u64(dst, dst_size, u64(value));
+		result = serialize_u64(dst, dst_size, (u64) value);
 	}
 
 	return result;

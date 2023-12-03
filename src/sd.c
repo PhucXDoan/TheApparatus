@@ -1,7 +1,7 @@
 #define SD_CMD8_ARGUMENT                0x00000'1'AA // See: Source(19) @ Table(7-5) @ AbsPage(119).
 #define SD_CMD8_CRC7                    0x43         // See: [CRC7 Calculation].
 #define SD_MAX_COMMAND_RETRIES          16384
-#define SD_MAX_COMMAND_RESPONSE_LATENCY (u16(1) << 15)
+#define SD_MAX_COMMAND_RESPONSE_LATENCY (((u16) 1) << 15)
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE HaltSource_sd
 
@@ -268,7 +268,7 @@ sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
 		}
 
 		// Attempt to initialize SD and let it know we support high-capacity cards (HCS bit). Responds with R1.
-		u8 response = _sd_command(SDCommand_SD_SEND_OP_COND, u32(1) << 30);
+		u8 response = _sd_command(SDCommand_SD_SEND_OP_COND, ((u32) 1) << 30);
 
 		pin_high(PIN_SD_SS);
 
@@ -315,13 +315,13 @@ sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
 
 	u8  csd_READ_BL_LEN  = csd[5] & 0xF;
 	u8  csd_WRITE_BL_LEN = ((csd[12] & 0b11) << 2) | (csd[13] >> 6);
-	u32 csd_C_SIZE       = (u32(csd[7] & 0b00'111111) << 16) | (u32(csd[8]) << 8) | csd[9];
+	u32 csd_C_SIZE       = (((u32) csd[7] & 0b00'111111) << 16) | (((u32) csd[8]) << 8) | csd[9];
 
 	if
 	(
 		!(
-			(u64(1) << csd_READ_BL_LEN ) == FAT32_SECTOR_SIZE &&
-			(u64(1) << csd_WRITE_BL_LEN) == FAT32_SECTOR_SIZE
+			(((u64) 1) << csd_READ_BL_LEN ) == FAT32_SECTOR_SIZE &&
+			(((u64) 1) << csd_WRITE_BL_LEN) == FAT32_SECTOR_SIZE
 		)
 	)
 	{

@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "defs.h"
+//#include "data/word_glossary.h"
 //#include "misc.c"
 #include "pin.c"
 //#include "Nerd_uart.c"

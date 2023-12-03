@@ -5,7 +5,7 @@
 // "DEST_X" : Must be within [0, 127].
 // "DEST_Y" : Must be within [0, 255].
 // See: [Mouse Commands].
-#define usb_mouse_command(HELD, DEST_X, DEST_Y) usb_mouse_command_((u16(HELD) << 15) | (u16(DEST_X) << 8) | u16(DEST_Y))
+#define usb_mouse_command(HELD, DEST_X, DEST_Y) usb_mouse_command_((((u16) HELD) << 15) | (((u16) DEST_X) << 8) | ((u16) DEST_Y))
 static void
 usb_mouse_command_(u16 command)
 {
@@ -292,7 +292,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 						{
 							payload_data   = (const u8*) &USB_DESC_DEVICE;
 							payload_length = sizeof(USB_DESC_DEVICE);
-							static_assert(sizeof(USB_DESC_DEVICE) < (u64(1) << bitsof(payload_length)));
+							static_assert(sizeof(USB_DESC_DEVICE) < (((u64) 1) << bitsof(payload_length)));
 						} break;
 
 						case USBDescType_config: // [Interfaces, Configurations, and Classes].
@@ -301,7 +301,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 							{
 								payload_data   = (const u8*) &USB_CONFIG;
 								payload_length = sizeof(USB_CONFIG);
-								static_assert(sizeof(USB_CONFIG) < (u64(1) << bitsof(payload_length)));
+								static_assert(sizeof(USB_CONFIG) < (((u64) 1) << bitsof(payload_length)));
 							}
 						} break;
 
@@ -329,7 +329,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 				{
 					payload_data   = (const u8*) &USB_DESC_HID_REPORT;
 					payload_length = sizeof(USB_DESC_HID_REPORT);
-					static_assert(sizeof(USB_DESC_HID_REPORT) < (u64(1) << bitsof(payload_length)));
+					static_assert(sizeof(USB_DESC_HID_REPORT) < (((u64) 1) << bitsof(payload_length)));
 				}
 				#endif
 				else
@@ -622,10 +622,10 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 			u32 transaction_sector_count         = ((command.CBWCB[7] << 8) | command.CBWCB[8]);
 			u32 transaction_sector_start_address =
-					(u32(command.CBWCB[2]) << 24) |
-					(u32(command.CBWCB[3]) << 16) |
-					(u32(command.CBWCB[4]) <<  8) |
-					(u32(command.CBWCB[5]) <<  0);
+					(((u32) command.CBWCB[2]) << 24) |
+					(((u32) command.CBWCB[3]) << 16) |
+					(((u32) command.CBWCB[4]) <<  8) |
+					(((u32) command.CBWCB[5]) <<  0);
 
 			if
 			(
@@ -728,8 +728,8 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 							{
 								if
 								(
-									u32( bmp_dib_header->Width ) != u32(board_dim_slots.x - 1) * compressed_slot_stride + MASK_DIM ||
-									u32(-bmp_dib_header->Height) != u32(board_dim_slots.y - 1) * compressed_slot_stride + MASK_DIM
+									((u32)  bmp_dib_header->Width ) != ((u32) board_dim_slots.x - 1) * compressed_slot_stride + MASK_DIM ||
+									((u32) -bmp_dib_header->Height) != ((u32) board_dim_slots.y - 1) * compressed_slot_stride + MASK_DIM
 								)
 								{
 									error(); // Received BMP is not conforming to the expect dimensions for the wordgame.
@@ -743,9 +743,9 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 						case USBMSOCRState_processing: // Does this sector look like BMP pixel data?
 						{
-							u32 pixels_in_bmp_row_processed      = u32(_usb_ms_ocr_slot_topdown_board_coords.x) * compressed_slot_stride + _usb_ms_ocr_slot_topdown_pixel_coords.x;
-							u32 bmp_width                        = u32(board_dim_slots.x - 1) * compressed_slot_stride + MASK_DIM;
-							u32 total_amount_of_pixels_remaining = (u32(board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y) * compressed_slot_stride + MASK_DIM - _usb_ms_ocr_slot_topdown_pixel_coords.y) * bmp_width - pixels_in_bmp_row_processed;
+							u32 pixels_in_bmp_row_processed      = ((u32) _usb_ms_ocr_slot_topdown_board_coords.x) * compressed_slot_stride + _usb_ms_ocr_slot_topdown_pixel_coords.x;
+							u32 bmp_width                        = ((u32) board_dim_slots.x - 1) * compressed_slot_stride + MASK_DIM;
+							u32 total_amount_of_pixels_remaining = (((u32) board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y) * compressed_slot_stride + MASK_DIM - _usb_ms_ocr_slot_topdown_pixel_coords.y) * bmp_width - pixels_in_bmp_row_processed;
 							u8  pixels_to_verify                 = FAT32_SECTOR_SIZE / sizeof(struct BMPPixel);
 							if (pixels_to_verify > total_amount_of_pixels_remaining)
 							{
@@ -929,7 +929,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 												}
 												else // Shift in ones.
 												{
-													mask_byte = ~(u8(~mask_byte) >> shift_amount); // Shift in ones.
+													mask_byte = ~(((u8) ~mask_byte) >> shift_amount); // Shift in ones.
 												}
 
 												mask_bits_unfilled                            -= shift_amount;
@@ -1193,10 +1193,10 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 					u8 control                  =  command.CBWCB[9];
 
 					u32 sector_start_address =
-						(u32(command.CBWCB[2]) << 24) |
-						(u32(command.CBWCB[3]) << 16) |
-						(u32(command.CBWCB[4]) <<  8) |
-						(u32(command.CBWCB[5]) <<  0);
+						(((u32) command.CBWCB[2]) << 24) |
+						(((u32) command.CBWCB[3]) << 16) |
+						(((u32) command.CBWCB[4]) <<  8) |
+						(((u32) command.CBWCB[5]) <<  0);
 
 					if (!(command.dCBWDataTransferLength == 8 && command.bmCBWFlags && command.bCBWCBLength == 10))
 					{

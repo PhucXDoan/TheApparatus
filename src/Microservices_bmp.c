@@ -1,9 +1,8 @@
 static struct BMP
 bmp_alloc_read_file(str file_path)
 {
-	struct BMP result = {0};
-
-	str file_content = alloc_read_file(file_path);
+	struct BMP result       = {0};
+	str        file_content = alloc_read_file(file_path);
 
 	//
 	// Parse file.
@@ -23,8 +22,8 @@ bmp_alloc_read_file(str file_path)
 	struct BMPDIBHeader* dib_header = (struct BMPDIBHeader*) &file_header[1];
 	if
 	(
-		u64(file_content.length) < sizeof(struct BMPFileHeader) + sizeof(dib_header->Size) ||
-		u64(file_content.length) < sizeof(struct BMPFileHeader) + dib_header->Size
+		(u64) file_content.length < sizeof(struct BMPFileHeader) + sizeof(dib_header->Size) ||
+		(u64) file_content.length < sizeof(struct BMPFileHeader) + dib_header->Size
 	)
 	{
 		error("Source too small for BMP DIB header.");
@@ -87,8 +86,7 @@ bmp_alloc_read_file(str file_path)
 		(
 			dib_header->Compression == BMPCompression_RGB ||
 			dib_header->Compression == BMPCompression_BITFIELDS
-		) &&
-		dib_header->Height > 0
+		) && dib_header->Height > 0
 	)
 	{
 		i32 bytes_per_row   = (dib_header->Width * (dib_header->BitCount / 8) + 3) / 4 * 4;
@@ -109,9 +107,9 @@ bmp_alloc_read_file(str file_path)
 		{
 			#define DETERMINE_MASK(MASK) \
 				( \
-					(MASK) == (u32(0xFF) <<  0) ? 0 : \
-					(MASK) == (u32(0xFF) <<  8) ? 1 : \
-					(MASK) == (u32(0xFF) << 16) ? 2 : 3 \
+					(MASK) == 0x00'00'FF ? 0 : \
+					(MASK) == 0x00'FF'00 ? 1 : \
+					(MASK) == 0xFF'00'00 ? 2 : 3 \
 				)
 
 			index_r = DETERMINE_MASK(dib_header->v2.RedMask);
@@ -129,7 +127,7 @@ bmp_alloc_read_file(str file_path)
 		result.dim.x = dib_header->Width;
 		result.dim.y = dib_header->Height;
 
-		if (dib_header->SizeImage && dib_header->SizeImage != u32(bytes_per_row * dib_header->Height))
+		if (dib_header->SizeImage && dib_header->SizeImage != (u32) (bytes_per_row * dib_header->Height))
 		{
 			error("DIB with invalid \"SizeImage\" field.");
 		}
@@ -179,10 +177,10 @@ bmp_export(struct BMP src, str file_path)
 			.Planes       = 1,
 			.BitCount     = bitsof(struct BMPPixel),
 			.Compression  = BMPCompression_BITFIELDS,
-			.v2.RedMask   = u32(0xFF) << (offsetof(struct BMPPixel, r) * 8),
-			.v2.GreenMask = u32(0xFF) << (offsetof(struct BMPPixel, g) * 8),
-			.v2.BlueMask  = u32(0xFF) << (offsetof(struct BMPPixel, b) * 8),
-			.v3.AlphaMask = u32(0xFF) << (offsetof(struct BMPPixel, a) * 8),
+			.v2.RedMask   = ((u32) 0xFF) << (offsetof(struct BMPPixel, r) * 8),
+			.v2.GreenMask = ((u32) 0xFF) << (offsetof(struct BMPPixel, g) * 8),
+			.v2.BlueMask  = ((u32) 0xFF) << (offsetof(struct BMPPixel, b) * 8),
+			.v3.AlphaMask = ((u32) 0xFF) << (offsetof(struct BMPPixel, a) * 8),
 		};
 	struct BMPFileHeader file_header =
 		{

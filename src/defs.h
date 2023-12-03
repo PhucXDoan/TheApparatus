@@ -1,92 +1,50 @@
-#define false                   0
-#define true                    1
-#define stringify_(X)           #X
-#define stringify(X)            stringify_(X)
-#define concat_(X, Y)           X##Y
-#define concat(X, Y)            concat_(X, Y)
-#define countof(...)            (sizeof(__VA_ARGS__) / sizeof((__VA_ARGS__)[0]))
-#define bitsof(...)             (sizeof(__VA_ARGS__) * 8)
-#define implies(P, Q)           (!(P) || (Q))
-#define static_assert(X)        _Static_assert((X), #X)
-#define fori(TYPE, X, N)        for (TYPE  X = 0   ; X <        (N)        ; X += 1)
-#define forptr(TYPE, X, XS)     for (TYPE* X = (XS); X < (XS) + countof(XS); X += 1)
-#define forptrn(TYPE, X, XS, N) for (TYPE* X = (XS); X < (XS) + (N)        ; X += 1)
+#define false            0
+#define true             1
+#define stringify_(X)    #X
+#define stringify(X)     stringify_(X)
+#define concat_(X, Y)    X##Y
+#define concat(X, Y)     concat_(X, Y)
+#define countof(...)     (sizeof(__VA_ARGS__) / sizeof((__VA_ARGS__)[0]))
+#define bitsof(...)      (sizeof(__VA_ARGS__) * 8)
+#define implies(P, Q)    (!(P) || (Q))
+#define static_assert(X) _Static_assert((X), #X)
 
-typedef uint8_t  u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-typedef int8_t   i8;
-typedef int16_t  i16;
-typedef int32_t  i32;
-typedef int64_t  i64;
-typedef int8_t   b8;
-typedef int16_t  b16;
-typedef int32_t  b32;
-typedef int64_t  b64;
-#define u8(...)  ((u8)  (__VA_ARGS__))
-#define u16(...) ((u16) (__VA_ARGS__))
-#define u32(...) ((u32) (__VA_ARGS__))
-#define u64(...) ((u64) (__VA_ARGS__))
-#define i8(...)  ((i8)  (__VA_ARGS__))
-#define i16(...) ((i16) (__VA_ARGS__))
-#define i32(...) ((i32) (__VA_ARGS__))
-#define i64(...) ((i64) (__VA_ARGS__))
-#define b8(...)  ((b8)  (__VA_ARGS__))
-#define b16(...) ((b16) (__VA_ARGS__))
-#define b32(...) ((b32) (__VA_ARGS__))
-#define b64(...) ((b64) (__VA_ARGS__))
-
-typedef struct { u8  x; u8  y; } u8_2;
-typedef struct { u16 x; u16 y; } u16_2;
-typedef struct { u32 x; u32 y; } u32_2;
-typedef struct { u64 x; u64 y; } u64_2;
-typedef struct { i8  x; i8  y; } i8_2;
-typedef struct { i16 x; i16 y; } i16_2;
-typedef struct { i32 x; i32 y; } i32_2;
-typedef struct { i64 x; i64 y; } i64_2;
-typedef struct { b8  x; b8  y; } b8_2;
-typedef struct { b16 x; b16 y; } b16_2;
-typedef struct { b32 x; b32 y; } b32_2;
-typedef struct { b64 x; b64 y; } b64_2;
-#define u8_2(...)  ((u8_2)  { __VA_ARGS__ })
-#define u16_2(...) ((u16_2) { __VA_ARGS__ })
-#define u32_2(...) ((u32_2) { __VA_ARGS__ })
-#define u64_2(...) ((u64_2) { __VA_ARGS__ })
-#define i8_2(...)  ((i8_2)  { __VA_ARGS__ })
-#define i16_2(...) ((i16_2) { __VA_ARGS__ })
-#define i32_2(...) ((i32_2) { __VA_ARGS__ })
-#define i64_2(...) ((i64_2) { __VA_ARGS__ })
-#define b8_2(...)  ((b8_2)  { __VA_ARGS__ })
-#define b16_2(...) ((b16_2) { __VA_ARGS__ })
-#define b32_2(...) ((b32_2) { __VA_ARGS__ })
-#define b64_2(...) ((b64_2) { __VA_ARGS__ })
-
-typedef struct { u8  x; u8  y; u8  z; } u8_3;
-typedef struct { u16 x; u16 y; u16 z; } u16_3;
-typedef struct { u32 x; u32 y; u32 z; } u32_3;
-typedef struct { u64 x; u64 y; u64 z; } u64_3;
-typedef struct { i8  x; i8  y; i8  z; } i8_3;
-typedef struct { i16 x; i16 y; i16 z; } i16_3;
-typedef struct { i32 x; i32 y; i32 z; } i32_3;
-typedef struct { i64 x; i64 y; i64 z; } i64_3;
-typedef struct { b8  x; b8  y; b8  z; } b8_3;
-typedef struct { b16 x; b16 y; b16 z; } b16_3;
-typedef struct { b32 x; b32 y; b32 z; } b32_3;
-typedef struct { b64 x; b64 y; b64 z; } b64_3;
-#define u8_3(...)  ((u8_3)  { __VA_ARGS__ })
-#define u16_3(...) ((u16_3) { __VA_ARGS__ })
-#define u32_3(...) ((u32_3) { __VA_ARGS__ })
-#define u64_3(...) ((u64_3) { __VA_ARGS__ })
-#define i8_3(...)  ((i8_3)  { __VA_ARGS__ })
-#define i16_3(...) ((i16_3) { __VA_ARGS__ })
-#define i32_3(...) ((i32_3) { __VA_ARGS__ })
-#define i64_3(...) ((i64_3) { __VA_ARGS__ })
-#define b8_3(...)  ((b8_3)  { __VA_ARGS__ })
-#define b16_3(...) ((b16_3) { __VA_ARGS__ })
-#define b32_3(...) ((b32_3) { __VA_ARGS__ })
-#define b64_3(...) ((b64_3) { __VA_ARGS__ })
-
+typedef uint8_t                                u8;
+typedef uint16_t                               u16;
+typedef uint32_t                               u32;
+typedef uint64_t                               u64;
+typedef int8_t                                 i8;
+typedef int16_t                                i16;
+typedef int32_t                                i32;
+typedef int64_t                                i64;
+typedef int8_t                                 b8;
+typedef int16_t                                b16;
+typedef int32_t                                b32;
+typedef int64_t                                b64;
+typedef struct { u8  x; u8  y;               } u8_2;
+typedef struct { u16 x; u16 y;               } u16_2;
+typedef struct { u32 x; u32 y;               } u32_2;
+typedef struct { u64 x; u64 y;               } u64_2;
+typedef struct { i8  x; i8  y;               } i8_2;
+typedef struct { i16 x; i16 y;               } i16_2;
+typedef struct { i32 x; i32 y;               } i32_2;
+typedef struct { i64 x; i64 y;               } i64_2;
+typedef struct { b8  x; b8  y;               } b8_2;
+typedef struct { b16 x; b16 y;               } b16_2;
+typedef struct { b32 x; b32 y;               } b32_2;
+typedef struct { b64 x; b64 y;               } b64_2;
+typedef struct { u8  x; u8  y; u8  z;        } u8_3;
+typedef struct { u16 x; u16 y; u16 z;        } u16_3;
+typedef struct { u32 x; u32 y; u32 z;        } u32_3;
+typedef struct { u64 x; u64 y; u64 z;        } u64_3;
+typedef struct { i8  x; i8  y; i8  z;        } i8_3;
+typedef struct { i16 x; i16 y; i16 z;        } i16_3;
+typedef struct { i32 x; i32 y; i32 z;        } i32_3;
+typedef struct { i64 x; i64 y; i64 z;        } i64_3;
+typedef struct { b8  x; b8  y; b8  z;        } b8_3;
+typedef struct { b16 x; b16 y; b16 z;        } b16_3;
+typedef struct { b32 x; b32 y; b32 z;        } b32_3;
+typedef struct { b64 x; b64 y; b64 z;        } b64_3;
 typedef struct { u8  x; u8  y; u8  z; u8  w; } u8_4;
 typedef struct { u16 x; u16 y; u16 z; u16 w; } u16_4;
 typedef struct { u32 x; u32 y; u32 z; u32 w; } u32_4;
@@ -99,39 +57,16 @@ typedef struct { b8  x; b8  y; b8  z; b8  w; } b8_4;
 typedef struct { b16 x; b16 y; b16 z; b16 w; } b16_4;
 typedef struct { b32 x; b32 y; b32 z; b32 w; } b32_4;
 typedef struct { b64 x; b64 y; b64 z; b64 w; } b64_4;
-#define u8_4(...)  ((u8_4)  { __VA_ARGS__ })
-#define u16_4(...) ((u16_4) { __VA_ARGS__ })
-#define u32_4(...) ((u32_4) { __VA_ARGS__ })
-#define u64_4(...) ((u64_4) { __VA_ARGS__ })
-#define i8_4(...)  ((i8_4)  { __VA_ARGS__ })
-#define i16_4(...) ((i16_4) { __VA_ARGS__ })
-#define i32_4(...) ((i32_4) { __VA_ARGS__ })
-#define i64_4(...) ((i64_4) { __VA_ARGS__ })
-#define b8_4(...)  ((b8_4)  { __VA_ARGS__ })
-#define b16_4(...) ((b16_4) { __VA_ARGS__ })
-#define b32_4(...) ((b32_4) { __VA_ARGS__ })
-#define b64_4(...) ((b64_4) { __VA_ARGS__ })
 
 #if PROGRAM_MICROSERVICES
-	typedef float  f32;
-	typedef double f64;
-	#define f32(...) ((f32) (__VA_ARGS__ ))
-	#define f64(...) ((f64) (__VA_ARGS__ ))
-
-	typedef struct { f32 x; f32 y; } f32_2;
-	typedef struct { f64 x; f64 y; } f64_2;
-	#define f32_2(...) ((f32_2)  { __VA_ARGS__ })
-	#define f64_2(...) ((f64_2)  { __VA_ARGS__ })
-
-	typedef struct { f32 x; f32 y; f32 z; } f32_3;
-	typedef struct { f64 x; f64 y; f64 z; } f64_3;
-	#define f32_3(...) ((f32_3) { __VA_ARGS__ })
-	#define f64_3(...) ((f64_3) { __VA_ARGS__ })
-
+	typedef float                                  f32;
+	typedef double                                 f64;
+	typedef struct { f32 x; f32 y;               } f32_2;
+	typedef struct { f64 x; f64 y;               } f64_2;
+	typedef struct { f32 x; f32 y; f32 z;        } f32_3;
+	typedef struct { f64 x; f64 y; f64 z;        } f64_3;
 	typedef struct { f32 x; f32 y; f32 z; f32 w; } f32_4;
 	typedef struct { f64 x; f64 y; f64 z; f64 w; } f64_4;
-	#define f32_4(...) ((f32_4) { __VA_ARGS__ })
-	#define f64_4(...) ((f64_4) { __VA_ARGS__ })
 
 	typedef struct { char* data; i64 length; } str;
 	#define str(STRLIT) (str) { (STRLIT), sizeof(STRLIT) - 1 }
@@ -153,7 +88,7 @@ typedef struct { b64 x; b64 y; b64 z; b64 w; } b64_4;
 	} strbuf;
 #endif
 
-static_assert(LITTLE_ENDIAN);
+static_assert(LITTLE_ENDIAN); // Lots of structures assume little-endian.
 
 //
 // "lcd.c"
@@ -269,12 +204,15 @@ static_assert(LITTLE_ENDIAN);
 // Miscellaneous.
 //
 
-#define ASSISTIVE_TOUCH_X         9
-#define ASSISTIVE_TOUCH_Y         9
-#define MASK_ACTIVATION_THRESHOLD 8  // Applied to red channel.
-#define MASK_DIM                  64
-#define MIN_WORD_LENGTH           3
-#define MAX_SIGMABET_BITS         16
+#define ASSISTIVE_TOUCH_X             9
+#define ASSISTIVE_TOUCH_Y             9
+#define MASK_ACTIVATION_THRESHOLD     8  // Applied to red channel.
+#define MASK_DIM                      64
+#define MIN_WORD_LENGTH               3
+#define BITS_PER_ALPHABET_INDEX       5
+#define PACKED_WORD_SIZE(WORD_LENGTH) (1 + ((((WORD_LENGTH) - 1) * BITS_PER_ALPHABET_INDEX) + ((WORD_LENGTH) - 1) / 3 + 7) / 8)
+
+static_assert(BITS_PER_ALPHABET_INDEX == 5); // PACKED_WORD_SIZE calculation assumes 5 bits per alphabet index.
 
 #define ANAGRAMS_GENERIC_6_PRINT_NAME "Anagrams (6)"
 #define WORDGAME_XMDT(X, Y) /* There's no good way to determine the language of Anagrams perfectly, so we will always assume it's English and have the test region all be zero. */ \
@@ -286,59 +224,59 @@ static_assert(LITTLE_ENDIAN);
 		X(anagrams_german   , "Anagrams (DE)"       , german   , 6               , Letter_COUNT    ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,    0,     0          ,   0,    0              ,      0,      0,      0                                         ) \
 		X(anagrams_spanish  , "Anagrams (ES)"       , spanish  , 6               , Letter_ene + 1  ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,    0,     0          ,   0,    0              ,      0,      0,      0                                         ) \
 		X(anagrams_italian  , "Anagrams (IT)"       , italian  , 6               , Letter_z + 1    ,  39, 354       , 6, 1              , 119      , 195                      , 105                    ,    0,     0          ,   0,    0              ,      0,      0,      0                                         ) \
-		X(wordhunt_4x4      , "WordHunt (4x4)"      , english  , 16              , Letter_z + 1    , 199, 538       , 4, 4              , 136      , 212                      , 100                    ,  128,   701          , 900,   16              , 0.2204, 0.2775, 0.2089                                         ) \
-		X(wordhunt_o        , "WordHunt (O)"        , english  , 16              , Letter_z + 1    , 142, 480       , 5, 5              , 123      , 191                      , 100                    ,  512,   854          , 128,  128              , 0.4765, 0.6349, 0.4380, Y(0, 0) Y(0, 4) Y(4, 0) Y(4, 4) Y(2, 2)) \
-		X(wordhunt_x        , "WordHunt (X)"        , english  , 16              , Letter_z + 1    , 142, 480       , 5, 5              , 123      , 191                      , 100                    ,  900,   854          , 128,  128              , 0.4356, 0.5768, 0.4018, Y(0, 2) Y(2, 0) Y(4, 2) Y(2, 4)        ) \
-		X(wordhunt_5x5      , "WordHunt (5x5)"      , english  , 16              , Letter_z + 1    , 142, 480       , 5, 5              , 123      , 191                      , 100                    , 1050,   532          ,  64, 1000              , 0.4024, 0.5326, 0.3719                                         ) \
+		X(wordhunt_4x4      , "WordHunt (4x4)"      , english  , 15              , Letter_z + 1    , 199, 538       , 4, 4              , 136      , 212                      , 100                    ,  128,   701          , 900,   16              , 0.2204, 0.2775, 0.2089                                         ) \
+		X(wordhunt_o        , "WordHunt (O)"        , english  , 15              , Letter_z + 1    , 142, 480       , 5, 5              , 123      , 191                      , 100                    ,  512,   854          , 128,  128              , 0.4765, 0.6349, 0.4380, Y(0, 0) Y(0, 4) Y(4, 0) Y(4, 4) Y(2, 2)) \
+		X(wordhunt_x        , "WordHunt (X)"        , english  , 15              , Letter_z + 1    , 142, 480       , 5, 5              , 123      , 191                      , 100                    ,  900,   854          , 128,  128              , 0.4356, 0.5768, 0.4018, Y(0, 2) Y(2, 0) Y(4, 2) Y(2, 4)        ) \
+		X(wordhunt_5x5      , "WordHunt (5x5)"      , english  , 15              , Letter_z + 1    , 142, 480       , 5, 5              , 123      , 191                      , 100                    , 1050,   532          ,  64, 1000              , 0.4024, 0.5326, 0.3719                                         ) \
 		X(wordbites         , "WordBites"           , english  , 9               , Letter_z + 1    ,  44, 384       , 8, 9              , 102      , 140.5                    ,  88                    ,  400,  1676          , 256,  256              , 0.2524, 0.3749, 0.4917                                         )
 
 #define LETTER_XMDT(X) \
 	/* Name       | LCD Character Code | Unicode Codepoints */ \
-	X(null        , 0b1111'1111        , '\0'                                                                                                              ) \
-	X(a           , 'A'                , 'A'   , 'a'   , 0x0410, 0x0430    , 0x00C0, 0x00E0, 0x00C1, 0x00E1, 0x00C2, 0x00E2, 0x00C3, 0x00E3, 0x00C5, 0x00E5) \
-	X(b           , 'B'                , 'B'   , 'b'   , 0x0412, 0x0432                                                                                    ) \
-	X(c           , 'C'                , 'C'   , 'c'   , 0x0421, 0x0441    , 0x00C7, 0x00E7, 0x010C, 0x010D                                                ) \
-	X(d           , 'D'                , 'D'   , 'd'                                                                                                       ) \
-	X(e           , 'E'                , 'E'   , 'e'   , 0x0415, 0x0435    , 0x00C8, 0x00E8, 0x00C9, 0x00E9, 0x00CA, 0x00EA, 0x0112, 0x0113                ) \
-	X(f           , 'F'                , 'F'   , 'f'                                                                                                       ) \
-	X(g           , 'G'                , 'G'   , 'g'                                                                                                       ) \
-	X(h           , 'H'                , 'H'   , 'h'   , 0x041D, 0x043D                                                                                    ) \
-	X(i           , 'I'                , 'I'   , 'i'   , 0x0406, 0x0456    , 0x00CC, 0x00EC, 0x00CD, 0x00ED, 0x00CE, 0x00EE, 0x012A, 0x012B                ) \
-	X(j           , 'J'                , 'J'   , 'j'   , 0x0408, 0x0458                                                                                    ) \
-	X(k           , 'K'                , 'K'   , 'k'   , 0x041A, 0x043A                                                                                    ) \
-	X(l           , 'L'                , 'L'   , 'l'                       , 0x0141, 0x0142                                                                ) \
-	X(m           , 'M'                , 'M'   , 'm'   , 0x041C, 0x043C                                                                                    ) \
-	X(n           , 'N'                , 'N'   , 'n'                                                                                                       ) \
-	X(o           , 'O'                , 'O'   , 'o'   , 0x041E, 0x043E    , 0x00D5, 0x00F5, 0x00D2, 0x00F2, 0x00D3, 0x00F3, 0x014C, 0x014D                ) \
-	X(p           , 'P'                , 'P'   , 'p'   , 0x0420, 0x0440                                                                                    ) \
-	X(q           , 'Q'                , 'Q'   , 'q'                                                                                                       ) \
-	X(r           , 'R'                , 'R'   , 'r'                                                                                                       ) \
-	X(s           , 'S'                , 'S'   , 's'   , 0x0405, 0x0455    , 0x0160, 0x0161                                                                ) \
-	X(t           , 'T'                , 'T'   , 't'   , 0x0422, 0x0442                                                                                    ) \
-	X(u           , 'U'                , 'U'   , 'u'                       , 0x00D9, 0x00F9, 0x00DA, 0x00FA, 0x00DB, 0x00FB, 0x016A, 0x016B                ) \
-	X(v           , 'V'                , 'V'   , 'v'                                                                                                       ) \
-	X(w           , 'W'                , 'W'   , 'w'                                                                                                       ) \
-	X(x           , 'X'                , 'X'   , 'x'   , 0x0425, 0x0445                                                                                    ) \
-	X(y           , 'Y'                , 'Y'   , 'y'                                                                                                       ) \
-	X(z           , 'Z'                , 'Z'   , 'z'                                                                                                       ) /* English letters must be contiguous up to prune out foreign letters that don't need to be processed. */ \
-	X(ene         , 0b1110'1110        , 0x00D1, 0x00F1                                                                                                    ) /* Same reason as above; Spanish alphabet essentially consists the basic 26 Latin letters plus N with tilde. */ \
-	X(boris       , 0b001              , 0x0411, 0x0431                                                                                                    ) \
-	X(chelovek    , 0b010              , 0x0427, 0x0447                                                                                                    ) \
-	X(dmitri      , 0b1101'1011        , 0x0414, 0x0434                                                                                                    ) \
-	X(fyodor      , '0'                , 0x0424, 0x0444                                                                                                    ) \
-	X(gregory     , 'r'                , 0x0413, 0x0433                                                                                                    ) \
-	X(ivan        , 0b011              , 0x0418, 0x0438                                                                                                    ) \
-	X(ivan_kratkiy, 0b100              , 0x0419, 0x0439                                                                                                    ) \
-	X(leonid      , 0b1011'0110        , 0x041B, 0x043B                                                                                                    ) \
-	X(myagkiy_znak, 'b'                , 0x042C, 0x044C                                                                                                    ) \
-	X(pavel       , 0b1111'0111        , 0x041F, 0x043F                                                                                                    ) \
-	X(shura       , 0b101              , 0x0428, 0x0448                                                                                                    ) \
-	X(ulyana      , 'y'                , 0x0423, 0x0443                                                                                                    ) \
-	X(yery        , 0b110              , 0x042B, 0x044B                                                                                                    ) \
-	X(zhenya      , 0b111              , 0x0416, 0x0436                                                                                                    ) \
-	X(zinaida     , '3'                , 0x0417, 0x0437                                                                                                    ) \
-	X(a_umlaut    , 0b1110'0001        , 0x04D2, 0x00C4, 0x00C4, 0x00E4                                                                                    ) \
-	X(o_umlaut    , 0b1110'1111        , 0x04E6, 0x00F6, 0x00D6, 0x00F6                                                                                    )
+	X(null        , 0b1111'1111        , '\0'                                                                                                          ) \
+	X(a           , 'A'                , 'A'   , 'a'   , 0x0410, 0x0430, 0x00C0, 0x00E0, 0x00C1, 0x00E1, 0x00C2, 0x00E2, 0x00C3, 0x00E3, 0x00C5, 0x00E5) \
+	X(b           , 'B'                , 'B'   , 'b'   , 0x0412, 0x0432                                                                                ) \
+	X(c           , 'C'                , 'C'   , 'c'   , 0x0421, 0x0441, 0x00C7, 0x00E7, 0x010C, 0x010D                                                ) \
+	X(d           , 'D'                , 'D'   , 'd'                                                                                                   ) \
+	X(e           , 'E'                , 'E'   , 'e'   , 0x0415, 0x0435, 0x00C8, 0x00E8, 0x00C9, 0x00E9, 0x00CA, 0x00EA, 0x0112, 0x0113                ) \
+	X(f           , 'F'                , 'F'   , 'f'                                                                                                   ) \
+	X(g           , 'G'                , 'G'   , 'g'                                                                                                   ) \
+	X(h           , 'H'                , 'H'   , 'h'   , 0x041D, 0x043D                                                                                ) \
+	X(i           , 'I'                , 'I'   , 'i'   , 0x0406, 0x0456, 0x00CC, 0x00EC, 0x00CD, 0x00ED, 0x00CE, 0x00EE, 0x012A, 0x012B                ) \
+	X(j           , 'J'                , 'J'   , 'j'   , 0x0408, 0x0458                                                                                ) \
+	X(k           , 'K'                , 'K'   , 'k'   , 0x041A, 0x043A                                                                                ) \
+	X(l           , 'L'                , 'L'   , 'l'                   , 0x0141, 0x0142                                                                ) \
+	X(m           , 'M'                , 'M'   , 'm'   , 0x041C, 0x043C                                                                                ) \
+	X(n           , 'N'                , 'N'   , 'n'                                                                                                   ) \
+	X(o           , 'O'                , 'O'   , 'o'   , 0x041E, 0x043E, 0x00D5, 0x00F5, 0x00D2, 0x00F2, 0x00D3, 0x00F3, 0x014C, 0x014D                ) \
+	X(p           , 'P'                , 'P'   , 'p'   , 0x0420, 0x0440                                                                                ) \
+	X(q           , 'Q'                , 'Q'   , 'q'                                                                                                   ) \
+	X(r           , 'R'                , 'R'   , 'r'                                                                                                   ) \
+	X(s           , 'S'                , 'S'   , 's'   , 0x0405, 0x0455, 0x0160, 0x0161                                                                ) \
+	X(t           , 'T'                , 'T'   , 't'   , 0x0422, 0x0442                                                                                ) \
+	X(u           , 'U'                , 'U'   , 'u'                   , 0x00D9, 0x00F9, 0x00DA, 0x00FA, 0x00DB, 0x00FB, 0x016A, 0x016B                ) \
+	X(v           , 'V'                , 'V'   , 'v'                                                                                                   ) \
+	X(w           , 'W'                , 'W'   , 'w'                                                                                                   ) \
+	X(x           , 'X'                , 'X'   , 'x'   , 0x0425, 0x0445                                                                                ) \
+	X(y           , 'Y'                , 'Y'   , 'y'                                                                                                   ) \
+	X(z           , 'Z'                , 'Z'   , 'z'                                                                                                   ) /* English letters must be contiguous up to prune out foreign letters that don't need to be processed. */ \
+	X(ene         , 0b1110'1110        , 0x00D1, 0x00F1                                                                                                ) /* Same reason as above; Spanish alphabet essentially consists the basic 26 Latin letters plus N with tilde. */ \
+	X(boris       , 0b001              , 0x0411, 0x0431                                                                                                ) \
+	X(chelovek    , 0b010              , 0x0427, 0x0447                                                                                                ) \
+	X(dmitri      , 0b1101'1011        , 0x0414, 0x0434                                                                                                ) \
+	X(fyodor      , '0'                , 0x0424, 0x0444                                                                                                ) \
+	X(gregory     , 'r'                , 0x0413, 0x0433                                                                                                ) \
+	X(ivan        , 0b011              , 0x0418, 0x0438                                                                                                ) \
+	X(ivan_kratkiy, 0b100              , 0x0419, 0x0439                                                                                                ) \
+	X(leonid      , 0b1011'0110        , 0x041B, 0x043B                                                                                                ) \
+	X(myagkiy_znak, 'b'                , 0x042C, 0x044C                                                                                                ) \
+	X(pavel       , 0b1111'0111        , 0x041F, 0x043F                                                                                                ) \
+	X(shura       , 0b101              , 0x0428, 0x0448                                                                                                ) \
+	X(ulyana      , 'y'                , 0x0423, 0x0443                                                                                                ) \
+	X(yery        , 0b110              , 0x042B, 0x044B                                                                                                ) \
+	X(zhenya      , 0b111              , 0x0416, 0x0436                                                                                                ) \
+	X(zinaida     , '3'                , 0x0417, 0x0437                                                                                                ) \
+	X(a_umlaut    , 0b1110'0001        , 0x04D2, 0x00C4, 0x00C4, 0x00E4                                                                                ) \
+	X(o_umlaut    , 0b1110'1111        , 0x04E6, 0x00F6, 0x00D6, 0x00F6                                                                                )
 
 #define LANGUAGE_XMDT(X) \
 	X(english, Letter_a, Letter_b       , Letter_c, Letter_d      , Letter_e     , Letter_f, Letter_g     , Letter_h      , Letter_i   , Letter_j           , Letter_k, Letter_l     , Letter_m, Letter_n, Letter_o, Letter_p    , Letter_q       , Letter_r, Letter_s, Letter_t     , Letter_u     , Letter_v, Letter_w       , Letter_x    , Letter_y   , Letter_z                      ) \
@@ -445,6 +383,8 @@ struct WordGameInfo
 		f64_3         test_region_rgb;
 	#endif
 };
+
+static_assert(MAX_ALPHABET_LENGTH <= (1 << BITS_PER_ALPHABET_INDEX)); // Alphabet too long to be able to index.
 
 #if PROGRAM_DIPLOMAT
 	#define count_cleared_bits(...) pgm_u8(COUNT_CLEARED_BITS_DT_[(u8) { __VA_ARGS__ }])
@@ -620,15 +560,14 @@ struct Dary_void
 	}
 #define Dary_def(TYPE) Dary_define(TYPE, TYPE)
 
-Dary_def(u8 );
-Dary_def(u16);
-Dary_def(u32);
-Dary_def(u64);
-Dary_def(i8 );
-Dary_def(i16);
-Dary_def(i32);
-Dary_def(i64);
-
+Dary_def(u8   );
+Dary_def(u16  );
+Dary_def(u32  );
+Dary_def(u64  );
+Dary_def(i8   );
+Dary_def(i16  );
+Dary_def(i32  );
+Dary_def(i64  );
 Dary_def(u8_2 );
 Dary_def(u16_2);
 Dary_def(u32_2);
@@ -637,6 +576,22 @@ Dary_def(i8_2 );
 Dary_def(i16_2);
 Dary_def(i32_2);
 Dary_def(i64_2);
+Dary_def(u8_3 );
+Dary_def(u16_3);
+Dary_def(u32_3);
+Dary_def(u64_3);
+Dary_def(i8_3 );
+Dary_def(i16_3);
+Dary_def(i32_3);
+Dary_def(i64_3);
+Dary_def(u8_4 );
+Dary_def(u16_4);
+Dary_def(u32_4);
+Dary_def(u64_4);
+Dary_def(i8_4 );
+Dary_def(i16_4);
+Dary_def(i32_4);
+Dary_def(i64_4);
 
 Dary_define(Letter, enum Letter);
 
@@ -682,7 +637,7 @@ struct BMPRGBQuad // See: "RGBQUAD" @ Source(22) @ Page(1344).
 #pragma pack(push, 1)
 struct BMPFileHeader // See: "BITMAPFILEHEADER" @ Source(22) @ Page(281).
 {
-	#define BMP_FILE_HEADER_SIGNATURE (u16('B') | (u16('M') << 8))
+	#define BMP_FILE_HEADER_SIGNATURE (((u16) 'B') | ((u16) ('M' << 8)))
 	u16 bfType;      // Must be BMP_FILE_HEADER_SIGNATURE.
 	u32 bfSize;      // Size of the entire BMP file in bytes.
 	u16 bfReserved1;
@@ -828,10 +783,18 @@ enum CLIProgram
 		i32                 field_count;
 	};
 
+	//
+	// Make typedef of each CLI field type.
+	//
+
 	#define MAKE(TYPING_NAME, TYPING_TYPE) typedef TYPING_TYPE CLIFieldTyping_##TYPING_NAME##_t;
 	CLI_TYPING_XMDT(MAKE)
 	#undef MAKE
 	Dary_def(CLIFieldTyping_string_t);
+
+	//
+	// Make enum of CLI fields for each CLI program.
+	//
 
 	#define MAKE_CLI_FIELD(PROGRAM_NAME, PROGRAM_DESC) \
 		enum CLIField_##PROGRAM_NAME \
@@ -844,6 +807,10 @@ enum CLIProgram
 	CLI_PROGRAM_XMDT(MAKE_CLI_FIELD)
 	#undef MAKE_CLI_FIELD_MEMBERS
 	#undef MAKE_CLI_FIELD
+
+	//
+	// Make CLI program field members.
+	//
 
 	struct CLI
 	{
@@ -858,6 +825,10 @@ enum CLIProgram
 		#undef MAKE_CLI_PROGRAM_MEMBERS
 		#undef MAKE_CLI_PROGRAM
 	};
+
+	//
+	// Make info on each CLI program.
+	//
 
 	static const struct CLIProgramInfo CLI_PROGRAM_INFO[] =
 		{
@@ -1067,7 +1038,7 @@ struct FAT32FileStructureInfo // See: Source(15) @ Page(21-22).
 			.BPB_BkBootSec  = FAT32_BACKUP_BOOT_SECTOR_OFFSET,
 			.BS_DrvNum      = 0x80,
 			.BS_BootSig     = 0x29,
-			.BS_VolID       = (u32('B') << 0) | (u32('o') << 8) | (u32('o') << 16) | (u32('b') << 24),
+			.BS_VolID       = (((u32) 'B') << 0) | (((u32) 'o') << 8) | (((u32) 'o') << 16) | (((u32) 'b') << 24),
 			.BS_VolLab      = "Le Diplomat",
 			.BS_FilSysType  = "FAT32   ",
 			.BS_BootSign    = 0xAA55,
@@ -1204,7 +1175,7 @@ enum USBClass // Non-exhaustive. See: Source(5).
 
 enum USBSetupRequestKind // "bmRequestType" in LSB and "bRequest" in MSB. See: Source(2) @ Table(9-2) @ Page(248).
 {
-	#define MAKE(BM_REQUEST_TYPE, B_REQUEST) ((u16(B_REQUEST) << 8) | (BM_REQUEST_TYPE))
+	#define MAKE(BM_REQUEST_TYPE, B_REQUEST) (((u16) (B_REQUEST) << 8) | (BM_REQUEST_TYPE))
 
 	// Non-exhaustive.
 	// See: "Standard Device Requests" @ Source(2) @ Table(9-3) @ Page(250)
@@ -1467,9 +1438,9 @@ enum USBHIDItem // Short-items with hardcoded amount of data bytes. See: Source(
 
 enum USBHIDItemMainInputFlag // Non-exhaustive. See: Source(7) @ Section(6.2.2.4) @ AbsPage(38) & Source(7) @ Section(6.2.2.5) @ AbsPage(40-41).
 {
-	USBHIDItemMainInputFlag_padding  = u16(1) << 0, // Also called "constant", but it's essentially used for padding.
-	USBHIDItemMainInputFlag_variable = u16(1) << 1, // Data is just a simple bitmap/integer; otherwise, the data is a fixed-sized buffer that can be filled up.
-	USBHIDItemMainInputFlag_relative = u16(1) << 2, // Data is a delta.
+	USBHIDItemMainInputFlag_padding  = ((u16) 1) << 0, // Also called "constant", but it's essentially used for padding.
+	USBHIDItemMainInputFlag_variable = ((u16) 1) << 1, // Data is just a simple bitmap/integer; otherwise, the data is a fixed-sized buffer that can be filled up.
+	USBHIDItemMainInputFlag_relative = ((u16) 1) << 2, // Data is a delta.
 };
 
 enum USBHIDItemMainCollectionType // Non-exhaustive. See: Source(7) @ Section(6.2.2.4) @ AbsPage(38) & Source(7) @ Section(6.2.2.6) @ AbsPage(42-43).
@@ -1706,16 +1677,16 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	static const u8 USB_MS_SCSI_READ_CAPACITY_DATA[] PROGMEM = // See: Source(14) @ Section(5.10.2) @ Page(54-55).
 		{
 			// "RETURNED LOGICAL BLOCK ADDRESS" : Big-endian address of the last addressable sector.
-				(u32(FAT32_TOTAL_SECTOR_COUNT - 1) >> 24) & 0xFF,
-				(u32(FAT32_TOTAL_SECTOR_COUNT - 1) >> 16) & 0xFF,
-				(u32(FAT32_TOTAL_SECTOR_COUNT - 1) >>  8) & 0xFF,
-				(u32(FAT32_TOTAL_SECTOR_COUNT - 1) >>  0) & 0xFF,
+				(((u32) FAT32_TOTAL_SECTOR_COUNT - 1) >> 24) & 0xFF,
+				(((u32) FAT32_TOTAL_SECTOR_COUNT - 1) >> 16) & 0xFF,
+				(((u32) FAT32_TOTAL_SECTOR_COUNT - 1) >>  8) & 0xFF,
+				(((u32) FAT32_TOTAL_SECTOR_COUNT - 1) >>  0) & 0xFF,
 
 			// "BLOCK LENGTH IN BYTES" : Big-endian size of sectors.
-				(u32(FAT32_SECTOR_SIZE) >> 24) & 0xFF,
-				(u32(FAT32_SECTOR_SIZE) >> 16) & 0xFF,
-				(u32(FAT32_SECTOR_SIZE) >>  8) & 0xFF,
-				(u32(FAT32_SECTOR_SIZE) >>  0) & 0xFF,
+				(((u32) FAT32_SECTOR_SIZE) >> 24) & 0xFF,
+				(((u32) FAT32_SECTOR_SIZE) >> 16) & 0xFF,
+				(((u32) FAT32_SECTOR_SIZE) >>  8) & 0xFF,
+				(((u32) FAT32_SECTOR_SIZE) >>  0) & 0xFF,
 		};
 
 	static const u8 USB_MS_SCSI_INQUIRY_DATA[] PROGMEM = // See: Source(13) @ Section(7.3.2) @ Page(82-86).
@@ -2016,8 +1987,8 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	static_assert(sizeof(_usb_mouse_command_writer) == 1 && sizeof(_usb_mouse_command_reader) == 1);
 
 	// The read/write indices must be able to address any element in the corresponding buffer.
-	static_assert(countof(_usb_mouse_command_buffer) < (u64(1) << bitsof(_usb_mouse_command_reader)));
-	static_assert(countof(_usb_mouse_command_buffer) < (u64(1) << bitsof(_usb_mouse_command_writer)));
+	static_assert(countof(_usb_mouse_command_buffer) < (((u64) 1) << bitsof(_usb_mouse_command_reader)));
+	static_assert(countof(_usb_mouse_command_buffer) < (((u64) 1) << bitsof(_usb_mouse_command_writer)));
 
 	// Buffer sizes must be a power of two for the "_usb_mouse_X_masked" macros.
 	static_assert(countof(_usb_mouse_command_buffer) && !(countof(_usb_mouse_command_buffer) & (countof(_usb_mouse_command_buffer) - 1)));
@@ -2064,10 +2035,10 @@ struct USBConfig // This layout is defined uniquely for our device application.
 		static_assert(sizeof(debug_usb_cdc_in_writer) == 1 && sizeof(debug_usb_cdc_in_reader) == 1 && sizeof(debug_usb_cdc_out_writer) == 1 && sizeof(debug_usb_cdc_out_reader) == 1);
 
 		// The read/write indices must be able to address any element in the corresponding buffer.
-		static_assert(countof(debug_usb_cdc_in_buffer ) <= (u64(1) << bitsof(debug_usb_cdc_in_reader )));
-		static_assert(countof(debug_usb_cdc_in_buffer ) <= (u64(1) << bitsof(debug_usb_cdc_in_writer )));
-		static_assert(countof(debug_usb_cdc_out_buffer) <= (u64(1) << bitsof(debug_usb_cdc_out_reader)));
-		static_assert(countof(debug_usb_cdc_out_buffer) <= (u64(1) << bitsof(debug_usb_cdc_out_writer)));
+		static_assert(countof(debug_usb_cdc_in_buffer ) <= (((u64) 1) << bitsof(debug_usb_cdc_in_reader )));
+		static_assert(countof(debug_usb_cdc_in_buffer ) <= (((u64) 1) << bitsof(debug_usb_cdc_in_writer )));
+		static_assert(countof(debug_usb_cdc_out_buffer) <= (((u64) 1) << bitsof(debug_usb_cdc_out_reader)));
+		static_assert(countof(debug_usb_cdc_out_buffer) <= (((u64) 1) << bitsof(debug_usb_cdc_out_writer)));
 
 		// Buffer sizes must be a power of two for the "debug_usb_cdc_X_Y_masked" macros.
 		static_assert(countof(debug_usb_cdc_in_buffer ) && !(countof(debug_usb_cdc_in_buffer ) & (countof(debug_usb_cdc_in_buffer ) - 1)));

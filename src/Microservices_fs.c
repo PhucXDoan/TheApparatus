@@ -60,20 +60,16 @@ create_file_writing_handle(str file_path)
 	{
 		file_dir.length -= 1;
 	}
-
 	create_dir(file_dir, false);
 
-	char file_path_cstr[256] = {0};
-	if (file_path.length >= countof(file_path_cstr))
-	{
-		error("File path \"%.*s\" too long.", i32(file_path.length), file_path.data);
-	}
-	memmove(file_path_cstr, file_path.data, file_path.length);
+	strbuf file_path_cstr = strbuf(256);
+	strbuf_str (&file_path_cstr, file_path);
+	strbuf_char(&file_path_cstr, '\0');
 
-	HANDLE file_handle = CreateFileA(file_path_cstr, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+	HANDLE file_handle = CreateFileA(file_path_cstr.data, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
 	if (file_handle == INVALID_HANDLE_VALUE)
 	{
-		error("Failed to open \"%s\" for writing.", file_path_cstr);
+		error("Failed to open \"%s\" for writing.", file_path_cstr.data);
 	}
 
 	return file_handle;
@@ -92,7 +88,7 @@ static void
 write_raw_data(HANDLE file_writing_handle, void* data, i64 size)
 {
 	DWORD bytes_written = {0};
-	if (!WriteFile(file_writing_handle, data, u32(size), &bytes_written, 0) || bytes_written != u32(size))
+	if (!WriteFile(file_writing_handle, data, (u32) size, &bytes_written, 0) || bytes_written != (u32) size)
 	{
 		error("Failed to write.");
 	}
@@ -110,17 +106,14 @@ alloc_read_file(str file_path)
 {
 	str file_content = {0};
 
-	char file_path_cstr[256] = {0};
-	if (file_path.length >= countof(file_path_cstr))
-	{
-		error("File path too long.");
-	}
-	memmove(file_path_cstr, file_path.data, file_path.length);
+	strbuf file_path_cstr = strbuf(256);
+	strbuf_str (&file_path_cstr, file_path);
+	strbuf_char(&file_path_cstr, '\0');
 
-	FILE* file = fopen(file_path_cstr, "rb");
+	FILE* file = fopen(file_path_cstr.data, "rb");
 	if (!file)
 	{
-		error("`fopen` failed. Does the file \"%s\" exist?", file_path_cstr);
+		error("`fopen` failed. Does the file \"%s\" exist?", file_path_cstr.data);
 	}
 
 	if (fseek(file, 0, SEEK_END))

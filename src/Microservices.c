@@ -19,66 +19,6 @@
 #include "Microservices_fs.c"
 #include "Microservices_bmp.c"
 
-struct IterateWordsetState
-{
-	enum Language language;
-	i32           word_length;
-	i32           word_initial_alphabet_index;
-	i32           word_index;
-	u16*          word_makeup;
-	struct Dary_u16 (*wordsets)[ABSOLUTE_MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1][MAX_ALPHABET_LENGTH];
-};
-
-static b32
-iterate_wordset(struct IterateWordsetState* iterator)
-{
-	b32 found = false;
-	while (true)
-	{
-		// Skip empty wordsets by initials.
-		while
-		(
-			iterator->word_length >= MIN_WORD_LENGTH &&
-			iterator->word_index * iterator->word_length == (*iterator->wordsets)[ABSOLUTE_MAX_WORD_LENGTH - iterator->word_length][iterator->word_initial_alphabet_index].length
-		)
-		{
-			iterator->word_index                   = 0;
-			iterator->word_initial_alphabet_index += 1;
-
-			// Skip empty wordsets by length.
-			if (iterator->word_initial_alphabet_index == LANGUAGE_INFO[iterator->language].alphabet_length)
-			{
-				iterator->word_initial_alphabet_index  = 0;
-				iterator->word_length                 -= 1;
-			}
-		}
-
-		if (iterator->word_length >= MIN_WORD_LENGTH)
-		{
-			found                 = true;
-			iterator->word_makeup =
-				(*iterator->wordsets)[ABSOLUTE_MAX_WORD_LENGTH - iterator->word_length][iterator->word_initial_alphabet_index].data
-					+ iterator->word_length * iterator->word_index;
-			iterator->word_index += 1;
-			break;
-		}
-		else
-		{
-			break;
-		}
-	}
-	return found;
-}
-
-static i32
-calc_min_part(u16 min_part_info)
-{
-	i32 result =
-		(min_part_info & ~(1 << (bitsof(min_part_info) - 1))) + 1 // dest partition and partitions before it.
-			+ (min_part_info >> (bitsof(min_part_info) - 1));     // There is or will be a partition between dest and src.
-	return result;
-}
-
 static b32
 is_mask_compliant(struct BMP bmp)
 {
@@ -127,7 +67,7 @@ alloc_load_masks(struct BMP* dst_masks, str dir_path)
 			error
 			(
 				"Mask \"%.*s\" has the wrong properties; Must be %dx%d and monochrome.\n",
-				i32(mask_file_path.length), mask_file_path.data,
+				(i32) mask_file_path.length, mask_file_path.data,
 				MASK_DIM, MASK_DIM
 			);
 		}
@@ -213,8 +153,8 @@ print_cli_field_pattern(str pattern)
 	printf("%c", pattern.data[0] == '-' ? '(' : '[');
 	result += 1;
 
-	printf("%.*s", i32(pattern.length), pattern.data);
-	result += i32(pattern.length);
+	printf("%.*s", (i32) pattern.length, pattern.data);
+	result += (i32) pattern.length;
 
 	printf("%c", pattern.data[0] == '-' ? ')' : ']');
 	result += 1;
@@ -245,8 +185,8 @@ print_cli_program_help(str exe_name, enum CLIProgram program)
 	printf
 	(
 		"%.*s %.*s",
-		i32(exe_name.length), exe_name.data,
-		i32(program_info.name.length), program_info.name.data
+		(i32) exe_name.length, exe_name.data,
+		(i32) program_info.name.length, program_info.name.data
 	);
 	for (i32 field_index = {0}; field_index < program_info.field_count; field_index += 1)
 	{
@@ -262,9 +202,9 @@ print_cli_program_help(str exe_name, enum CLIProgram program)
 	printf
 	(
 		"\t%.*s%*s| %.*s\n",
-		i32(program_info.name.length), program_info.name.data,
-		i32(margin - program_info.name.length), "",
-		i32(program_info.desc.length), program_info.desc.data
+		(i32) program_info.name.length, program_info.name.data,
+		(i32) (margin - program_info.name.length), "",
+		(i32) program_info.desc.length, program_info.desc.data
 	);
 
 	//
@@ -280,8 +220,8 @@ print_cli_program_help(str exe_name, enum CLIProgram program)
 		printf
 		(
 			"%*s| %.*s\n",
-			i32(margin - cli_field_length), "",
-			i32(field_info.desc.length), field_info.desc.data
+			(i32) (margin - cli_field_length), "",
+			(i32) field_info.desc.length, field_info.desc.data
 		);
 	}
 }
@@ -421,7 +361,7 @@ main(int argc, char** argv)
 			// CLI call structure.
 			//
 
-			printf("%.*s [program] ...", i32(exe_name.length), exe_name.data);
+			printf("%.*s [program] ...", (i32) exe_name.length, exe_name.data);
 			printf("\n");
 
 			//
@@ -431,8 +371,8 @@ main(int argc, char** argv)
 			printf
 			(
 				"\t%.*s%*s| %s\n",
-				i32(exe_name.length), exe_name.data,
-				i32(margin - exe_name.length), "",
+				(i32) exe_name.length, exe_name.data,
+				(i32) (margin - exe_name.length), "",
 				CLI_EXE_DESC
 			);
 
@@ -448,9 +388,9 @@ main(int argc, char** argv)
 				printf
 				(
 					"%.*s%*s| %.*s\n",
-					i32(program_info.name.length), program_info.name.data,
-					i32(margin - program_info.name.length), "",
-					i32(program_info.desc.length), program_info.desc.data
+					(i32) program_info.name.length, program_info.name.data,
+					(i32) (margin - program_info.name.length), "",
+					(i32) program_info.desc.length, program_info.desc.data
 				);
 			}
 
@@ -586,7 +526,7 @@ main(int argc, char** argv)
 				error
 				(
 					"Required argument [%.*s] not provided.\n",
-					i32(cli_field_info.pattern.length), cli_field_info.pattern.data
+					(i32) cli_field_info.pattern.length, cli_field_info.pattern.data
 				);
 			}
 		}
@@ -674,7 +614,7 @@ main(int argc, char** argv)
 							(
 								"[EaglePeek] % 4d : %.*s : \"%s\".\n",
 								examined_screenshots,
-								i32(identified_wordgame_name.length), identified_wordgame_name.data,
+								(i32) identified_wordgame_name.length, identified_wordgame_name.data,
 								iterator.finder_data.cFileName
 							);
 						}
@@ -693,7 +633,7 @@ main(int argc, char** argv)
 					(
 						"%s%*s : %d\n",
 						WORDGAME_INFO[wordgame].print_name_cstr,
-						i32(WORDGAME_MAX_PRINT_NAME_LENGTH - WORDGAME_INFO[wordgame].print_name.length), "",
+						(i32) (WORDGAME_MAX_PRINT_NAME_LENGTH - WORDGAME_INFO[wordgame].print_name.length), "",
 						wordgame_counts[wordgame]
 					);
 				}
@@ -716,7 +656,7 @@ main(int argc, char** argv)
 						(
 							"Average Test Region RGB of %s%*s : Delta(%.4f, %.4f, %.4f) : Found(%.4f, %.4f, %.4f) : Expected(%.4f, %.4f, %.4f) @ (%d, %d) (%dx%d).\n",
 							WORDGAME_INFO[wordgame].print_name_cstr,
-							i32(WORDGAME_MAX_PRINT_NAME_LENGTH - WORDGAME_INFO[wordgame].print_name.length), "",
+							(i32) (WORDGAME_MAX_PRINT_NAME_LENGTH - WORDGAME_INFO[wordgame].print_name.length), "",
 							fabs(accumulated_unknown_wordgame_test_region_rgbs[wordgame].x / unknown_wordgames - WORDGAME_INFO[wordgame].test_region_rgb.x),
 							fabs(accumulated_unknown_wordgame_test_region_rgbs[wordgame].y / unknown_wordgames - WORDGAME_INFO[wordgame].test_region_rgb.y),
 							fabs(accumulated_unknown_wordgame_test_region_rgbs[wordgame].z / unknown_wordgames - WORDGAME_INFO[wordgame].test_region_rgb.z),
@@ -804,7 +744,7 @@ main(int argc, char** argv)
 								{
 									for (i32 slot_coord_x = 0; slot_coord_x < WORDGAME_INFO[wordgame].dim_slots.x; slot_coord_x += 1)
 									{
-										if (!is_slot_excluded(wordgame, u8(slot_coord_x), u8(slot_coord_y)))
+										if (!is_slot_excluded(wordgame, (u8) slot_coord_x, (u8) slot_coord_y))
 										{
 											b8 found_activated_pixel = false;
 
@@ -818,8 +758,8 @@ main(int argc, char** argv)
 												{
 													i32_2 uncompressed_bmp_dim =
 														{
-															i32((WORDGAME_INFO[wordgame].dim_slots.x - 1) * WORDGAME_INFO[wordgame].uncompressed_slot_stride + WORDGAME_INFO[wordgame].slot_dim),
-															i32((WORDGAME_INFO[wordgame].dim_slots.y - 1) * WORDGAME_INFO[wordgame].uncompressed_slot_stride + WORDGAME_INFO[wordgame].slot_dim),
+															(i32) ((WORDGAME_INFO[wordgame].dim_slots.x - 1) * WORDGAME_INFO[wordgame].uncompressed_slot_stride + WORDGAME_INFO[wordgame].slot_dim),
+															(i32) ((WORDGAME_INFO[wordgame].dim_slots.y - 1) * WORDGAME_INFO[wordgame].uncompressed_slot_stride + WORDGAME_INFO[wordgame].slot_dim),
 														};
 													i32_2 compressed_slot_abs_px_pos =
 														{
@@ -833,14 +773,14 @@ main(int argc, char** argv)
 														};
 													f64_2 uv =
 														{
-															f64(compressed_slot_abs_px_pos.x) / f64(compressed_game.x),
-															f64(compressed_slot_abs_px_pos.y) / f64(compressed_game.y),
+															(f64) compressed_slot_abs_px_pos.x / compressed_game.x,
+															(f64) compressed_slot_abs_px_pos.y / compressed_game.y,
 														};
 													struct BMPPixel pixel =
 														iterator.bmp.data
 														[
-															( WORDGAME_INFO[wordgame].pos.y + i32(uv.y * uncompressed_bmp_dim.y)) * iterator.bmp.dim.x
-															+ WORDGAME_INFO[wordgame].pos.x + i32(uv.x * uncompressed_bmp_dim.x)
+															( WORDGAME_INFO[wordgame].pos.y + (i32) (uv.y * uncompressed_bmp_dim.y)) * iterator.bmp.dim.x
+															+ WORDGAME_INFO[wordgame].pos.x + (i32) (uv.x * uncompressed_bmp_dim.x)
 														];
 
 													u8 value = 0;
@@ -917,7 +857,7 @@ main(int argc, char** argv)
 							(
 								"[extractorv2] % 4d : %.*s : \"%s\".\n",
 								examined_screenshots,
-								i32(wordgame_name.length), wordgame_name.data,
+								(i32) wordgame_name.length, wordgame_name.data,
 								iterator.finder_data.cFileName
 							);
 						}
@@ -1212,12 +1152,12 @@ main(int argc, char** argv)
 						}
 						else
 						{
-							if (runlength > u16(-1))
+							if (runlength > (u16) -1)
 							{
 								error("Run length too long!");
 							}
 
-							dary_push(&overflowed_runlengths, &(u16) { u16(runlength) });
+							dary_push(&overflowed_runlengths, (u16[]) { (u16) runlength });
 							strbuf_cstr(&output_buf, "0x00");
 						}
 
@@ -1300,21 +1240,27 @@ main(int argc, char** argv)
 
 			case CLIProgram_wordy: // See: [Terms & Definitions].
 			{
-				struct CLIProgram_wordy_t cli = cli_unknown.wordy;
+				struct CLIProgram_wordy_t cli         = cli_unknown.wordy;
+				i32                       total_flash = 0;
+
+				strbuf c_source_file_path = strbuf(256);
+				strbuf_str (&c_source_file_path, cli.dir_path.str);
+				strbuf_cstr(&c_source_file_path, "/word_glossary.h");
+				HANDLE c_source_handle = create_file_writing_handle(c_source_file_path.str);
+				strbuf output_buf      = strbuf(256);
 
 				//
 				// Process each language's dictionary file.
 				//
 
-				//for (enum Language language = {0}; language < Language_COUNT; language += 1)
-				enum Language language = Language_english;
+				for (enum Language language = {0}; language < Language_COUNT; language += 1)
 				{
 					i32 max_word_length = 0;
-					forptr (const struct WordGameInfo, info, WORDGAME_INFO)
+					for (i32 i = 0; i < countof(WORDGAME_INFO); i += 1)
 					{
-						if (info->language == language && max_word_length < info->max_word_length)
+						if (WORDGAME_INFO[i].language == language && max_word_length < WORDGAME_INFO[i].max_word_length)
 						{
-							max_word_length = info->max_word_length;
+							max_word_length = WORDGAME_INFO[i].max_word_length;
 						}
 					}
 
@@ -1335,7 +1281,7 @@ main(int argc, char** argv)
 						str   stream = alloc_read_file(dictionary_file_path.str);
 						char* reader = stream.data;
 
-						printf("Collecting words from \"%.*s\"...\n", i32(dictionary_file_path.length), dictionary_file_path.data);
+						printf("Processing \"%.*s\"...\n", (i32) dictionary_file_path.length, dictionary_file_path.data);
 
 						while (reader < stream.data + stream.length)
 						{
@@ -1431,15 +1377,17 @@ main(int argc, char** argv)
 
 									i32 codepoint_alphabet_index = -1;
 
-									fori (i32, alphabet_index, LANGUAGE_INFO[language].alphabet_length)
+									for (i32 alphabet_index = 0; alphabet_index < LANGUAGE_INFO[language].alphabet_length; alphabet_index += 1)
 									{
-										forptr (const u32, alphabet_codepoint, LETTER_INFO[LANGUAGE_INFO[language].alphabet[alphabet_index]].codepoints)
+										for (i32 alpahbet_codepoint_index = 0; alpahbet_codepoint_index < countof(LETTER_INFO[0].codepoints); alpahbet_codepoint_index += 1)
 										{
-											if (!*alphabet_codepoint)
+											u32 alphabet_codepoint = LETTER_INFO[LANGUAGE_INFO[language].alphabet[alphabet_index]].codepoints[alpahbet_codepoint_index];
+
+											if (!alphabet_codepoint)
 											{
 												break;
 											}
-											else if (*alphabet_codepoint == codepoint)
+											else if (alphabet_codepoint == codepoint)
 											{
 												codepoint_alphabet_index = alphabet_index;
 												break;
@@ -1463,9 +1411,9 @@ main(int argc, char** argv)
 										// Is the codepoint blacklisted?
 										//
 
-										forptr (const u32, blacklisted_codepoint, BLACKLISTED_CODEPOINTS)
+										for (i32 i = 0; i < countof(BLACKLISTED_CODEPOINTS); i += 1)
 										{
-											if (*blacklisted_codepoint == codepoint)
+											if (BLACKLISTED_CODEPOINTS[i] == codepoint)
 											{
 												goto NOT_UNKNOWN;
 											}
@@ -1475,15 +1423,17 @@ main(int argc, char** argv)
 										// Does a letter have this codepoint?
 										//
 
-										fori (enum Letter, letter, Letter_COUNT)
+										for (enum Letter letter = {0}; letter < Letter_COUNT; letter += 1)
 										{
-											forptr (const u32, letter_codepoint, LETTER_INFO[letter].codepoints)
+											for (i32 letter_codepoint_index = 0; letter_codepoint_index < countof(LETTER_INFO[letter].codepoints); letter_codepoint_index += 1)
 											{
-												if (!*letter_codepoint)
+												u32 letter_codepoint = LETTER_INFO[letter].codepoints[letter_codepoint_index];
+
+												if (!letter_codepoint)
 												{
 													break;
 												}
-												else if (*letter_codepoint == codepoint)
+												else if (letter_codepoint == codepoint)
 												{
 													goto NOT_UNKNOWN;
 												}
@@ -1526,10 +1476,13 @@ main(int argc, char** argv)
 								)
 								{
 									struct Dary_u16 parenting_wordset = wordsets[ABSOLUTE_MAX_WORD_LENGTH - parenting_word_length][parsed_word_buffer[0]];
-									fori (i32, parenting_word_makeup_index, parenting_wordset.length / parenting_word_length)
+									for
+									(
+										u16* parenting_word_makeup = parenting_wordset.data;
+										parenting_word_makeup < parenting_wordset.data + parenting_wordset.length;
+										parenting_word_makeup += parenting_word_length
+									)
 									{
-										u16* parenting_word_makeup = parenting_wordset.data + parenting_word_makeup_index * parenting_word_length;
-
 										static_assert(sizeof(parsed_word_buffer[0]) == sizeof(parenting_word_makeup[0]));
 										if
 										(
@@ -1554,10 +1507,13 @@ main(int argc, char** argv)
 								if (!skip_appending)
 								{
 									struct Dary_u16 doppelganger_wordset = wordsets[ABSOLUTE_MAX_WORD_LENGTH - parsed_word_length][parsed_word_buffer[0]];
-									fori (i32, doppelganger_word_index, doppelganger_wordset.length / parsed_word_length)
+									for
+									(
+										u16* doppelganger_word_makeup = doppelganger_wordset.data;
+										doppelganger_word_makeup < doppelganger_wordset.data + doppelganger_wordset.length;
+										doppelganger_word_makeup += parsed_word_length
+									)
 									{
-										u16* doppelganger_word_makeup = doppelganger_wordset.data + doppelganger_word_index * parsed_word_length;
-
 										static_assert(sizeof(doppelganger_wordset.data[0]) == sizeof(parsed_word_buffer[0]));
 										if
 										(
@@ -1595,12 +1551,10 @@ main(int argc, char** argv)
 
 										for
 										(
-											i32 subword_makeup_index = 0;
-											subword_makeup_index < subword_wordset->length / subword_length;
+											u16* subword_makeup = subword_wordset->data;
+											subword_makeup < subword_wordset->data + subword_wordset->length;
 										)
 										{
-											u16* subword_makeup = subword_wordset->data + subword_makeup_index * subword_length;
-
 											static_assert(sizeof(subword_makeup[0]) == sizeof(parsed_word_buffer[0]));
 											if
 											(
@@ -1625,7 +1579,7 @@ main(int argc, char** argv)
 											}
 											else
 											{
-												subword_makeup_index += 1;
+												subword_makeup += subword_length;
 											}
 										}
 									}
@@ -1649,435 +1603,248 @@ main(int argc, char** argv)
 
 						free(stream.data);
 					}
-					printf("%d word makeups.\n", word_makeup_count);
+					printf("\t%d word makeups.\n", word_makeup_count);
 
 					//
-					// Generate betabets and bottom-fields.
+					// Generate subfields and count in word glossary.
 					//
 
-					struct Dary_u32 betabets      = {0};
-					struct Dary_u16 bottom_fields = {0};
+					i32             glossary_counts[ABSOLUTE_MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1][MAX_ALPHABET_LENGTH] = {0};
+					struct Dary_u16 subfields = {0};
 
-					static_assert(MAX_ALPHABET_LENGTH + 1 <= bitsof(betabets.data[0])); // +1 to allow space for a bit to indicate a used value for the partitioning algorithm.
-					{
-						struct IterateWordsetState iterator =
-							{
-								.language    = language,
-								.word_length = max_word_length,
-								.wordsets    = &wordsets,
-							};
-						while (iterate_wordset(&iterator))
-						{
-							//
-							// Make betabet.
-							//
-
-							{
-								u32 new_betabet = 0;
-								forptrn (u16, alphabet_index, iterator.word_makeup + 1, iterator.word_length - 1)
-								{
-									new_betabet |= 1 << *alphabet_index;
-								}
-
-								//
-								// Check subsetting-nature of betabet.
-								//
-
-								b32 should_push = true;
-								for
-								(
-									i32 past_betabet_index = 0;
-									past_betabet_index < betabets.length;
-								)
-								{
-									if ((new_betabet & betabets.data[past_betabet_index]) == new_betabet) // New betabet is just a subset.
-									{
-										should_push = false;
-										break;
-									}
-									else if ((new_betabet & betabets.data[past_betabet_index]) == betabets.data[past_betabet_index]) // New betabet is a superset.
-									{
-										betabets.data[past_betabet_index]  = betabets.data[betabets.length - 1]; // Remove past betabet since it's now just a subset.
-										betabets.length                   -= 1;
-									}
-									else
-									{
-										past_betabet_index += 1;
-									}
-								}
-
-								//
-								// Push betabet.
-								//
-
-								if (should_push)
-								{
-									dary_push(&betabets, &new_betabet);
-								}
-							}
-
-							//
-							// Make bottom-field.
-							//
-
-							{
-								b32 should_push = true;
-								forptrn (u16, bottom_field, bottom_fields.data, bottom_fields.length) // See if the subword-field would subset a bottom-field.
-								{
-									// The current word will never be longer than any word that was processed so far in the bottom-fields, since
-									// we are iterating through wordsets sorted in such a way that longer words would be processed first anyways.
-									u16 common_mask = ((1 << (15 - __lzcnt16(iterator.word_makeup[0]))) - 1);
-									if ((iterator.word_makeup[0] & common_mask) == ((*bottom_field) & common_mask))
-									{
-										should_push = false;
-										break;
-									}
-								}
-
-								if (should_push)
-								{
-									dary_push(&bottom_fields, &iterator.word_makeup[0]);
-								}
-							}
-						}
-					}
-					printf
+					for
 					(
-						"%lld betabets.\n"
-						"%lld bottom-fields.\n"
-						"\n",
-						betabets.length,
-						bottom_fields.length
-					);
-
-					i32 TEMP[ABSOLUTE_MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1] = {0};
-
-					struct IterateWordsetState iterator =
-						{
-							.language    = language,
-							.word_length = max_word_length,
-							.wordsets    = &wordsets,
-						};
-					while (iterate_wordset(&iterator))
+						i32 word_length = max_word_length;
+						word_length >= MIN_WORD_LENGTH;
+						word_length -= 1
+					)
 					{
-						TEMP[ABSOLUTE_MAX_WORD_LENGTH - iterator.word_length] += 1;
-					}
-
-					debug_halt();
-
-					//
-					// Begin iterating through partitions of betabets to generate sigmabets.
-					//
-
-					struct MergePoint // Serves as a checkpoint that the algorithm can use to jump back to a point in time where a merge occured.
-					{
-						u32 dest_old_value; // Used to restore the original value at dest_index before it was merged with src_index.
-						u16 dest_index;
-						u16 src_index;
-						u16 min_part_info;  // MSb indicates there is or will be a value between dest and src. Non-MSb is amount of partitions before dest.
-					};
-					static_assert(MAX_ALPHABET_LENGTH + 1 <= bitsof(((struct MergePoint*) 0)->dest_old_value)); // old_dest_value must be able to alias to the original value and also have a bit to indicate a used state.
-					assert(betabets.length <= (u64(1) << (bitsof(((struct MergePoint*) 0)->min_part_info) - 1)));        // Non-MSb must be able to describe the most granular scenario of partitions.
-					assert(betabets.length <= (u64(1) <<  bitsof(((struct MergePoint*) 0)->dest_index   )     ));        // Index must be able to span the set.
-					assert(betabets.length <= (u64(1) <<  bitsof(((struct MergePoint*) 0)->src_index    )     ));        // Index must be able to span the set.
-
-					struct MergePoint  curr_merge_point          = {0};
-					struct MergePoint* saved_merge_points        = 0;
-					i32                saved_merge_points_length = 0;
-					u32*               sigmabets                 = 0;
-					i32                sigmabets_length          = 0;
-					alloc(&saved_merge_points, betabets.length - 1);
-					alloc(&sigmabets         , betabets.length    );
-
-					LARGE_INTEGER counter_frequency = {0};
-					LARGE_INTEGER counter_start     = {0};
-					QueryPerformanceFrequency(&counter_frequency);
-					QueryPerformanceCounter(&counter_start);
-
-					#define USED_FLAG (1 << (bitsof(((struct MergePoint*) 0)->dest_old_value) - 1))
-					b32 found_optimal = false;
-					i64 iterations    = 0;
-					while (!found_optimal)
-					{
-						b32 revert_merge_point = false;
-
-						if (sigmabets_length && calc_min_part(curr_merge_point.min_part_info) >= sigmabets_length) // The minimum partitioning is not any smaller than the current best partitioning.
+						for (i32 word_initial_alphabet_index = 0; word_initial_alphabet_index < LANGUAGE_INFO[language].alphabet_length; word_initial_alphabet_index += 1)
 						{
-							revert_merge_point = true;
-						}
-						else
-						{
-							//
-							// Examine mergability of all values after src.
-							//
-
-							i32 fst_subsetting_index = 0; // 0 is never a valid src index.
-							i32 fst_mergable_index   = 0; // 0 is never a valid src index; will not be filled out if a subsetting value is found first.
-							i32 fst_unmergable_index = 0; // 0 is never a valid src index; will not be filled out if a subsetting value is found first.
+							struct Dary_u16 wordset = wordsets[ABSOLUTE_MAX_WORD_LENGTH - word_length][word_initial_alphabet_index];
 							for
 							(
-								i32 scanning_index = curr_merge_point.src_index + 1;
-								scanning_index < betabets.length;
-								scanning_index += 1
+								u16* word_makeup = wordset.data;
+								word_makeup < wordset.data + wordset.length;
+								word_makeup += word_length
 							)
 							{
-								if (!(betabets.data[scanning_index] & USED_FLAG))
-								{
-									if // Subsetting values?
-									(
-										(betabets.data[curr_merge_point.dest_index] & betabets.data[scanning_index]) == betabets.data[curr_merge_point.dest_index] ||
-										(betabets.data[curr_merge_point.dest_index] & betabets.data[scanning_index]) == betabets.data[scanning_index             ]
-									)
-									{
-										fst_subsetting_index = scanning_index;
-										break; // Prioritize merging with this subsetting value first.
-									}
-									else if (__popcnt(betabets.data[curr_merge_point.dest_index] | betabets.data[scanning_index]) <= MAX_SIGMABET_BITS) // Mergable value?
-									{
-										if (!fst_mergable_index)
-										{
-											fst_mergable_index = scanning_index;
-										}
-									}
-									else if (!fst_unmergable_index) // First unmergable value?
-									{
-										fst_unmergable_index            = scanning_index;
-										curr_merge_point.min_part_info |= 1 << (bitsof(curr_merge_point.min_part_info) - 1); // There'll be a partition between dest and src in the future.
+								//
+								// Increment count.
+								//
 
-										if (sigmabets_length && calc_min_part(curr_merge_point.min_part_info) >= sigmabets_length)
-										{
-											revert_merge_point = true;
-											break; // No matter what, we're not going to find a better partitioning.
-										}
+								glossary_counts[ABSOLUTE_MAX_WORD_LENGTH - word_length][word_initial_alphabet_index] += 1;
+								if (glossary_counts[ABSOLUTE_MAX_WORD_LENGTH - word_length][word_initial_alphabet_index] > (u16) -1)
+								{
+									error("Glossary count overflow!");
+								}
+
+								//
+								// Determine if a subfield can be applied to subword bitfield.
+								//
+
+								b32 should_push = true;
+								for (i32 subfield_index = 0; subfield_index < subfields.length; subfield_index += 1)
+								{
+									// The current word will never be longer than any word that was processed so far in the subfields, since
+									// we are iterating through wordsets sorted in such a way that longer words would be processed first anyways.
+									u16 common_mask = ((1 << (15 - __lzcnt16(word_makeup[0]))) - 1);
+									if ((word_makeup[0] & common_mask) == (subfields.data[subfield_index] & common_mask))
+									{
+										word_makeup[0] = (u16) subfield_index;
+										should_push    = false;
+										break;
 									}
 								}
-							}
 
-							//
-							// Merge or move dest forward.
-							//
-
-							if (!revert_merge_point)
-							{
-								if (fst_subsetting_index) // Merge with subsetting value, but still continue with same dest and src indices.
+								if (should_push)
 								{
-									struct MergePoint subsetting_merge_point =
-										{
-											.dest_old_value = betabets.data[curr_merge_point.dest_index],
-											.dest_index     = curr_merge_point.dest_index,
-											.src_index      = (u16) fst_subsetting_index,
-											.min_part_info  = {0}, // Doesn't actually matter, since we will pop another merge point after this one since this one is subsetting.
-										};
-									betabets.data[curr_merge_point.dest_index]    |= betabets.data[fst_subsetting_index];
-									betabets.data[fst_subsetting_index]           |= USED_FLAG;
-									saved_merge_points[saved_merge_points_length]  = subsetting_merge_point;
-									saved_merge_points_length                     += 1;
-								}
-								else if (fst_mergable_index) // Merge with src and make merge point.
-								{
-									curr_merge_point.src_index                     = (u16) fst_mergable_index;
-									curr_merge_point.dest_old_value                = betabets.data[curr_merge_point.dest_index];
-									betabets.data[curr_merge_point.dest_index]    |= betabets.data[curr_merge_point.src_index ];
-									betabets.data[curr_merge_point.src_index ]    |= USED_FLAG;
-									saved_merge_points[saved_merge_points_length]  = curr_merge_point;
-									saved_merge_points_length                     += 1;
-								}
-								else // No src to merge with?
-								{
-									//
-									// Move dest forward.
-									//
-
-									curr_merge_point.min_part_info &= ~(1 << (bitsof(curr_merge_point.min_part_info) - 1));
-									curr_merge_point.min_part_info += 1;
-									do
+									dary_push(&subfields, &word_makeup[0]);
+									if (subfields.length > (u8) -1)
 									{
-										curr_merge_point.dest_index += 1;
+										error("Subfield count overflow!");
 									}
-									while
-									(
-										curr_merge_point.dest_index < betabets.length &&         // Reached end of values.
-										(betabets.data[curr_merge_point.dest_index] & USED_FLAG) // Skip over used values.
-									);
-									curr_merge_point.src_index = curr_merge_point.dest_index;
 
-									//
-									// Dest is at end.
-									//
-
-									if (curr_merge_point.dest_index == betabets.length)
-									{
-										if (!sigmabets_length || i32(betabets.length) - saved_merge_points_length < sigmabets_length) // Partitioning better than the one we have currently?
-										{
-											sigmabets_length = 0;
-											forptrn (u32, betabet, betabets.data, betabets.length)
-											{
-												if (!((*betabet) & USED_FLAG))
-												{
-													sigmabets[sigmabets_length]  = *betabet;
-													sigmabets_length            += 1;
-												}
-											}
-											assert(sigmabets_length == i32(betabets.length) - saved_merge_points_length);
-
-											printf("%16lld Iterations | %4d Partitions |", iterations, sigmabets_length);
-											forptrn (u32, sigmabet, sigmabets, sigmabets_length)
-											{
-												printf(" %08X", *sigmabet);
-											}
-											printf("\n");
-										}
-										revert_merge_point = true;
-									}
+									word_makeup[0] = (u16) (subfields.length - 1);
 								}
 							}
 						}
-
-						//
-						// Revert back to past merge points.
-						//
-
-						if (revert_merge_point)
-						{
-							while (revert_merge_point)
-							{
-								if (saved_merge_points_length)
-								{
-									curr_merge_point                            = saved_merge_points[saved_merge_points_length - 1];
-									saved_merge_points_length                   -= 1;
-									betabets.data[curr_merge_point.dest_index]  = curr_merge_point.dest_old_value;
-									betabets.data[curr_merge_point.src_index ] &= ~USED_FLAG;
-									curr_merge_point.min_part_info             |= 1 << (bitsof(curr_merge_point.min_part_info) - 1); // Since we're back at the merge point and going to skip it, there'll be a value between src and dest.
-									revert_merge_point                          =
-										calc_min_part(curr_merge_point.min_part_info) >= sigmabets_length ||
-										(betabets.data[curr_merge_point.dest_index] & betabets.data[curr_merge_point.src_index ]) == betabets.data[curr_merge_point.src_index ] ||
-										(betabets.data[curr_merge_point.src_index ] & betabets.data[curr_merge_point.dest_index]) == betabets.data[curr_merge_point.dest_index];
-								}
-								else
-								{
-									revert_merge_point = false;
-									found_optimal      = true;
-								}
-							}
-						}
-
-						//
-						// Print progress.
-						//
-
-						if (iterations % (1 << 18))
-						{
-							LARGE_INTEGER counter_current = {0};
-							QueryPerformanceCounter(&counter_current);
-
-							if (counter_current.QuadPart - counter_start.QuadPart >= counter_frequency.QuadPart) // A second has passed?
-							{
-								counter_start = counter_current;
-
-								if (_kbhit()) // Stop search?
-								{
-									while (true)
-									{
-										printf("Stop? (Y/N): ");
-
-										char buffer[8] = {0};
-										i32  length    = 0;
-										while (true)
-										{
-											i32 input = getchar();
-											if (input == EOF || input == '\n')
-											{
-												break;
-											}
-											else if (input >= 32 && length < countof(buffer))
-											{
-												buffer[length]  = (char) input;
-												length         += 1;
-											}
-										}
-
-										if (feof(stdin) || (length == 1 && to_upper(buffer[0]) == 'Y'))
-										{
-											found_optimal = true;
-											break;
-										}
-										else if (length == 1 && to_upper(buffer[0]) == 'N')
-										{
-											break;
-										}
-									}
-								}
-								else // Show progress.
-								{
-									printf("%16lld Iterations | %4d Partitions | %4d Merges Deep", iterations, sigmabets_length, saved_merge_points_length);
-									for
-									(
-										struct MergePoint* merge_point = saved_merge_points_length >= 8 ? saved_merge_points + saved_merge_points_length - 8 : saved_merge_points;
-										merge_point < saved_merge_points + saved_merge_points_length;
-										merge_point += 1
-									)
-									{
-										printf(" |  %04d %04d ", merge_point->dest_index, merge_point->src_index);
-									}
-									printf(" | <%04d %04d>\n", curr_merge_point.dest_index, curr_merge_point.src_index);
-								}
-							}
-						}
-						iterations += 1;
 					}
-					#undef USED_FLAG
+					printf("\t%lld subfields.\n", subfields.length);
 
-					printf
+					//
+					// Make glossary of the counts.
+					//
+
+					strbuf_cstr(&output_buf, "static const u16 WORD_GLOSSARY_COUNTS_");
+					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
+					strbuf_cstr(&output_buf, "[");
+					strbuf_i64 (&output_buf, max_word_length - MIN_WORD_LENGTH + 1);
+					strbuf_cstr(&output_buf, "][");
+					strbuf_i64 (&output_buf, LANGUAGE_INFO[language].alphabet_length);
+					strbuf_cstr(&output_buf, "] PROGMEM =\n");
+					strbuf_cstr(&output_buf, "\t{\n");
+					write_flush_strbuf(c_source_handle, &output_buf);
+					for
 					(
-						"\n"
-						"After %lld iterations, there will be %d sigmabets :",
-						iterations, sigmabets_length
-					);
-					forptrn (u32, sigmabet, sigmabets, sigmabets_length)
+						i32 word_length = max_word_length;
+						word_length >= MIN_WORD_LENGTH;
+						word_length -= 1
+					)
 					{
-						printf(" %08X", *sigmabet);
+						strbuf_cstr(&output_buf, "\t\t{ // ");
+						strbuf_i64 (&output_buf, word_length);
+						strbuf_cstr(&output_buf, "-lettered words.\n");
+						write_flush_strbuf(c_source_handle, &output_buf);
+						for (i32 alphabet_index = 0; alphabet_index < LANGUAGE_INFO[language].alphabet_length; alphabet_index += 1)
+						{
+							strbuf_cstr(&output_buf, "\t\t\t");
+							strbuf_i64 (&output_buf, glossary_counts[ABSOLUTE_MAX_WORD_LENGTH - word_length][alphabet_index]);
+							strbuf_cstr(&output_buf, ", // \"");
+							strbuf_str (&output_buf, LETTER_INFO[LANGUAGE_INFO[language].alphabet[alphabet_index]].name);
+							strbuf_cstr(&output_buf, "\".\n");
+							write_flush_strbuf(c_source_handle, &output_buf);
+						}
+						strbuf_cstr(&output_buf, "\t\t},\n");
+						write_flush_strbuf(c_source_handle, &output_buf);
 					}
-					printf("\n");
+					strbuf_cstr(&output_buf, "\t};\n\n");
+
+					total_flash += (i32) (sizeof(u16) * LANGUAGE_INFO[language].alphabet_length * (max_word_length - MIN_WORD_LENGTH + 1));
 
 					//
-					//
-					//
-
-					assert(0 < sigmabets_length && sigmabets_length < 256); // TODO Make error.
-
-					//
-					//
+					// Make glossary of the subfields.
 					//
 
-					// strbuf output_file_path = strbuf(256);
-					// strbuf_str (&output_file_path, cli.dir_path.str);
-					// strbuf_char(&output_file_path, '/');
-					// strbuf_str (&output_file_path, LANGUAGE_INFO[language].name);
-					// strbuf_cstr(&output_file_path, ".dat");
-					// HANDLE output_handle = create_file_writing_handle(output_file_path.str);
-					// strbuf output_buf    = strbuf(256);
+					strbuf_cstr(&output_buf, "static const u16 WORD_GLOSSARY_SUBFIELDS_");
+					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
+					strbuf_cstr(&output_buf, "[");
+					strbuf_i64 (&output_buf, subfields.length);
+					strbuf_cstr(&output_buf, "] PROGMEM = {");
+					write_flush_strbuf(c_source_handle, &output_buf);
+					for (i32 i = 0; i < subfields.length; i += 1)
+					{
+						strbuf_cstr(&output_buf, " 0b");
+						strbuf_8b  (&output_buf, (u8) (subfields.data[i] >> 8));
+						strbuf_char(&output_buf, '\'');
+						strbuf_8b  (&output_buf, (u8) (subfields.data[i] >> 0));
+						strbuf_cstr(&output_buf, ",");
+						write_flush_strbuf(c_source_handle, &output_buf);
+					}
+					strbuf_cstr(&output_buf, " };\n\n");
+					write_flush_strbuf(c_source_handle, &output_buf);
 
-					// printf("Processing \"%.*s\"...\n", i32(LANGUAGE_INFO[language].name.length), LANGUAGE_INFO[language].name.data);
-					// close_file_writing_handle(output_handle);
+					total_flash += (i32) (sizeof(u16) * subfields.length);
+
+					//
+					// Generate stream.
+					//
+
+					strbuf stream_file_path = strbuf(256);
+					strbuf_str (&stream_file_path, cli.dir_path.str);
+					strbuf_str (&stream_file_path, LANGUAGE_INFO[language].name);
+					strbuf_cstr(&stream_file_path, ".bin");
+					HANDLE stream_handle = create_file_writing_handle(stream_file_path.str);
+
+					for
+					(
+						i32 word_length = max_word_length;
+						word_length >= MIN_WORD_LENGTH;
+						word_length -= 1
+					)
+					{
+						for (i32 word_initial_alphabet_index = 0; word_initial_alphabet_index < LANGUAGE_INFO[language].alphabet_length; word_initial_alphabet_index += 1)
+						{
+							struct Dary_u16 wordset = wordsets[ABSOLUTE_MAX_WORD_LENGTH - word_length][word_initial_alphabet_index];
+							for
+							(
+								u16* word_makeup = wordset.data;
+								word_makeup < wordset.data + wordset.length;
+								word_makeup += word_length
+							)
+							{
+								static_assert(BITS_PER_ALPHABET_INDEX == 5); // Packing scheme assumes five bits per alphabet index here.
+
+								// "APPLES" with word-makeup of { 0x**, 15, 15, 11, 4, 18 } or equivalently { 0x**, 0b01111, 0b01111, 0b01011, 0b00100, 0b10010 } will have
+								// the 5-bit alphabet indices be packed tightly into the form { 0b*'01011'01111'01111, 0b*'*****'10010'00100 } where three indices can
+								// be compressed into 2 bytes with 1 padding bit.
+
+								u16 packed[((PACKED_WORD_SIZE(ABSOLUTE_MAX_WORD_LENGTH) - 1) + 1) / 2] = {0};
+
+								for (i32 packed_index = 0; packed_index < ((word_length - 1) + 2) / 3; packed_index += 1)
+								{
+									u8 alphabet_indices_to_be_packed[3] =
+										{
+											1 + packed_index * 3 + 0 < word_length ? (u8) word_makeup[1 + packed_index * 3 + 0] : 0,
+											1 + packed_index * 3 + 1 < word_length ? (u8) word_makeup[1 + packed_index * 3 + 1] : 0,
+											1 + packed_index * 3 + 2 < word_length ? (u8) word_makeup[1 + packed_index * 3 + 2] : 0,
+										};
+									packed[packed_index] =
+										(alphabet_indices_to_be_packed[0] << (BITS_PER_ALPHABET_INDEX * 0)) |
+										(alphabet_indices_to_be_packed[1] << (BITS_PER_ALPHABET_INDEX * 1)) |
+										(alphabet_indices_to_be_packed[2] << (BITS_PER_ALPHABET_INDEX * 2));
+								}
+
+								static_assert(LITTLE_ENDIAN);
+								write_raw_data(stream_handle, &word_makeup[0], sizeof(u8)                       ); // Subfield index should be contained within a byte.
+								write_raw_data(stream_handle, packed         , PACKED_WORD_SIZE(word_length) - 1);
+							}
+						}
+					}
 
 					//
 					// Clean up.
 					//
 
-					debug_halt();
-
-					free(sigmabets);
-					free(saved_merge_points);
-					free(bottom_fields.data);
-					free(betabets.data);
-					fori (i32, i, countof(wordsets))
+					close_file_writing_handle(stream_handle);
+					free(subfields.data);
+					for (i32 i = 0; i < countof(wordsets); i += 1)
 					{
-						forptr (struct Dary_u16, dary, wordsets[i])
+						for (i32 j = 0; j < countof(wordsets[i]); j += 1)
 						{
-							free(dary->data);
+							free(wordsets[i][j].data);
 						}
 					}
 				}
+
+				//
+				// Make word glossary table of the languages.
+				//
+
+				strbuf_cstr(&output_buf, "static const struct { const u16* counts; const u16* subfields; u8 max_word_length; } WORD_GLOSSARY[] PROGMEM =\n");
+				strbuf_cstr(&output_buf, "\t{\n");
+				write_flush_strbuf(c_source_handle, &output_buf);
+				for (enum Language language = {0}; language < Language_COUNT; language += 1)
+				{
+					strbuf_cstr(&output_buf, "\t\t[Language_");
+					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
+					strbuf_cstr(&output_buf, "] = { (u16*) WORD_GLOSSARY_COUNTS_");
+					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
+					strbuf_cstr(&output_buf, ", (u16*) WORD_GLOSSARY_SUBFIELDS_");
+					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
+					strbuf_cstr(&output_buf, ", countof(WORD_GLOSSARY_COUNTS_");
+					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
+					strbuf_cstr(&output_buf, ") + MIN_WORD_LENGTH - 1 },\n");
+					write_flush_strbuf(c_source_handle, &output_buf);
+				}
+				strbuf_cstr(&output_buf, "\t};\n");
+				write_flush_strbuf(c_source_handle, &output_buf);
+
+				total_flash += (sizeof(u16) * 2 + sizeof(u8)) * Language_COUNT;
+
+				strbuf_cstr(&output_buf, "\n");
+				strbuf_cstr(&output_buf, "// ");
+				strbuf_i64 (&output_buf, total_flash);
+				strbuf_cstr(&output_buf, " bytes total.\n");
+				write_flush_strbuf(c_source_handle, &output_buf);
+
+				printf("%d bytes of flash will be used.\n", total_flash);
+
+				//
+				// Clean up.
+				//
+
+				close_file_writing_handle(c_source_handle);
 			} break;
 
 			case CLIProgram_COUNT:
@@ -2235,21 +2002,7 @@ main(int argc, char** argv)
 		Collection of word-makeups where words are organized from longest to shortest and alphabetically according to the language.
 		Since word-makeups are sorted length-wise and alphabetically, information on the length of the word and its initial letter is therefore implicit.
 
-	(BETABETS)
-		A betabet is a bitfield of a word's usage of letters (excluding the initial) in the
-		language's alphabet. If bit N is set, then the (N+1)th letter of the alphabet is used. That
-		is, 'A' maps to 0, 'B' to 2, 'C' to 4, etc. in the English alphabet. The first letter of
-		the word is not considered, since the compression algorithm makes the initial letter
-		implicit already.
-
-		Example: "APPLES" has betabet of 0x48810.
-
-	(SIGMABETS)
-		A sigmabet is just betabets bitwise OR'd together where the amount of bits set is no
-		greater than some upper limit (e.g. 16). A collection of sigmabets must be disjoint from
-		one another, that is, no sigmabet can be a subset of the other sigmabet in the collection.
-
-	(BOTTOM-FIELDS)
+	(BOTTOM-FIELDS) TODO
 		A bottom-field is just a subword-field, but it would be used in such a manner that it
 		allows for it to be able to represent multiple subword-fields simultaneously. Bottom-fields
 		rely on the fact that a word of length N would only need N-MIN_WORD_LENGTH bits for the
