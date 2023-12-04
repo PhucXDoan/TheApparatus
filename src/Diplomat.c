@@ -1,19 +1,17 @@
 #define F_CPU                   16'000'000
 #define PROGRAM_DIPLOMAT        true
 #define BOARD_PRO_MICRO         true
-#define PIN_DEBUG_U16_DATA      2
-#define PIN_DEBUG_U16_CLK       3
-#define PIN_LCD_ENABLE          4
-#define PIN_LCD_REGISTER_SELECT 5
-#define PIN_LCD_DATA_4          6
-#define PIN_LCD_DATA_5          7
-#define PIN_LCD_DATA_6          8
-#define PIN_LCD_DATA_7          9
-#define PIN_ROTARY_BTN          10
-#define PIN_ROTARY_CLK          A1
-#define PIN_ROTARY_DAT          A3
-#define PIN_USB_BUSY            A2
-#define PIN_SD_SS               A0
+#define PIN_LCD_ENABLE          6
+#define PIN_LCD_REGISTER_SELECT 7
+#define PIN_LCD_DATA_4          5
+#define PIN_LCD_DATA_5          4
+#define PIN_LCD_DATA_6          3
+#define PIN_LCD_DATA_7          2
+#define PIN_SD_SS               8
+#define PIN_BTN_LEFT            A1
+#define PIN_BTN_MID             A0
+#define PIN_BTN_RIGHT           10
+#define PIN_USB_BUSY            9
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
@@ -72,79 +70,44 @@ enum MenuMainOption
 	MenuMainOption_COUNT,
 };
 
-struct Rotary
+static i8 // -1 released, 0 no change, 1 pressed.
+update_btn(u8* btn_bias, b8 btn_released)
 {
-	u8 clk;
-	u8 btn_bias;
-	i8 rotation;
-	i8 transition;
-};
+	i8 transition = 0;
 
-static void
-update_rotary(struct Rotary* rotary)
-{
-	rotary->rotation   = 0;
-	rotary->transition = 0;
-
-	if (pin_read(PIN_ROTARY_BTN)) // Rotary button unpressed?
+	if (btn_released)
 	{
-		//
-		// Handle rotary rotation.
-		//
-
-		if (pin_read(PIN_ROTARY_CLK) != rotary->clk)
+		if (*btn_bias >= 128) // Currently still recognize button as being pressed?
 		{
-			if (rotary->clk)
+			*btn_bias -= 1;
+
+			if (*btn_bias < 128) // Enough ticks have passed to the point where we're confident the button is released?
 			{
-				if (pin_read(PIN_ROTARY_DAT))
-				{
-					rotary->rotation = 1;
-				}
-				else
-				{
-					rotary->rotation = -1;
-				}
-			}
-
-			rotary->clk = !rotary->clk;
-		}
-
-		//
-		// Handle rotary button being unpressed.
-		//
-
-		if (rotary->btn_bias >= 128)
-		{
-			rotary->btn_bias -= 1;
-
-			if (rotary->btn_bias < 128)
-			{
-				rotary->transition = -1;
-				rotary->btn_bias   = 0;
+				transition = -1;
+				*btn_bias  = 0;
 			}
 		}
-		else
+		else // Button is still released.
 		{
-			rotary->btn_bias = 0;
+			*btn_bias = 0;
 		}
 	}
-	else // Rotary button pressed.
+	else if (*btn_bias < 128) // Currently still recognize button as being released?
 	{
-		if (rotary->btn_bias < 128)
-		{
-			rotary->btn_bias += 1;
+		*btn_bias += 1;
 
-			if (rotary->btn_bias >= 128)
-			{
-				rotary->transition = 1;
-				rotary->btn_bias   = 255;
-			}
-		}
-		else
+		if (*btn_bias >= 128) // Enough ticks have passed to the point where we're confident the button is pressed?
 		{
-			rotary->btn_bias = 255;
+			transition = 1;
+			*btn_bias  = 255;
 		}
 	}
+	else // Button is still pressed.
+	{
+		*btn_bias = 255;
+	}
+
+	return transition;
 }
 
 int
@@ -159,18 +122,18 @@ main(void)
 		restart();
 	}
 
-	debug_u16(0);
-
 	sei();
 	lcd_init();
 	spi_init();
 	sd_init();
 	usb_init();
 
-	pin_input(PIN_ROTARY_BTN);
-	pin_input(PIN_ROTARY_CLK);
-	pin_input(PIN_ROTARY_DAT);
-	struct Rotary              rotary                                 = {0};
+	pin_pullup(PIN_BTN_LEFT);
+	pin_pullup(PIN_BTN_MID);
+	pin_pullup(PIN_BTN_RIGHT);
+	u8                         btn_left_bias                          = 0;
+	u8                         btn_mid_bias                           = 0;
+	u8                         btn_right_bias                         = 0;
 	enum   Menu                menu                                   = {0};
 	enum   MenuMainOption      menu_main_selected_option              = {0};
 	enum   MenuMainOption      menu_main_first_displayed_option       = {0};
@@ -185,7 +148,16 @@ main(void)
 
 	while (true)
 	{
-		update_rotary(&rotary);
+		b8 clicked  = update_btn(&btn_mid_bias, pin_read(PIN_BTN_MID)) == -1;
+		i8 rotation = 0;
+		if (update_btn(&btn_left_bias, pin_read(PIN_BTN_LEFT)) == -1)
+		{
+			rotation -= 1;
+		}
+		if (update_btn(&btn_right_bias, pin_read(PIN_BTN_RIGHT)) == -1)
+		{
+			rotation += 1;
+		}
 
 		switch (menu)
 		{
@@ -195,11 +167,11 @@ main(void)
 				// Update selection.
 				//
 
-				menu_main_selected_option += MenuMainOption_COUNT + rotary.rotation;
+				menu_main_selected_option += MenuMainOption_COUNT + rotation;
 				menu_main_selected_option %= MenuMainOption_COUNT;
 				if ((menu_main_selected_option - menu_main_first_displayed_option + MenuMainOption_COUNT) % MenuMainOption_COUNT >= LCD_DIM_Y)
 				{
-					menu_main_first_displayed_option += MenuMainOption_COUNT + rotary.rotation;
+					menu_main_first_displayed_option += MenuMainOption_COUNT + rotation;
 					menu_main_first_displayed_option %= MenuMainOption_COUNT;
 				}
 
@@ -247,7 +219,7 @@ main(void)
 				// React to selection.
 				//
 
-				if (rotary.transition == -1)
+				if (clicked)
 				{
 					if (menu_main_selected_option < (enum MenuMainOption) WordGame_COUNT)
 					{
@@ -313,11 +285,11 @@ main(void)
 				// Update selection.
 				//
 
-				menu_chosen_map_selected_option += MenuChosenMapOption_COUNT + rotary.rotation;
+				menu_chosen_map_selected_option += MenuChosenMapOption_COUNT + rotation;
 				menu_chosen_map_selected_option %= MenuChosenMapOption_COUNT;
 				if ((menu_chosen_map_selected_option - menu_chosen_map_first_displayed_option + MenuChosenMapOption_COUNT) % MenuChosenMapOption_COUNT >= LCD_DIM_Y - 1)
 				{
-					menu_chosen_map_first_displayed_option += MenuChosenMapOption_COUNT + rotary.rotation;
+					menu_chosen_map_first_displayed_option += MenuChosenMapOption_COUNT + rotation;
 					menu_chosen_map_first_displayed_option %= MenuChosenMapOption_COUNT;
 				}
 
@@ -357,7 +329,7 @@ main(void)
 				// React to selection.
 				//
 
-				if (rotary.transition == -1)
+				if (clicked)
 				{
 					switch (menu_chosen_map_selected_option)
 					{
@@ -386,8 +358,7 @@ main(void)
 								{ \
 									for (u16 i = 0; i < (MS); i += 1) \
 									{ \
-										update_rotary(&rotary); \
-										if (rotary.transition == 1) \
+										if (update_btn(&btn_mid_bias, pin_read(PIN_BTN_MID)) == 1) \
 										{ \
 											goto BREAK_DATAMINING; \
 										} \
@@ -562,15 +533,15 @@ main(void)
 								WAIT(64);
 								usb_mouse_command(false, ASSISTIVE_TOUCH_X, ASSISTIVE_TOUCH_Y);
 								screenshot_count += 1;
-								WAIT(750);
+								WAIT(1000);
 
 								// Close game.
 								usb_mouse_command(false, 64, 20);
 								WAIT(500);
 								usb_mouse_command(true, 64, 100);
-								WAIT(200);
+								WAIT(300);
 								usb_mouse_command(false, 64, 100);
-								WAIT(200);
+								WAIT(300);
 
 								// Swipe away screenshot.
 								usb_mouse_command(false, 25, 255);
@@ -595,10 +566,7 @@ main(void)
 								"  Release to finish"
 							);
 							lcd_refresh();
-							while (rotary.transition != -1)
-							{
-								update_rotary(&rotary);
-							}
+							while (update_btn(&btn_mid_bias, pin_read(PIN_BTN_MID)) != -1);
 
 							#undef WAIT
 							#undef CLICK
@@ -712,7 +680,7 @@ main(void)
 				// React to selection.
 				//
 
-				if (usb_ms_ocr_state == USBMSOCRState_ready && rotary.transition == -1)
+				if (usb_ms_ocr_state == USBMSOCRState_ready && clicked)
 				{
 					menu = Menu_main;
 				}
@@ -721,6 +689,7 @@ main(void)
 		}
 	}
 }
+
 //
 // Documentation.
 //

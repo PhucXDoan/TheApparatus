@@ -18,7 +18,7 @@ REM W:\build\Microservices.exe maskiversev2 W:\data\masks.h W:\data\collectune\t
 
 W:\build\Microservices.exe extractorv2 ^
 	W:\data\extractor\main\ ^
-	W:\data\screenshots\anagrams_french\ ^
+	W:\data\screenshots\anagrams_german\ ^
 	--clear-output-dir
 
 REM W:\build\Microservices.exe extractorv2 ^

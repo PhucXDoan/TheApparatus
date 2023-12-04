@@ -1,19 +1,19 @@
-#define pin_input(P)  concat(pin_input_ , P)()
-#define pin_output(P) concat(pin_output_, P)()
-#define pin_low(P)    concat(pin_low_   , P)()
-#define pin_high(P)   concat(pin_high_  , P)()
-#define pin_read(P)   concat(pin_read_  , P)()
+#define pin_pullup(P) concat(pin_pullup_, P)()
+#define pin_output(P) concat(pin_output_ , P)()
+#define pin_low(P)    concat(pin_low_    , P)()
+#define pin_high(P)   concat(pin_high_   , P)()
+#define pin_read(P)   concat(pin_read_   , P)()
 
-#define COMMON(NAME, BODY) __attribute__((always_inline)) static inline void NAME(void) { BODY; }
-	#define MAKE_INPUT(P, X, N)  COMMON(pin_input_##P , DDR##X  &= ~(1 << DD##X##N  ))
-	#define MAKE_OUTPUT(P, X, N) COMMON(pin_output_##P, DDR##X  |=  (1 << DD##X##N  ))
-	#define MAKE_LOW(P, X, N)    COMMON(pin_low_##P   , PORT##X &= ~(1 << PORT##X##N))
-	#define MAKE_HIGH(P, X, N)   COMMON(pin_high_##P  , PORT##X |=  (1 << PORT##X##N))
-		PIN_XMDT(MAKE_INPUT)
+#define COMMON(NAME, BODY) __attribute__((always_inline)) static inline void NAME(void) { BODY }
+	#define MAKE_PULLUP(P, X, N) COMMON(pin_pullup_##P, DDR##X  &= ~(1 << DD##X##N  ); PORT##X |=  (1 << PORT##X##N);)
+	#define MAKE_OUTPUT(P, X, N) COMMON(pin_output_##P, DDR##X  |=  (1 << DD##X##N  );                               )
+	#define MAKE_LOW(P, X, N)    COMMON(pin_low_##P   , PORT##X &= ~(1 << PORT##X##N);                               )
+	#define MAKE_HIGH(P, X, N)   COMMON(pin_high_##P  , PORT##X |=  (1 << PORT##X##N);                               )
+		PIN_XMDT(MAKE_PULLUP)
 		PIN_XMDT(MAKE_OUTPUT)
 		PIN_XMDT(MAKE_LOW)
 		PIN_XMDT(MAKE_HIGH)
-	#undef MAKE_INPUT
+	#undef MAKE_PULLUP
 	#undef MAKE_OUTPUT
 	#undef MAKE_LOW
 	#undef MAKE_HIGH
