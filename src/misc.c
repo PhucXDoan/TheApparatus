@@ -72,7 +72,7 @@ serialize_i64(char* dst, u16 dst_size, i64 value) // "dst_size" of at least 20 w
 	return result;
 }
 
-#if !PROGRAM_MICROSERVICES
+#ifdef WDTO_15MS
 	__attribute__((noreturn))
 	static void
 	restart(void)
@@ -82,7 +82,7 @@ serialize_i64(char* dst, u16 dst_size, i64 value) // "dst_size" of at least 20 w
 	}
 #endif
 
-#if PROGRAM_DIPLOMAT
+#if PROGRAM_DIPLOMAT || PROGRAM_NERD
 	#if DEBUG
 		// Long pulse followed by pairs of flashes.
 		__attribute__((noreturn))
@@ -127,51 +127,10 @@ serialize_i64(char* dst, u16 dst_size, i64 value) // "dst_size" of at least 20 w
 		#define assert(...)
 	#endif
 
-	// Rapid flashes follwed by pulses indicating the source of error.
 	#define error() error_(__LINE__, PIN_HALT_SOURCE)
 	__attribute__((noreturn))
 	static void
-	error_(u16 line_number, enum HaltSource source)
-	{
-		cli();
-
-		pin_output(HALT);
-		for (;;)
-		{
-			#if BOARD_PRO_MICRO || BOARD_LEONARDO // These boards has the LEDs active low.
-				#define ON()  pin_low(HALT)
-				#define OFF() pin_high(HALT)
-			#endif
-
-			#if BOARD_MEGA2560
-				#define ON()  pin_high(HALT)
-				#define OFF() pin_low(HALT)
-			#endif
-
-			for (u8 i = 0; i < 8; i += 1)
-			{
-				ON();
-				_delay_ms(25.0);
-				OFF();
-				_delay_ms(25.0);
-			}
-
-			_delay_ms(250.0);
-
-			for (u8 i = 0; i < source; i += 1)
-			{
-				ON();
-				_delay_ms(150.0);
-				OFF();
-				_delay_ms(150.0);
-			}
-
-			_delay_ms(250.0);
-
-			#undef ON
-			#undef OFF
-		}
-	}
+	error_(u16 line_number, enum HaltSource source);
 #endif
 
 #if DEBUG && !PROGRAM_MICROSERVICES && implies(PROGRAM_DIPLOMAT, USB_CDC_ENABLE)

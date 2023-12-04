@@ -91,6 +91,136 @@ typedef struct { b64 x; b64 y; b64 z; b64 w; } b64_4;
 static_assert(LITTLE_ENDIAN); // Lots of structures assume little-endian.
 
 //
+// "matrix.c"
+//
+
+#if PIN_MATRIX_SS
+	static const u64 MATRIX_DIGITS[] PROGMEM =
+		{
+			#define MAKE(A, B, C, D, E, F, G, H) \
+				(((u64) 0b##A) << (8 * 7)) | \
+				(((u64) 0b##B) << (8 * 6)) | \
+				(((u64) 0b##C) << (8 * 5)) | \
+				(((u64) 0b##D) << (8 * 4)) | \
+				(((u64) 0b##E) << (8 * 3)) | \
+				(((u64) 0b##F) << (8 * 2)) | \
+				(((u64) 0b##G) << (8 * 1)) | \
+				(((u64) 0b##H) << (8 * 0))
+			MAKE
+			(
+				00000000,
+				00000000,
+				00111110,
+				01000001,
+				01000001,
+				00111110,
+				00000000,
+				00000000
+			),
+			MAKE
+			(
+				00000000,
+				00000000,
+				01000000,
+				01111111,
+				01000010,
+				01000100,
+				00000000,
+				00000000
+			),
+			MAKE
+			(
+				00000000,
+				00000000,
+				01000110,
+				01001001,
+				01010001,
+				01100010,
+				00000000,
+				00000000
+			),
+			MAKE
+			(
+				00000000,
+				00000000,
+				00111110,
+				01001001,
+				01001001,
+				01001001,
+				00000000,
+				00000000
+			),
+			MAKE
+			(
+				00000000,
+				00000000,
+				01111111,
+				00010010,
+				00010100,
+				00011000,
+				00000000,
+				00000000
+			),
+			MAKE
+			(
+				00000000,
+				00000000,
+				00111001,
+				01001001,
+				01001001,
+				01001111,
+				00000000,
+				00000000
+			),
+			MAKE
+			(
+				00000000,
+				00000000,
+				00110010,
+				01001001,
+				01001001,
+				00111110,
+				00000000,
+				00000000
+			),
+			MAKE
+			(
+				00000000,
+				00000000,
+				00000111,
+				00001001,
+				01110001,
+				00000001,
+				00000000,
+				00000000
+			),
+			MAKE
+			(
+				00000000,
+				00000000,
+				00110110,
+				01001001,
+				01001001,
+				00110110,
+				00000000,
+				00000000
+			),
+			MAKE
+			(
+				00000000,
+				00000000,
+				01111110,
+				00001001,
+				00001001,
+				00000110,
+				00000000,
+				00000000
+			),
+			#undef MAKE
+		};
+#endif
+
+//
 // "lcd.c"
 //
 
@@ -934,8 +1064,6 @@ enum TimerPrescaler // Prescalers for Timer0's TCCR0B register. See: Source(1) @
 //
 // "spi.c"
 //
-
-#define SPI_PRESCALER SPIPrescaler_2
 
 enum SPIPrescaler // See: Source(1) @ Table(17-5) @ Page(186).
 {
@@ -2078,6 +2206,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	Source(23) := PDF Article of Microsoft's "Open Specifications" for Protocols (Dated: 08/01/2023).
 	Source(24) := Wikipedia's "BMP file format" Page (Last Edited: 23 October 2022, at 13:30 (UTC)).
 	Source(25) := HD44780U (LCD-II) (Dot Matrix Liquid Crystal Display Controller/Driver) by HITACHI (Dated: 1998).
+	Source(26) := MAX7219/MAX7221 Serially Interfaced, 8-Digit LED Display Drivers by Maxim Integrated (Dated: 8/21).
 
 	We are working within the environment of the ATmega32U4 and ATmega2560 microcontrollers,
 	which are 8-bit CPUs. This consequently means that there are no padding bytes to

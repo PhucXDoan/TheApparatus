@@ -1,6 +1,9 @@
 #define F_CPU 16'000'000
 #define PROGRAM_NERD         true
 #define BOARD_MEGA_2560_REV3 true
+#define PIN_MATRIX_SS        2
+#define PIN_SD_SS            3
+#define SPI_PRESCALER        SPIPrescaler_2
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
@@ -8,77 +11,58 @@
 #include <stdint.h>
 #include <string.h>
 #include "defs.h"
-//#include "data/word_glossary.h"
-//#include "misc.c"
 #include "pin.c"
-//#include "Nerd_uart.c"
+#include "misc.c"
+#include "uart.c"
+#include "spi.c"
+#include "matrix.c"
+#include "sd.c"
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE HaltSource_nerd
 
-//static volatile char spi_buffer[256] = {0};
-//static volatile u8   spi_writer      = 0;
-//static volatile u8   spi_reader      = 0;
-//
-//ISR(SPI_STC_vect)
-//{
-//	if (spi_writer + 1 == spi_reader)
-//	{
-//		error();
-//	}
-//	else
-//	{
-//		pin_high(13);
-//		spi_buffer[spi_writer] = SPDR;
-//		spi_writer += 1;
-//		pin_low(13);
-//	}
-//}
+__attribute__((noreturn))
+static void
+error_(u16 line_number, enum HaltSource source)
+{
+	cli();
+
+	#if DEBUG
+	matrix_set((((u64) line_number) << 32) | source);
+	#endif
+
+	pin_output(HALT);
+	for (;;)
+	{
+		pin_high(HALT);
+		_delay_ms(25.0);
+		pin_low(HALT);
+		_delay_ms(25.0);
+	}
+}
 
 int
 main(void)
 {
-	pin_output(13);
-	while (true)
+	uart_init();
+	spi_init();
+	matrix_init();
+
+	sd_init();
+
+	sd_read(0);
+
+	for (u16 i = 0; i < countof(sd_sector); i += 1)
 	{
-		pin_high(13);
-		_delay_ms(1000.0);
-		pin_low(13);
-		_delay_ms(1000.0);
+		if (i % 16)
+		{
+			debug_tx_cstr(" ");
+		}
+		else
+		{
+			debug_tx_cstr("\n");
+		}
+		debug_tx_8H(sd_sector[i]);
 	}
 
-//	sei();
-//
-//	uart_init();
-//
-//	pin_output(13);
-//	pin_output(PIN_SPI_MISO);
-//	SPCR = (1 << SPIE) | (1 << SPE) | (1 << SPR1) | (1 << SPR0);
-//
-//	u8 column = 0;
-//	for (;;)
-//	{
-//		if (spi_reader != spi_writer)
-//		{
-//			char byte = spi_buffer[spi_reader];
-//			spi_reader += 1;
-//
-//			debug_tx_H8(byte);
-//
-//			if (column == 15)
-//			{
-//				column = 0;
-//				debug_tx_cstr("\n");
-//			}
-//			else if (column == 7)
-//			{
-//				column += 1;
-//				debug_tx_cstr("  ");
-//			}
-//			else
-//			{
-//				column += 1;
-//				debug_tx_cstr(" ");
-//			}
-//		}
-//	}
+	for(;;);
 }

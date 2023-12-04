@@ -12,6 +12,7 @@
 #define PIN_BTN_MID             A0
 #define PIN_BTN_RIGHT           10
 #define PIN_USB_BUSY            9
+#define SPI_PRESCALER           SPIPrescaler_2
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
@@ -30,6 +31,53 @@
 #include "usb.c"
 #undef  PIN_HALT_SOURCE
 #define PIN_HALT_SOURCE HaltSource_diplomat
+
+__attribute__((noreturn))
+static void
+error_(u16 line_number, enum HaltSource source)
+{
+	cli();
+
+	pin_output(HALT);
+	for (;;)
+	{
+		#if PROGRAM_NERD
+		#endif
+
+		#if BOARD_PRO_MICRO || BOARD_LEONARDO // These boards have the LED active low.
+			#define ON()  pin_low(HALT)
+			#define OFF() pin_high(HALT)
+		#endif
+
+		#if BOARD_MEGA_2560_REV3 // These boards have the LED active high.
+			#define ON()  pin_high(HALT)
+			#define OFF() pin_low(HALT)
+		#endif
+
+		for (u8 i = 0; i < 8; i += 1)
+		{
+			ON();
+			_delay_ms(25.0);
+			OFF();
+			_delay_ms(25.0);
+		}
+
+		_delay_ms(250.0);
+
+		for (u8 i = 0; i < source; i += 1)
+		{
+			ON();
+			_delay_ms(150.0);
+			OFF();
+			_delay_ms(150.0);
+		}
+
+		_delay_ms(250.0);
+
+		#undef ON
+		#undef OFF
+	}
+}
 
 enum Menu
 {

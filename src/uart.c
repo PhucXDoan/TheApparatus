@@ -5,7 +5,7 @@
 static void
 uart_init(void)
 {
-#if 0
+#if 1
 	/*
 		The baud rate is calculated as follows for asynchronous mode without 2x-speed
 		(see table on page 203 in the datasheet):
@@ -34,8 +34,8 @@ uart_init(void)
 	// By default, this is asynchronous USART with no parity bit and one stop bit (BN1 format).
 #endif
 
-	UBRR0  = 12;
-	UCSR0B = 1 << TXEN0;
+//	UBRR0  = 12;
+//	UCSR0B = 1 << TXEN0;
 }
 
 #if DEBUG
@@ -49,44 +49,5 @@ debug_tx_chars(char* value, u16 length)
 		while (!(UCSR0A & (1 << UDRE0)));
 		UDR0 = value[i]; // See page 218 about the USART-IO-Data register.
 	}
-}
-#endif
-
-#if DEBUG
-static void
-debug_tx_cstr(char* value)
-{
-	debug_tx_chars(value, strlen(value));
-}
-#endif
-
-#if DEBUG
-static void
-debug_tx_u64(u64 value)
-{
-	char buffer[20];
-	u8   length = serialize_u64(buffer, countof(buffer), value);
-	debug_tx_chars(buffer, length);
-}
-#endif
-
-#if DEBUG
-static void
-debug_tx_i64(i64 value)
-{
-	char buffer[20];
-	u8   length = serialize_i64(buffer, countof(buffer), value);
-	debug_tx_chars(buffer, length);
-}
-#endif
-
-#if DEBUG
-static void
-debug_tx_H8(u8 value)
-{
-	char digits[2] = {0};
-	digits[0] = ((value >> 4) & 0x0F) < 10 ? '0' + ((value >> 4) & 0x0F) : 'A' + (((value >> 4) & 0x0F) - 10);
-	digits[1] = ((value >> 0) & 0x0F) < 10 ? '0' + ((value >> 0) & 0x0F) : 'A' + (((value >> 0) & 0x0F) - 10);
-	debug_tx_chars(digits, countof(digits));
 }
 #endif

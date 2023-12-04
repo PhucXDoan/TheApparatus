@@ -188,8 +188,12 @@ sd_write(u32 abs_sector_address)
 	pin_high(PIN_SD_SS);
 }
 
+// Initializes SD card module.
+// Requirements:
+//     - SPI must be configured with leading MSb. TODO Citation?
+//     - SPI MISO must be sampled on rise. TODO Citation?
 static void
-sd_init(void) // Depends on SPI being MSb sent first and samples taken on rise.
+sd_init(void)
 { // See: Source(19) @ Section(4.2.2) @ AbsPage(24).
 
 	pin_output(PIN_SD_SS);
