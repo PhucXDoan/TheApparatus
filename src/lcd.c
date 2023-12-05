@@ -1,3 +1,8 @@
+// Versitile interface for LCD displays driven by HD44780U.
+//
+//     - R/W pin must always be driven low.
+//     - ~5 kOhm resistor tied to ground on the contrast pin sets a satisfactory contrast.
+
 static void
 _lcd_pulse_enable(void)
 {
@@ -161,7 +166,7 @@ lcd_cstr(char* value)
 	}
 }
 
-#define lcd_pstr(STRLIT) lcd_pgm_cstr(PSTR(STRLIT))
+#define lcd_strlit(STRLIT) lcd_pgm_cstr(PSTR(STRLIT))
 static void
 lcd_pgm_cstr(const char* value)
 {

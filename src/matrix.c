@@ -1,3 +1,9 @@
+// Initializes 8x8 LED matrix equipped with MAX7219 driver.
+//
+//     - PIN_MATRIX_SS must be provided to enable the device.
+//     - SPI must be configured in mode 0 (sample on rise, setup on fall). See: Timing Diagram @ Source(26) @ Figure(1) @ Page(6).
+//     - SPI must be below 10MHz. See: "CLK" @ Source(26) @ Page(5).
+
 static void
 _matrix_command(u8 command, u8 data)
 {
@@ -22,11 +28,6 @@ matrix_set(u64 bits)
 	_matrix_command(0x08, (bits >> 56) & 0xFF);
 }
 
-// Initializes 8x8 LED matrix equipped with MAX7219 driver.
-// Requirements:
-//     - PIN_MATRIX_SS must be provided.
-//     - SPI must be configured to have leading MSb. See: Timing Diagram @ Source(26) @ Figure(1) @ Page(6).
-//     - SPI must be below 10MHz. See: "CLK" @ Source(26) @ Page(5).
 static void
 matrix_init(void)
 {

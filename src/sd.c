@@ -1,7 +1,6 @@
 // Read and write sectors of an SD card.
 //
-//     - SPI must be configured with leading MSb. TODO Citation?
-//     - SPI MISO must be sampled on rise. TODO Citation? TODO Reword.
+//     - SPI must be configured in mode 0 (sample on rise, setup on fall). See: "SPI Mode" @ Source(20).
 //
 // If SD card size is needed, refer to [Sector Count Determination].
 

@@ -1,28 +1,32 @@
-#if __AVR_ATmega32U4__
-	static void
-	timer_init(void) // Uses the 8-bit Timer0.
-	{
-		TCNT0  = TIMER_INITIAL_COUNTER;       // Timer0's initial counter value. See: [Overview].
-		TCCR0B = (TimerPrescaler_64 << CS00); // Timer0's counter will be incrementing at a rate of F_CPU/TimerPrescaler.
-		TIMSK0 = (1 << TOIE0);                // When Timer0's 8-bit counter overflows, the TIMER0_OVF_vect interrupt routine is triggered.
-	}
+// Uses Timer0 to count amount of milliseconds elapsed since timer initialization.
+//
+//     - The firmware must not be interrupt-heavy, else this slows down the measurement.
+//     - timer_ms is best executed as infrequently as possible.
+//     - The timer will not overflow for over 49 days.
 
-	[[nodiscard]]
-	static u32 // Milliseconds since initialization of Timer0.
-	timer_ms(void)
-	{
-		cli();
-		u32 ms = _timer_ms;
-		sei();
-		return ms;
-	}
+static void
+timer_init(void) // Uses the 8-bit Timer0.
+{
+	TCNT0  = TIMER_INITIAL_COUNTER;       // Timer0's initial counter value. See: [Overview].
+	TCCR0B = (TimerPrescaler_64 << CS00); // Timer0's counter will be incrementing at a rate of F_CPU/TimerPrescaler.
+	TIMSK0 = (1 << TOIE0);                // When Timer0's 8-bit counter overflows, the TIMER0_OVF_vect interrupt routine is triggered.
+}
 
-	ISR(TIMER0_OVF_vect) // When Timer0's 8-bit counter overflows. See: [Overview].
-	{
-		_timer_ms += 1;
-		TCNT0      = TIMER_INITIAL_COUNTER;
-	}
-#endif
+[[nodiscard]]
+static u32 // Milliseconds since initialization of Timer0.
+timer_ms(void)
+{
+	cli();
+	u32 ms = _timer_ms;
+	sei();
+	return ms;
+}
+
+ISR(TIMER0_OVF_vect) // When Timer0's 8-bit counter overflows. See: [Overview].
+{
+	_timer_ms += 1;
+	TCNT0      = TIMER_INITIAL_COUNTER;
+}
 
 //
 // Documentation.

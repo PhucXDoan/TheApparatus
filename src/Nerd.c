@@ -66,8 +66,8 @@
 int
 main(void)
 {
-	#if DEBUG // Configure USART0 to have 2Mbps.
-		UCSR0A = (1 << U2X0);
+	#if DEBUG // Configure USART0 to have 2Mbps. See: Source(27) @ Table(22-12) @ Page(225).
+		UCSR0A = 1 << U2X0;
 		UBRR0  = 0;
 		UCSR0B = 1 << TXEN0;
 	#endif

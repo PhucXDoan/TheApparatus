@@ -1,6 +1,7 @@
-// Defines asynchronous serial communication between Nerd and Diplomat via the USART hardware.
+// Defines basic asynchronous serial communication through a single USART.
 //
-//     - USART_N must be defined to indicate which USART hardware to use.
+//     - USART_N must be defined to indicate which USART hardware to use. Consequently, multiple USARTs are not directly supported for simplicity.
+//     - The USART hardware and firmware is also pretty much identical across AVR devices, so the ATmega32U4 datasheet will be primarily referred to within this file.
 
 // See: "USART Register Description" @ Source(1) @ Section(11.81) @ Page(209).
 #define UCSRnA concat(concat(UCSR, USART_N), A)
@@ -34,17 +35,16 @@ usart_init(void)
 
 static void
 usart_tx(u8 value)
-{
-	// See: C Code Example @ Source(1) @ Section(18.5.1) @ Page(195).
+{ // See: C Code Example @ Source(1) @ Section(18.5.1) @ Page(195).
 
 	while (!(UCSRnA & (1 << UDREn))); // Wait for data register to be empty. See: "USART Data Register Empty" @ Source(1) @ Section(18.11.2) @ Page(209).
 	UDRn = value;
 }
 
+[[nodiscard]]
 static u8
 usart_rx(void)
-{
-	// See: C Code Example @ Source(1) @ Section(18.6.1) @ Page(198).
+{ // See: C Code Example @ Source(1) @ Section(18.6.1) @ Page(198).
 
 	if (UCSRnA & (1 << DORn)) // See: "Data OverRun" @ Source(1) @ Section(18.11.2) @ Page(210).
 	{
@@ -65,14 +65,3 @@ usart_rx(void)
 
 	return UDRn;
 }
-
-//
-// Documentation.
-//
-
-/* [Overview].
-	The USART description is pretty much identical across AVR devices, so the ATmega32U4
-	datasheet will be primarily referred to.
-
-	TODO Expand.
-*/

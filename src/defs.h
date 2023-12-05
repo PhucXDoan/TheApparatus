@@ -1093,7 +1093,7 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 #endif
 
 //
-// "usb.c"
+// "Diplomat_usb.c"
 //
 
 #define USB_MOUSE_CALIBRATIONS_REQUIRED 128
@@ -1128,10 +1128,10 @@ enum USBEndpointSizeCode // See: Source(1) @ Section(22.18.2) @ Page(287).
 	USBEndpointSizeCode_16  = 0b001,
 	USBEndpointSizeCode_32  = 0b010,
 	USBEndpointSizeCode_64  = 0b011,
-	USBEndpointSizeCode_128 = 0b100, // See: [Endpoint Sizes] @ "usb.c".
-	USBEndpointSizeCode_256 = 0b101, // See: [Endpoint Sizes] @ "usb.c".
+	USBEndpointSizeCode_128 = 0b100, // See: [Endpoint Sizes] @ "Diplomat_usb.c".
+	USBEndpointSizeCode_256 = 0b101, // See: [Endpoint Sizes] @ "Diplomat_usb.c".
 
-	// See: [Endpoint Sizes] @ "usb.c".
+	// See: [Endpoint Sizes] @ "Diplomat_usb.c".
 	// USBEndpointSizeCode_512 = 0b110,
 };
 
@@ -1966,7 +1966,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	static u8 _usb_mouse_curr_y       = 0; // Origin is top-left.
 	static b8 _usb_mouse_held         = false;
 
-	static volatile u16 _usb_mouse_command_buffer[8] = {0}; // See: [Mouse Commands] @ "usb.c".
+	static volatile u16 _usb_mouse_command_buffer[8] = {0}; // See: [Mouse Commands] @ "Diplomat_usb.c".
 	static volatile u8  _usb_mouse_command_writer    = 0;   // Main program writes.
 	static volatile u8  _usb_mouse_command_reader    = 0;   // Interrupt reads.
 

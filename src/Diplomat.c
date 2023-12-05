@@ -100,7 +100,7 @@ main(void)
 //	#include "spi.c"
 //	#include "sd.c"
 //	#include "lcd.c"
-//	#include "usb.c"
+//	#include "Diplomat_usb.c"
 //	
 //	enum Menu
 //	{

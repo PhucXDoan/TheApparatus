@@ -1950,7 +1950,7 @@ main(int argc, char** argv)
 
 	Alright, once we have what appears to be pretty good monochrome MASK_DIM x MASK_DIM BMPs
 	representing each letter, we have to compress it into a format that won't gobble up all the
-	flash of the Diplomat. As explained thoroughly in usb.c, the compression that is done is
+	flash of the Diplomat. As explained thoroughly in Diplomat_usb.c, the compression that is done is
 	essentially run-length encoding that begins on the top-left corner of the first letter, to
 	the top-right corner of the same letter, and then going to the next letter, and continuing to
 	the very last letter. Once at the very last letter, the run-length of pixels then start from
