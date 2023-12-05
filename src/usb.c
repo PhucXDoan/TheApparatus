@@ -1,6 +1,3 @@
-#undef  PIN_HALT_SOURCE
-#define PIN_HALT_SOURCE HaltSource_usb
-
 // "HELD"   : Must evaluate to 0 or 1.
 // "DEST_X" : Must be within [0, 127].
 // "DEST_Y" : Must be within [0, 255].

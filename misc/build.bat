@@ -43,7 +43,7 @@ set DIPLOMAT_AVR_GCC_ARGS= ^
 	!AVR_GCC_FLAGS! -mmcu=!DIPLOMAT_MCU! ^
 	-D BOOTLOADER_BAUD_SIGNAL=!DIPLOMAT_BOOTLOADER_BAUD_SIGNAL!
 
-set NERD_DIAGNOSTIC_BAUD=9600
+set NERD_DIAGNOSTIC_BAUD=2000000
 set NERD_BOOTLOADER_COM=7
 set NERD_DIAGNOSTIC_COM=7
 
@@ -157,13 +157,13 @@ pushd W:\build\
 	)
 
 	echo No bootloader found.
- goto ABORT
+	goto ABORT
 
- REM
- REM Open PuTTY!
- REM
+	REM
+	REM Open PuTTY!
+	REM
 
- :OPEN_PUTTY
+	:OPEN_PUTTY
 	if not "!PUTTY_ARGS!" == "" (
 		start putty.exe -load "Default Settings" !PUTTY_ARGS!
 	)

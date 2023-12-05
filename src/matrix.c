@@ -22,16 +22,6 @@ matrix_set(u64 bits)
 	_matrix_command(0x08, (bits >> 56) & 0xFF);
 }
 
-static void
-matrix_set_pgm(const u64* bits)
-{
-	matrix_set
-	(
-		((u64) pgm_read_dword(((const u32*) bits    ))      ) |
-		((u64) pgm_read_dword(((const u32*) bits + 1)) << 32)
-	);
-}
-
 // Initializes 8x8 LED matrix equipped with MAX7219 driver.
 // Requirements:
 //     - PIN_MATRIX_SS must be provided.

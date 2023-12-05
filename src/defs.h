@@ -91,136 +91,6 @@ typedef struct { b64 x; b64 y; b64 z; b64 w; } b64_4;
 static_assert(LITTLE_ENDIAN); // Lots of structures assume little-endian.
 
 //
-// "matrix.c"
-//
-
-#if PIN_MATRIX_SS
-	static const u64 MATRIX_DIGITS[] PROGMEM =
-		{
-			#define MAKE(A, B, C, D, E, F, G, H) \
-				(((u64) 0b##A) << (8 * 7)) | \
-				(((u64) 0b##B) << (8 * 6)) | \
-				(((u64) 0b##C) << (8 * 5)) | \
-				(((u64) 0b##D) << (8 * 4)) | \
-				(((u64) 0b##E) << (8 * 3)) | \
-				(((u64) 0b##F) << (8 * 2)) | \
-				(((u64) 0b##G) << (8 * 1)) | \
-				(((u64) 0b##H) << (8 * 0))
-			MAKE
-			(
-				00000000,
-				00000000,
-				00111110,
-				01000001,
-				01000001,
-				00111110,
-				00000000,
-				00000000
-			),
-			MAKE
-			(
-				00000000,
-				00000000,
-				01000000,
-				01111111,
-				01000010,
-				01000100,
-				00000000,
-				00000000
-			),
-			MAKE
-			(
-				00000000,
-				00000000,
-				01000110,
-				01001001,
-				01010001,
-				01100010,
-				00000000,
-				00000000
-			),
-			MAKE
-			(
-				00000000,
-				00000000,
-				00111110,
-				01001001,
-				01001001,
-				01001001,
-				00000000,
-				00000000
-			),
-			MAKE
-			(
-				00000000,
-				00000000,
-				01111111,
-				00010010,
-				00010100,
-				00011000,
-				00000000,
-				00000000
-			),
-			MAKE
-			(
-				00000000,
-				00000000,
-				00111001,
-				01001001,
-				01001001,
-				01001111,
-				00000000,
-				00000000
-			),
-			MAKE
-			(
-				00000000,
-				00000000,
-				00110010,
-				01001001,
-				01001001,
-				00111110,
-				00000000,
-				00000000
-			),
-			MAKE
-			(
-				00000000,
-				00000000,
-				00000111,
-				00001001,
-				01110001,
-				00000001,
-				00000000,
-				00000000
-			),
-			MAKE
-			(
-				00000000,
-				00000000,
-				00110110,
-				01001001,
-				01001001,
-				00110110,
-				00000000,
-				00000000
-			),
-			MAKE
-			(
-				00000000,
-				00000000,
-				01111110,
-				00001001,
-				00001001,
-				00000110,
-				00000000,
-				00000000
-			),
-			#undef MAKE
-		};
-#endif
-
-//
 // "lcd.c"
 //
 
@@ -988,14 +858,6 @@ enum CLIProgram
 //
 // "pin.c"
 //
-
-enum HaltSource
-{
-	HaltSource_diplomat = 0,
-	HaltSource_usb      = 1,
-	HaltSource_nerd     = 2,
-	HaltSource_sd       = 3,
-};
 
 #if BOARD_LEONARDO
 	static_assert(__AVR_ATmega32U4__);
@@ -2181,7 +2043,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 //
 
 /* [Overview].
-	Source(1)  := ATmega32U4 Datasheet ("Atmel-7766J-USB-ATmega16U4/32U4-Datasheet_04/2016").
+	Source(1)  := ATmega16U4/ATmega32U4 Datasheet (Dated: 2016).
 	Source(2)  := USB 2.0 Specification (Dated: April 27, 2000).
 	Source(3)  := Arduino Leonardo Pinout Diagram (STORE.ARDUINO.CC/LEONARDO) (Dated: 17/06/2020).
 	Source(4)  := USB in a NutShell by BeyondLogic (Accessed: September 19, 2023).
@@ -2207,6 +2069,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	Source(24) := Wikipedia's "BMP file format" Page (Last Edited: 23 October 2022, at 13:30 (UTC)).
 	Source(25) := HD44780U (LCD-II) (Dot Matrix Liquid Crystal Display Controller/Driver) by HITACHI (Dated: 1998).
 	Source(26) := MAX7219/MAX7221 Serially Interfaced, 8-Digit LED Display Drivers by Maxim Integrated (Dated: 8/21).
+	Source(27) := Atmel ATmega640/V-1280/V-1281/V-2560/V-2561/V Datasheet (Dated: 2014).
 
 	We are working within the environment of the ATmega32U4 and ATmega2560 microcontrollers,
 	which are 8-bit CPUs. This consequently means that there are no padding bytes to

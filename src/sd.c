@@ -1,9 +1,14 @@
+// Read and write sectors of an SD card.
+//
+//     - SPI must be configured with leading MSb. TODO Citation?
+//     - SPI MISO must be sampled on rise. TODO Citation? TODO Reword.
+//
+// If SD card size is needed, refer to [Sector Count Determination].
+
 #define SD_CMD8_ARGUMENT                0x00000'1'AA // See: Source(19) @ Table(7-5) @ AbsPage(119).
 #define SD_CMD8_CRC7                    0x43         // See: [CRC7 Calculation].
 #define SD_MAX_COMMAND_RETRIES          16384
 #define SD_MAX_COMMAND_RESPONSE_LATENCY (((u16) 1) << 15)
-#undef  PIN_HALT_SOURCE
-#define PIN_HALT_SOURCE HaltSource_sd
 
 [[nodiscard]]
 static u8 // First byte of the response. MSb being set means the procedure timed out.
@@ -80,7 +85,10 @@ static void
 sd_read(u32 abs_sector_address)
 { // See: Source(19) @ Section(7.2.3) @ AbsPage(107).
 
-	assert(abs_sector_address < FAT32_TOTAL_SECTOR_COUNT);
+	if (abs_sector_address < FAT32_TOTAL_SECTOR_COUNT)
+	{
+		error(); // Out-of-range address.
+	}
 
 	pin_low(PIN_SD_SS);
 
@@ -106,7 +114,10 @@ static void
 sd_write(u32 abs_sector_address)
 { // See: Source(19) @ Section(7.2.4) @ AbsPage(108).
 
-	assert(abs_sector_address < FAT32_TOTAL_SECTOR_COUNT);
+	if (abs_sector_address < FAT32_TOTAL_SECTOR_COUNT)
+	{
+		error(); // Out-of-range address.
+	}
 
 	pin_low(PIN_SD_SS);
 
@@ -188,10 +199,6 @@ sd_write(u32 abs_sector_address)
 	pin_high(PIN_SD_SS);
 }
 
-// Initializes SD card module.
-// Requirements:
-//     - SPI must be configured with leading MSb. TODO Citation?
-//     - SPI MISO must be sampled on rise. TODO Citation?
 static void
 sd_init(void)
 { // See: Source(19) @ Section(4.2.2) @ AbsPage(24).
@@ -332,7 +339,9 @@ sd_init(void)
 		error(); // Card has unexpected/unsupported parameters.
 	}
 
-	/* If needed, the following expression calculates the sector count of the inserted SD card.
+	/* [Sector Count Determination].
+		If needed, the following expression calculates the sector count of the inserted SD card.
+
 		static_assert(FAT32_SECTOR_SIZE == 512);
 		(csd_C_SIZE + 1) * 1024; // See: "C_SIZE" @ Source(19) @ Section(5.3.3) @ AbsPage(98).
 	*/
