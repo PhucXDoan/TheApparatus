@@ -1988,10 +1988,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	WORDGAME_XMDT(MAKE,)
 	#undef MAKE
 
-	static volatile enum USBMSOCRState usb_ms_ocr_state                                                     = {0};
-	static volatile enum WordGame      usb_ms_ocr_wordgame                                                  = {0};
-	static volatile enum Letter        usb_ms_ocr_board[WORDGAME_MAX_DIM_SLOTS_Y][WORDGAME_MAX_DIM_SLOTS_X] = {0};
-
+	static volatile enum USBMSOCRState     usb_ms_ocr_state                                                      = {0};
 	static u8_2                           _usb_ms_ocr_slot_topdown_board_coords                                  = {0};
 	static u8_2                           _usb_ms_ocr_slot_topdown_pixel_coords                                  = {0};
 	static u16                            _usb_ms_ocr_accumulated_scores[WORDGAME_MAX_DIM_SLOTS_X][Letter_COUNT] = {0};
@@ -2036,6 +2033,20 @@ struct USBConfig // This layout is defined uniquely for our device application.
 
 		static b8 debug_usb_is_on_host_machine = false;
 	#endif
+#endif
+
+//
+// Diplomat and Nerd.
+//
+
+struct DiplomatPacket
+{
+	enum WordGame wordgame;
+	enum Letter   board[WORDGAME_MAX_DIM_SLOTS_Y][WORDGAME_MAX_DIM_SLOTS_X];
+};
+
+#if PROGRAM_DIPLOMAT || PROGRAM_NERD
+	static volatile struct DiplomatPacket diplomat_packet = {0};
 #endif
 
 //

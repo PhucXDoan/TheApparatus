@@ -6,7 +6,7 @@
 
 #define SD_CMD8_ARGUMENT                0x00000'1'AA // See: Source(19) @ Table(7-5) @ AbsPage(119).
 #define SD_CMD8_CRC7                    0x43         // See: [CRC7 Calculation].
-#define SD_MAX_COMMAND_RETRIES          16384
+#define SD_MAX_COMMAND_RETRIES          8192
 #define SD_MAX_COMMAND_RESPONSE_LATENCY (((u16) 1) << 15)
 
 [[nodiscard]]
@@ -84,7 +84,7 @@ static void
 sd_read(u32 abs_sector_address)
 { // See: Source(19) @ Section(7.2.3) @ AbsPage(107).
 
-	if (abs_sector_address < FAT32_TOTAL_SECTOR_COUNT)
+	if (abs_sector_address >= FAT32_TOTAL_SECTOR_COUNT)
 	{
 		error(); // Out-of-range address.
 	}
@@ -113,7 +113,7 @@ static void
 sd_write(u32 abs_sector_address)
 { // See: Source(19) @ Section(7.2.4) @ AbsPage(108).
 
-	if (abs_sector_address < FAT32_TOTAL_SECTOR_COUNT)
+	if (abs_sector_address >= FAT32_TOTAL_SECTOR_COUNT)
 	{
 		error(); // Out-of-range address.
 	}

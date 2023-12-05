@@ -237,7 +237,11 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 			// Copy the chunk of the sector data from host.
 			//
 
-			assert(UEBCX == USB_ENDPOINT_MS_OUT_SIZE); // Ensures that the payloads aren't varying in lengths.
+			if (UEBCX != USB_ENDPOINT_MS_OUT_SIZE)
+			{
+				error(); // Payloads are varying in lengths!
+			}
+
 			while (UEINTX & (1 << RWAL))
 			{
 				sd_sector[sector_byte_index]  = UEDATX;
@@ -546,12 +550,8 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 			default:
 			{
 				UECONX |= (1 << STALLRQ);
-
 				#if DEBUG
-				#if PIN_DEBUG_U16_CLK
-				debug_u16(request.kind);
-				#endif
-				debug_halt(-1);
+				debug_unhandled();
 				#endif
 			} break;
 		}
@@ -689,11 +689,11 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 				b8   transaction_is_for_bmp  = false;
 				u16  curr_red_channel_offset = 0;
-				u8   compressed_slot_stride  = pgm_u8(WORDGAME_INFO[usb_ms_ocr_wordgame].compressed_slot_stride);
+				u8   compressed_slot_stride  = pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].compressed_slot_stride);
 				u8_2 board_dim_slots         =
 					{
-						pgm_u8(WORDGAME_INFO[usb_ms_ocr_wordgame].dim_slots.x),
-						pgm_u8(WORDGAME_INFO[usb_ms_ocr_wordgame].dim_slots.y),
+						pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x),
+						pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y),
 					};
 
 				if (transaction_sector_start_address >= FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT) // In data region?
@@ -795,12 +795,12 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 								should_process =
 									!is_slot_excluded
 									(
-										usb_ms_ocr_wordgame,
+										diplomat_packet.wordgame,
 										_usb_ms_ocr_slot_topdown_board_coords.x,
 										board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y
 									);
 
-								if (should_process && usb_ms_ocr_wordgame == WordGame_wordbites && _usb_ms_ocr_slot_topdown_board_coords.y)
+								if (should_process && diplomat_packet.wordgame == WordGame_wordbites && _usb_ms_ocr_slot_topdown_board_coords.y)
 								{
 									u8_2 coords =
 										{
@@ -812,14 +812,14 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 										implies
 										(
 											coords.x,
-											!usb_ms_ocr_board[coords.y + 1][coords.x - 1]
+											!diplomat_packet.board[coords.y + 1][coords.x - 1]
 										);
 
 									should_process &= // Up-right slot must be free.
 										implies
 										(
 											coords.x < board_dim_slots.x - 1,
-											!usb_ms_ocr_board[coords.y + 1][coords.x + 1]
+											!diplomat_packet.board[coords.y + 1][coords.x + 1]
 										);
 
 									should_process &= // Must not be below a vertical duo piece.
@@ -827,8 +827,8 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 										(
 											coords.y + 2 < board_dim_slots.y,
 											!(
-												usb_ms_ocr_board[coords.y + 2][coords.x] &&
-												usb_ms_ocr_board[coords.y + 1][coords.x]
+												diplomat_packet.board[coords.y + 2][coords.x] &&
+												diplomat_packet.board[coords.y + 1][coords.x]
 											)
 										);
 
@@ -873,7 +873,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 									struct USBMSOCRMaskStreamState probing_mask_stream_state = _usb_ms_ocr_curr_mask_stream_state;
 
-									for (enum Letter letter = {1}; letter < pgm_u8(WORDGAME_INFO[usb_ms_ocr_wordgame].sentinel_letter); letter += 1)
+									for (enum Letter letter = {1}; letter < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].sentinel_letter); letter += 1)
 									{
 										static_assert(MASK_DIM % 8 == 0);
 										for (u8 byte_index = 0; byte_index < MASK_DIM / 8; byte_index += 1)
@@ -897,7 +897,6 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 													// Read the next byte-sized run-length.
 													//
 
-													assert(probing_mask_stream_state.index_u8 < countof(MASK_U8_STREAM));
 													probing_mask_stream_state.runlength_remaining  = pgm_u8(MASK_U8_STREAM[probing_mask_stream_state.index_u8]);
 													probing_mask_stream_state.index_u8            += 1;
 
@@ -907,7 +906,6 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 													if (!probing_mask_stream_state.runlength_remaining)
 													{
-														assert(probing_mask_stream_state.index_u16 < countof(MASK_U16_STREAM));
 														probing_mask_stream_state.runlength_remaining  = pgm_u16(MASK_U16_STREAM[probing_mask_stream_state.index_u16]);
 														probing_mask_stream_state.index_u16           += 1;
 													}
@@ -957,7 +955,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 									if (!_usb_ms_ocr_next_mask_stream_state.index_u8)
 									{
-										u16 remaining_mask_row_pixels = MASK_DIM * (Letter_COUNT - pgm_u8(WORDGAME_INFO[usb_ms_ocr_wordgame].sentinel_letter));
+										u16 remaining_mask_row_pixels = MASK_DIM * (Letter_COUNT - pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].sentinel_letter));
 										while (remaining_mask_row_pixels)
 										{
 											if (!probing_mask_stream_state.runlength_remaining)
@@ -966,7 +964,6 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 												// Read the next byte-sized run-length.
 												//
 
-												assert(probing_mask_stream_state.index_u8 < countof(MASK_U8_STREAM));
 												probing_mask_stream_state.runlength_remaining  = pgm_u8(MASK_U8_STREAM[probing_mask_stream_state.index_u8]);
 												probing_mask_stream_state.index_u8            += 1;
 
@@ -976,7 +973,6 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 												if (!probing_mask_stream_state.runlength_remaining)
 												{
-													assert(probing_mask_stream_state.index_u16 < countof(MASK_U16_STREAM));
 													probing_mask_stream_state.runlength_remaining  = pgm_u16(MASK_U16_STREAM[probing_mask_stream_state.index_u16]);
 													probing_mask_stream_state.index_u16           += 1;
 												}
@@ -1042,7 +1038,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 										if (_usb_ms_ocr_packed_activated_slots & (1 << slot_coord_x)) // Was this slot actually processed?
 										{
 											u16 highest_score = 0;
-											for (enum Letter letter = {1}; letter < pgm_u8(WORDGAME_INFO[usb_ms_ocr_wordgame].sentinel_letter); letter += 1)
+											for (enum Letter letter = {1}; letter < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].sentinel_letter); letter += 1)
 											{
 												if (highest_score < _usb_ms_ocr_accumulated_scores[slot_coord_x][letter])
 												{
@@ -1052,7 +1048,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 											}
 										}
 
-										usb_ms_ocr_board[board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y][slot_coord_x] = best_letter;
+										diplomat_packet.board[board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y][slot_coord_x] = best_letter;
 									}
 
 									_usb_ms_ocr_packed_activated_slots = 0;
@@ -1301,7 +1297,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 #if DEBUG && USB_CDC_ENABLE
 	static void
-	debug_tx_chars(char* value, u16 value_size)
+	debug_chars(char* value, u16 value_size)
 	{
 		if (debug_usb_is_on_host_machine)
 		{

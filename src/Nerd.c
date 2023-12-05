@@ -3,8 +3,8 @@
 #define BOARD_MEGA_2560_REV3 true
 #define PIN_MATRIX_SS        2
 #define PIN_SD_SS            3
-#define USART_N              3
 #define SPI_PRESCALER        SPIPrescaler_2
+#define USART_N              3
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
@@ -74,7 +74,7 @@ main(void)
 
 	usart_init();
 	spi_init();
-	sd_init();
+	// sd_init();
 
 	#if DEBUG // 8x8 LED dot matrix to have visual debug info.
 		matrix_init();
