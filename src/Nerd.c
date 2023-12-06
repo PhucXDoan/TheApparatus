@@ -70,23 +70,98 @@ main(void)
 		UCSR0A = 1 << U2X0;
 		UBRR0  = 0;
 		UCSR0B = 1 << TXEN0;
+		debug_char('\n'); // If terminal is opened early, lots of junk could appear due to noise.
 	#endif
 
 	usart_init();
 	spi_init();
-	// sd_init();
+	sd_init();
 
 	#if DEBUG // 8x8 LED dot matrix to have visual debug info.
 		matrix_init();
 	#endif
 
-	u64 bits = 0;
+	//
+	// Wait for packet from Diplomat.
+	//
+
+	matrix_set
+	(
+		(((u64) 0b00000000) << (8 * 0)) |
+		(((u64) 0b00111110) << (8 * 1)) |
+		(((u64) 0b01000000) << (8 * 2)) |
+		(((u64) 0b01111100) << (8 * 3)) |
+		(((u64) 0b01000000) << (8 * 4)) |
+		(((u64) 0b00111110) << (8 * 5)) |
+		(((u64) 0b00000000) << (8 * 6)) |
+		(((u64) 0b00000000) << (8 * 7))
+	);
+
+	struct DiplomatPacket diplomat_packet = {0};
+//	for (u8 i = 0; i < sizeof(diplomat_packet); i += 1)
+//	{
+//		((u8*) &diplomat_packet)[i] = usart_rx();
+//	}
+
+	//
+	//
+	//
+
+	matrix_set
+	(
+		(((u64) 0b00000000) << (8 * 0)) |
+		(((u64) 0b00000000) << (8 * 1)) |
+		(((u64) 0b01111110) << (8 * 2)) |
+		(((u64) 0b00010010) << (8 * 3)) |
+		(((u64) 0b00010010) << (8 * 4)) |
+		(((u64) 0b00001100) << (8 * 5)) |
+		(((u64) 0b00000000) << (8 * 6)) |
+		(((u64) 0b00000000) << (8 * 7))
+	);
+
+	debug_cstr("WordGame: ");
+	debug_u64(diplomat_packet.wordgame);
+	debug_cstr("\n");
+
+	for
+	(
+		i8 y = WORDGAME_MAX_DIM_SLOTS_Y - 1;
+		y >= 0;
+		y -= 1
+	)
+	{
+		for (u8 x = 0; x < WORDGAME_MAX_DIM_SLOTS_X; x += 1)
+		{
+			debug_u64 (diplomat_packet.board[y][x]);
+			debug_char(' ');
+		}
+		debug_char('\n');
+	}
+
+	u8 counter = 0;
 	while (true)
 	{
-		bits <<= 8;
-		bits  |= usart_rx();
-		matrix_set(bits);
-		debug_u64(bits);
-		debug_cstr("\n");
+		if (usart_rx_available()) // Diplomat signaled that it's ready for next command?
+		{
+			counter += 1;
+
+			usart_rx(); // Eat dummy signal byte.
+			usart_tx(counter);
+			matrix_set
+			(
+				(
+					(((u64) 0b00000000) << (8 * 0)) |
+					(((u64) 0b00000000) << (8 * 1)) |
+					(((u64) 0b00100100) << (8 * 2)) |
+					(((u64) 0b01001010) << (8 * 3)) |
+					(((u64) 0b01010010) << (8 * 4)) |
+					(((u64) 0b00100100) << (8 * 5)) |
+					(((u64) 0b00000000) << (8 * 6)) |
+					(((u64) 0b00000000) << (8 * 7))
+				) + counter
+			);
+		}
 	}
+
+	for(;;);
 }

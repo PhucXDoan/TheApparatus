@@ -2045,7 +2045,7 @@ struct DiplomatPacket
 	enum Letter   board[WORDGAME_MAX_DIM_SLOTS_Y][WORDGAME_MAX_DIM_SLOTS_X];
 };
 
-#if PROGRAM_DIPLOMAT || PROGRAM_NERD
+#if PROGRAM_DIPLOMAT
 	static volatile struct DiplomatPacket diplomat_packet = {0};
 #endif
 

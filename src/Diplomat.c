@@ -207,9 +207,14 @@ main(void)
 					menu_main_first_displayed_option %= MenuMainOption_COUNT;
 				}
 
-				if (rotation)
+				if (rotation) // TEMP
 				{
-					usart_tx(menu_main_selected_option);
+					usart_tx(0xFF); // Dummy byte to signal that we're ready for command from Nerd.
+					u8 nerd_command = usart_rx();
+					lcd_reset();
+					lcd_u64(nerd_command);
+					lcd_refresh();
+					_delay_ms(1000.0);
 				}
 
 				//

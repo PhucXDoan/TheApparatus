@@ -7,9 +7,9 @@ static void
 usb_mouse_command_(u16 command)
 {
 	#if USB_HID_ENABLE
-	while (_usb_mouse_command_writer_masked(1) == _usb_mouse_command_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
-	_usb_mouse_command_buffer[_usb_mouse_command_writer_masked(0)] = command;
-	_usb_mouse_command_writer += 1;
+		while (_usb_mouse_command_writer_masked(1) == _usb_mouse_command_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
+		_usb_mouse_command_buffer[_usb_mouse_command_writer_masked(0)] = command;
+		_usb_mouse_command_writer += 1;
 	#endif
 }
 

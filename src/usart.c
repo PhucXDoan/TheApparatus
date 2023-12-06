@@ -41,7 +41,8 @@ usart_tx(u8 value)
 	UDRn = value;
 }
 
-[[nodiscard]]
+#define usart_rx_available() (!!(UCSRnA & (1 << RXCn)))
+
 static u8
 usart_rx(void)
 { // See: C Code Example @ Source(1) @ Section(18.6.1) @ Page(198).
@@ -51,7 +52,7 @@ usart_rx(void)
 		error(); // We missed some data!
 	}
 
-	while (!(UCSRnA & (1 << RXCn))); // Wait for reception to be completed. See: "USART Receive Complete" @ Source(1) @ Section(18.11.2) @ Page(209).
+	while (!usart_rx_available()); // Wait for reception to be completed. See: "USART Receive Complete" @ Source(1) @ Section(18.11.2) @ Page(209).
 
 	if (UCSRnA & (1 << FEn)) // See: "Frame Error" @ Source(1) @ Section(18.11.2) @ Page(210).
 	{
