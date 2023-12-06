@@ -3,6 +3,9 @@
 //     - The firmware must not be interrupt-heavy, else this slows down the measurement.
 //     - timer_ms is best executed as infrequently as possible.
 //     - The timer will not overflow for over 49 days.
+//     - Clock frequency is assumed to be 16MHz.
+
+static_assert(F_CPU == 16'000'000);
 
 static void
 timer_init(void) // Uses the 8-bit Timer0.
@@ -33,12 +36,12 @@ ISR(TIMER0_OVF_vect) // When Timer0's 8-bit counter overflows. See: [Overview].
 //
 
 /* [Overview].
-	The MCU has a 16MHz clock that would increment Timer0's 8-bit counter after some amount of
-	cycles. The amount of cycles depends on the configured prescaler (e.g. prescaler of 64
-	means the 8-bit counter is incremented by 1 after 64 cycles). Since the counter is only 8 bits,
-	it would overflow back to 0 after incrementing from 255. When this overflow occurs, an
-	interrupt is also triggered, and we can use this interrupt to increment our own counter to
-	signify that some amount of time has passed.
+	A 16MHz clock would increment Timer0's 8-bit counter after some amount of cycles.
+	The amount of cycles depends on the configured prescaler (e.g. prescaler of 64 means the 8-bit
+	counter is incremented by 1 after 64 cycles). Since the counter is only 8 bits, it would
+	overflow back to 0 after incrementing from 255. When this overflow occurs, an interrupt is
+	also triggered, and we can use this interrupt to increment our own counter to signify that
+	some amount of time has passed.
 
 	For example, the amount of time it takes to overflow using 16MHz clock with prescaler of 64
 	can be calculated as so:

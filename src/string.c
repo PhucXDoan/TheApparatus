@@ -1,3 +1,5 @@
+// Basic operations between null-terminated strings (cstrs) and lengthed strings.
+
 static str
 str_cstr(char* cstr)
 {

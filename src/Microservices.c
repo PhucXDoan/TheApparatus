@@ -1868,9 +1868,9 @@ main(int argc, char** argv)
 	the purpose of data processing. Admittedly I probably should've wrote it in something like
 	Python, but hey, at least all the configuration values are kept in defs.h and changing it is
 	pretty trivial. This part of the project is also not the cleanest or most efficient, I'll
-	confess, but it got the job done!
+	confess, but it gets the job done!
 
-	For what exactly this program achieves, see [Mask Generation].
+	For what exactly this program achieves, see [Mask Generation] and [Word Compression].
 */
 
 /* [Mask Generation].
@@ -1932,9 +1932,9 @@ main(int argc, char** argv)
 	alphabet. Now, I don't know a lot of Russian (as in none) but it appears that some letters are
 	just not used at all. I've collected gigabytes of screenshots of Russian Anagrams and not once
 	a particular character appeared. Some are so rare that I literally only have one screenshot of
-	it! This applies to German too, and even in English where 'Q' doesn't seem to appear at all, but
-	does for the 7-letter version. Strange. I highly suspect that Game Pigeon is doing some weird
-	RNG stuff to get a good set of letters that'll be enjoyable to play.
+	it! This applies to German too, and even in English where 'Q' doesn't seem to appear at all,
+	but does for the 7-letter version. Strange. I highly suspect that Game Pigeon is doing some
+	weird RNG stuff to get a good set of letters that'll be enjoyable to play.
 
 	Anyways, we sift through the huge pile of unsorted monochrome slot BMPs that extractorv2
 	generated and find a BMP of each letter. These BMPs will essentially act as the
@@ -1950,8 +1950,8 @@ main(int argc, char** argv)
 
 	Alright, once we have what appears to be pretty good monochrome MASK_DIM x MASK_DIM BMPs
 	representing each letter, we have to compress it into a format that won't gobble up all the
-	flash of the Diplomat. As explained thoroughly in Diplomat_usb.c, the compression that is done is
-	essentially run-length encoding that begins on the top-left corner of the first letter, to
+	flash of the Diplomat. As explained thoroughly in Diplomat_usb.c, the compression that is done
+	is essentially run-length encoding that begins on the top-left corner of the first letter, to
 	the top-right corner of the same letter, and then going to the next letter, and continuing to
 	the very last letter. Once at the very last letter, the run-length of pixels then start from
 	the second row from the top now at the first letter again, and then repeat until we reach the
@@ -1964,69 +1964,431 @@ main(int argc, char** argv)
 	matter if things are a bit slow.
 */
 
-/* [Terms & Definitions]. // TODO Explain
+/* [Word Compression].
+	Nerd is the MCU that performs all the computation to figure out what words are valid in the
+	provided wordgame and how to submit it. Nerd could just read a dictionary text file, but this
+	would be massively bottlenecked by the communication between the storage medium and the MCU.
+	The less time that spent in the data transfer, the better. Thus several techniques are
+	employed to achieve better information density.
 
-	(SUBWORD)
-		A word is considered a subword of a parenting word if the parenting word can be truncated
-		on the right-side to make the subword. The parenting word is considered to be its own
-		subword. The collection of subwords can be represented as a bitfield with respect to the
-		parenting word where a valid subword of length N would have bit N-MIN_WORD_LENGTH set in
-		the bitfield.
+		- Lengthed words.
 
-		Examples (MIN_WORD_LENGTH=3):
-			Parenting Word | Subwords                          | Bitfield
-			---------------|-----------------------------------|------------
-			Treehouses     | Treehouses, Treehouse, Tree       |   1100'0010
-			Processing     | Processing, Process               |   1001'0000
-			Collections    | Collections, Collection, Collect  | 1'1001'0000
-			Sacks          | Sacks, Sack, Sac                  |        0111
-			Ice            | Ice                               |        0001
+			If Nerd were to read the dictionary as raw bytes, it'd look something like:
 
-	(WORD-MAKEUP)
-		Describes the letters of a word (except its initial letter) and its uniquely assigned
-		subwords.
+			// "ACTINON\nACTINONS\nACTINOPOD\nACTINOPODS\nACTINOTHERAPIES\n..."
 
-		[0]   : Subword-bitfield.
-		[1]   : Index into the current language's alphabet that describes the word's second letter.
-		[2]   : Index into the current language's alphabet that describes the word's third letter.
-		[...] : ...
-		[N]   : Index into the current language's alphabet that describes the word's Nth letter.
+			To get the first word, Nerd would have to keep scanning until it finally
+			encounters the '\n' byte. If the storage medium is divded into sectors, which the SD
+			card is, then this '\n' would not appear until the next chunk, making this process a
+			bit more awkward than it really needs to be. What can be done instead is have each
+			word be prepended with its length instead, and drop the '\n' byte entirely.
+			For example:
 
-		The subword bitfield is where if bit M-MIN_WORD_LENGTH is set, then truncating the word to
-		M letters is also a valid word. A subword will always be assigned to a single parenting
-		word.
+			// "(7)ACTINON(8)ACTINONS(9)ACTINOPOD(10)ACTINOPODS(15)ACTINOTHERAPIES..."
 
-		Example: "APPLES" with subwords "APP" and "APPLES" would have a word-makeup of { 5, 15, 15, 11, 4, 18 }.
+			Where (N) represents the raw byte of value N.
 
-	(WORDSETS)
-		Collection of word-makeups where words are organized from longest to shortest and alphabetically according to the language.
-		Since word-makeups are sorted length-wise and alphabetically, information on the length of the word and its initial letter is therefore implicit.
+			Now Nerd immediately knows the length of the word, and if the word is too long for
+			a particular wordgame (e.g. can't make 15-lettered word in Anagrams), then Nerd
+			can skip it entirely and move onto the next word. Knowing whether or not the entire
+			word is within the sector is now also a bit easier to handle.
 
-	(BOTTOM-FIELDS) TODO
-		A bottom-field is just a subword-field, but it would be used in such a manner that it
-		allows for it to be able to represent multiple subword-fields simultaneously. Bottom-fields
-		rely on the fact that a word of length N would only need N-MIN_WORD_LENGTH bits for the
-		subword-field (since length N is already known, the word can obviously be spelt with N
-		letters). If more bits were provided than N-MIN_WORD_LENGTH, then this wouldn't make much
-		sense (5-lettered word with a subword of 8 letters?), but if we make the choice of ignoring
-		the excess bits, then a single subword-field can be reused multiple times for distinct
-		words.
+			But it can be further improved! If we sort words by their lengths, specifically from
+			longest to shortest, then we can omit most of these length-bytes entirely. What we'd
+			have instead is essentially a header that describes how many N-lettered words there
+			are, and then how many (N-1)-lettered words after that, and so on.
 
-		Example:
+			// [Length Header].
+			//
+			//     ...
+			//     (2) : 11-lettered words.
+			//     (7) : 10-lettered words.
+			//     (5) : 9-lettered words.
+			//     (3) : 8-lettered words.
+			//     (1) : 7-lettered words.
+			//     (2) : 6-lettered words.
+			//     (0) : 5-lettered words.
+			//     ...
+			//
+			// [Continuous Stream of Letters].
+			//
+			//     ACTINOZOANSACTIVATIONS...
+			//     ACTINOZOANACTIONABLEACTIONABLYACTIONISTSACTIONLESSACTIVATINGACTIVATION...
+			//     ACTIONERSACTIONINGACTIONISTACTIVATEDACTIVATES...
+			//     ACTIONEDACTIONERACTIVATE...
+			//     ACTIONS...
+			//     ACTINSACTION...
 
-			Consider the two words, their subwords, and their subword-bitfields (MIN_WORD_LENGTH=3).
+			This pretty much factors out all the common bytes of words into one place, like
+			the distributive property. Another huge benefit of this scheme is that the Nerd
+			can now skip an entire family of words that are too long for the current wordgame,
+			rather than skip on a word-by-word basis.
 
-				"ELECTIONEER" -> "ELECTIONEER", "ELECTION", "ELECT" -> 1'0010'0100
-				"CIVILIAN"    ->                "CIVILIAN", "CIVIL" ->     10'0100
+		- Initial letters.
 
-			Since "CIVILIAN" has subwords of the same length that of "ELECTIONEER"'s last subwords,
-			we can use "ELECTIONEER"'s subword-field as a bottom-field to represent both
-			"ELECTIONEER" and "CIVILIAN"'s subwords.
+			Consider this sequence of 5-lettered words:
 
-			Bottom-field:   0000'0001'0010'0100
-			"ELECTIONEER" + ****'****'0010'0100 -> "ELECTIONEER", "ELECTION", "ELECT"
-			"CIVILIAN"    + ****'****'***0'0100 -> "CIVILIAN", "CIVIL"
+				"BYRESBYRLSBYSSIBYTESBYWAYCAAEDCABALCABASCABBYCABERCABINCABLECABOB..."
 
-			Since "CIVILIAN" is only 8 letters long, it would only use the bottom 8-MIN_WORD_LENGTH
-			bits of the bottom-field to reconstruct each proper subword.
+			Like with the word lengths, we can factor out the common bytes of these words,
+			specifically the letter they start with. Thus, we can redefine the header to details
+			how many N-letter words that begin with some particular letter X, for all possible
+			combinations of N and X. By doing this, we can also omit the initial letter of each
+			word now, since it's just information that the Nerd can recover.
+
+			// [Length & Initial Header].
+			//
+			//     ...
+			//     (5) 5-letter words that begin with 'B'.
+			//     (8) 5-letter words that begin with 'C'.
+			//     ...
+			//
+			// [Continuous Stream of Letters].
+			//
+			//     YRESYRLSYSSIYTESYWAYAAEDABALABASABBYABERABINABLEABOB...
+
+			So if English has an alphabet of 26 letters and the maximum and minimum word lengths
+			we will allow to store are 15 and 3 respectively, then we should expect 26*(15-3+1)
+			or 338 entries in the header.
+
+			This optimization on top of the previous length-based optimization allows for huge
+			amount of redundant information in the dictionary file to be removed, but also allow
+			for Nerd to skip even more family of words if needed. For example, if the wordbank
+			have letters (A, N, D, E, I, M), but the family of words are 4-lettered words beginning
+			with H, then that entire chunk of words be skippped entirely, since the wordbank does
+			not provide an H anyways.
+
+		- Packed alphabet indices.
+
+			Russian has an alphabet of 33 letters, largest of any of the other languages that we
+			support so far, but some of them are never actually used (or just so rare that I have
+			never actually encountered them...). Thus, we can assume that no alphabet will be
+			larger than 32 letters, and there  can use a 5-bit index to refer to the letters of the
+			alphabet. This also addresses the issue of UTF-8, since Cyrillic characters are two
+			bytes.
+
+			5 is a pretty ugly number, and it would've been great if it was 4 bits, but
+			this turns out to be a futile attempt anyways (see: [Deadend of Partitions]).
+
+			Groups of three letters in a word can be packed together into 15 bits, and by having 1
+			padding bit, this makes up two bytes.
+
+			// A B C -> aaaaabbb'bbccccc*
+
+			Not all words are multiples of 3s, so if there's two letters leftover, then there'll
+			just be some more padding bits.
+
+			// A B -> aaaaabbb'bb******
+
+			If there's just one letter leftover, then we just use one byte.
+
+			// A -> aaaaa***
+
+			Since we save a byte for every three letters of a word, this is about a 33% reduction.
+			Of course, we're saving a byte for every word already due to the previous optimization.
+
+		- Subwords.
+
+			Consider the following words:
+
+			// INTERRELATIONSHIPS
+			// INTERRELATIONSHIP
+			// INTERRELATIONS
+			// INTERRELATION
+			// INTER
+			// IN
+			// RELATIONSHIPS
+			// RELATIONSHIP
+			// RELATIONS
+			// RELATION
+			// SHIPS
+			// SHIP
+
+			All of these words are essentially a subset of the parenting word "INTERRELATIONSHIPS".
+			A very simple optimization we can do to address most of this redundancy is by having a
+			bitfield that indicate where a word can be truncated but be still left a valid word
+			that exists in the dictionary. For example:
+
+			//           INTER
+			//           |       INTERRELATION
+			//           |       |INTERRELATIONS
+			//           |       ||  INTERRELATIONSHIP
+			//           |       ||  |INTERRELATIONSHIPS
+			//           |       ||  ||
+			//           v       vv  vv
+			// LSb ->  0010000000110011 <- MSb // Bits omitted on LHS assuming MIN_WORD_LENGTH=3.
+			//       INTERRELATIONSHIPS
+
+			The bitfield can only describe subwords that also begins with the parenting word (thus
+			"RELATIONSHIP" is not encoded despite still being technically a valid subword of
+			"INTERRELATIONSHIPS"), but this is mostly fine, since this simple optimization allows
+			for us to encode "INTERRELATIONSHIPS" and 5 other words at the same time with the
+			simple flip of a bit! Asking for any more overcomplicates the scheme.
+
+			The thing we have to be aware about this optimization is that we have to process for
+			subwords in such a way that we won't have an entry for a word twice in the compressed
+			dictionary file. For example, "EXIT" could be encompassed by both "EXITS" and
+			"EXITING", but we will only actually assign it to one of them. This avoid redudant
+			processing and submissions on the Nerd's end.
+
+			Another quirk that the optimization brings is that the family of "12-lettered words
+			beginning with the letter 'B'" no longer consists of entirely 12-lettered words anymore,
+			since any of those 12-lettered words may have a valid subword ranging from
+			MIN_WORD_LENGTH to 11 letters. This isn't exactly significant, but it means that Nerd
+			may not iterate through ALL the longest words first. For example, English Anagrams
+			have a word limit of 6 letters (7 in the other mode), so Nerd would skim through the
+			entire dictionary file until it finds the family of words that are 6 letters long.
+			However, there are definitely some family of words that are 12-lettered but have valid
+			subwords that would be reproducible within the Anagrams game. Again, this is not too
+			significant, it would just mean that Nerd cannot gaurantee it'll submit ALL the longest
+			words FIRST, but it will nonetheless get the majority of them!
+
+		- Subfields.
+
+			The subword optimization itself needs to be optimized, because there's currently no
+			good way to store this subword bitfield information in a convenient manner.
+			For 14-lettered words, you'd need at least 11 bits to encode all the potential 11
+			subwords (assuming MIN_WORD_LENGTH=3 and the 14-lettered word itself is already known).
+			This means two bytes is needed. For 5-lettered words, however, only 2 bits are
+			required! So a byte is sufficient and, if anything, inefficient...
+
+			Thus what we can do is first get the set of all unique subword bitfields from words of
+			all different lengths. For example, consider the set:
+
+			// A: --1--1--1
+			// B: -1---111
+			// C: -1---1
+			// D: --1--1
+			// E: -----1
+			// F: --1
+
+			(Zeros are replaced with dashes for readability).
+			Then if we group the subword bitfields like so...
+
+			// (0) A: --1--1--1
+			//     D: --1--1
+			//     F: --1
+			//
+			// (1) B: -1---111
+			//     C: -1---1
+			//
+			// (2) E: -----1
+
+			Each group (namely (0), (1), and (2)) will have some longest subword bitfield that
+			encompasses all the shorter subword bitfields in that same group. The insight here
+			is that the shorter subword bitfields can be completely replaced with the longest
+			subword bitfield and have it where the extra bits are just ignored. Thus we can
+			instead have a set of "subfields" and replace the original subword bitfields of each
+			word with indices to this set of subfields.
+
+			// [Subfields].
+			//     (0) --1--1--1
+			//     (1) -1---111
+			//     (2) -----1
+			//
+			//  A: (0) -> (--1--1--1)
+			//  B: (1) -> (-1---111 )
+			//  C: (1) -> (-1---1** )
+			//  D: (0) -> (--1--1***)
+			//  E: (2) -> (-----1   )
+			//  F: (0) -> (--1******)
+
+			We know how many bits to ignore since we already know the length of the word.
+
+			Since English would have the largest set of words (being language that's used for all
+			Game Pigeon wordgames), it's quite fortunate that there are actually less than 256
+			subfields, so we can actually just use a single byte as an index to indicate all the
+			word's valid subwords without having to worry about varied-lengthed subword bitfields.
+
+	Header information (which I refer to as the glossary) for "how many N-lettered words that
+	begin with the letter X are there" and the set of subfields are all stored on flash on the
+	microcontroller. The rest of the data will be on the SD card storage medium where it consists
+	of the pattern of a byte-index into the set of subfields followed by packed alphabet indices.
+
+	Doing all of these optimizations allows for a highly dense information stream that Nerd can
+	spend more time on processing rather than be busy communicating with the SD card.
+*/
+
+/* [Deadend of Partitions].
+	In the base Game Pigeon wordgames, WordHunt (4x4) is where you could hypothetically create the
+	longest word of 16 letters. WordHunt (5x5) pushes this to 25, but chances are you can't even
+	come up with a word longer than 16 and also have it practically appear in a random game. Thus
+	16 is a reasonable upper-limit on the length of words we should care about and process for.
+	However, this upper bound of 16 also means that for all words, only up to 16 unique, distinct
+	letters will be used out of, say, the 26 letters of the English alphabet.
+
+	This insight has huge implications, because if we can get away with using only 4 bits per
+	letter of a word, which 16 happens to be conveniently a power of two of, then we can pack two
+	letters for every byte! We could end up with a compressed dictionary with potentially no
+	padding bits at all and a much simplier decoding scheme.
+
+	Of course, if we only use 4 bits and not 5 bits, we will be unable to represent certain letters
+	of the alphabet, and therefore unable to encode entire words that utilize those letters. The
+	trick here is to essentially have "betabets" that are subsets of the parenting alphabet, with
+	each betabet containing 16 letters at most. Then by specifying which betabet we are using
+	preemptively, we can use this betabet as if it was the alphabet. If a particular word can't be
+	written with a particular betabet, then a different or a new one will be made to accomdate that
+	word.
+
+	Thus the problem boils down to coming up with a set of betabets that are highly optimized (to
+	which I called them sigmabets) where the set will be of minimum size and yet still be able to
+	represent every single word that we'd be saving in the compressed dictionary file.
+
+	Consider the following words and their smallest betabets:
+
+	//              A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
+	//
+	// APPLECIDER : A   C D E       I     L       P   R
+	// CANDLE     : A   C D E             L
+	// PACER      : A   C   E                     P
+	// CHRISTMAS  : A   C         H I       M         R S T
+	// DIODE      :       D E       I           O
+	// WHISKERS   :         E     H I   K             R S       W
+	// WINDMAKER  : A     D E       I   K   M N       R         W
+
+	These words can all be represented by a single sigmabet.
+
+	//              A C D E H I K L M N O P R S T W
+	//
+	// APPLECIDER : A C D E   I   L       P R
+	// CANDLE     : A C D E       L
+	// PACER      : A C   E               P
+	// CHRISTMAS  : A C     H I     M       R S T
+	// DIODE      :     D E   I         O
+	// WHISKERS   :       E H I K           R S   W
+	// WINDMAKER  : A   D E   I K   M N     R     W
+
+	Because this sigmabet uses only 16 letters of the 26-lettered alphabet of the English language,
+	only a 4-bit index is needed for each word to describe its letters. The word "ZOO", however,
+	cannot be encoded by the above sigmabet since the sigmabet does not include 'Z'. Thus a
+	separate sigmabet must be created to handle words like "ZOO".
+
+	But how exactly do we find the minimum amount of sigmabets that'll encode every single word
+	we'll care about? Well, I'm actually not too sure if it's possible... to do efficiently.
+
+	See, this problem seems to be related to the NP-hard problem of set covering, where you have a
+	set of subsets that you must filter out as much as you can without leaving any gaps in the
+	union. The sigmabet generation problem seems related because we can imagine the sigmabets
+	themselves as "subsets" of all of the word's betabets, and we must weed out as many as we can
+	to find the most optimal collection of sigmabets. In short, we should be expecting to not be
+	able to find a good algorithm that'll compute the most optimal set of sigmabets in polynomial
+	time, any time at all.
+
+	Nonetheless, we can still try. See, this sigmabet generation problem comes down to finding the
+	most optimal partitioning of all recognized words. In each partition, we convert each word into
+	its respective betabet, and "OR" all of the betabets in the partition together. The OR'd
+	betabets will be the sigmabet that encode all of the words in that particular partition. Thus
+	for any partitioning of the dictionary to be valid, each partition cannot use more than 16
+	distinct letters, lest its sigmabets will end up with more than 16 letters and be unindexable
+	with 4 bits.
+
+	So to find the most optimal collection of sigmabets, we just simply iterate through all
+	possible partitions of the dictionary, which contains over 250K words. Yikes! Luckily, we can
+	trim this down to something more managable. Since we're going to convert the words into
+	betabets, and betabets will be OR'd together, we can just simply first generate the collection
+	of all betabets where no two betabets are subsets of each other. This collection comes out to
+	being around a hair short of 7K entries, so much more managable. It's still brute-forcing, but
+	managable brute-forcing... maybe.
+
+	Now all we have to do is just partition all these betabets in this 7K collection in such a way
+	that they generate the most optimal set of sigmabets. To first grasp the sheer scale of this
+	operation, consider how many possible partitioning there can be for a set of size N. If we
+	were talking about all possible combinations, you'd use exponentiation; if we were doing
+	permutations, we'd use factorials. So what will we use for partitionings? Well, there's
+	actually no known closed-form solution for this computation... At best, we have an algorithm
+	similar to Pascal's triangle. With this algorithm, we can generate Bell's numbers, which is
+	what the counts of all possible partitionings are called. Here are the first 32 Bell's numbers:
+
+	//  1:                                   1
+	//  2:                                   2
+	//  3:                                   5
+	//  4:                                  15
+	//  5:                                  52
+	//  6:                                 203
+	//  7:                                 877
+	//  8:                               4 140
+	//  9:                              21 147
+	// 10:                             115 975
+	// 11:                             678 570
+	// 12:                           4 213 597
+	// 13:                          27 644 437
+	// 14:                         190 899 322
+	// 15:                       1 382 958 545
+	// 16:                      10 480 142 147
+	// 17:                      82 864 869 804
+	// 18:                     682 076 806 159
+	// 19:                   5 832 742 205 057
+	// 20:                  51 724 158 235 372
+	// 21:                 474 869 816 156 751
+	// 22:               4 506 715 738 447 323
+	// 23:              44 152 005 855 084 346
+	// 24:             445 958 869 294 805 289
+	// 25:           4 638 590 332 229 999 353
+	// 26:          49 631 246 523 618 756 274
+	// 27:         545 717 047 936 059 989 389
+	// 28:       6 160 539 404 599 934 652 455
+	// 29:      71 339 801 938 860 275 191 172
+	// 30:     846 749 014 511 809 332 450 147
+	// 31:  10 293 358 946 226 376 485 095 653
+	// 32: 128 064 670 049 908 713 818 925 644
+
+	This means for a set of 32 elements, there are over 100 goddamn septillion partitionings! It
+	may look like the sequence is growing exponentially, and it is, but it is in fact FASTER than
+	exponential growth (1). With that in mind, now try to imagine the amount of partitionings of
+	7000 elements! Since it grows faster than any exponential growth, we can confidently say it's
+	more than 2^7000. We'd likely need several orders of magnitude multiples of of 875 bytes to
+	even represent this humongous number!
+
+	But let's not be swayed so easily: a majority of partitionings are not valid canidates to
+	becoming the most optimal collection of sigmabets anyways, since there's this constraint that
+	sigmabets cannot have more than 16 letters. If iterate through all possible partitions in such
+	a way that can essentially prune large amounts of dead-ends, the iteration can become somewhat
+	quick.
+
+	This is what I essentially did for a week. I wrote a pretty convoluted algorithm that iterated
+	through all possible partitionings of ~7K elements where it skipped a whole lot of dead-ends.
+	I got pretty far, I'll admit; I'd probably even implement multi-threading into the search if I
+	was paid at all to do this stupid project, but what I had at the end was sufficient.
+
+	After possibly several hundred trillion partitionings considered and iterated over, I have
+	found that, given my dataset of the English wordset, a collection of 187 sigmabets is
+	sufficient in describing all words we'd be processing for*. This is not a definitive answer,
+	though. Chances are the program would never finish until the heat death of the universe, but
+	187 sigmabets is pretty damn good.
+
+	Except... we did all of this just to shave off a single bit of a 5-bit index. Consider the
+	current optimization for the compression of the word "ELECTROMAGNETISM":
+
+	// Implicit.
+	// |   Subfield index.
+	// |    |       Packed into 2 bytes.
+	// |    |                |
+	// |    |    ____________|____________
+	// |    |    |     |     |     |     |
+	// v  vvvv  vvv   vvv   vvv   vvv   vvv
+	// E  XXXX (LEC) (TRO) (MAG) (NET) (ISM)
+	//     1B    2B    2B    2B    2B    2B
+	//
+	// Total: 11 bytes.
+
+	Now consider if we managed to squeeze it down to 4-bits per letter:
+
+	// Implicit.
+	// |   Subfield index.
+	// |    |      Packed into 2 bytes.
+	// |    |               |
+	// |    |    ___________|__________
+	// |    |    |      |      |      |
+	// v  vvvv  vvvv   vvvv   vvvv   vvvv
+	// E  XXXX (LECT) (ROMA) (GNET) (ISM*)
+	//     1B    2B     2B     2B     2B
+	//
+	// Total: 9 bytes.
+
+	For the longest word, we'd save three bytes! Wonderful! But how exactly do we ...
+
+	* The sigmabet generation ignores the first letter of words, since we performed an optimization
+	that'd that letter implicit anyways.
+
+	(1) Bell numbers @ Site(johndcook.com/blog/2018/06/05/bell-numbers).
 */

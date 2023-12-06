@@ -1,8 +1,8 @@
 #define pin_pullup(P) concat(pin_pullup_, P)()
-#define pin_output(P) concat(pin_output_ , P)()
-#define pin_low(P)    concat(pin_low_    , P)()
-#define pin_high(P)   concat(pin_high_   , P)()
-#define pin_read(P)   concat(pin_read_   , P)()
+#define pin_output(P) concat(pin_output_, P)()
+#define pin_low(P)    concat(pin_low_   , P)()
+#define pin_high(P)   concat(pin_high_  , P)()
+#define pin_read(P)   concat(pin_read_  , P)()
 
 #define COMMON(NAME, BODY) __attribute__((always_inline)) static inline void NAME(void) { BODY }
 	#define MAKE_PULLUP(P, X, N) COMMON(pin_pullup_##P, DDR##X  &= ~(1 << DD##X##N  ); PORT##X |=  (1 << PORT##X##N);)
@@ -35,7 +35,7 @@ PIN_XMDT(MAKE)
 //
 
 /* [Overview].
-	This file just defines stuff related to the MCU's pins.
+	This file just defines macros to configure pins straightforwardly.
 	The pin numberings are determined by pin-out diagrams such as (2).
 
 	Pins can be in four states (configured with pin_input/pin_output and pin_low/pin_high
