@@ -1064,6 +1064,12 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 										_usb_ms_ocr_slot_topdown_board_coords.y = 0;
 										_usb_ms_ocr_slot_topdown_pixel_coords.y = 0;
 										usb_ms_ocr_state                        = USBMSOCRState_ready;
+
+										// Immediately send out packet.
+										for (u8 i = 0; i < sizeof(diplomat_packet); i += 1)
+										{
+											usart_tx(((volatile u8*) &diplomat_packet)[i]);
+										}
 									}
 								}
 								else if (_usb_ms_ocr_slot_topdown_pixel_coords.y == compressed_slot_stride) // Move onto the next row of slots.

@@ -379,6 +379,10 @@ main(void)
 
 						case MenuChosenMapOption_on_guard:
 						{
+							pin_low(PIN_NERD_RESET);
+							_delay_ms(1.0);
+							pin_high(PIN_NERD_RESET);
+
 							usb_ms_ocr_state         = USBMSOCRState_set;
 							diplomat_packet.wordgame = (enum WordGame) menu_main_selected_option;
 							menu                     = Menu_displaying;

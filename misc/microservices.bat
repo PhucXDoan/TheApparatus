@@ -3,6 +3,13 @@ setlocal EnableDelayedExpansion
 
 cls
 
+REM W:\build\Microservices.exe extractorv2 ^
+REM 	W:\data\extractor\temp\ ^
+REM 	W:\data\screenshots\temp\ ^
+REM 	--clear-output-dir
+REM 
+REM W:\build\Microservices.exe collectune W:\data\collectune\temp\ W:\data\masks\ W:\data\extractor\temp\ --clear-output-dir
+
 W:\build\Microservices.exe extractorv2 ^
 	W:\data\extractor\main\ ^
 	W:\data\screenshots\anagrams_english_6\ ^
