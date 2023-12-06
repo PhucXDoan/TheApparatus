@@ -222,7 +222,7 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 
 #if USB_MS_ENABLE
 	static void
-	_usb_ms_sd_write_through(u32 sector_address) // Receive sector from host and writes it to the SD.
+	_usb_ms_receive_sector(void)
 	{
 		u16 sector_byte_index = 0;
 		while (sector_byte_index < countof(sd_sector))
@@ -255,8 +255,6 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 			UEINTX &= ~(1 << RXOUTI);
 			UEINTX &= ~(1 << FIFOCON);
 		}
-
-		sd_write(sector_address);
 	}
 #endif
 
@@ -681,7 +679,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 			}
 			else if (transaction_sector_count) // [Mass Storage - OCR].
 			{
-				_usb_ms_sd_write_through(transaction_sector_start_address);
+				_usb_ms_receive_sector();
 
 				//
 				// Determine whether or not we need to inspect the write transaction to do OCR.
@@ -777,7 +775,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 				{
 					if (sector_address != transaction_sector_start_address) // We already did the first write in order to inspect the sector.
 					{
-						_usb_ms_sd_write_through(sector_address);
+						_usb_ms_receive_sector();
 					}
 
 					if (transaction_is_for_bmp && usb_ms_ocr_state == USBMSOCRState_processing)
@@ -1081,6 +1079,10 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 						}
 
 						curr_red_channel_offset = 0;
+					}
+					else // Only actually write to SD card if it's junk we don't care about; this speeds up the OCR process as we aren't wasting time doing data transfers.
+					{
+						sd_write(sector_address);
 					}
 				}
 			}
@@ -2682,6 +2684,14 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 	direct adjacency with another piece, thus we can avoid having to extract activated pixels and
 	perform comparisons of a lot of slots since we know for a fact they'll just be empty space.
 	Simple exits like these cuts the processing time of WordBites around half, to 13 seconds total.
+
+	Later, I made another optimization where we skip writing to the SD card entirely when we're
+	doing OCR. The storage medium is still important to keep around and have up to date since it
+	contains a bunch of junk file system stuff that the OS needs, but for the BMP data itself,
+	we really don't actually have to bother with saving that. Thus, we can completely remove
+	that from the OCR entirely, making processing WordBites take around 8 seconds! This does mean
+	that we can't use the cropped screenshots from the SD card whenever we need to do some
+	debugging since those files would be pretty much be pointing to junk, but this is mostly fine.
 */
 
 /* [OCR - Mask Stream].
