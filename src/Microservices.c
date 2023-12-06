@@ -2199,6 +2199,7 @@ main(int argc, char** argv)
 			Game Pigeon wordgames), it's quite fortunate that there are actually less than 256
 			subfields, so we can actually just use a single byte as an index to indicate all the
 			word's valid subwords without having to worry about varied-lengthed subword bitfields.
+			We can just prepend the subfield index right before the packed letters of the word.
 
 	Header information (which I refer to as the glossary) for "how many N-lettered words that
 	begin with the letter X are there" and the set of subfields are all stored on flash on the
@@ -2385,10 +2386,86 @@ main(int argc, char** argv)
 	//
 	// Total: 9 bytes.
 
-	For the longest word, we'd save three bytes! Wonderful! But how exactly do we ...
+	For the longest word, we'd save three bytes! Wonderful! But how exactly do we indicate which
+	sigmabet we're actually using...? Hmm, okay, what if we do it like with the subwords where we
+	had a byte-index that'll point to the specific sigmabet to use? Okay, that'll be an extra byte
+	overhead for each word now, making the savings for "ELECTROMAGNETISM" go from 3 bytes to 2
+	bytes. No big deal; it adds up when we have thousands of words!
+
+	Except... there just aren't that many words that long. Most words are about 5-8 letters long,
+	and you don't actually lose or gain any bytes from this optimization... For example, "LOSERS":
+
+	// Implicit.
+	// |   Subfield index.
+	// |    | Packed into 2 bytes.
+	// |    |       |
+	// |    |    ___|___
+	// |    |    |     |
+	// v  vvvv  vvv   vvv
+	// L  XXXX (OSE) (RS*)
+	//     1B    2B    2B
+	//
+	// Total: 5 bytes.
+	//
+	// Implicit.
+	// |   Subfield index.
+	// |    | Sigmabet index.
+	// |    |    | Packed into 2 bytes.
+	// |    |    |    | Stored as 1 byte.
+	// |    |    |    |     |
+	// v  vvvv vvvv  vvvv   v
+	// L  XXXX YYYY (OSER) (S)
+	//     1B   1B    2B    1B
+	//
+	// Total: 5 bytes.
+
+	It's even worse for 4-lettered words actually! Like for "LOSE":
+
+	// Implicit.
+	// |   Subfield index.
+	// |    | Packed into 2 bytes.
+	// |    |    |
+	// |    |    |
+	// v  vvvv  vvv
+	// L  XXXX (OSE)
+	//     1B    2B
+	//
+	// Total: 3 bytes.
+	//
+	// Implicit.
+	// |   Subfield index.
+	// |    | Sigmabet index.
+	// |    |    | Packed into 2 bytes.
+	// |    |    |    |
+	// |    |    |    |
+	// v  vvvv vvvv  vvvv
+	// L  XXXX YYYY (OSE*)
+	//     1B   1B    2B
+	//
+	// Total: 4 bytes.
+
+	Yikes. I mean, sure, perhaps we could save a couple kilobytes in the net sum, but this was the
+	final nail in the coffin for me: decoding it just might be as difficult as having 5-bit
+	indices. Since we are now using a sigmabet that's just a subset of the alphabet, we might have
+	an extra layer of indirection penaltized onto us in the decoding process. All just to shave
+	off one extra bit!
+
+	There's no hope in having the sigmabet indices be stored in some sort of header or glossary.
+	With the lengthed and initial letter glossary, there's already 338 entries for English. If
+	there's 187 sigmabets, then this explodes to 63,206! All of this is just WAY too complicated
+	and much for something as simple as "shaving off one extra bit". This is just a deadend.
+
+	It wasn't wasted effort though; I learned quite a lot. For other languages besides English,
+	the amount of sigmabets were quite few. Can't exactly recall, but it might've been around the
+	magnitude of 64. This is mostly in due part of the fact that foreign languages are only found
+	within Anagrams which have a word length limit of 6 letters. If it turns out that the most
+	optimal sigmabet collection is exceptionally tiny (which very well may be true since I had to
+	eventually terminate the search that'll likely last the entire to heat death of the universe),
+	then this optimaization would be more a lot more practical.
+
+	But alas, it was futile.
 
 	* The sigmabet generation ignores the first letter of words, since we performed an optimization
 	that'd that letter implicit anyways.
-
 	(1) Bell numbers @ Site(johndcook.com/blog/2018/06/05/bell-numbers).
 */
