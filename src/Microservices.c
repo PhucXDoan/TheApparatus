@@ -685,7 +685,7 @@ main(int argc, char** argv)
 				}
 			} break;
 
-			case CLIProgram_extractorv2:
+			case CLIProgram_extractorv2: // See: [Mask Generation].
 			{
 				struct CLIProgram_extractorv2_t cli                  = cli_unknown.extractorv2;
 				i32                             examined_screenshots = 0;
@@ -909,7 +909,7 @@ main(int argc, char** argv)
 				free(compressed_slot.data);
 			} break;
 
-			case CLIProgram_collectune:
+			case CLIProgram_collectune: // See: [Mask Generation].
 			{
 				struct CLIProgram_collectune_t cli                                 = cli_unknown.collectune;
 				i32                            processed_images                    = 0;
@@ -1070,7 +1070,7 @@ main(int argc, char** argv)
 				free(accumulated_mask_pixels);
 			} break;
 
-			case CLIProgram_maskiversev2:
+			case CLIProgram_maskiversev2: // See: [Mask Generation].
 			{
 				struct CLIProgram_maskiversev2_t cli = cli_unknown.maskiversev2;
 
@@ -1238,16 +1238,24 @@ main(int argc, char** argv)
 				}
 			} break;
 
-			case CLIProgram_wordy: // See: [Terms & Definitions].
+			case CLIProgram_wordy: // See: [Word Compression].
 			{
 				struct CLIProgram_wordy_t cli         = cli_unknown.wordy;
 				i32                       total_flash = 0;
+				u64                       stream_size = 0;
 
 				strbuf c_source_file_path = strbuf(256);
 				strbuf_str (&c_source_file_path, cli.dir_path.str);
-				strbuf_cstr(&c_source_file_path, "/word_glossary.h");
+				strbuf_cstr(&c_source_file_path, "/words_table_of_contents.h");
 				HANDLE c_source_handle = create_file_writing_handle(c_source_file_path.str);
 				strbuf output_buf      = strbuf(256);
+
+				strbuf stream_file_path = strbuf(256);
+				strbuf_str (&stream_file_path, cli.dir_path.str);
+				strbuf_cstr(&stream_file_path, WORD_STREAM_NAME);
+				strbuf_char(&stream_file_path, '.');
+				strbuf_cstr(&stream_file_path, WORD_STREAM_EXTENSION);
+				HANDLE stream_handle = create_file_writing_handle(stream_file_path.str);
 
 				//
 				// Process each language's dictionary file.
@@ -1265,7 +1273,7 @@ main(int argc, char** argv)
 					}
 
 					//
-					// Parse dictionary for words.
+					// Generate wordsets consisting of word-makeups with first u16 being the subword bitfield.
 					//
 
 					static_assert(MIN_WORD_LENGTH > 0); // Zero-lengthed words doesn't make sense!
@@ -1603,13 +1611,14 @@ main(int argc, char** argv)
 
 						free(stream.data);
 					}
-					printf("\t%d word makeups.\n", word_makeup_count);
+					printf("\t%d entries.\n", word_makeup_count);
 
 					//
-					// Generate subfields and count in word glossary.
+					// Find table values. First u16 of word-makeups will be replaced with subfield index.
 					//
 
-					i32             glossary_counts[ABSOLUTE_MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1][MAX_ALPHABET_LENGTH] = {0};
+					i32             entry_counts  [ABSOLUTE_MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1][MAX_ALPHABET_LENGTH] = {0};
+					u32             length_offsets[ABSOLUTE_MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1] = {0};
 					struct Dary_u16 subfields = {0};
 
 					for
@@ -1619,6 +1628,8 @@ main(int argc, char** argv)
 						word_length -= 1
 					)
 					{
+						length_offsets[ABSOLUTE_MAX_WORD_LENGTH - word_length] = (u32) stream_size;
+
 						for (i32 word_initial_alphabet_index = 0; word_initial_alphabet_index < LANGUAGE_INFO[language].alphabet_length; word_initial_alphabet_index += 1)
 						{
 							struct Dary_u16 wordset = wordsets[ABSOLUTE_MAX_WORD_LENGTH - word_length][word_initial_alphabet_index];
@@ -1633,14 +1644,24 @@ main(int argc, char** argv)
 								// Increment count.
 								//
 
-								glossary_counts[ABSOLUTE_MAX_WORD_LENGTH - word_length][word_initial_alphabet_index] += 1;
-								if (glossary_counts[ABSOLUTE_MAX_WORD_LENGTH - word_length][word_initial_alphabet_index] > (u16) -1)
+								entry_counts[ABSOLUTE_MAX_WORD_LENGTH - word_length][word_initial_alphabet_index] += 1;
+								if (entry_counts[ABSOLUTE_MAX_WORD_LENGTH - word_length][word_initial_alphabet_index] > (u16) -1)
 								{
-									error("Glossary count overflow!");
+									error("Entry count overflow! Too many words of the same length that begin with the same letter.");
 								}
 
 								//
-								// Determine if a subfield can be applied to subword bitfield.
+								// Increment stream size.
+								//
+
+								stream_size += PACKED_WORD_SIZE(word_length);
+								if (stream_size > (u32) -1)
+								{
+									error("Word stream too large!");
+								}
+
+								//
+								// Determine if a subfield can be applied to the subword's bitfield.
 								//
 
 								b32 should_push = true;
@@ -1673,10 +1694,10 @@ main(int argc, char** argv)
 					printf("\t%lld subfields.\n", subfields.length);
 
 					//
-					// Make glossary of the counts.
+					// Make table of the entry counts.
 					//
 
-					strbuf_cstr(&output_buf, "static const u16 WORD_GLOSSARY_COUNTS_");
+					strbuf_cstr(&output_buf, "static const u16 WORDS_TABLE_OF_CONTENTS_ENTRY_COUNTS_");
 					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
 					strbuf_cstr(&output_buf, "[");
 					strbuf_i64 (&output_buf, max_word_length - MIN_WORD_LENGTH + 1);
@@ -1699,7 +1720,7 @@ main(int argc, char** argv)
 						for (i32 alphabet_index = 0; alphabet_index < LANGUAGE_INFO[language].alphabet_length; alphabet_index += 1)
 						{
 							strbuf_cstr(&output_buf, "\t\t\t");
-							strbuf_i64 (&output_buf, glossary_counts[ABSOLUTE_MAX_WORD_LENGTH - word_length][alphabet_index]);
+							strbuf_i64 (&output_buf, entry_counts[ABSOLUTE_MAX_WORD_LENGTH - word_length][alphabet_index]);
 							strbuf_cstr(&output_buf, ", // \"");
 							strbuf_str (&output_buf, LETTER_INFO[LANGUAGE_INFO[language].alphabet[alphabet_index]].name);
 							strbuf_cstr(&output_buf, "\".\n");
@@ -1713,10 +1734,35 @@ main(int argc, char** argv)
 					total_flash += (i32) (sizeof(u16) * LANGUAGE_INFO[language].alphabet_length * (max_word_length - MIN_WORD_LENGTH + 1));
 
 					//
-					// Make glossary of the subfields.
+					// Make table of the length offsets.
 					//
 
-					strbuf_cstr(&output_buf, "static const u16 WORD_GLOSSARY_SUBFIELDS_");
+					strbuf_cstr(&output_buf, "static const u32 WORDS_TABLE_OF_CONTENTS_LENGTH_OFFSETS_");
+					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
+					strbuf_cstr(&output_buf, "[");
+					strbuf_i64 (&output_buf, max_word_length - MIN_WORD_LENGTH + 1);
+					strbuf_cstr(&output_buf, "] PROGMEM = { ");
+					write_flush_strbuf(c_source_handle, &output_buf);
+					for
+					(
+						i32 word_length = max_word_length;
+						word_length >= MIN_WORD_LENGTH;
+						word_length -= 1
+					)
+					{
+						strbuf_u64 (&output_buf, length_offsets[ABSOLUTE_MAX_WORD_LENGTH - word_length]);
+						strbuf_cstr(&output_buf, ", ");
+						write_flush_strbuf(c_source_handle, &output_buf);
+					}
+					strbuf_cstr(&output_buf, "};\n\n");
+
+					total_flash += (i32) (sizeof(u32) * (max_word_length - MIN_WORD_LENGTH + 1));
+
+					//
+					// Make table of the subfields.
+					//
+
+					strbuf_cstr(&output_buf, "static const u16 WORDS_TABLE_OF_CONTENTS_SUBFIELDS_");
 					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
 					strbuf_cstr(&output_buf, "[");
 					strbuf_i64 (&output_buf, subfields.length);
@@ -1737,15 +1783,8 @@ main(int argc, char** argv)
 					total_flash += (i32) (sizeof(u16) * subfields.length);
 
 					//
-					// Generate stream.
+					// Generate stream for the language.
 					//
-
-					strbuf stream_file_path = strbuf(256);
-					strbuf_str (&stream_file_path, cli.dir_path.str);
-					strbuf_str (&stream_file_path, LANGUAGE_INFO[language].name);
-					strbuf_char(&stream_file_path, '.');
-					strbuf_cstr(&stream_file_path, WORDY_SUFFIX);
-					HANDLE stream_handle = create_file_writing_handle(stream_file_path.str);
 
 					for
 					(
@@ -1797,7 +1836,6 @@ main(int argc, char** argv)
 					// Clean up.
 					//
 
-					close_file_writing_handle(stream_handle);
 					free(subfields.data);
 					for (i32 i = 0; i < countof(wordsets); i += 1)
 					{
@@ -1809,29 +1847,46 @@ main(int argc, char** argv)
 				}
 
 				//
-				// Make word glossary table of the languages.
+				// Make table of contents for all of the languages.
 				//
 
-				strbuf_cstr(&output_buf, "static const struct { const u16* counts; const u16* subfields; u8 max_word_length; } WORD_GLOSSARY[] PROGMEM =\n");
+				strbuf_cstr(&output_buf, "static const struct { const u16* entry_counts; const u16* length_offsets; const u16* subfields; u8 max_word_length; } WORDS_TABLE_OF_CONTENTS[] PROGMEM =\n");
 				strbuf_cstr(&output_buf, "\t{\n");
 				write_flush_strbuf(c_source_handle, &output_buf);
 				for (enum Language language = {0}; language < Language_COUNT; language += 1)
 				{
 					strbuf_cstr(&output_buf, "\t\t[Language_");
 					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
-					strbuf_cstr(&output_buf, "] = { (u16*) WORD_GLOSSARY_COUNTS_");
+					strbuf_cstr(&output_buf, "] = { ");
+					write_flush_strbuf(c_source_handle, &output_buf);
+
+					strbuf_cstr(&output_buf, "(const u16*) WORDS_TABLE_OF_CONTENTS_ENTRY_COUNTS_");
 					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
-					strbuf_cstr(&output_buf, ", (u16*) WORD_GLOSSARY_SUBFIELDS_");
+					strbuf_cstr(&output_buf, ", ");
+					write_flush_strbuf(c_source_handle, &output_buf);
+
+					strbuf_cstr(&output_buf, "(const u16*) WORDS_TABLE_OF_CONTENTS_LENGTH_OFFSETS_");
 					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
-					strbuf_cstr(&output_buf, ", countof(WORD_GLOSSARY_COUNTS_");
+					strbuf_cstr(&output_buf, ", ");
+					write_flush_strbuf(c_source_handle, &output_buf);
+
+					strbuf_cstr(&output_buf, "(const u16*) WORDS_TABLE_OF_CONTENTS_SUBFIELDS_");
 					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
-					strbuf_cstr(&output_buf, ") + MIN_WORD_LENGTH - 1 },\n");
+					strbuf_cstr(&output_buf, ", ");
+					write_flush_strbuf(c_source_handle, &output_buf);
+
+					strbuf_cstr(&output_buf, "countof(WORDS_TABLE_OF_CONTENTS_ENTRY_COUNTS_");
+					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
+					strbuf_cstr(&output_buf, ") + MIN_WORD_LENGTH - 1");
+					write_flush_strbuf(c_source_handle, &output_buf);
+
+					strbuf_cstr(&output_buf, "},\n");
 					write_flush_strbuf(c_source_handle, &output_buf);
 				}
 				strbuf_cstr(&output_buf, "\t};\n");
 				write_flush_strbuf(c_source_handle, &output_buf);
 
-				total_flash += (sizeof(u16) * 2 + sizeof(u8)) * Language_COUNT;
+				total_flash += (sizeof(u16) * 3 + sizeof(u8)) * Language_COUNT;
 
 				strbuf_cstr(&output_buf, "\n");
 				strbuf_cstr(&output_buf, "// ");
@@ -1845,6 +1900,7 @@ main(int argc, char** argv)
 				// Clean up.
 				//
 
+				close_file_writing_handle(stream_handle);
 				close_file_writing_handle(c_source_handle);
 			} break;
 
@@ -2050,7 +2106,7 @@ main(int argc, char** argv)
 
 			So if English has an alphabet of 26 letters and the maximum and minimum word lengths
 			we will allow to store are 15 and 3 respectively, then we should expect 26*(15-3+1)
-			or 338 entries in the header.
+			or 338 counts in the header.
 
 			This optimization on top of the previous length-based optimization allows for huge
 			amount of redundant information in the dictionary file to be removed, but also allow
@@ -2202,13 +2258,11 @@ main(int argc, char** argv)
 			word's valid subwords without having to worry about varied-lengthed subword bitfields.
 			We can just prepend the subfield index right before the packed letters of the word.
 
-	Header information (which I refer to as the glossary) for "how many N-lettered words that
-	begin with the letter X are there" and the set of subfields are all stored on flash on the
-	microcontroller. The rest of the data will be on the SD card storage medium where it consists
-	of the pattern of a byte-index into the set of subfields followed by packed alphabet indices.
-
-	Doing all of these optimizations allows for a highly dense information stream that Nerd can
-	spend more time on processing rather than be busy communicating with the SD card.
+	The majority of the data pertaining to the composition of the words is stored as a single
+	binary file on an SD card that the Nerd has access to. Data for how this file is laid out
+	(the amount of N-lettered words beginning with the letter X, what the actual subfield values
+	are, etc.) is outputted as a header file that gets compiled in with Nerd and then stored in
+	flash.
 */
 
 /* [Deadend of Partitions].

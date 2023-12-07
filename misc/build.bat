@@ -63,10 +63,10 @@ pushd W:\build\
 	REM Compile Microservices.c.
 	REM
 
-REM	cl W:\src\Microservices.c /Fe:Microservices.exe !MSVC_FLAGS!
-REM	if not !ERRORLEVEL! == 0 (
-REM		goto ABORT
-REM	)
+	cl W:\src\Microservices.c /Fe:Microservices.exe !MSVC_FLAGS!
+	if not !ERRORLEVEL! == 0 (
+		goto ABORT
+	)
 
 	REM
 	REM Compile C source code into assembly and ELF.
@@ -79,14 +79,14 @@ REM		goto ABORT
 REM	)
 
 REM	avr-gcc !NERD_AVR_GCC_ARGS! -S -fverbose-asm     W:\src\Nerd.c
-	avr-gcc !NERD_AVR_GCC_ARGS! -o W:\build\Nerd.elf W:\src\Nerd.c
-	if not !ERRORLEVEL! == 0 (
-		goto ABORT
-	)
+REM	avr-gcc !NERD_AVR_GCC_ARGS! -o W:\build\Nerd.elf W:\src\Nerd.c
+REM	if not !ERRORLEVEL! == 0 (
+REM		goto ABORT
+REM	)
 
 REM	avr-size W:\build\Diplomat.elf W:\build\Nerd.elf
 
-	avr-size W:\build\Nerd.elf
+REM	avr-size W:\build\Nerd.elf
 
 	REM
 	REM Convert ELF into HEX.
@@ -97,79 +97,79 @@ REM	if not !ERRORLEVEL! == 0 (
 REM		goto ABORT
 REM	)
 
-	avr-objcopy -O ihex -j .text -j .data Nerd.elf Nerd.hex
-	if not !ERRORLEVEL! == 0 (
-		goto ABORT
-	)
-
-	REM
-	REM Find Nerd's bootloader.
-	REM
-
-	mode | findstr "COM!NERD_BOOTLOADER_COM!:" > nul
-	if !ERRORLEVEL! == 0 (
-		set PUTTY_ARGS=-serial COM!NERD_DIAGNOSTIC_COM! -sercfg !NERD_DIAGNOSTIC_BAUD!,8,n,1,N
-
-		avrdude -p !NERD_MCU! -c !NERD_PROGRAMMER! -V -P COM!NERD_BOOTLOADER_COM! -D -Uflash:w:Nerd.hex
-		if not !ERRORLEVEL! == 0 (
-			goto ABORT
-		)
-
-		goto OPEN_PUTTY
-	)
-
-	REM
-	REM Find Diplomat's bootloader.
-	REM
-
-	mode | findstr "COM!DIPLOMAT_DIAGNOSTIC_COM!:" > nul
-	if !ERRORLEVEL! == 0 (
-		mode COM!DIPLOMAT_DIAGNOSTIC_COM!: BAUD=!DIPLOMAT_BOOTLOADER_BAUD_SIGNAL! > nul
-	) else (
-		mode | findstr "COM!DIPLOMAT_BOOTLOADER_COM!:" > nul
-		if not !ERRORLEVEL! == 0 (
-			echo No bootloader found.
-			goto ABORT
-		)
-	)
-
-	for /L %%n in (1,1,64) do (
-		mode | findstr "COM!DIPLOMAT_BOOTLOADER_COM!:" > nul
-		if !ERRORLEVEL! == 0 (
-			set PUTTY_ARGS=-serial COM!DIPLOMAT_DIAGNOSTIC_COM!
-
-			avrdude -p !DIPLOMAT_MCU! -c !DIPLOMAT_PROGRAMMER! -V -P COM!DIPLOMAT_BOOTLOADER_COM! -D -Uflash:w:Diplomat.hex
-			if not !ERRORLEVEL! == 0 (
-				goto ABORT
-			)
-
-			for /L %%n in (1,1,64) do (
-				mode | findstr "COM!DIPLOMAT_DIAGNOSTIC_COM!:" > nul
-				if !ERRORLEVEL! == 0 (
-					goto OPEN_PUTTY
-				) else (
-					ping 127.0.0.1 -n 1 -w 500 > nul
-				)
-			)
-
-			echo No diagnostic port found.
-			goto ABORT
-		) else (
-			ping 127.0.0.1 -n 1 -w 500 > nul
-		)
-	)
-
-	echo No bootloader found.
-	goto ABORT
-
-	REM
-	REM Open PuTTY!
-	REM
-
-	:OPEN_PUTTY
-	if not "!PUTTY_ARGS!" == "" (
-		start putty.exe -load "Default Settings" !PUTTY_ARGS!
-	)
+REM	avr-objcopy -O ihex -j .text -j .data Nerd.elf Nerd.hex
+REM	if not !ERRORLEVEL! == 0 (
+REM		goto ABORT
+REM	)
+REM
+REM	REM
+REM	REM Find Nerd's bootloader.
+REM	REM
+REM
+REM	mode | findstr "COM!NERD_BOOTLOADER_COM!:" > nul
+REM	if !ERRORLEVEL! == 0 (
+REM		set PUTTY_ARGS=-serial COM!NERD_DIAGNOSTIC_COM! -sercfg !NERD_DIAGNOSTIC_BAUD!,8,n,1,N
+REM
+REM		avrdude -p !NERD_MCU! -c !NERD_PROGRAMMER! -V -P COM!NERD_BOOTLOADER_COM! -D -Uflash:w:Nerd.hex
+REM		if not !ERRORLEVEL! == 0 (
+REM			goto ABORT
+REM		)
+REM
+REM		goto OPEN_PUTTY
+REM	)
+REM
+REM	REM
+REM	REM Find Diplomat's bootloader.
+REM	REM
+REM
+REM	mode | findstr "COM!DIPLOMAT_DIAGNOSTIC_COM!:" > nul
+REM	if !ERRORLEVEL! == 0 (
+REM		mode COM!DIPLOMAT_DIAGNOSTIC_COM!: BAUD=!DIPLOMAT_BOOTLOADER_BAUD_SIGNAL! > nul
+REM	) else (
+REM		mode | findstr "COM!DIPLOMAT_BOOTLOADER_COM!:" > nul
+REM		if not !ERRORLEVEL! == 0 (
+REM			echo No bootloader found.
+REM			goto ABORT
+REM		)
+REM	)
+REM
+REM	for /L %%n in (1,1,64) do (
+REM		mode | findstr "COM!DIPLOMAT_BOOTLOADER_COM!:" > nul
+REM		if !ERRORLEVEL! == 0 (
+REM			set PUTTY_ARGS=-serial COM!DIPLOMAT_DIAGNOSTIC_COM!
+REM
+REM			avrdude -p !DIPLOMAT_MCU! -c !DIPLOMAT_PROGRAMMER! -V -P COM!DIPLOMAT_BOOTLOADER_COM! -D -Uflash:w:Diplomat.hex
+REM			if not !ERRORLEVEL! == 0 (
+REM				goto ABORT
+REM			)
+REM
+REM			for /L %%n in (1,1,64) do (
+REM				mode | findstr "COM!DIPLOMAT_DIAGNOSTIC_COM!:" > nul
+REM				if !ERRORLEVEL! == 0 (
+REM					goto OPEN_PUTTY
+REM				) else (
+REM					ping 127.0.0.1 -n 1 -w 500 > nul
+REM				)
+REM			)
+REM
+REM			echo No diagnostic port found.
+REM			goto ABORT
+REM		) else (
+REM			ping 127.0.0.1 -n 1 -w 500 > nul
+REM		)
+REM	)
+REM
+REM	echo No bootloader found.
+REM	goto ABORT
+REM
+REM	REM
+REM	REM Open PuTTY!
+REM	REM
+REM
+REM	:OPEN_PUTTY
+REM	if not "!PUTTY_ARGS!" == "" (
+REM		start putty.exe -load "Default Settings" !PUTTY_ARGS!
+REM	)
 
 	del *.o > nul 2>&1
 	:ABORT

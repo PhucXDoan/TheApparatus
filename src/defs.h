@@ -287,7 +287,8 @@ static_assert(BITS_PER_ALPHABET_INDEX == 5); // PACKED_WORD_SIZE calculation ass
 	X(spanish, Letter_a, Letter_b       , Letter_c, Letter_d      , Letter_e     , Letter_f, Letter_g     , Letter_h      , Letter_i   , Letter_j           , Letter_k, Letter_l     , Letter_m, Letter_n, Letter_o, Letter_p    , Letter_q       , Letter_r, Letter_s, Letter_t     , Letter_u     , Letter_v, Letter_w       , Letter_x    , Letter_y   , Letter_z, Letter_ene          ) \
 	X(italian, Letter_a, Letter_b       , Letter_c, Letter_d      , Letter_e     , Letter_f, Letter_g     , Letter_h      , Letter_i   , Letter_l           , Letter_m, Letter_n     , Letter_o, Letter_p, Letter_q, Letter_r    , Letter_s       , Letter_t, Letter_u, Letter_v     , Letter_z                                                                                           )
 
-#define WORDY_SUFFIX "bin"
+#define WORD_STREAM_NAME      "words"
+#define WORD_STREAM_EXTENSION "bin"
 
 #if PROGRAM_MICROSERVICES
 	static const u32 BLACKLISTED_CODEPOINTS[] =
