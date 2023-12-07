@@ -313,7 +313,6 @@ static_assert(BITS_PER_ALPHABET_INDEX == 5); // PACKED_WORD_SIZE calculation ass
 #define LETTER_MAX_NAME_LENGTH_(NAME, ...) u8 NAME[sizeof(#NAME) - 1];
 #define LETTER_MAX_CODEPOINTS_(NAME, LCD_CHARACTER_CODE, ...) u8 NAME[countof((u16[]) { __VA_ARGS__ })];
 #define MAX_ALPHABET_LENGTH_(NAME, ...) u8 NAME[countof((enum Letter[]) { __VA_ARGS__ })];
-#define MAX_LANGUAGE_NAME_LENGTH_(NAME, ...) u8 NAME[sizeof(#NAME) - 1];
 #define ABSOLUTE_MAX_WORD_LENGTH_(IDENTIFIER_NAME, PRINT_NAME, LANGUAGE, MAX_WORD_LENGTH, ...) u8 IDENTIFIER_NAME[MAX_WORD_LENGTH];
 
 #define WORDGAME_MAX_PRINT_NAME_SIZE    sizeof(union { WORDGAME_XMDT(WORDGAME_MAX_PRINT_NAME_SIZE_,) })
@@ -323,7 +322,6 @@ static_assert(BITS_PER_ALPHABET_INDEX == 5); // PACKED_WORD_SIZE calculation ass
 #define LETTER_MAX_NAME_LENGTH          sizeof(union { LETTER_XMDT(LETTER_MAX_NAME_LENGTH_) })
 #define LETTER_MAX_CODEPOINTS           sizeof(union { LETTER_XMDT(LETTER_MAX_CODEPOINTS_) })
 #define MAX_ALPHABET_LENGTH             sizeof(union { LANGUAGE_XMDT(MAX_ALPHABET_LENGTH_) })
-#define MAX_LANGUAGE_NAME_LENGTH        sizeof(union { LANGUAGE_XMDT(MAX_LANGUAGE_NAME_LENGTH_) })
 #define ABSOLUTE_MAX_WORD_LENGTH        sizeof(union { WORDGAME_XMDT(ABSOLUTE_MAX_WORD_LENGTH_,) })
 
 enum Letter
@@ -348,10 +346,6 @@ struct LanguageInfo
 {
 	enum Letter alphabet[MAX_ALPHABET_LENGTH];
 	u8          alphabet_length;
-
-	#if PROGRAM_NERD
-		char name[MAX_LANGUAGE_NAME_LENGTH];
-	#endif
 
 	#if PROGRAM_MICROSERVICES
 		str name;
@@ -481,7 +475,6 @@ static_assert(MAX_ALPHABET_LENGTH <= (1 << BITS_PER_ALPHABET_INDEX)); // Alphabe
 				{ \
 					.alphabet        = { __VA_ARGS__ }, \
 					.alphabet_length = countof((enum Letter[]) { __VA_ARGS__ }), \
-					.name            = #NAME, \
 				},
 			LANGUAGE_XMDT(MAKE)
 			#undef MAKE
@@ -550,7 +543,7 @@ static_assert(MAX_ALPHABET_LENGTH <= (1 << BITS_PER_ALPHABET_INDEX)); // Alphabe
 				{ \
 					.alphabet        = { __VA_ARGS__ }, \
 					.alphabet_length = countof((enum Letter[]) { __VA_ARGS__ }), \
-					.name            = STR(#NAME), \
+					.name            = #NAME, \
 				},
 			LANGUAGE_XMDT(MAKE)
 			#undef MAKE
@@ -1039,8 +1032,8 @@ union FAT32DirEntry
 {
 	struct FAT32DirEntryShort // See: Source(15) @ Section(6) @ Page(23).
 	{
-		#define FAT32_SHORT_NAME_LENGTH 8
-		#define FAT32_SHORT_EXT_LENGTH  3
+		#define FAT32_SHORT_NAME_LENGTH      8
+		#define FAT32_SHORT_EXTENSION_LENGTH 3
 		u8   DIR_Name[11];     // 8 characters for the main name followed by 3 for the extension where both are right-padded with spaces if necessary. Must never contain lowercase characters. If first byte is 0xE5, the entry is unallocated; 0x00 indicates the current and future entries are also unallocated.
 		u8   DIR_Attr;         // Aliasing enum FAT32DirEntryAttrFlag. Must not be FAT32_DIR_ENTRY_ATTR_FLAGS_LONG.
 		u8   DIR_NTRes;        // Must be zero.
