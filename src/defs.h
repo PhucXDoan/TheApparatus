@@ -8,6 +8,7 @@
 #define bitsof(...)      (sizeof(__VA_ARGS__) * 8)
 #define implies(P, Q)    (!(P) || (Q))
 #define static_assert(X) _Static_assert((X), #X)
+#define memeq(...)       (!memcmp(__VA_ARGS__))
 
 typedef uint8_t                                u8;
 typedef uint16_t                               u16;
@@ -286,6 +287,8 @@ static_assert(BITS_PER_ALPHABET_INDEX == 5); // PACKED_WORD_SIZE calculation ass
 	X(spanish, Letter_a, Letter_b       , Letter_c, Letter_d      , Letter_e     , Letter_f, Letter_g     , Letter_h      , Letter_i   , Letter_j           , Letter_k, Letter_l     , Letter_m, Letter_n, Letter_o, Letter_p    , Letter_q       , Letter_r, Letter_s, Letter_t     , Letter_u     , Letter_v, Letter_w       , Letter_x    , Letter_y   , Letter_z, Letter_ene          ) \
 	X(italian, Letter_a, Letter_b       , Letter_c, Letter_d      , Letter_e     , Letter_f, Letter_g     , Letter_h      , Letter_i   , Letter_l           , Letter_m, Letter_n     , Letter_o, Letter_p, Letter_q, Letter_r    , Letter_s       , Letter_t, Letter_u, Letter_v     , Letter_z                                                                                           )
 
+#define WORDY_SUFFIX "bin"
+
 #if PROGRAM_MICROSERVICES
 	static const u32 BLACKLISTED_CODEPOINTS[] =
 		{
@@ -309,6 +312,7 @@ static_assert(BITS_PER_ALPHABET_INDEX == 5); // PACKED_WORD_SIZE calculation ass
 #define LETTER_MAX_NAME_LENGTH_(NAME, ...) u8 NAME[sizeof(#NAME) - 1];
 #define LETTER_MAX_CODEPOINTS_(NAME, LCD_CHARACTER_CODE, ...) u8 NAME[countof((u16[]) { __VA_ARGS__ })];
 #define MAX_ALPHABET_LENGTH_(NAME, ...) u8 NAME[countof((enum Letter[]) { __VA_ARGS__ })];
+#define MAX_LANGUAGE_NAME_LENGTH_(NAME, ...) u8 NAME[sizeof(#NAME) - 1];
 #define ABSOLUTE_MAX_WORD_LENGTH_(IDENTIFIER_NAME, PRINT_NAME, LANGUAGE, MAX_WORD_LENGTH, ...) u8 IDENTIFIER_NAME[MAX_WORD_LENGTH];
 
 #define WORDGAME_MAX_PRINT_NAME_SIZE    sizeof(union { WORDGAME_XMDT(WORDGAME_MAX_PRINT_NAME_SIZE_,) })
@@ -318,6 +322,7 @@ static_assert(BITS_PER_ALPHABET_INDEX == 5); // PACKED_WORD_SIZE calculation ass
 #define LETTER_MAX_NAME_LENGTH          sizeof(union { LETTER_XMDT(LETTER_MAX_NAME_LENGTH_) })
 #define LETTER_MAX_CODEPOINTS           sizeof(union { LETTER_XMDT(LETTER_MAX_CODEPOINTS_) })
 #define MAX_ALPHABET_LENGTH             sizeof(union { LANGUAGE_XMDT(MAX_ALPHABET_LENGTH_) })
+#define MAX_LANGUAGE_NAME_LENGTH        sizeof(union { LANGUAGE_XMDT(MAX_LANGUAGE_NAME_LENGTH_) })
 #define ABSOLUTE_MAX_WORD_LENGTH        sizeof(union { WORDGAME_XMDT(ABSOLUTE_MAX_WORD_LENGTH_,) })
 
 enum Letter
@@ -342,6 +347,10 @@ struct LanguageInfo
 {
 	enum Letter alphabet[MAX_ALPHABET_LENGTH];
 	u8          alphabet_length;
+
+	#if PROGRAM_NERD
+		char name[MAX_LANGUAGE_NAME_LENGTH];
+	#endif
 
 	#if PROGRAM_MICROSERVICES
 		str name;
@@ -460,6 +469,20 @@ static_assert(MAX_ALPHABET_LENGTH <= (1 << BITS_PER_ALPHABET_INDEX)); // Alphabe
 					.lcd_character_code = LCD_CHARACTER_CODE, \
 				},
 			LETTER_XMDT(MAKE)
+			#undef MAKE
+		};
+#endif
+
+#if PROGRAM_NERD
+	static const struct LanguageInfo LANGUAGE_INFO[] PROGMEM =
+		{
+			#define MAKE(NAME, ...) \
+				{ \
+					.alphabet        = { __VA_ARGS__ }, \
+					.alphabet_length = countof((enum Letter[]) { __VA_ARGS__ }), \
+					.name            = #NAME, \
+				},
+			LANGUAGE_XMDT(MAKE)
 			#undef MAKE
 		};
 #endif
@@ -1011,6 +1034,55 @@ struct FAT32FileStructureInfo // See: Source(15) @ Page(21-22).
 	u32 FSI_TrailSig;       // Must be 0xAA550000.
 };
 
+union FAT32DirEntry
+{
+	struct FAT32DirEntryShort // See: Source(15) @ Section(6) @ Page(23).
+	{
+		#define FAT32_SHORT_NAME_LENGTH 8
+		#define FAT32_SHORT_EXT_LENGTH  3
+		u8   DIR_Name[11];     // 8 characters for the main name followed by 3 for the extension where both are right-padded with spaces if necessary. Must never contain lowercase characters. If first byte is 0xE5, the entry is unallocated; 0x00 indicates the current and future entries are also unallocated.
+		u8   DIR_Attr;         // Aliasing enum FAT32DirEntryAttrFlag. Must not be FAT32_DIR_ENTRY_ATTR_FLAGS_LONG.
+		u8   DIR_NTRes;        // Must be zero.
+		u8   DIR_CrtTimeTenth; // Irrelevant.
+		u16  DIR_CrtTime;      // Irrelevant.
+		u16  DIR_CrtDate;      // Irrelevant.
+		u16  DIR_LstAccDate;   // irrelevant.
+		u16  DIR_FstClusHI;    // "High word of first data cluster number for file/directory described by this entry".
+		u16  DIR_WrtTime;      // Irrelevant.
+		u16  DIR_WrtDate;      // Irrelevant.
+		u16  DIR_FstClusLO;    // "Low word of first data cluster number for file/directory described by this entry".
+		u32  DIR_FileSize;     // Size of file in bytes; must be zero for directories. See: Source(15) @ Section(6.2) @ Page(26).
+	} short_entry;
+
+	// Note that:
+	//     - Long-name entries are reversed, that is, the first long-name entry encountered would detail the last few characters of the file name.
+	//     - Characters are in UTF-16.
+	//     - If there's leftover space, entries are null-terminated and then padded with 0xFFFFs.
+	struct FAT32DirEntryLong // See: Source(15) @ Section(7) @ Page(30).
+	{
+		u8  LDIR_Ord;       // The Nth long-entry. If the entry is the "last" (as in it provides the last part of the long name), then it is additionally OR'd with FAT32_LAST_LONG_DIR_ENTRY.
+		u16 LDIR_Name1[5];  // First five UTF-16 characters that this long-entry provides for the long name.
+		u8  LDIR_Attr;      // Must be FAT32_DIR_ENTRY_ATTR_FLAGS_LONG.
+		u8  LDIR_Type;      // Must be zero.
+		u8  LDIR_Chksum;    // "Checksum of name in the associated short name directory entry at the end of the long name directory entry set". TODO Not so simple...
+		u16 LDIR_Name2[6];  // The next six UTF-16 characters that this long-entry provides for the long name.
+		u16 LDIR_FstClusLO; // Must be zero.
+		u16 LDIR_Name3[2];  // The last two UTF-16 characters that this long-entry provides for the long name.
+	} long_entry;
+};
+
+#define FAT32_DIR_ENTRY_ATTR_FLAGS_LONG (FAT32DirEntryAttrFlag_read_only | FAT32DirEntryAttrFlag_hidden | FAT32DirEntryAttrFlag_system | FAT32DirEntryAttrFlag_volume_id)
+#define FAT32_LAST_LONG_DIR_ENTRY       0x40 // See: Source(15) @ Section(7) @ Page(30).
+enum FAT32DirEntryAttrFlag // See: Source(15) @ Section(6) @ Page(23).
+{
+	FAT32DirEntryAttrFlag_read_only = 0x01,
+	FAT32DirEntryAttrFlag_hidden    = 0x02,
+	FAT32DirEntryAttrFlag_system    = 0x04,
+	FAT32DirEntryAttrFlag_volume_id = 0x08,
+	FAT32DirEntryAttrFlag_directory = 0x10,
+	FAT32DirEntryAttrFlag_archive   = 0x20, // File has been modified/created; used by backup utilities.
+};
+
 #if PROGRAM_DIPLOMAT
 	static const struct FAT32BootSector FAT32_BOOT_SECTOR PROGMEM =
 		{
@@ -1061,6 +1133,24 @@ struct FAT32FileStructureInfo // See: Source(15) @ Page(21-22).
 	FAT32_SECTOR_XMDT(MAKE)
 	#undef MAKE
 #endif
+
+#define MASTER_BOOT_RECORD_PARTITION_TYPE_FAT32_LBA 0x0C
+struct MasterBootRecordPartition
+{
+	u8  status;                    // Irrelevant.
+	u8  fst_sector_chs_address[3]; // Irrelevant.
+	u8  partition_type;
+	u8  lst_sector_chs_address[3]; // Irrelevant.
+	u32 fst_sector_address;
+	u32 sector_count;
+};
+
+struct MasterBootRecord // See: Source(16).
+{
+	u8                               bootstrap_code_area[446];
+	struct MasterBootRecordPartition partitions[4];
+	u8                               signature[2];  // Must be { 0x55, 0AA }.
+};
 
 //
 // "sd.c"
@@ -2081,6 +2171,7 @@ struct DiplomatPacket
 	Source(25) := HD44780U (LCD-II) (Dot Matrix Liquid Crystal Display Controller/Driver) by HITACHI (Dated: 1998).
 	Source(26) := MAX7219/MAX7221 Serially Interfaced, 8-Digit LED Display Drivers by Maxim Integrated (Dated: 8/21).
 	Source(27) := Atmel ATmega640/V-1280/V-1281/V-2560/V-2561/V Datasheet (Dated: 2014).
+	Source(28) := "Partition type" on Wikipedia (Accessed: December 6, 2023).
 
 	We are working within the environment of the ATmega32U4 and ATmega2560 microcontrollers,
 	which are 8-bit CPUs. This consequently means that there are no padding bytes to

@@ -871,7 +871,12 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 									struct USBMSOCRMaskStreamState probing_mask_stream_state = _usb_ms_ocr_curr_mask_stream_state;
 
-									for (enum Letter letter = {1}; letter < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].sentinel_letter); letter += 1)
+									for
+									(
+										enum Letter letter = {1};
+										letter < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].sentinel_letter);
+										letter += 1
+									)
 									{
 										static_assert(MASK_DIM % 8 == 0);
 										for (u8 byte_index = 0; byte_index < MASK_DIM / 8; byte_index += 1)
@@ -1036,7 +1041,12 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 										if (_usb_ms_ocr_packed_activated_slots & (1 << slot_coord_x)) // Was this slot actually processed?
 										{
 											u16 highest_score = 0;
-											for (enum Letter letter = {1}; letter < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].sentinel_letter); letter += 1)
+											for
+											(
+												enum Letter letter = {1};
+												letter < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].sentinel_letter);
+												letter += 1
+											)
 											{
 												if (highest_score < _usb_ms_ocr_accumulated_scores[slot_coord_x][letter])
 												{

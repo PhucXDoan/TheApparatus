@@ -43,9 +43,9 @@ set DIPLOMAT_AVR_GCC_ARGS= ^
 	!AVR_GCC_FLAGS! -mmcu=!DIPLOMAT_MCU! ^
 	-D BOOTLOADER_BAUD_SIGNAL=!DIPLOMAT_BOOTLOADER_BAUD_SIGNAL!
 
-set NERD_DIAGNOSTIC_BAUD=2000000
-set NERD_BOOTLOADER_COM=7
-set NERD_DIAGNOSTIC_COM=7
+set NERD_DIAGNOSTIC_BAUD=250000
+set NERD_BOOTLOADER_COM=8
+set NERD_DIAGNOSTIC_COM=8
 
 set NERD_PROGRAMMER=wiring
 set NERD_MCU=ATmega2560
@@ -63,36 +63,39 @@ pushd W:\build\
 	REM Compile Microservices.c.
 	REM
 
-	cl W:\src\Microservices.c /Fe:Microservices.exe !MSVC_FLAGS!
-	if not !ERRORLEVEL! == 0 (
-		goto ABORT
-	)
+REM	cl W:\src\Microservices.c /Fe:Microservices.exe !MSVC_FLAGS!
+REM	if not !ERRORLEVEL! == 0 (
+REM		goto ABORT
+REM	)
 
 	REM
 	REM Compile C source code into assembly and ELF.
 	REM
 
-	avr-gcc !DIPLOMAT_AVR_GCC_ARGS! -S -fverbose-asm         W:\src\Diplomat.c
-	avr-gcc !DIPLOMAT_AVR_GCC_ARGS! -o W:\build\Diplomat.elf W:\src\Diplomat.c
-	if not !ERRORLEVEL! == 0 (
-		goto ABORT
-	)
+REM	avr-gcc !DIPLOMAT_AVR_GCC_ARGS! -S -fverbose-asm         W:\src\Diplomat.c
+REM	avr-gcc !DIPLOMAT_AVR_GCC_ARGS! -o W:\build\Diplomat.elf W:\src\Diplomat.c
+REM	if not !ERRORLEVEL! == 0 (
+REM		goto ABORT
+REM	)
 
-	avr-gcc !NERD_AVR_GCC_ARGS! -S -fverbose-asm     W:\src\Nerd.c
+REM	avr-gcc !NERD_AVR_GCC_ARGS! -S -fverbose-asm     W:\src\Nerd.c
 	avr-gcc !NERD_AVR_GCC_ARGS! -o W:\build\Nerd.elf W:\src\Nerd.c
 	if not !ERRORLEVEL! == 0 (
 		goto ABORT
 	)
-	avr-size W:\build\Diplomat.elf W:\build\Nerd.elf
+
+REM	avr-size W:\build\Diplomat.elf W:\build\Nerd.elf
+
+	avr-size W:\build\Nerd.elf
 
 	REM
 	REM Convert ELF into HEX.
 	REM
 
-	avr-objcopy -O ihex -j .text -j .data Diplomat.elf Diplomat.hex
-	if not !ERRORLEVEL! == 0 (
-		goto ABORT
-	)
+REM	avr-objcopy -O ihex -j .text -j .data Diplomat.elf Diplomat.hex
+REM	if not !ERRORLEVEL! == 0 (
+REM		goto ABORT
+REM	)
 
 	avr-objcopy -O ihex -j .text -j .data Nerd.elf Nerd.hex
 	if not !ERRORLEVEL! == 0 (

@@ -1486,7 +1486,7 @@ main(int argc, char** argv)
 										static_assert(sizeof(parsed_word_buffer[0]) == sizeof(parenting_word_makeup[0]));
 										if
 										(
-											!memcmp
+											memeq
 											(
 												(parenting_word_makeup + 1), // Skipping subword bitfield.
 												(parsed_word_buffer    + 1), // Skipping word's initial letter.
@@ -1517,7 +1517,7 @@ main(int argc, char** argv)
 										static_assert(sizeof(doppelganger_wordset.data[0]) == sizeof(parsed_word_buffer[0]));
 										if
 										(
-											!memcmp
+											memeq
 											(
 												(doppelganger_word_makeup + 1), // Skipping subword field.
 												(parsed_word_buffer       + 1), // Skipping word's initial letter.
@@ -1558,7 +1558,7 @@ main(int argc, char** argv)
 											static_assert(sizeof(subword_makeup[0]) == sizeof(parsed_word_buffer[0]));
 											if
 											(
-												!memcmp
+												memeq
 												(
 													(parsed_word_buffer + 1),
 													(subword_makeup     + 1),
@@ -1743,7 +1743,8 @@ main(int argc, char** argv)
 					strbuf stream_file_path = strbuf(256);
 					strbuf_str (&stream_file_path, cli.dir_path.str);
 					strbuf_str (&stream_file_path, LANGUAGE_INFO[language].name);
-					strbuf_cstr(&stream_file_path, ".bin");
+					strbuf_char(&stream_file_path, '.');
+					strbuf_cstr(&stream_file_path, WORDY_SUFFIX);
 					HANDLE stream_handle = create_file_writing_handle(stream_file_path.str);
 
 					for

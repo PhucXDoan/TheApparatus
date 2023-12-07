@@ -10,14 +10,14 @@ str_cstr(char* cstr)
 static b32
 str_begins_with(str src, str starting)
 {
-	b32 result = src.length >= starting.length && !memcmp(src.data, starting.data, starting.length);
+	b32 result = src.length >= starting.length && memeq(src.data, starting.data, starting.length);
 	return result;
 }
 
 static b32
 str_ends_with(str src, str ending)
 {
-	b32 result = src.length >= ending.length && !memcmp(src.data + src.length - ending.length, ending.data, ending.length);
+	b32 result = src.length >= ending.length && memeq(src.data + src.length - ending.length, ending.data, ending.length);
 	return result;
 }
 
@@ -48,7 +48,7 @@ str_ends_with_caseless(str src, str ending)
 static b32
 str_eq(str lhs, str rhs)
 {
-	b32 result = lhs.length == rhs.length && !memcmp(lhs.data, rhs.data, lhs.length);
+	b32 result = lhs.length == rhs.length && memeq(lhs.data, rhs.data, lhs.length);
 	return result;
 }
 

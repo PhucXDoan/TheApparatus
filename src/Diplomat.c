@@ -152,6 +152,8 @@ main(void)
 
 	pin_output(PIN_NERD_RESET);
 	pin_low(PIN_NERD_RESET);
+	_delay_ms(1.0);
+	pin_high(PIN_NERD_RESET);
 
 	usart_init();
 	lcd_init();
@@ -159,7 +161,6 @@ main(void)
 	sd_init();
 	usb_init();
 
-	pin_high(PIN_NERD_RESET);
 	pin_pullup(PIN_BTN_LEFT);
 	pin_pullup(PIN_BTN_MID);
 	pin_pullup(PIN_BTN_RIGHT);

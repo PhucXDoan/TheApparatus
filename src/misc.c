@@ -107,8 +107,9 @@ is_slot_excluded(enum WordGame wordgame, u8 x, u8 y)
 }
 
 #ifdef PROGMEM
-	#define pgm_u8(LVALUE)  pgm_read_byte((const u8 *) { &(LVALUE) })
-	#define pgm_u16(LVALUE) pgm_read_word((const u16*) { &(LVALUE) })
+	#define pgm_char(LVALUE) pgm_read_byte((const char*) { &(LVALUE) })
+	#define pgm_u8(LVALUE)   pgm_read_byte((const u8  *) { &(LVALUE) })
+	#define pgm_u16(LVALUE)  pgm_read_word((const u16 *) { &(LVALUE) })
 #endif
 
 #if PROGRAM_MICROSERVICES
@@ -271,6 +272,8 @@ is_slot_excluded(enum WordGame wordgame, u8 x, u8 y)
 	static void
 	error(char* file_name, u16 line_number)
 	{
+		cli();
+
 		#if DEBUG
 			debug_dump(file_name, line_number);
 		#endif
