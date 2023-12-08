@@ -210,12 +210,61 @@ main(void)
 
 				if (rotation) // TEMP
 				{
-					usart_tx(0xFF); // Dummy byte to signal that we're ready for command from Nerd.
-					u8 nerd_command = usart_rx();
-					lcd_reset();
-					lcd_u64(nerd_command);
-					lcd_refresh();
+					pin_low(PIN_NERD_RESET);
+					_delay_ms(1.0);
+					pin_high(PIN_NERD_RESET);
 					_delay_ms(1000.0);
+
+					diplomat_packet =
+						(struct DiplomatPacket)
+						{
+							.wordgame = WordGame_anagrams_english_6,
+							.board    =
+								{
+									{ Letter_l, Letter_d, Letter_w, Letter_o, Letter_a, Letter_s, },
+								},
+						};
+
+					for (u8 i = 0; i < sizeof(diplomat_packet); i += 1)
+					{
+						usart_tx(((volatile u8*) &diplomat_packet)[i]);
+					}
+
+					//
+					//
+					//
+
+					lcd_reset();
+					while (true)
+					{
+						usart_tx(0xFF);          // Dummy byte to indicate to the nerd that we're ready to accept a command.
+						u8 command = usart_rx(); // Wait for command.
+
+						if (command == NERD_COMMAND_COMPLETE)
+						{
+							lcd_strlit("Done.");
+						}
+						else
+						{
+							lcd_char(pgm_u8(LETTER_INFO[diplomat_packet.board[NERD_COMMAND_Y(command)][NERD_COMMAND_X(command)]].lcd_character_code));
+							if (command & NERD_COMMAND_SUBMIT_BIT)
+							{
+								lcd_shift_down();
+								lcd_cursor_pos = (u8_2) { 0, 0 };
+							}
+						}
+
+						lcd_refresh();
+
+						_delay_ms(100.0);
+
+						if (command == NERD_COMMAND_COMPLETE)
+						{
+							break;
+						}
+					}
+
+					_delay_ms(3000.0);
 				}
 
 				//
@@ -387,7 +436,7 @@ main(void)
 						{
 							pin_low(PIN_NERD_RESET);
 							_delay_ms(1.0);
-							pin_high(PIN_NERD_RESET);
+							pin_high(PIN_NERD_RESET); // By the time OCR is finished, Nerd should all be set up and ready to go.
 
 							usb_ms_ocr_state         = USBMSOCRState_set;
 							diplomat_packet.wordgame = (enum WordGame) menu_main_selected_option;

@@ -198,3 +198,10 @@ lcd_8H(u8 value)
 	lcd_char((value >>   4) < 10 ? '0' + (value >>   4) : 'A' + ((value >>   4) - 10));
 	lcd_char((value &  0xF) < 10 ? '0' + (value &  0xF) : 'A' + ((value &  0xF) - 10));
 }
+
+static void
+lcd_shift_down(void)
+{
+	memmove(&lcd_display[1], &lcd_display[0], sizeof(lcd_display[0]) * (LCD_DIM_Y - 1));
+	memset (&lcd_display[0], 0              , sizeof(lcd_display[0]));
+}

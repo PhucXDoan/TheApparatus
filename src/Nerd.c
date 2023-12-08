@@ -66,6 +66,32 @@
 	}
 #endif
 
+static_assert(WORDGAME_MAX_DIM_SLOTS_X <= 8);
+static_assert(WORDGAME_MAX_DIM_SLOTS_Y <= 15); // Can't be 16, since command of 0xFF is special.
+/*
+	"command" : 0bS'XXX'YYYY
+	"S"       : In Anagrams and WordHunt, this should be set for the last letter of the word in order to submit it; irrelevant for WordBites.
+	"X"       : X coordinate of the slot to select.
+	"Y"       : Y coordinate of the slot to select.
+
+	If command is NERD_COMMAND_COMPLETE, then this is a signal to the Diplomat that the Nerd is done processing.
+	In WordBites, commands should be "paired up", where the first command is where the mouse should pick up the piece, and the second command is where the piece should be
+	dropped off.
+*/
+static void
+push_command(u8 command)
+{
+	if (command_writer_masked(1) == command_reader_masked(0)) // Any open space in command buffer?
+	{
+		usart_rx();                                         // Wait for the ready signal from the Diplomat.
+		usart_tx(command_buffer[command_reader_masked(0)]); // Send out command.
+		command_reader += 1;                                // A space opened up!
+	}
+
+	command_buffer[command_writer_masked(0)] = command;
+	command_writer += 1;
+}
+
 int
 main(void)
 {
@@ -87,19 +113,6 @@ main(void)
 	#endif
 
 	sd_init();
-
-	enum Language language = Language_english;
-	b8 alphabet_count[MAX_ALPHABET_LENGTH] = {0};
-	alphabet_count[Letter_d - Letter_a] = true;
-	alphabet_count[Letter_u - Letter_a] = true;
-	alphabet_count[Letter_m - Letter_a] = true;
-	alphabet_count[Letter_p - Letter_a] = true;
-	alphabet_count[Letter_t - Letter_a] = true;
-	alphabet_count[Letter_r - Letter_a] = true;
-	alphabet_count[Letter_u - Letter_a] = true;
-	alphabet_count[Letter_c - Letter_a] = true;
-	alphabet_count[Letter_k - Letter_a] = true;
-
 
 	//
 	// Find sectors of the word stream binary file.
@@ -308,11 +321,58 @@ main(void)
 		);
 	#endif
 
-//	struct DiplomatPacket diplomat_packet = {0};
+	struct DiplomatPacket diplomat_packet = {0};
+	for (u8 i = 0; i < sizeof(diplomat_packet); i += 1)
+	{
+		((u8*) &diplomat_packet)[i] = usart_rx();
+	}
+
+//	struct DiplomatPacket diplomat_packet =
+//		{
+//			.wordgame = WordGame_anagrams_english_6,
+//			.board    =
+//				{
+//					{ Letter_l, Letter_d, Letter_w, Letter_o, Letter_a, Letter_s, },
+//				},
+//		};
 //	for (u8 i = 0; i < sizeof(diplomat_packet); i += 1)
 //	{
-//		((u8*) &diplomat_packet)[i] = usart_rx();
+//		usart_rx();
 //	}
+
+	//
+	// Parse packet.
+	//
+
+	enum Language language                           = pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].language);
+	u8            max_word_length                    = pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].max_word_length);
+	b8            alphabet_used[MAX_ALPHABET_LENGTH] = {0};
+	enum Letter   board_alphabet_indices[WORDGAME_MAX_DIM_SLOTS_Y][WORDGAME_MAX_DIM_SLOTS_X] = {0};
+
+	for (u8 y = 0; y < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y); y += 1)
+	{
+		for (u8 x = 0; x < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x); x += 1)
+		{
+			if (diplomat_packet.board[y][x])
+			{
+				b8 found = false;
+				for (u8 alphabet_index = 0; alphabet_index < pgm_u8(LANGUAGE_INFO[language].alphabet_length); alphabet_index += 1)
+				{
+					if (pgm_u8(LANGUAGE_INFO[language].alphabet[alphabet_index]) == diplomat_packet.board[y][x])
+					{
+						found                         = true;
+						alphabet_used[alphabet_index] = true;
+						board_alphabet_indices[y][x]  = alphabet_index;
+						break;
+					}
+				}
+				if (!found)
+				{
+					error(); // OCR identified a letter that's not in the language's alphabet...
+				}
+			}
+		}
+	}
 
 	//
 	// Process for words.
@@ -332,9 +392,6 @@ main(void)
 		);
 	#endif
 
-	u16 crc         = 0xFF;
-	u32 starting_ms = timer_ms();
-
 	const struct WordsTableOfContentEntry* curr_table_entry = pgm_read_ptr(&WORDS_TABLE_OF_CONTENTS[language].entries);
 	for
 	(
@@ -351,7 +408,7 @@ main(void)
 			curr_table_entry += 1
 		)
 		{
-			if (alphabet_count[initial_alphabet_index])
+			if (alphabet_used[initial_alphabet_index])
 			{
 				u16 curr_cluster_index        = pgm_u16(curr_table_entry->sector_index) >> sectors_per_cluster_exp;
 				u8  curr_cluster_sector_index = pgm_u16(curr_table_entry->sector_index) & ((1 << sectors_per_cluster_exp) - 1);
@@ -411,7 +468,7 @@ main(void)
 						//
 
 						u8 subword_length = 1;
-						while (subword_length < entry_word_length && alphabet_count[word_alphabet_indices[subword_length]])
+						while (subword_length < entry_word_length && subword_length < max_word_length && alphabet_used[word_alphabet_indices[subword_length]])
 						{
 							subword_length += 1;
 						}
@@ -430,19 +487,94 @@ main(void)
 						{
 							if (subword_bits & (1 << 15))
 							{
-								//for (u8 i = 0; i < subword_length; i += 1)
-								//{
-								//	debug_char('A' + word_alphabet_indices[i]);
-								//}
-								//debug_char('\n');
+								b8 reproducible = true;
 
-								for (u8 i = 0; i < subword_length; i += 1)
+								#define BOARD_ALPHABET_INDEX_USED (1 << (bitsof(board_alphabet_indices[0][0]) - 1))
+								switch (diplomat_packet.wordgame)
 								{
-									crc = _crc16_update(crc, word_alphabet_indices[i]);
+									case WordGame_anagrams_english_6:
+									case WordGame_anagrams_english_7:
+									case WordGame_anagrams_russian:
+									case WordGame_anagrams_french:
+									case WordGame_anagrams_german:
+									case WordGame_anagrams_spanish:
+									case WordGame_anagrams_italian:
+									{
+										u8 commands[ABSOLUTE_MAX_WORD_LENGTH] = {0};
+
+										for (u8 letter_index = 0; letter_index < subword_length; letter_index += 1)
+										{
+											commands[letter_index] = -1; // Assume no matching slot.
+
+											for (u8 slot_index = 0; slot_index < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x); slot_index += 1)
+											{
+												if (board_alphabet_indices[0][slot_index] == word_alphabet_indices[letter_index])
+												{
+													board_alphabet_indices[0][slot_index] |= BOARD_ALPHABET_INDEX_USED;
+													commands[letter_index]                 = slot_index << 4;
+													break;
+												}
+											}
+
+											if (commands[letter_index] == (u8) -1) // Didn't find a matching slot.
+											{
+												reproducible = false;
+												break;
+											}
+										}
+
+										for (u8 slot_index = 0; slot_index < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x); slot_index += 1)
+										{
+											board_alphabet_indices[0][slot_index] &= ~BOARD_ALPHABET_INDEX_USED;
+										}
+
+										if (reproducible)
+										{
+											commands[subword_length - 1] |= NERD_COMMAND_SUBMIT_BIT;
+											for (u8 letter_index = 0; letter_index < subword_length; letter_index += 1)
+											{
+												push_command(commands[letter_index]);
+											}
+										}
+									} break;
+
+									case WordGame_wordhunt_4x4:
+									case WordGame_wordhunt_o:
+									case WordGame_wordhunt_x:
+									case WordGame_wordhunt_5x5:
+									{
+										debug_unhandled();
+									} break;
+
+									case WordGame_wordbites:
+									{
+										debug_unhandled();
+									} break;
+
+									case WordGame_COUNT:
+									{
+										error(); // Impossible.
+									} break;
+								}
+
+								if (reproducible)
+								{
+									for (u8 i = 0; i < subword_length; i += 1)
+									{
+										debug_char('A' + word_alphabet_indices[i]);
+									}
+									debug_char('\n');
 								}
 							}
 
 							subword_bits <<= 1;
+						}
+
+						if (usart_rx_available() && command_reader_masked(0) != command_writer_masked(0))
+						{
+							usart_rx();
+							usart_tx(command_buffer[command_reader_masked(0)]);
+							command_reader += 1;
 						}
 
 						entries_remaining -= 1;
@@ -459,28 +591,46 @@ main(void)
 		}
 	}
 
-	u32 elapsed_ms = timer_ms() - starting_ms;
+	#if DEBUG
+		matrix_set
+		(
+			(((u64) 0b00000000) << (8 * 0)) |
+			(((u64) 0b00000000) << (8 * 1)) |
+			(((u64) 0b01111110) << (8 * 2)) |
+			(((u64) 0b01000010) << (8 * 3)) |
+			(((u64) 0b01000010) << (8 * 4)) |
+			(((u64) 0b00111100) << (8 * 5)) |
+			(((u64) 0b00000000) << (8 * 6)) |
+			(((u64) 0b00000000) << (8 * 7))
+		);
+	#endif
 
-	debug_u64 (crc);
-	debug_cstr(" : ");
-	debug_u64 (elapsed_ms);
-	debug_cstr("ms elapsed.\n");
+	push_command(NERD_COMMAND_COMPLETE);
 
 	//
-	// Done!
+	// Send out remaining commands.
 	//
 
-	matrix_set
-	(
-		(((u64) 0b00001000) << (8 * 0)) |
-		(((u64) 0b00000100) << (8 * 1)) |
-		(((u64) 0b00101000) << (8 * 2)) |
-		(((u64) 0b01000000) << (8 * 3)) |
-		(((u64) 0b01000000) << (8 * 4)) |
-		(((u64) 0b00101000) << (8 * 5)) |
-		(((u64) 0b00000100) << (8 * 6)) |
-		(((u64) 0b00001000) << (8 * 7))
-	);
+	while (command_reader_masked(0) != command_writer_masked(0))
+	{
+		usart_rx();
+		usart_tx(command_buffer[command_reader_masked(0)]);
+		command_reader += 1;
+	}
+
+	#if DEBUG
+		matrix_set
+		(
+			(((u64) 0b00001000) << (8 * 0)) |
+			(((u64) 0b00000100) << (8 * 1)) |
+			(((u64) 0b00101000) << (8 * 2)) |
+			(((u64) 0b01000000) << (8 * 3)) |
+			(((u64) 0b01000000) << (8 * 4)) |
+			(((u64) 0b00101000) << (8 * 5)) |
+			(((u64) 0b00000100) << (8 * 6)) |
+			(((u64) 0b00001000) << (8 * 7))
+		);
+	#endif
 
 	for(;;);
 }

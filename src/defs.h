@@ -378,21 +378,30 @@ enum WordGame
 
 struct WordGameInfo
 {
-	char        print_name_cstr[WORDGAME_MAX_PRINT_NAME_SIZE];
-	enum Letter sentinel_letter;
-	u8_2        dim_slots;
-	u8          compressed_slot_stride;
+	u8_2 dim_slots;
+
+	#if PROGRAM_DIPLOMAT
+		enum Letter sentinel_letter;
+	#endif
+
+	#if PROGRAM_DIPLOMAT || PROGRAM_MICROSERVICES
+		char print_name_cstr[WORDGAME_MAX_PRINT_NAME_SIZE];
+		u8   compressed_slot_stride;
+	#endif
+
+	#if PROGRAM_NERD || PROGRAM_MICROSERVICES
+		enum Language language;
+		u8            max_word_length;
+	#endif
 
 	#if PROGRAM_MICROSERVICES
-		enum Language language;
-		i32           max_word_length;
-		str           print_name;
-		i32_2         pos;
-		i32           slot_dim;
-		f64           uncompressed_slot_stride;
-		i32_2         test_region_pos;
-		i32_2         test_region_dim;
-		f64_3         test_region_rgb;
+		str   print_name;
+		i32_2 pos;
+		i32   slot_dim;
+		f64   uncompressed_slot_stride;
+		i32_2 test_region_pos;
+		i32_2 test_region_dim;
+		f64_3 test_region_rgb;
 	#endif
 };
 
@@ -477,6 +486,33 @@ static_assert(MAX_ALPHABET_LENGTH <= (1 << BITS_PER_ALPHABET_INDEX)); // Alphabe
 #endif
 
 #if PROGRAM_NERD
+	static const struct WordGameInfo WORDGAME_INFO[] PROGMEM =
+		{
+			#define MAKE( \
+				IDENTIFIER_NAME, \
+				PRINT_NAME, \
+				LANGUAGE, \
+				MAX_WORD_LENGTH, \
+				SENTINEL_LETTER, \
+				POS_X, POS_Y, \
+				DIM_SLOTS_X, DIM_SLOTS_Y, \
+				SLOT_DIM, \
+				UNCOMPRESSED_SLOT_STRIDE, \
+				COMPRESSED_SLOT_STRIDE, \
+				TEST_REGION_POS_X, TEST_REGION_POS_Y, \
+				TEST_REGION_DIM_X, TEST_REGION_DIM_Y, \
+				TEST_REGION_R, TEST_REGION_G, TEST_REGION_B, \
+				... \
+			) \
+				{ \
+					.dim_slots       = { DIM_SLOTS_X, DIM_SLOTS_Y }, \
+					.language        = Language_##LANGUAGE, \
+					.max_word_length = MAX_WORD_LENGTH, \
+				},
+			WORDGAME_XMDT(MAKE,)
+			#undef MAKE
+		};
+
 	static const struct LanguageInfo LANGUAGE_INFO[] PROGMEM =
 		{
 			#define MAKE(NAME, ...) \
@@ -513,7 +549,6 @@ static_assert(MAX_ALPHABET_LENGTH <= (1 << BITS_PER_ALPHABET_INDEX)); // Alphabe
 					.print_name               = STR(PRINT_NAME), \
 					.language                 = Language_##LANGUAGE, \
 					.max_word_length          = MAX_WORD_LENGTH, \
-					.sentinel_letter          = SENTINEL_LETTER, \
 					.pos.x                    = POS_X, \
 					.pos.y                    = POS_Y, \
 					.dim_slots.x              = DIM_SLOTS_X, \
@@ -2134,6 +2169,11 @@ struct USBConfig // This layout is defined uniquely for our device application.
 // Diplomat and Nerd.
 //
 
+#define NERD_COMMAND_SUBMIT_BIT 0b1'000'0000
+#define NERD_COMMAND_COMPLETE   0b1'111'1111
+#define NERD_COMMAND_X(COMMAND) ((COMMAND >> 4) & 0b0000'0111)
+#define NERD_COMMAND_Y(COMMAND) ( COMMAND       & 0b0000'1111)
+
 struct DiplomatPacket
 {
 	enum WordGame wordgame;
@@ -2142,6 +2182,20 @@ struct DiplomatPacket
 
 #if PROGRAM_DIPLOMAT
 	static volatile struct DiplomatPacket diplomat_packet = {0};
+#endif
+
+//
+// Nerd.c.
+//
+
+#if PROGRAM_NERD
+	static u8 command_buffer[64] = {0};
+	u8        command_reader     = 0;
+	u8        command_writer     = 0;
+
+	static_assert((countof(command_buffer) & (countof(command_buffer) - 1)) == 0); // Must be power of two.
+	#define command_writer_masked(OFFSET) ((command_writer + (OFFSET)) & (countof(command_buffer) - 1))
+	#define command_reader_masked(OFFSET) ((command_reader + (OFFSET)) & (countof(command_buffer) - 1))
 #endif
 
 //
