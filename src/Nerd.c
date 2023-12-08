@@ -9,6 +9,7 @@
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
 #include <util/delay.h>
+#include <util/crc16.h>
 #include <stdint.h>
 #include <string.h>
 #include "defs.h"
@@ -18,6 +19,7 @@
 #include "usart.c"
 #include "spi.c"
 #include "sd.c"
+#include "timer.c"
 #if DEBUG
 	#include "matrix.c"
 #endif
@@ -67,6 +69,8 @@
 int
 main(void)
 {
+	sei();
+
 	#if DEBUG // Configure USART0 to have 250Kbps. See: Source(27) @ Table(22-12) @ Page(226).
 		UCSR0A = 1 << U2X0;
 		UBRR0  = 7;
@@ -76,6 +80,7 @@ main(void)
 
 	usart_init();
 	spi_init();
+	timer_init();
 
 	#if DEBUG // 8x8 LED dot matrix to have visual debug info. Must be initialized first before SD or else it messes with SPI communications...
 		matrix_init();
@@ -191,6 +196,22 @@ main(void)
 						&& memeq(word_stream_file_name, entry->DIR_Name, countof(entry->DIR_Name))                 // File name matches?
 					)
 					{
+						u8                                     last_language_max_word_length = pgm_u8(WORDS_TABLE_OF_CONTENTS[Language_COUNT - 1].max_word_length);
+						u8                                     last_language_alphabet_length = pgm_u8(LANGUAGE_INFO[Language_COUNT - 1].alphabet_length);
+						const struct WordsTableOfContentEntry* last_entry                    =
+							(const struct WordsTableOfContentEntry*) pgm_read_ptr(&WORDS_TABLE_OF_CONTENTS[Language_COUNT - 1].entries)
+								+ (last_language_max_word_length - MIN_WORD_LENGTH + 1) * last_language_alphabet_length
+								- 1;
+						if
+						(
+							entry->DIR_FileSize !=
+								((u32) pgm_u16(last_entry->sector_index)) * FAT32_SECTOR_SIZE
+									+ pgm_u16(last_entry->count) * PACKED_WORD_SIZE(MIN_WORD_LENGTH)
+						)
+						{
+							error(); // Binary file mismatching with our table of contents on flash...
+						}
+
 						word_stream_cluster_addresses[0] = (((u32) entry->DIR_FstClusHI) << 16) | entry->DIR_FstClusLO;
 						goto STOP_SEARCHING_ROOT_DIRECTORY;
 					}
@@ -247,107 +268,172 @@ main(void)
 		}
 	}
 
-//	//for (u8 i = 0; i < countof(word_stream_cluster_addresses); i += 1)
-//	//{
-//	//	debug_u64(word_stream_cluster_addresses[i]);
-//	//	debug_char('\n');
-//	//}
-//
-//	enum Language language                 = Language_english;
-//	u8            upper_word_length        = 4;
-//	u8            language_max_word_length = pgm_u8(WORDS_TABLE_OF_CONTENTS[language].max_word_length);
-//	u8            language_alphabet_length = pgm_u8(LANGUAGE_INFO[language].alphabet_length);
-//
-//	const u16* curr_entry_count_reader =
-//		&pgm_u16_ptr(WORDS_TABLE_OF_CONTENTS[language].entry_counts)
-//			[(language_max_word_length - upper_word_length) * language_alphabet_length];
-//
-//	u32 length_offset = pgm_u32(pgm_u32_ptr(WORDS_TABLE_OF_CONTENTS[language].length_offsets)[language_max_word_length - upper_word_length]);
-//	u32 cluster_index = length_offset >> (FAT32_SECTOR_SIZE_EXP + sectors_per_cluster_exp);
-//	u8  sector_index  = (u8) ((length_offset >> FAT32_SECTOR_SIZE_EXP) & ((1 << sectors_per_cluster_exp) - 1));
-//	u16 byte_index    =        length_offset                           & ((1 << FAT32_SECTOR_SIZE_EXP  ) - 1);
-//
-//	for
-//	(
-//		u8 word_length = upper_word_length;
-//		word_length >= MIN_WORD_LENGTH;
-//		word_length -= 1
-//	)
-//	{
-//		for (u8 alphabet_index = 0; alphabet_index < language_alphabet_length; alphabet_index += 1)
-//		{
-//			u16 entry_count = pgm_u16(*curr_entry_count_reader);
-//			curr_entry_count_reader += 1;
-//
-//			debug_cstr("Length ");
-//			debug_u64 (word_length);
-//			debug_cstr(" | Alphabet ");
-//			debug_u64 (alphabet_index);
-//			debug_cstr(" | ");
-//			debug_u64 (entry_count);
-//			debug_cstr(" entries | Cluster #");
-//			debug_u64 (cluster_index);
-//			debug_cstr(" | Sector #");
-//			debug_u64 (sector_index);
-//			debug_cstr(" | Byte #");
-//			debug_u64 (byte_index);
-//			debug_char('\n');
-//
-//
-//			if (true)
-//			{
-//				u8  word_alphabet_indices[ABSOLUTE_MAX_WORD_LENGTH] = {0};
-//				u16 entries_remaining                               = entry_count;
-//
-//				sd_read(word_stream_cluster_addresses[cluster_index] + sector_index);
-//				while (entries_remaining)
-//				{
-//					u8 packed_word[PACKED_WORD_SIZE(ABSOLUTE_MAX_WORD_LENGTH)] = {0};
-//					for (u8 i = 0; i < PACKED_WORD_SIZE(word_length); i += 1)
-//					{
-//						packed_word[i]  = sd_sector[byte_index];
-//						byte_index     += 1;
-//						if (byte_index >> FAT32_SECTOR_SIZE_EXP)
-//						{
-//							sector_index  += byte_index   >> FAT32_SECTOR_SIZE_EXP;
-//							cluster_index += sector_index >> sectors_per_cluster_exp;
-//							sector_index  &= ((1 << sectors_per_cluster_exp) - 1);
-//							byte_index    &= ((1 << FAT32_SECTOR_SIZE_EXP  ) - 1);
-//							sd_read(word_stream_cluster_addresses[cluster_index] + sector_index);
-//						}
-//					}
-//
-//					// for (u8 word_alphabet_indices_index = 0; word_alphabet_indices_index < word_length; word_alphabet_indices_index += 1)
-//					// {
-//					// }
-//
-//					entries_remaining -= 1;
-//				}
-//			}
-//			else
-//			{
-//				byte_index    += entry_count * PACKED_WORD_SIZE(word_length); // This probably wouldn't overflow...
-//				sector_index  += byte_index   >> FAT32_SECTOR_SIZE_EXP;
-//				cluster_index += sector_index >> sectors_per_cluster_exp;
-//				sector_index  &= ((1 << sectors_per_cluster_exp) - 1);
-//				byte_index    &= ((1 << FAT32_SECTOR_SIZE_EXP  ) - 1);
-//			}
-//
-//			debug_char('\n');
-//		}
-//	}
-//
-//	matrix_set
-//	(
-//		(((u64) 0b00001000) << (8 * 0)) |
-//		(((u64) 0b00000100) << (8 * 1)) |
-//		(((u64) 0b00101000) << (8 * 2)) |
-//		(((u64) 0b01000000) << (8 * 3)) |
-//		(((u64) 0b01000000) << (8 * 4)) |
-//		(((u64) 0b00101000) << (8 * 5)) |
-//		(((u64) 0b00000100) << (8 * 6)) |
-//		(((u64) 0b00001000) << (8 * 7))
-//	);
+
+
+
+
+
+
+
+
+	enum Language language = Language_english;
+
+	b8 alphabet_count[MAX_ALPHABET_LENGTH] = {0};
+	alphabet_count[Letter_d - Letter_a] = true;
+	alphabet_count[Letter_u - Letter_a] = true;
+	alphabet_count[Letter_m - Letter_a] = true;
+	alphabet_count[Letter_p - Letter_a] = true;
+	alphabet_count[Letter_t - Letter_a] = true;
+	alphabet_count[Letter_r - Letter_a] = true;
+	alphabet_count[Letter_u - Letter_a] = true;
+	alphabet_count[Letter_c - Letter_a] = true;
+	alphabet_count[Letter_k - Letter_a] = true;
+
+	u16 crc         = 0xFF;
+	u32 starting_ms = timer_ms();
+
+	const struct WordsTableOfContentEntry* curr_table_entry = pgm_read_ptr(&WORDS_TABLE_OF_CONTENTS[language].entries);
+	for
+	(
+		u8 entry_word_length = pgm_u8(WORDS_TABLE_OF_CONTENTS[language].max_word_length);
+		entry_word_length >= MIN_WORD_LENGTH;
+		entry_word_length -= 1
+	)
+	{
+		for
+		(
+			u8 initial_alphabet_index = 0;
+			initial_alphabet_index < pgm_u8(LANGUAGE_INFO[language].alphabet_length);
+			initial_alphabet_index += 1,
+			curr_table_entry += 1
+		)
+		{
+			if (alphabet_count[initial_alphabet_index])
+			{
+				u16 curr_cluster_index        = pgm_u16(curr_table_entry->sector_index) >> sectors_per_cluster_exp;
+				u8  curr_cluster_sector_index = pgm_u16(curr_table_entry->sector_index) & ((1 << sectors_per_cluster_exp) - 1);
+				u16 entries_remaining         = pgm_u16(curr_table_entry->count);
+				while (entries_remaining)
+				{
+					sd_read(word_stream_cluster_addresses[curr_cluster_index] + curr_cluster_sector_index);
+
+					for
+					(
+						u16 sector_byte_index = 0;
+						sector_byte_index + PACKED_WORD_SIZE(entry_word_length) <= FAT32_SECTOR_SIZE && entries_remaining;
+					)
+					{
+						//
+						// Get subword bitfield.
+						//
+
+						u16 subword_bitfield = pgm_u16(pgm_u16_ptr(WORDS_TABLE_OF_CONTENTS[language].subfields)[sd_sector[sector_byte_index]]);
+						sector_byte_index += 1;
+
+						//
+						// Get alphabet indices.
+						//
+
+						// +2 since the unpacking process writes up to three elements at a time.
+						u8 word_alphabet_indices[ABSOLUTE_MAX_WORD_LENGTH + 2] = { initial_alphabet_index };
+
+						static_assert(BITS_PER_ALPHABET_INDEX == 5);
+						for
+						(
+							u8 word_alphabet_indices_index = 1;
+							word_alphabet_indices_index < entry_word_length;
+							word_alphabet_indices_index += 3
+						)
+						{
+							// This is technically invoking UB if we happen to be trying to read a u16 at the last byte of the sector,
+							// but this shaves off some instructions, so I think it's worth it. AVR-GCC seems to be kinda dumb, so it's a safe bet for me!
+							u16 packed = *(u16*) &sd_sector[sector_byte_index];
+
+							word_alphabet_indices[word_alphabet_indices_index] = packed & 0b0001'1111;
+
+							if (word_alphabet_indices_index + 1 < entry_word_length)
+							{
+								word_alphabet_indices[word_alphabet_indices_index + 1] = (packed >>  5) & 0b0001'1111;
+								word_alphabet_indices[word_alphabet_indices_index + 2] = (packed >> 10) & 0b0001'1111;
+								sector_byte_index += 2;
+							}
+							else
+							{
+								sector_byte_index += 1;
+							}
+						}
+
+						//
+						// Truncate the word to only contain the provided letters of the bank.
+						//
+
+						u8 subword_length = 1;
+						while (subword_length < entry_word_length && alphabet_count[word_alphabet_indices[subword_length]])
+						{
+							subword_length += 1;
+						}
+
+						//
+						// Test for reproducibility of subwords.
+						//
+
+						u16 subword_bits = subword_bitfield << (15 - (subword_length - MIN_WORD_LENGTH));
+						for
+						(
+							;
+							subword_length >= MIN_WORD_LENGTH && subword_bits;
+							subword_length -= 1
+						)
+						{
+							if (subword_bits & (1 << 15))
+							{
+								for (u8 i = 0; i < subword_length; i += 1)
+								{
+									debug_char('A' + word_alphabet_indices[i]);
+								}
+								debug_char('\n');
+
+								for (u8 i = 0; i < subword_length; i += 1)
+								{
+									crc = _crc16_update(crc, word_alphabet_indices[i]);
+								}
+							}
+
+							subword_bits <<= 1;
+						}
+
+						entries_remaining -= 1;
+					}
+
+					curr_cluster_sector_index += 1;
+					if (curr_cluster_sector_index == (1 << sectors_per_cluster_exp))
+					{
+						curr_cluster_index        += 1;
+						curr_cluster_sector_index  = 0;
+					}
+				}
+			}
+		}
+	}
+
+	u32 elapsed_ms = timer_ms() - starting_ms;
+
+	debug_u64 (crc);
+	debug_cstr(" : ");
+	debug_u64 (elapsed_ms);
+	debug_cstr("ms elapsed.\n");
+
+	matrix_set
+	(
+		(((u64) 0b00001000) << (8 * 0)) |
+		(((u64) 0b00000100) << (8 * 1)) |
+		(((u64) 0b00101000) << (8 * 2)) |
+		(((u64) 0b01000000) << (8 * 3)) |
+		(((u64) 0b01000000) << (8 * 4)) |
+		(((u64) 0b00101000) << (8 * 5)) |
+		(((u64) 0b00000100) << (8 * 6)) |
+		(((u64) 0b00001000) << (8 * 7))
+	);
 
 //	//
 //	// Wait for packet from Diplomat.

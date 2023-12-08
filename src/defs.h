@@ -306,6 +306,14 @@ static_assert(BITS_PER_ALPHABET_INDEX == 5); // PACKED_WORD_SIZE calculation ass
 		};
 #endif
 
+#pragma pack(push, 1)
+struct WordsTableOfContentEntry
+{
+	u16 sector_index;
+	u16 count;
+};
+#pragma pack(pop)
+
 #define WORDGAME_MAX_PRINT_NAME_SIZE_(IDENTIFIER_NAME, PRINT_NAME, ...) u8 IDENTIFIER_NAME[sizeof(PRINT_NAME)];
 #define WORDGAME_MAX_DIM_SLOTS_X_(IDENTIFIER_NAME, PRINT_NAME, LANGUAGE, MAX_WORD_LENGTH, SENTINEL_LETTER, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[DIM_SLOTS_X];
 #define WORDGAME_MAX_DIM_SLOTS_Y_(IDENTIFIER_NAME, PRINT_NAME, LANGUAGE, MAX_WORD_LENGTH, SENTINEL_LETTER, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, ...) u8 IDENTIFIER_NAME[DIM_SLOTS_Y];
@@ -936,7 +944,7 @@ enum TimerPrescaler // Prescalers for Timer0's TCCR0B register. See: Source(1) @
 
 #define TIMER_INITIAL_COUNTER 6 // See: [Overview] @ "timer.c".
 
-#if 0
+#if PROGRAM_NERD
 	static volatile u32 _timer_ms = 0;
 #endif
 

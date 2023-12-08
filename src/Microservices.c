@@ -1588,8 +1588,13 @@ main(int argc, char** argv)
 												)
 											)
 											{
+												// The parsed word "absorbs" all the subwords of this subword.
+												// Technically what we should also do is make it so that any word's subword that also happen to be a valid subword
+												// of the parsed word be reassigned to the parsed word, so that Nerd can process through as many words of the longest
+												// length first, rather than discover them later from a shorter word. However, this seems to blow the subfield count
+												// to greater than 256, so it can't really be done without some clever work around that.
 												subword_bitfield |= 1 << (subword_length - MIN_WORD_LENGTH);
-												subword_bitfield |= subword_makeup[0]; // In case the subword had its own subwords.
+												subword_bitfield |= subword_makeup[0];
 												memmove
 												(
 													subword_makeup,
@@ -1630,17 +1635,17 @@ main(int argc, char** argv)
 					// Generate table, subfields, and stream.
 					//
 
-					strbuf_cstr(&output_buf, "static const u16 WORDS_TABLE_OF_CONTENTS_ENTRIES_");
+					strbuf_cstr(&output_buf, "static const struct WordsTableOfContentEntry WORDS_TABLE_OF_CONTENTS_ENTRIES_");
 					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
 					strbuf_cstr(&output_buf, "[");
 					strbuf_i64 (&output_buf, max_word_length - MIN_WORD_LENGTH + 1);
 					strbuf_cstr(&output_buf, "][");
 					strbuf_i64 (&output_buf, LANGUAGE_INFO[language].alphabet_length);
-					strbuf_cstr(&output_buf, "][2] PROGMEM =\n");
+					strbuf_cstr(&output_buf, "] PROGMEM =\n");
 					strbuf_cstr(&output_buf, "\t{\n");
 					write_flush_strbuf(c_source_handle, &output_buf);
 
-					total_flash += (i32) (sizeof(u16) * (max_word_length - MIN_WORD_LENGTH + 1) * LANGUAGE_INFO[language].alphabet_length * 2);
+					total_flash += (i32) (sizeof(struct WordsTableOfContentEntry) * (max_word_length - MIN_WORD_LENGTH + 1) * LANGUAGE_INFO[language].alphabet_length * 2);
 
 					struct Dary_u16 subfields = {0};
 
@@ -1822,7 +1827,11 @@ main(int argc, char** argv)
 				// Make table of contents for all of the languages.
 				//
 
-				strbuf_cstr(&output_buf, "static const struct { const u16* entry_counts; const u16* subfields; u8 max_word_length; } WORDS_TABLE_OF_CONTENTS[] PROGMEM =\n");
+				strbuf_cstr
+				(
+					&output_buf,
+					"static const struct { const struct WordsTableOfContentEntry* entries; const u16* subfields; u8 max_word_length; } WORDS_TABLE_OF_CONTENTS[] PROGMEM =\n"
+				);
 				strbuf_cstr(&output_buf, "\t{\n");
 				write_flush_strbuf(c_source_handle, &output_buf);
 				for (enum Language language = {0}; language < Language_COUNT; language += 1)
@@ -1834,7 +1843,7 @@ main(int argc, char** argv)
 
 					strbuf_cstr(&output_buf, "&WORDS_TABLE_OF_CONTENTS_ENTRIES_");
 					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
-					strbuf_cstr(&output_buf, "[0][0][0], ");
+					strbuf_cstr(&output_buf, "[0][0], ");
 					write_flush_strbuf(c_source_handle, &output_buf);
 
 					strbuf_cstr(&output_buf, "&WORDS_TABLE_OF_CONTENTS_SUBFIELDS_");
@@ -1854,39 +1863,6 @@ main(int argc, char** argv)
 				write_flush_strbuf(c_source_handle, &output_buf);
 
 				total_flash += (sizeof(u16) * 2 + sizeof(u8)) * Language_COUNT;
-
-				//
-				// Make table.
-				//
-
-				strbuf_cstr(&output_buf, "#undef  PACKED_WORD_SIZE\n");
-				write_flush_strbuf(c_source_handle, &output_buf);
-
-				strbuf_cstr(&output_buf, "#define PACKED_WORD_SIZE(WORD_LENGTH) pgm_u8(WORDS_TABLE_OF_CONTENTS_PRECOMPUTED_COUNTS[ABSOLUTE_MAX_WORD_LENGTH - (WORD_LENGTH)].packed_word_length)\n");
-				write_flush_strbuf(c_source_handle, &output_buf);
-
-				strbuf_cstr(&output_buf, "static const struct { u8 packed_word_size; u8 packed_words_per_sector; } WORDS_TABLE_OF_CONTENTS_PRECOMPUTED_COUNTS[] =\n\t{\n");
-				write_flush_strbuf(c_source_handle, &output_buf);
-				for
-				(
-					i32 word_length = ABSOLUTE_MAX_WORD_LENGTH;
-					word_length >= MIN_WORD_LENGTH;
-					word_length -= 1
-				)
-				{
-					strbuf_cstr(&output_buf, "\t\t{ ");
-					strbuf_i64 (&output_buf, PACKED_WORD_SIZE(word_length));
-					strbuf_cstr(&output_buf, ", ");
-					strbuf_i64 (&output_buf, FAT32_SECTOR_SIZE / PACKED_WORD_SIZE(word_length));
-					strbuf_cstr(&output_buf, " }, // ");
-					strbuf_i64 (&output_buf, word_length);
-					strbuf_cstr(&output_buf, "-letterd words.\n");
-					write_flush_strbuf(c_source_handle, &output_buf);
-				}
-				strbuf_cstr(&output_buf, "\t};\n");
-				write_flush_strbuf(c_source_handle, &output_buf);
-
-				total_flash += sizeof(u8) * 2 * (ABSOLUTE_MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1);
 
 				//
 				// Done with all languages!
@@ -2196,13 +2172,9 @@ main(int argc, char** argv)
 			beginning with the letter 'B'" no longer consists of entirely 12-lettered words anymore,
 			since any of those 12-lettered words may have a valid subword ranging from
 			MIN_WORD_LENGTH to 11 letters. This isn't exactly significant, but it means that Nerd
-			may not iterate through ALL the longest words first. For example, English Anagrams
-			have a word limit of 6 letters (7 in the other mode), so Nerd would skim through the
-			entire dictionary file until it finds the family of words that are 6 letters long.
-			However, there are definitely some family of words that are 12-lettered but have valid
-			subwords that would be reproducible within the Anagrams game. Again, this is not too
-			significant, it would just mean that Nerd cannot gaurantee it'll submit ALL the longest
-			words FIRST, but it will nonetheless get the majority of them!
+			can't just skip an entire family of 12-lettered words in a game of 6-lettered Anagrams
+			anymore, since one of those words have the possibility of being reproducible in the
+			game.
 
 		- Subfields.
 
