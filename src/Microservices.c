@@ -1206,7 +1206,7 @@ main(int argc, char** argv)
 				strbuf_cstr(&output_buf, " bytes for word-sized run-lengths.\n");
 				strbuf_cstr(&output_buf, "// ");
 				strbuf_u64 (&output_buf, run_count * sizeof(u8) + overflowed_runlengths.length * sizeof(u16));
-				strbuf_cstr(&output_buf, " bytes total.\n");
+				strbuf_cstr(&output_buf, " bytes of flash total.\n");
 				write_flush_strbuf(c_source_handle, &output_buf);
 
 				//
@@ -1257,6 +1257,20 @@ main(int argc, char** argv)
 				strbuf_cstr(&stream_file_path, WORD_STREAM_EXTENSION);
 				HANDLE stream_handle = create_file_writing_handle(stream_file_path.str);
 
+				strbuf_cstr(&output_buf, "static_assert(MIN_WORD_LENGTH == ");
+				strbuf_u64 (&output_buf, MIN_WORD_LENGTH);
+				strbuf_cstr(&output_buf, ");\n");
+				strbuf_cstr(&output_buf, "static_assert(ABSOLUTE_MAX_WORD_LENGTH == ");
+				strbuf_u64 (&output_buf, ABSOLUTE_MAX_WORD_LENGTH);
+				strbuf_cstr(&output_buf, ");\n");
+				strbuf_cstr(&output_buf, "static_assert(FAT32_SECTOR_SIZE == ");
+				strbuf_u64 (&output_buf, FAT32_SECTOR_SIZE);
+				strbuf_cstr(&output_buf, ");\n");
+				strbuf_cstr(&output_buf, "static_assert(BITS_PER_ALPHABET_INDEX == ");
+				strbuf_u64 (&output_buf, BITS_PER_ALPHABET_INDEX);
+				strbuf_cstr(&output_buf, ");\n\n");
+				write_flush_strbuf(c_source_handle, &output_buf);
+
 				//
 				// Process each language's dictionary file.
 				//
@@ -1273,7 +1287,7 @@ main(int argc, char** argv)
 					}
 
 					//
-					// Generate wordsets consisting of word-makeups with first u16 being the subword bitfield.
+					// Generate wordsets consisting of word-makeups.
 					//
 
 					static_assert(MIN_WORD_LENGTH > 0); // Zero-lengthed words doesn't make sense!
@@ -1611,101 +1625,25 @@ main(int argc, char** argv)
 
 						free(stream.data);
 					}
-					printf("\t%d entries.\n", word_makeup_count);
 
 					//
-					// Find table values. First u16 of word-makeups will be replaced with subfield index.
+					// Generate table, subfields, and stream.
 					//
 
-					i32             entry_counts  [ABSOLUTE_MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1][MAX_ALPHABET_LENGTH] = {0};
-					u32             length_offsets[ABSOLUTE_MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1] = {0};
-					struct Dary_u16 subfields = {0};
-
-					for
-					(
-						i32 word_length = max_word_length;
-						word_length >= MIN_WORD_LENGTH;
-						word_length -= 1
-					)
-					{
-						length_offsets[ABSOLUTE_MAX_WORD_LENGTH - word_length] = (u32) stream_size;
-
-						for (i32 word_initial_alphabet_index = 0; word_initial_alphabet_index < LANGUAGE_INFO[language].alphabet_length; word_initial_alphabet_index += 1)
-						{
-							struct Dary_u16 wordset = wordsets[ABSOLUTE_MAX_WORD_LENGTH - word_length][word_initial_alphabet_index];
-							for
-							(
-								u16* word_makeup = wordset.data;
-								word_makeup < wordset.data + wordset.length;
-								word_makeup += word_length
-							)
-							{
-								//
-								// Increment count.
-								//
-
-								entry_counts[ABSOLUTE_MAX_WORD_LENGTH - word_length][word_initial_alphabet_index] += 1;
-								if (entry_counts[ABSOLUTE_MAX_WORD_LENGTH - word_length][word_initial_alphabet_index] > (u16) -1)
-								{
-									error("Entry count overflow! Too many words of the same length that begin with the same letter.");
-								}
-
-								//
-								// Increment stream size.
-								//
-
-								stream_size += PACKED_WORD_SIZE(word_length);
-								if (stream_size > (u32) -1)
-								{
-									error("Word stream too large!");
-								}
-
-								//
-								// Determine if a subfield can be applied to the subword's bitfield.
-								//
-
-								b32 should_push = true;
-								for (i32 subfield_index = 0; subfield_index < subfields.length; subfield_index += 1)
-								{
-									// The current word will never be longer than any word that was processed so far in the subfields, since
-									// we are iterating through wordsets sorted in such a way that longer words would be processed first anyways.
-									u16 common_mask = ((1 << (15 - __lzcnt16(word_makeup[0]))) - 1);
-									if ((word_makeup[0] & common_mask) == (subfields.data[subfield_index] & common_mask))
-									{
-										word_makeup[0] = (u16) subfield_index;
-										should_push    = false;
-										break;
-									}
-								}
-
-								if (should_push)
-								{
-									dary_push(&subfields, &word_makeup[0]);
-									if (subfields.length > (u8) -1)
-									{
-										error("Subfield count overflow!");
-									}
-
-									word_makeup[0] = (u16) (subfields.length - 1);
-								}
-							}
-						}
-					}
-					printf("\t%lld subfields.\n", subfields.length);
-
-					//
-					// Make table of the entry counts.
-					//
-
-					strbuf_cstr(&output_buf, "static const u16 WORDS_TABLE_OF_CONTENTS_ENTRY_COUNTS_");
+					strbuf_cstr(&output_buf, "static const u16 WORDS_TABLE_OF_CONTENTS_ENTRIES_");
 					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
 					strbuf_cstr(&output_buf, "[");
 					strbuf_i64 (&output_buf, max_word_length - MIN_WORD_LENGTH + 1);
 					strbuf_cstr(&output_buf, "][");
 					strbuf_i64 (&output_buf, LANGUAGE_INFO[language].alphabet_length);
-					strbuf_cstr(&output_buf, "] PROGMEM =\n");
+					strbuf_cstr(&output_buf, "][2] PROGMEM =\n");
 					strbuf_cstr(&output_buf, "\t{\n");
 					write_flush_strbuf(c_source_handle, &output_buf);
+
+					total_flash += (i32) (sizeof(u16) * (max_word_length - MIN_WORD_LENGTH + 1) * LANGUAGE_INFO[language].alphabet_length * 2);
+
+					struct Dary_u16 subfields = {0};
+
 					for
 					(
 						i32 word_length = max_word_length;
@@ -1717,46 +1655,118 @@ main(int argc, char** argv)
 						strbuf_i64 (&output_buf, word_length);
 						strbuf_cstr(&output_buf, "-lettered words.\n");
 						write_flush_strbuf(c_source_handle, &output_buf);
-						for (i32 alphabet_index = 0; alphabet_index < LANGUAGE_INFO[language].alphabet_length; alphabet_index += 1)
+
+						for (i32 word_initial_alphabet_index = 0; word_initial_alphabet_index < LANGUAGE_INFO[language].alphabet_length; word_initial_alphabet_index += 1)
 						{
-							strbuf_cstr(&output_buf, "\t\t\t");
-							strbuf_i64 (&output_buf, entry_counts[ABSOLUTE_MAX_WORD_LENGTH - word_length][alphabet_index]);
-							strbuf_cstr(&output_buf, ", // \"");
-							strbuf_str (&output_buf, LETTER_INFO[LANGUAGE_INFO[language].alphabet[alphabet_index]].name);
+							struct Dary_u16 wordset = wordsets[ABSOLUTE_MAX_WORD_LENGTH - word_length][word_initial_alphabet_index];
+
+							//
+							// Add row to the table.
+							//
+
+							if (stream_size % FAT32_SECTOR_SIZE)
+							{
+								i32 padding = FAT32_SECTOR_SIZE - (stream_size % FAT32_SECTOR_SIZE);
+								write_n_bytes(stream_handle, 0, padding);
+								stream_size += padding;
+							}
+
+							strbuf_cstr(&output_buf, "\t\t\t{ ");
+							strbuf_u64 (&output_buf, stream_size / FAT32_SECTOR_SIZE);
+							strbuf_cstr(&output_buf, ", ");
+							strbuf_u64 (&output_buf, wordset.length / word_length);
+							strbuf_cstr(&output_buf, " }, // \"");
+							strbuf_str (&output_buf, LETTER_INFO[LANGUAGE_INFO[language].alphabet[word_initial_alphabet_index]].name);
 							strbuf_cstr(&output_buf, "\".\n");
 							write_flush_strbuf(c_source_handle, &output_buf);
+
+							//
+							// Generate part of stream and some subfields.
+							//
+
+							for
+							(
+								u16* word_makeup = wordset.data;
+								word_makeup < wordset.data + wordset.length;
+								word_makeup += word_length
+							)
+							{
+								//
+								// Determine if a subfield can be applied to the subword's bitfield.
+								//
+
+								i32 word_subfield_index = -1;
+								for (i32 subfield_index = 0; subfield_index < subfields.length; subfield_index += 1)
+								{
+									// The current word will never be longer than any word that was processed so far in the subfields, since
+									// we are iterating through wordsets sorted in such a way that longer words would be processed first anyways.
+									u16 common_mask = ((1 << (15 - __lzcnt16(word_makeup[0]))) - 1);
+									if ((word_makeup[0] & common_mask) == (subfields.data[subfield_index] & common_mask))
+									{
+										word_subfield_index = subfield_index;
+										break;
+									}
+								}
+
+								if (word_subfield_index == -1) // A new subfield!
+								{
+									dary_push(&subfields, &word_makeup[0]);
+									if (subfields.length > (u8) -1)
+									{
+										error("Subfield count overflow!");
+									}
+
+									word_subfield_index = (i32) subfields.length - 1;
+								}
+
+								//
+								// Compress word.
+								//
+
+								// "APPLES" with word-makeup of { 0x**, 15, 15, 11, 4, 18 } or equivalently { 0x**, 0b01111, 0b01111, 0b01011, 0b00100, 0b10010 } will have
+								// the 5-bit alphabet indices be packed tightly into the form { 0b*'01011'01111'01111, 0b*'*****'10010'00100 } where three indices can
+								// be compressed into 2 bytes with 1 padding bit.
+
+								static_assert(BITS_PER_ALPHABET_INDEX == 5); // Packing scheme assumes five bits per alphabet index here.
+								u16 packed[((PACKED_WORD_SIZE(ABSOLUTE_MAX_WORD_LENGTH) - 1) + 1) / 2] = {0};
+
+								for (i32 packed_index = 0; packed_index < ((word_length - 1) + 2) / 3; packed_index += 1)
+								{
+									u8 alphabet_indices_to_be_packed[3] =
+										{
+											1 + packed_index * 3 + 0 < word_length ? (u8) word_makeup[1 + packed_index * 3 + 0] : 0,
+											1 + packed_index * 3 + 1 < word_length ? (u8) word_makeup[1 + packed_index * 3 + 1] : 0,
+											1 + packed_index * 3 + 2 < word_length ? (u8) word_makeup[1 + packed_index * 3 + 2] : 0,
+										};
+									packed[packed_index] =
+										(alphabet_indices_to_be_packed[0] << (BITS_PER_ALPHABET_INDEX * 0)) |
+										(alphabet_indices_to_be_packed[1] << (BITS_PER_ALPHABET_INDEX * 1)) |
+										(alphabet_indices_to_be_packed[2] << (BITS_PER_ALPHABET_INDEX * 2));
+								}
+
+								//
+								// Output to stream.
+								//
+
+								if ((stream_size % FAT32_SECTOR_SIZE) + PACKED_WORD_SIZE(word_length) > FAT32_SECTOR_SIZE)
+								{
+									i32 padding = FAT32_SECTOR_SIZE - (stream_size % FAT32_SECTOR_SIZE);
+									write_n_bytes(stream_handle, 0, padding);
+									stream_size += padding;
+								}
+
+								static_assert(LITTLE_ENDIAN);
+								write_raw_data(stream_handle, &word_subfield_index, sizeof(u8)                       ); // Subfield index should be contained within a byte.
+								write_raw_data(stream_handle, packed              , PACKED_WORD_SIZE(word_length) - 1);
+								stream_size += PACKED_WORD_SIZE(word_length);
+							}
 						}
+
 						strbuf_cstr(&output_buf, "\t\t},\n");
 						write_flush_strbuf(c_source_handle, &output_buf);
 					}
 					strbuf_cstr(&output_buf, "\t};\n\n");
-
-					total_flash += (i32) (sizeof(u16) * LANGUAGE_INFO[language].alphabet_length * (max_word_length - MIN_WORD_LENGTH + 1));
-
-					//
-					// Make table of the length offsets.
-					//
-
-					strbuf_cstr(&output_buf, "static const u32 WORDS_TABLE_OF_CONTENTS_LENGTH_OFFSETS_");
-					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
-					strbuf_cstr(&output_buf, "[");
-					strbuf_i64 (&output_buf, max_word_length - MIN_WORD_LENGTH + 1);
-					strbuf_cstr(&output_buf, "] PROGMEM = { ");
 					write_flush_strbuf(c_source_handle, &output_buf);
-					for
-					(
-						i32 word_length = max_word_length;
-						word_length >= MIN_WORD_LENGTH;
-						word_length -= 1
-					)
-					{
-						strbuf_u64 (&output_buf, length_offsets[ABSOLUTE_MAX_WORD_LENGTH - word_length]);
-						strbuf_cstr(&output_buf, ", ");
-						write_flush_strbuf(c_source_handle, &output_buf);
-					}
-					strbuf_cstr(&output_buf, "};\n\n");
-
-					total_flash += (i32) (sizeof(u32) * (max_word_length - MIN_WORD_LENGTH + 1));
 
 					//
 					// Make table of the subfields.
@@ -1783,54 +1793,16 @@ main(int argc, char** argv)
 					total_flash += (i32) (sizeof(u16) * subfields.length);
 
 					//
-					// Generate stream for the language.
+					// Done for this language!
 					//
 
-					for
+					printf
 					(
-						i32 word_length = max_word_length;
-						word_length >= MIN_WORD_LENGTH;
-						word_length -= 1
-					)
-					{
-						for (i32 word_initial_alphabet_index = 0; word_initial_alphabet_index < LANGUAGE_INFO[language].alphabet_length; word_initial_alphabet_index += 1)
-						{
-							struct Dary_u16 wordset = wordsets[ABSOLUTE_MAX_WORD_LENGTH - word_length][word_initial_alphabet_index];
-							for
-							(
-								u16* word_makeup = wordset.data;
-								word_makeup < wordset.data + wordset.length;
-								word_makeup += word_length
-							)
-							{
-								static_assert(BITS_PER_ALPHABET_INDEX == 5); // Packing scheme assumes five bits per alphabet index here.
-
-								// "APPLES" with word-makeup of { 0x**, 15, 15, 11, 4, 18 } or equivalently { 0x**, 0b01111, 0b01111, 0b01011, 0b00100, 0b10010 } will have
-								// the 5-bit alphabet indices be packed tightly into the form { 0b*'01011'01111'01111, 0b*'*****'10010'00100 } where three indices can
-								// be compressed into 2 bytes with 1 padding bit.
-
-								u16 packed[((PACKED_WORD_SIZE(ABSOLUTE_MAX_WORD_LENGTH) - 1) + 1) / 2] = {0};
-
-								for (i32 packed_index = 0; packed_index < ((word_length - 1) + 2) / 3; packed_index += 1)
-								{
-									u8 alphabet_indices_to_be_packed[3] =
-										{
-											1 + packed_index * 3 + 0 < word_length ? (u8) word_makeup[1 + packed_index * 3 + 0] : 0,
-											1 + packed_index * 3 + 1 < word_length ? (u8) word_makeup[1 + packed_index * 3 + 1] : 0,
-											1 + packed_index * 3 + 2 < word_length ? (u8) word_makeup[1 + packed_index * 3 + 2] : 0,
-										};
-									packed[packed_index] =
-										(alphabet_indices_to_be_packed[0] << (BITS_PER_ALPHABET_INDEX * 0)) |
-										(alphabet_indices_to_be_packed[1] << (BITS_PER_ALPHABET_INDEX * 1)) |
-										(alphabet_indices_to_be_packed[2] << (BITS_PER_ALPHABET_INDEX * 2));
-								}
-
-								static_assert(LITTLE_ENDIAN);
-								write_raw_data(stream_handle, &word_makeup[0], sizeof(u8)                       ); // Subfield index should be contained within a byte.
-								write_raw_data(stream_handle, packed         , PACKED_WORD_SIZE(word_length) - 1);
-							}
-						}
-					}
+						"\t%d entries.\n"
+						"\t%lld subfields.\n",
+						word_makeup_count,
+						subfields.length
+					);
 
 					//
 					// Clean up.
@@ -1850,7 +1822,7 @@ main(int argc, char** argv)
 				// Make table of contents for all of the languages.
 				//
 
-				strbuf_cstr(&output_buf, "static const struct { const u16* entry_counts; const u16* length_offsets; const u16* subfields; u8 max_word_length; } WORDS_TABLE_OF_CONTENTS[] PROGMEM =\n");
+				strbuf_cstr(&output_buf, "static const struct { const u16* entry_counts; const u16* subfields; u8 max_word_length; } WORDS_TABLE_OF_CONTENTS[] PROGMEM =\n");
 				strbuf_cstr(&output_buf, "\t{\n");
 				write_flush_strbuf(c_source_handle, &output_buf);
 				for (enum Language language = {0}; language < Language_COUNT; language += 1)
@@ -1860,22 +1832,17 @@ main(int argc, char** argv)
 					strbuf_cstr(&output_buf, "] = { ");
 					write_flush_strbuf(c_source_handle, &output_buf);
 
-					strbuf_cstr(&output_buf, "(const u16*) WORDS_TABLE_OF_CONTENTS_ENTRY_COUNTS_");
+					strbuf_cstr(&output_buf, "&WORDS_TABLE_OF_CONTENTS_ENTRIES_");
 					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
-					strbuf_cstr(&output_buf, ", ");
+					strbuf_cstr(&output_buf, "[0][0][0], ");
 					write_flush_strbuf(c_source_handle, &output_buf);
 
-					strbuf_cstr(&output_buf, "(const u16*) WORDS_TABLE_OF_CONTENTS_LENGTH_OFFSETS_");
+					strbuf_cstr(&output_buf, "&WORDS_TABLE_OF_CONTENTS_SUBFIELDS_");
 					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
-					strbuf_cstr(&output_buf, ", ");
+					strbuf_cstr(&output_buf, "[0], ");
 					write_flush_strbuf(c_source_handle, &output_buf);
 
-					strbuf_cstr(&output_buf, "(const u16*) WORDS_TABLE_OF_CONTENTS_SUBFIELDS_");
-					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
-					strbuf_cstr(&output_buf, ", ");
-					write_flush_strbuf(c_source_handle, &output_buf);
-
-					strbuf_cstr(&output_buf, "countof(WORDS_TABLE_OF_CONTENTS_ENTRY_COUNTS_");
+					strbuf_cstr(&output_buf, "countof(WORDS_TABLE_OF_CONTENTS_ENTRIES_");
 					strbuf_str (&output_buf, LANGUAGE_INFO[language].name);
 					strbuf_cstr(&output_buf, ") + MIN_WORD_LENGTH - 1");
 					write_flush_strbuf(c_source_handle, &output_buf);
@@ -1883,15 +1850,52 @@ main(int argc, char** argv)
 					strbuf_cstr(&output_buf, "},\n");
 					write_flush_strbuf(c_source_handle, &output_buf);
 				}
+				strbuf_cstr(&output_buf, "\t};\n\n");
+				write_flush_strbuf(c_source_handle, &output_buf);
+
+				total_flash += (sizeof(u16) * 2 + sizeof(u8)) * Language_COUNT;
+
+				//
+				// Make table.
+				//
+
+				strbuf_cstr(&output_buf, "#undef  PACKED_WORD_SIZE\n");
+				write_flush_strbuf(c_source_handle, &output_buf);
+
+				strbuf_cstr(&output_buf, "#define PACKED_WORD_SIZE(WORD_LENGTH) pgm_u8(WORDS_TABLE_OF_CONTENTS_PRECOMPUTED_COUNTS[ABSOLUTE_MAX_WORD_LENGTH - (WORD_LENGTH)].packed_word_length)\n");
+				write_flush_strbuf(c_source_handle, &output_buf);
+
+				strbuf_cstr(&output_buf, "static const struct { u8 packed_word_size; u8 packed_words_per_sector; } WORDS_TABLE_OF_CONTENTS_PRECOMPUTED_COUNTS[] =\n\t{\n");
+				write_flush_strbuf(c_source_handle, &output_buf);
+				for
+				(
+					i32 word_length = ABSOLUTE_MAX_WORD_LENGTH;
+					word_length >= MIN_WORD_LENGTH;
+					word_length -= 1
+				)
+				{
+					strbuf_cstr(&output_buf, "\t\t{ ");
+					strbuf_i64 (&output_buf, PACKED_WORD_SIZE(word_length));
+					strbuf_cstr(&output_buf, ", ");
+					strbuf_i64 (&output_buf, FAT32_SECTOR_SIZE / PACKED_WORD_SIZE(word_length));
+					strbuf_cstr(&output_buf, " }, // ");
+					strbuf_i64 (&output_buf, word_length);
+					strbuf_cstr(&output_buf, "-letterd words.\n");
+					write_flush_strbuf(c_source_handle, &output_buf);
+				}
 				strbuf_cstr(&output_buf, "\t};\n");
 				write_flush_strbuf(c_source_handle, &output_buf);
 
-				total_flash += (sizeof(u16) * 3 + sizeof(u8)) * Language_COUNT;
+				total_flash += sizeof(u8) * 2 * (ABSOLUTE_MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1);
+
+				//
+				// Done with all languages!
+				//
 
 				strbuf_cstr(&output_buf, "\n");
 				strbuf_cstr(&output_buf, "// ");
 				strbuf_i64 (&output_buf, total_flash);
-				strbuf_cstr(&output_buf, " bytes total.\n");
+				strbuf_cstr(&output_buf, " bytes of flash total.\n");
 				write_flush_strbuf(c_source_handle, &output_buf);
 
 				printf("%d bytes of flash will be used.\n", total_flash);
@@ -2263,6 +2267,10 @@ main(int argc, char** argv)
 	(the amount of N-lettered words beginning with the letter X, what the actual subfield values
 	are, etc.) is outputted as a header file that gets compiled in with Nerd and then stored in
 	flash.
+
+	The binary file is generated in such a way that it's convenient to parse for words, but this
+	is only due to the padding bytes buffing the different families of words into their own
+	sector and preventing words from straddling across sector boundries.
 */
 
 /* [Deadend of Partitions].

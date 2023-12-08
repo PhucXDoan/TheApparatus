@@ -107,9 +107,14 @@ is_slot_excluded(enum WordGame wordgame, u8 x, u8 y)
 }
 
 #ifdef PROGMEM
-	#define pgm_char(LVALUE) pgm_read_byte((const char*) { &(LVALUE) })
-	#define pgm_u8(LVALUE)   pgm_read_byte((const u8  *) { &(LVALUE) })
-	#define pgm_u16(LVALUE)  pgm_read_word((const u16 *) { &(LVALUE) })
+	#define pgm_char(LVALUE)                  pgm_read_byte ((const char      *) { &(LVALUE) })
+	#define pgm_u8(LVALUE)                    pgm_read_byte ((const u8        *) { &(LVALUE) })
+	#define pgm_u16(LVALUE)                   pgm_read_word ((const u16       *) { &(LVALUE) })
+	#define pgm_u32(LVALUE)                   pgm_read_dword((const u32       *) { &(LVALUE) })
+	#define pgm_u8_ptr(LVALUE)  ((const u8 *) pgm_read_ptr  ((const u8 * const*) { &(LVALUE) }))
+	#define pgm_u16_ptr(LVALUE) ((const u16*) pgm_read_ptr  ((const u16* const*) { &(LVALUE) }))
+	#define pgm_u32_ptr(LVALUE) ((const u32*) pgm_read_ptr  ((const u32* const*) { &(LVALUE) }))
+	#define pgm_u64_ptr(LVALUE) ((const u64*) pgm_read_ptr  ((const u64* const*) { &(LVALUE) }))
 #endif
 
 #if PROGRAM_MICROSERVICES
@@ -188,9 +193,8 @@ is_slot_excluded(enum WordGame wordgame, u8 x, u8 y)
 		{
 			for
 			(
-				i8 i = bitsof(value) - 1;
-				i >= 0;
-				i -= 1
+				u8 i = bitsof(value);
+				i--;
 			)
 			{
 				debug_char('0' + ((value >> i) & 1));

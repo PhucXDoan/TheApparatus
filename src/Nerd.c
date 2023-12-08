@@ -71,7 +71,7 @@ main(void)
 		UCSR0A = 1 << U2X0;
 		UBRR0  = 7;
 		UCSR0B = 1 << TXEN0;
-		debug_cstr("\n\n\n\n"); // If terminal is opened early, lots of junk could appear due to noise; this helps separate.
+		debug_cstr("\n\n--------------------------------\n\n"); // If terminal is opened early, lots of junk could appear due to noise; this helps separate.
 	#endif
 
 	usart_init();
@@ -82,6 +82,13 @@ main(void)
 	#endif
 
 	sd_init();
+
+	//
+	// Find sectors of the word stream.
+	//
+
+	u32 word_stream_cluster_addresses[32] = {0}; // Zero is never a valid cluster address.
+	u8  sectors_per_cluster_exp           = 0;   // Max value is 7.
 
 	{
 		//
@@ -126,13 +133,21 @@ main(void)
 			error(); // Not the boot sector we're expecting...
 		}
 
-		u8  sectors_per_cluster = boot_sector->BPB_SecPerClus;
+		for (u8 i = 0; i < 8; i += 1) // Get exponent of sectors per cluster.
+		{
+			if (boot_sector->BPB_SecPerClus & (1 << i))
+			{
+				sectors_per_cluster_exp = i;
+				break;
+			}
+		}
+
 		u32 root_cluster        = boot_sector->BPB_RootClus;
 		u32 fat_address         = boot_sector_address + boot_sector->BPB_RsvdSecCnt;
 		u32 data_region_address = fat_address + boot_sector->BPB_NumFATs * boot_sector->BPB_FATSz32;
 
 		//
-		// FAT32 short file name of word stream binary file.
+		// Search through root directory for the word stream binary file.
 		//
 
 		char word_stream_file_name[FAT32_SHORT_NAME_LENGTH + FAT32_SHORT_EXTENSION_LENGTH] = {0};
@@ -143,18 +158,11 @@ main(void)
 		{
 			word_stream_file_name[i] = to_upper(pgm_char(PSTR(WORD_STREAM_NAME)[i]));
 		}
-
 		static_assert(sizeof(WORD_STREAM_EXTENSION) - 1 <= FAT32_SHORT_EXTENSION_LENGTH);
 		for (u8 i = 0; i < sizeof(WORD_STREAM_EXTENSION) - 1; i += 1)
 		{
 			word_stream_file_name[FAT32_SHORT_NAME_LENGTH + i] = to_upper(pgm_char(PSTR(WORD_STREAM_EXTENSION)[i]));
 		}
-
-		//
-		// Search through root directory for the word stream binary files.
-		//
-
-		u32 word_stream_clusters[32] = {0}; // Zero is never a valid cluster.
 
 		for
 		(
@@ -162,9 +170,9 @@ main(void)
 			(cluster & 0x0FFF'FFFF) != 0x0FFF'FFFF;
 		)
 		{
-			for (u8 sector_index = 0; sector_index < sectors_per_cluster; sector_index += 1)
+			for (u8 sector_index = 0; sector_index < (1 << sectors_per_cluster_exp); sector_index += 1)
 			{
-				sd_read(data_region_address + (cluster - 2) * sectors_per_cluster + sector_index);
+				sd_read(data_region_address + ((cluster - 2) << sectors_per_cluster_exp) + sector_index);
 
 				for (u8 entry_index = 0; entry_index < sizeof(sd_sector) / sizeof(union FAT32DirEntry); entry_index += 1)
 				{
@@ -183,41 +191,163 @@ main(void)
 						&& memeq(word_stream_file_name, entry->DIR_Name, countof(entry->DIR_Name))                 // File name matches?
 					)
 					{
-						word_stream_clusters[0] = (((u32) entry->DIR_FstClusHI) << 16) | entry->DIR_FstClusLO;
-
-						debug_char ('"');
-						debug_chars(word_stream_file_name, countof(word_stream_file_name));
-						debug_cstr ("\" : ");
-						debug_u64  (word_stream_clusters[0]);
-						debug_char ('\n');
-
+						word_stream_cluster_addresses[0] = (((u32) entry->DIR_FstClusHI) << 16) | entry->DIR_FstClusLO;
 						goto STOP_SEARCHING_ROOT_DIRECTORY;
 					}
 				}
 			}
 
-			sd_read(fat_address + cluster * sizeof(u32) / FAT32_SECTOR_SIZE);
-			cluster = ((u32*) sd_sector)[cluster % (FAT32_SECTOR_SIZE / sizeof(u32))];
+			sd_read(fat_address + cluster / FAT32_CLUSTER_ENTRIES_PER_TABLE_SECTOR);
+			cluster = ((u32*) sd_sector)[cluster % FAT32_CLUSTER_ENTRIES_PER_TABLE_SECTOR];
 		}
 		STOP_SEARCHING_ROOT_DIRECTORY:;
 
-		if (!word_stream_clusters[0])
+		if (!word_stream_cluster_addresses[0])
 		{
-			error(); // We didn't find the word stream binary file!
+			error(); // We couldn't find the word stream binary file!
+		}
+
+		//
+		// Get all clusters of the file.
+		//
+
+		for
+		(
+			u8 cluster_index = 1;
+			;
+			cluster_index += 1
+		)
+		{
+			sd_read(fat_address + word_stream_cluster_addresses[cluster_index - 1] / FAT32_CLUSTER_ENTRIES_PER_TABLE_SECTOR);
+			word_stream_cluster_addresses[cluster_index] = ((u32*) sd_sector)[word_stream_cluster_addresses[cluster_index - 1] % FAT32_CLUSTER_ENTRIES_PER_TABLE_SECTOR];
+
+			if ((word_stream_cluster_addresses[cluster_index] & 0x0FFF'FFFF) == 0x0FFF'FFFF)
+			{
+				word_stream_cluster_addresses[cluster_index] = 0;
+				break;
+			}
+			else if (cluster_index == countof(word_stream_cluster_addresses) - 1)
+			{
+				error(); // Too many clusters!
+			}
+		}
+
+		//
+		// Convert the clusters into sector addresses.
+		//
+
+		for
+		(
+			u8 i = 0;
+			i < countof(word_stream_cluster_addresses) && word_stream_cluster_addresses[i];
+			i += 1
+		)
+		{
+			word_stream_cluster_addresses[i] = data_region_address + ((word_stream_cluster_addresses[i] - 2) << sectors_per_cluster_exp);
 		}
 	}
 
-	matrix_set
-	(
-		(((u64) 0b00001000) << (8 * 0)) |
-		(((u64) 0b00000100) << (8 * 1)) |
-		(((u64) 0b00101000) << (8 * 2)) |
-		(((u64) 0b01000000) << (8 * 3)) |
-		(((u64) 0b01000000) << (8 * 4)) |
-		(((u64) 0b00101000) << (8 * 5)) |
-		(((u64) 0b00000100) << (8 * 6)) |
-		(((u64) 0b00001000) << (8 * 7))
-	);
+//	//for (u8 i = 0; i < countof(word_stream_cluster_addresses); i += 1)
+//	//{
+//	//	debug_u64(word_stream_cluster_addresses[i]);
+//	//	debug_char('\n');
+//	//}
+//
+//	enum Language language                 = Language_english;
+//	u8            upper_word_length        = 4;
+//	u8            language_max_word_length = pgm_u8(WORDS_TABLE_OF_CONTENTS[language].max_word_length);
+//	u8            language_alphabet_length = pgm_u8(LANGUAGE_INFO[language].alphabet_length);
+//
+//	const u16* curr_entry_count_reader =
+//		&pgm_u16_ptr(WORDS_TABLE_OF_CONTENTS[language].entry_counts)
+//			[(language_max_word_length - upper_word_length) * language_alphabet_length];
+//
+//	u32 length_offset = pgm_u32(pgm_u32_ptr(WORDS_TABLE_OF_CONTENTS[language].length_offsets)[language_max_word_length - upper_word_length]);
+//	u32 cluster_index = length_offset >> (FAT32_SECTOR_SIZE_EXP + sectors_per_cluster_exp);
+//	u8  sector_index  = (u8) ((length_offset >> FAT32_SECTOR_SIZE_EXP) & ((1 << sectors_per_cluster_exp) - 1));
+//	u16 byte_index    =        length_offset                           & ((1 << FAT32_SECTOR_SIZE_EXP  ) - 1);
+//
+//	for
+//	(
+//		u8 word_length = upper_word_length;
+//		word_length >= MIN_WORD_LENGTH;
+//		word_length -= 1
+//	)
+//	{
+//		for (u8 alphabet_index = 0; alphabet_index < language_alphabet_length; alphabet_index += 1)
+//		{
+//			u16 entry_count = pgm_u16(*curr_entry_count_reader);
+//			curr_entry_count_reader += 1;
+//
+//			debug_cstr("Length ");
+//			debug_u64 (word_length);
+//			debug_cstr(" | Alphabet ");
+//			debug_u64 (alphabet_index);
+//			debug_cstr(" | ");
+//			debug_u64 (entry_count);
+//			debug_cstr(" entries | Cluster #");
+//			debug_u64 (cluster_index);
+//			debug_cstr(" | Sector #");
+//			debug_u64 (sector_index);
+//			debug_cstr(" | Byte #");
+//			debug_u64 (byte_index);
+//			debug_char('\n');
+//
+//
+//			if (true)
+//			{
+//				u8  word_alphabet_indices[ABSOLUTE_MAX_WORD_LENGTH] = {0};
+//				u16 entries_remaining                               = entry_count;
+//
+//				sd_read(word_stream_cluster_addresses[cluster_index] + sector_index);
+//				while (entries_remaining)
+//				{
+//					u8 packed_word[PACKED_WORD_SIZE(ABSOLUTE_MAX_WORD_LENGTH)] = {0};
+//					for (u8 i = 0; i < PACKED_WORD_SIZE(word_length); i += 1)
+//					{
+//						packed_word[i]  = sd_sector[byte_index];
+//						byte_index     += 1;
+//						if (byte_index >> FAT32_SECTOR_SIZE_EXP)
+//						{
+//							sector_index  += byte_index   >> FAT32_SECTOR_SIZE_EXP;
+//							cluster_index += sector_index >> sectors_per_cluster_exp;
+//							sector_index  &= ((1 << sectors_per_cluster_exp) - 1);
+//							byte_index    &= ((1 << FAT32_SECTOR_SIZE_EXP  ) - 1);
+//							sd_read(word_stream_cluster_addresses[cluster_index] + sector_index);
+//						}
+//					}
+//
+//					// for (u8 word_alphabet_indices_index = 0; word_alphabet_indices_index < word_length; word_alphabet_indices_index += 1)
+//					// {
+//					// }
+//
+//					entries_remaining -= 1;
+//				}
+//			}
+//			else
+//			{
+//				byte_index    += entry_count * PACKED_WORD_SIZE(word_length); // This probably wouldn't overflow...
+//				sector_index  += byte_index   >> FAT32_SECTOR_SIZE_EXP;
+//				cluster_index += sector_index >> sectors_per_cluster_exp;
+//				sector_index  &= ((1 << sectors_per_cluster_exp) - 1);
+//				byte_index    &= ((1 << FAT32_SECTOR_SIZE_EXP  ) - 1);
+//			}
+//
+//			debug_char('\n');
+//		}
+//	}
+//
+//	matrix_set
+//	(
+//		(((u64) 0b00001000) << (8 * 0)) |
+//		(((u64) 0b00000100) << (8 * 1)) |
+//		(((u64) 0b00101000) << (8 * 2)) |
+//		(((u64) 0b01000000) << (8 * 3)) |
+//		(((u64) 0b01000000) << (8 * 4)) |
+//		(((u64) 0b00101000) << (8 * 5)) |
+//		(((u64) 0b00000100) << (8 * 6)) |
+//		(((u64) 0b00001000) << (8 * 7))
+//	);
 
 //	//
 //	// Wait for packet from Diplomat.
@@ -263,9 +393,8 @@ main(void)
 //
 //	for
 //	(
-//		i8 y = WORDGAME_MAX_DIM_SLOTS_Y - 1;
-//		y >= 0;
-//		y -= 1
+//		u8 y = WORDGAME_MAX_DIM_SLOTS_Y;
+//		y--;
 //	)
 //	{
 //		for (u8 x = 0; x < WORDGAME_MAX_DIM_SLOTS_X; x += 1)

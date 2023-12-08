@@ -648,9 +648,8 @@ main(void)
 							{
 								for
 								(
-									i8 y = pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y) - 1;
-									y >= 0;
-									y -= 1
+									u8 y = pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y);
+									y--;
 								)
 								{
 									for (u8 x = 0; x < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x); x += 1)

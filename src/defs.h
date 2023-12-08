@@ -543,7 +543,7 @@ static_assert(MAX_ALPHABET_LENGTH <= (1 << BITS_PER_ALPHABET_INDEX)); // Alphabe
 				{ \
 					.alphabet        = { __VA_ARGS__ }, \
 					.alphabet_length = countof((enum Letter[]) { __VA_ARGS__ }), \
-					.name            = #NAME, \
+					.name            = STR(#NAME), \
 				},
 			LANGUAGE_XMDT(MAKE)
 			#undef MAKE
@@ -970,7 +970,7 @@ enum SPIPrescaler // See: Source(1) @ Table(17-5) @ Page(186).
 #define FAT32_TOTAL_SECTOR_COUNT    16777216
 #define FAT32_RESERVED_SECTOR_COUNT 6144
 #define FAT32_TABLE_SECTOR_COUNT    1024
-#define FAT32_SECTOR_SIZE           512
+#define FAT32_SECTOR_SIZE_EXP       9
 #define FAT32_SECTORS_PER_CLUSTER   128
 
 #define FAT32_MEDIA_TYPE                        0xF8
@@ -980,6 +980,9 @@ enum SPIPrescaler // See: Source(1) @ Table(17-5) @ Page(186).
 
 // Includes the reserved region, the FAT itself, and the root cluster.
 #define FAT32_WIPE_SECTOR_COUNT FAT32_RESERVED_SECTOR_COUNT + FAT32_TABLE_SECTOR_COUNT + FAT32_SECTORS_PER_CLUSTER
+
+#define FAT32_SECTOR_SIZE                      (1 << FAT32_SECTOR_SIZE_EXP)
+#define FAT32_CLUSTER_ENTRIES_PER_TABLE_SECTOR (FAT32_SECTOR_SIZE / sizeof(u32))
 
 static_assert(FAT32_SECTORS_PER_CLUSTER && !(FAT32_SECTORS_PER_CLUSTER & (FAT32_SECTORS_PER_CLUSTER - 1)) && FAT32_SECTORS_PER_CLUSTER <= 128); // See: "BPB_SecPerClus" @ Source(15) @ Section(3.1) @ Page(8).
 static_assert((FAT32_TOTAL_SECTOR_COUNT - FAT32_RESERVED_SECTOR_COUNT - FAT32_TABLE_SECTOR_COUNT) / FAT32_SECTORS_PER_CLUSTER >= 65'525);       // See: Source(15) @ Section(3.5) @ Page(15).

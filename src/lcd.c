@@ -170,9 +170,9 @@ lcd_cstr(char* value)
 static void
 lcd_pgm_cstr(const char* value)
 {
-	for (u16 i = 0; pgm_read_byte(&value[i]); i += 1)
+	for (u16 i = 0; pgm_char(value[i]); i += 1)
 	{
-		lcd_char(pgm_read_byte(&value[i]));
+		lcd_char(pgm_char(value[i]));
 	}
 }
 

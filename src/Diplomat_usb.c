@@ -369,7 +369,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 							for (u8 i = 0; i < packet_size; i += 1)
 							{
-								UEDATX             = pgm_read_byte(payload_reader);
+								UEDATX             = pgm_u8(*payload_reader);
 								payload_remaining -= 1;
 								payload_reader    += 1;
 							}

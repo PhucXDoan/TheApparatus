@@ -95,6 +95,15 @@ write_raw_data(HANDLE file_writing_handle, void* data, i64 size)
 }
 
 static void
+write_n_bytes(HANDLE file_writing_handle, u8 byte, i64 count)
+{
+	for (i64 i = 0; i < count; i += 1) // Super dumb, lol.
+	{
+		write_raw_data(file_writing_handle, &byte, 1);
+	}
+}
+
+static void
 write_flush_strbuf(HANDLE file_writing_handle, strbuf* buf)
 {
 	write_raw_data(file_writing_handle, buf->data, buf->length);
