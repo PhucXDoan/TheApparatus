@@ -82,15 +82,42 @@ main(void)
 	spi_init();
 	timer_init();
 
-	#if DEBUG // 8x8 LED dot matrix to have visual debug info. Must be initialized first before SD or else it messes with SPI communications...
+	#if DEBUG // 8x8 LED dot matrix to have visual debug info.
 		matrix_init();
 	#endif
 
 	sd_init();
 
+	enum Language language = Language_english;
+	b8 alphabet_count[MAX_ALPHABET_LENGTH] = {0};
+	alphabet_count[Letter_d - Letter_a] = true;
+	alphabet_count[Letter_u - Letter_a] = true;
+	alphabet_count[Letter_m - Letter_a] = true;
+	alphabet_count[Letter_p - Letter_a] = true;
+	alphabet_count[Letter_t - Letter_a] = true;
+	alphabet_count[Letter_r - Letter_a] = true;
+	alphabet_count[Letter_u - Letter_a] = true;
+	alphabet_count[Letter_c - Letter_a] = true;
+	alphabet_count[Letter_k - Letter_a] = true;
+
+
 	//
-	// Find sectors of the word stream.
+	// Find sectors of the word stream binary file.
 	//
+
+	#if DEBUG
+		matrix_set
+		(
+			(((u64) 0b00000000) << (8 * 0)) |
+			(((u64) 0b00000000) << (8 * 1)) |
+			(((u64) 0b01000010) << (8 * 2)) |
+			(((u64) 0b01111110) << (8 * 3)) |
+			(((u64) 0b01000010) << (8 * 4)) |
+			(((u64) 0b00000000) << (8 * 5)) |
+			(((u64) 0b00000000) << (8 * 6)) |
+			(((u64) 0b00000000) << (8 * 7))
+		);
+	#endif
 
 	u32 word_stream_cluster_addresses[32] = {0}; // Zero is never a valid cluster address.
 	u8  sectors_per_cluster_exp           = 0;   // Max value is 7.
@@ -199,7 +226,7 @@ main(void)
 						u8                                     last_language_max_word_length = pgm_u8(WORDS_TABLE_OF_CONTENTS[Language_COUNT - 1].max_word_length);
 						u8                                     last_language_alphabet_length = pgm_u8(LANGUAGE_INFO[Language_COUNT - 1].alphabet_length);
 						const struct WordsTableOfContentEntry* last_entry                    =
-							(const struct WordsTableOfContentEntry*) pgm_read_ptr(&WORDS_TABLE_OF_CONTENTS[Language_COUNT - 1].entries)
+							pgm_ptr(struct WordsTableOfContentEntry, WORDS_TABLE_OF_CONTENTS[Language_COUNT - 1].entries)
 								+ (last_language_max_word_length - MIN_WORD_LENGTH + 1) * last_language_alphabet_length
 								- 1;
 						if
@@ -212,7 +239,9 @@ main(void)
 							error(); // Binary file mismatching with our table of contents on flash...
 						}
 
+						// We'll later convert it to sector address.
 						word_stream_cluster_addresses[0] = (((u32) entry->DIR_FstClusHI) << 16) | entry->DIR_FstClusLO;
+
 						goto STOP_SEARCHING_ROOT_DIRECTORY;
 					}
 				}
@@ -229,65 +258,79 @@ main(void)
 		}
 
 		//
-		// Get all clusters of the file.
+		// Get all clusters' sector addresses of the file.
 		//
 
 		for
 		(
-			u8 cluster_index = 1;
+			u8 cluster_index = 0;
 			;
 			cluster_index += 1
 		)
 		{
-			sd_read(fat_address + word_stream_cluster_addresses[cluster_index - 1] / FAT32_CLUSTER_ENTRIES_PER_TABLE_SECTOR);
-			word_stream_cluster_addresses[cluster_index] = ((u32*) sd_sector)[word_stream_cluster_addresses[cluster_index - 1] % FAT32_CLUSTER_ENTRIES_PER_TABLE_SECTOR];
+			// Get sector of FAT corresponding to the current cluster to get the following cluster.
+			sd_read(fat_address + word_stream_cluster_addresses[cluster_index] / FAT32_CLUSTER_ENTRIES_PER_TABLE_SECTOR);
+			u32 next_cluster = ((u32*) sd_sector)[word_stream_cluster_addresses[cluster_index] % FAT32_CLUSTER_ENTRIES_PER_TABLE_SECTOR];
 
-			if ((word_stream_cluster_addresses[cluster_index] & 0x0FFF'FFFF) == 0x0FFF'FFFF)
+			// Convert cluster into sector address.
+			word_stream_cluster_addresses[cluster_index] = data_region_address + ((word_stream_cluster_addresses[cluster_index] - 2) << sectors_per_cluster_exp);
+
+			if (next_cluster == 0x0FFF'FFFF)
 			{
-				word_stream_cluster_addresses[cluster_index] = 0;
-				break;
+				break; // End of cluster chain.
 			}
-			else if (cluster_index == countof(word_stream_cluster_addresses) - 1)
+			else if (cluster_index + 1 < (u8) countof(word_stream_cluster_addresses))
 			{
-				error(); // Too many clusters!
+				word_stream_cluster_addresses[cluster_index + 1] = next_cluster; // Will be converted to sector address on next iteration.
 			}
-		}
-
-		//
-		// Convert the clusters into sector addresses.
-		//
-
-		for
-		(
-			u8 i = 0;
-			i < countof(word_stream_cluster_addresses) && word_stream_cluster_addresses[i];
-			i += 1
-		)
-		{
-			word_stream_cluster_addresses[i] = data_region_address + ((word_stream_cluster_addresses[i] - 2) << sectors_per_cluster_exp);
+			else
+			{
+				error(); // Too many clusters and not enough space!
+			}
 		}
 	}
 
+	//
+	// Wait for packet from Diplomat.
+	//
 
+	#if DEBUG
+		matrix_set
+		(
+			(((u64) 0b00000000) << (8 * 0)) |
+			(((u64) 0b00111110) << (8 * 1)) |
+			(((u64) 0b01000000) << (8 * 2)) |
+			(((u64) 0b01111100) << (8 * 3)) |
+			(((u64) 0b01000000) << (8 * 4)) |
+			(((u64) 0b00111110) << (8 * 5)) |
+			(((u64) 0b00000000) << (8 * 6)) |
+			(((u64) 0b00000000) << (8 * 7))
+		);
+	#endif
 
+//	struct DiplomatPacket diplomat_packet = {0};
+//	for (u8 i = 0; i < sizeof(diplomat_packet); i += 1)
+//	{
+//		((u8*) &diplomat_packet)[i] = usart_rx();
+//	}
 
+	//
+	// Process for words.
+	//
 
-
-
-
-
-	enum Language language = Language_english;
-
-	b8 alphabet_count[MAX_ALPHABET_LENGTH] = {0};
-	alphabet_count[Letter_d - Letter_a] = true;
-	alphabet_count[Letter_u - Letter_a] = true;
-	alphabet_count[Letter_m - Letter_a] = true;
-	alphabet_count[Letter_p - Letter_a] = true;
-	alphabet_count[Letter_t - Letter_a] = true;
-	alphabet_count[Letter_r - Letter_a] = true;
-	alphabet_count[Letter_u - Letter_a] = true;
-	alphabet_count[Letter_c - Letter_a] = true;
-	alphabet_count[Letter_k - Letter_a] = true;
+	#if DEBUG
+		matrix_set
+		(
+			(((u64) 0b00000000) << (8 * 0)) |
+			(((u64) 0b00000000) << (8 * 1)) |
+			(((u64) 0b01111110) << (8 * 2)) |
+			(((u64) 0b00010010) << (8 * 3)) |
+			(((u64) 0b00010010) << (8 * 4)) |
+			(((u64) 0b00001100) << (8 * 5)) |
+			(((u64) 0b00000000) << (8 * 6)) |
+			(((u64) 0b00000000) << (8 * 7))
+		);
+	#endif
 
 	u16 crc         = 0xFF;
 	u32 starting_ms = timer_ms();
@@ -387,11 +430,11 @@ main(void)
 						{
 							if (subword_bits & (1 << 15))
 							{
-								for (u8 i = 0; i < subword_length; i += 1)
-								{
-									debug_char('A' + word_alphabet_indices[i]);
-								}
-								debug_char('\n');
+								//for (u8 i = 0; i < subword_length; i += 1)
+								//{
+								//	debug_char('A' + word_alphabet_indices[i]);
+								//}
+								//debug_char('\n');
 
 								for (u8 i = 0; i < subword_length; i += 1)
 								{
@@ -423,6 +466,10 @@ main(void)
 	debug_u64 (elapsed_ms);
 	debug_cstr("ms elapsed.\n");
 
+	//
+	// Done!
+	//
+
 	matrix_set
 	(
 		(((u64) 0b00001000) << (8 * 0)) |
@@ -434,87 +481,6 @@ main(void)
 		(((u64) 0b00000100) << (8 * 6)) |
 		(((u64) 0b00001000) << (8 * 7))
 	);
-
-//	//
-//	// Wait for packet from Diplomat.
-//	//
-//
-//	matrix_set
-//	(
-//		(((u64) 0b00000000) << (8 * 0)) |
-//		(((u64) 0b00111110) << (8 * 1)) |
-//		(((u64) 0b01000000) << (8 * 2)) |
-//		(((u64) 0b01111100) << (8 * 3)) |
-//		(((u64) 0b01000000) << (8 * 4)) |
-//		(((u64) 0b00111110) << (8 * 5)) |
-//		(((u64) 0b00000000) << (8 * 6)) |
-//		(((u64) 0b00000000) << (8 * 7))
-//	);
-//
-//	struct DiplomatPacket diplomat_packet = {0};
-//	for (u8 i = 0; i < sizeof(diplomat_packet); i += 1)
-//	{
-//		((u8*) &diplomat_packet)[i] = usart_rx();
-//	}
-//
-//	//
-//	//
-//	//
-//
-//	matrix_set
-//	(
-//		(((u64) 0b00000000) << (8 * 0)) |
-//		(((u64) 0b00000000) << (8 * 1)) |
-//		(((u64) 0b01111110) << (8 * 2)) |
-//		(((u64) 0b00010010) << (8 * 3)) |
-//		(((u64) 0b00010010) << (8 * 4)) |
-//		(((u64) 0b00001100) << (8 * 5)) |
-//		(((u64) 0b00000000) << (8 * 6)) |
-//		(((u64) 0b00000000) << (8 * 7))
-//	);
-//
-//	debug_cstr("WordGame: ");
-//	debug_u64(diplomat_packet.wordgame);
-//	debug_cstr("\n");
-//
-//	for
-//	(
-//		u8 y = WORDGAME_MAX_DIM_SLOTS_Y;
-//		y--;
-//	)
-//	{
-//		for (u8 x = 0; x < WORDGAME_MAX_DIM_SLOTS_X; x += 1)
-//		{
-//			debug_u64 (diplomat_packet.board[y][x]);
-//			debug_char(' ');
-//		}
-//		debug_char('\n');
-//	}
-//
-//	u8 counter = 0;
-//	while (true)
-//	{
-//		if (usart_rx_available()) // Diplomat signaled that it's ready for next command?
-//		{
-//			counter += 1;
-//
-//			usart_rx(); // Eat dummy signal byte.
-//			usart_tx(counter);
-//			matrix_set
-//			(
-//				(
-//					(((u64) 0b00000000) << (8 * 0)) |
-//					(((u64) 0b00000000) << (8 * 1)) |
-//					(((u64) 0b00100100) << (8 * 2)) |
-//					(((u64) 0b01001010) << (8 * 3)) |
-//					(((u64) 0b01010010) << (8 * 4)) |
-//					(((u64) 0b00100100) << (8 * 5)) |
-//					(((u64) 0b00000000) << (8 * 6)) |
-//					(((u64) 0b00000000) << (8 * 7))
-//				) + counter
-//			);
-//		}
-//	}
 
 	for(;;);
 }

@@ -89,6 +89,8 @@ sd_read(u32 abs_sector_address)
 		error(); // Out-of-range address.
 	}
 
+	spi_tx(0xFF); // Synchronize SD card module's clock.
+
 	pin_low(PIN_SD_SS);
 
 	// "READ_SINGLE_BLOCK" uses the R1 format for the response.
@@ -117,6 +119,8 @@ sd_write(u32 abs_sector_address)
 	{
 		error(); // Out-of-range address.
 	}
+
+	spi_tx(0xFF); // Synchronize SD card module's clock.
 
 	pin_low(PIN_SD_SS);
 
@@ -176,13 +180,9 @@ sd_write(u32 abs_sector_address)
 		{
 			u8 response = spi_rx();
 
-			if (response == 0xFF) // When the SD is finished, the data line will be released from the low state.
+			if (response) // When the SD is finished, the data line will be released from the low state. See: Busy @ Source(19) @ Section(4.4) @ AbsPage(53).
 			{
 				break;
-			}
-			else if (response)
-			{
-				error(); // Unknown response received.
 			}
 			else if (attempts < SD_MAX_COMMAND_RESPONSE_LATENCY)
 			{
