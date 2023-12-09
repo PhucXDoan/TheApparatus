@@ -81,15 +81,15 @@ static_assert(WORDGAME_MAX_DIM_SLOTS_Y <= 15); // Can't be 16, since command of 
 static void
 push_command(u8 command)
 {
-	if (command_writer_masked(1) == command_reader_masked(0)) // Any open space in command buffer?
+	if ((u8) (command_writer + 1) == command_reader) // Any open space in command buffer?
 	{
-		usart_rx();                                         // Wait for the ready signal from the Diplomat.
-		usart_tx(command_buffer[command_reader_masked(0)]); // Send out command.
-		command_reader += 1;                                // A space opened up!
+		usart_rx();                               // Wait for the ready signal from the Diplomat.
+		usart_tx(command_buffer[command_reader]); // Send out command.
+		command_reader += 1;                      // A space opened up!
 	}
 
-	command_buffer[command_writer_masked(0)] = command;
-	command_writer += 1;
+	command_buffer[command_writer]  = command;
+	command_writer                 += 1;
 }
 
 int
@@ -327,19 +327,6 @@ main(void)
 		((u8*) &diplomat_packet)[i] = usart_rx();
 	}
 
-//	struct DiplomatPacket diplomat_packet =
-//		{
-//			.wordgame = WordGame_anagrams_english_6,
-//			.board    =
-//				{
-//					{ Letter_l, Letter_d, Letter_w, Letter_o, Letter_a, Letter_s, },
-//				},
-//		};
-//	for (u8 i = 0; i < sizeof(diplomat_packet); i += 1)
-//	{
-//		usart_rx();
-//	}
-
 	//
 	// Parse packet.
 	//
@@ -377,6 +364,26 @@ main(void)
 				board_alphabet_indices[y][x] = BOARD_ALPHABET_INDEX_TAKEN; // Make slot unusable.
 			}
 		}
+	}
+
+	for
+	(
+		u8 y = pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y);
+		y--;
+	)
+	{
+		for (u8 x = 0; x < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x); x += 1)
+		{
+			if (board_alphabet_indices[y][x] & BOARD_ALPHABET_INDEX_TAKEN)
+			{
+				debug_char(' ');
+			}
+			else
+			{
+				debug_char('A' + board_alphabet_indices[y][x]);
+			}
+		}
+		debug_char('\n');
 	}
 
 	//
@@ -494,6 +501,10 @@ main(void)
 							{
 								switch (diplomat_packet.wordgame)
 								{
+									// An optimization can be made where if a subword can be reproduced,
+									// then all of the subwords shorter than that can also be reproduced.
+									// This optimization can be done, but there's already a huge bottleneck on the Diplomat's end
+									// of executing these commands already, so it's not going to buy us much anyways.
 									case WordGame_anagrams_english_6:
 									case WordGame_anagrams_english_7:
 									case WordGame_anagrams_russian:
@@ -502,51 +513,70 @@ main(void)
 									case WordGame_anagrams_spanish:
 									case WordGame_anagrams_italian:
 									{
-										b8 reproducible = true;
+										b8 reproducible                       = true;
 										u8 commands[ABSOLUTE_MAX_WORD_LENGTH] = {0};
 
-										for (u8 letter_index = 0; letter_index < subword_length; letter_index += 1)
+										//
+										// Find matching slots.
+										//
+
+										for (u8 subword_letter_index = 0; subword_letter_index < subword_length; subword_letter_index += 1)
 										{
-											commands[letter_index] = -1; // Assume no matching slot.
+											commands[subword_letter_index] = -1; // Assume no matching slot.
 
 											for (u8 slot_index = 0; slot_index < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x); slot_index += 1)
 											{
-												if (board_alphabet_indices[0][slot_index] == word_alphabet_indices[letter_index])
+												if (board_alphabet_indices[0][slot_index] == word_alphabet_indices[subword_letter_index]) // Matching slot?
 												{
 													board_alphabet_indices[0][slot_index] |= BOARD_ALPHABET_INDEX_TAKEN;
-													commands[letter_index]                 = slot_index << 4;
+													commands[subword_letter_index]         = slot_index << 4;
 													break;
 												}
 											}
 
-											if (commands[letter_index] == (u8) -1) // Didn't find a matching slot.
+											if (commands[subword_letter_index] == (u8) -1) // Didn't find a matching slot?
 											{
 												reproducible = false;
 												break;
 											}
 										}
 
-										for (u8 slot_index = 0; slot_index < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x); slot_index += 1)
-										{
-											board_alphabet_indices[0][slot_index] &= ~BOARD_ALPHABET_INDEX_TAKEN;
-										}
+										//
+										// Send commands for the slots.
+										//
 
 										if (reproducible)
 										{
 											commands[subword_length - 1] |= NERD_COMMAND_SUBMIT_BIT;
-											for (u8 letter_index = 0; letter_index < subword_length; letter_index += 1)
+											for (u8 i = 0; i < subword_length; i += 1)
 											{
-												push_command(commands[letter_index]);
+												push_command(commands[i]);
 											}
+										}
+
+										//
+										// Clear the taken bits of the board.
+										//
+
+										for (u8 slot_index = 0; slot_index < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x); slot_index += 1)
+										{
+											board_alphabet_indices[0][slot_index] &= ~BOARD_ALPHABET_INDEX_TAKEN;
 										}
 									} break;
 
+									// Like with Anagrams, an optimization can be done where if subword is reproducible,
+									// so are of the subwords shorter than it. This again can be done, but we're already bottlenecked by
+									// the Diplomat taking a while to execute the commands already.
 									case WordGame_wordhunt_4x4:
 									case WordGame_wordhunt_o:
 									case WordGame_wordhunt_x:
 									case WordGame_wordhunt_5x5:
 									{
 										u8 commands[ABSOLUTE_MAX_WORD_LENGTH] = {0};
+
+										//
+										// Find starting point for the subword.
+										//
 
 										for (u8 start_y = 0; start_y < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y); start_y += 1)
 										{
@@ -557,10 +587,13 @@ main(void)
 													board_alphabet_indices[start_y][start_x] |= BOARD_ALPHABET_INDEX_TAKEN;
 													commands[0]                               = (start_x << 4) | start_y;
 
+													//
+													// Find the steps to go in.
+													//
+
 													u8 reproduced_subword_length = 1;
 													i8 delta_x                   = -2;
 													i8 delta_y                   = -1;
-
 													while (true)
 													{
 														//
@@ -587,7 +620,8 @@ main(void)
 															{
 																next_x = NERD_COMMAND_X(commands[reproduced_subword_length - 1]) + delta_x;
 																next_y = NERD_COMMAND_Y(commands[reproduced_subword_length - 1]) + delta_y;
-																if
+
+																if // Within bounds and matches?
 																(
 																	next_x < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x) &&
 																	next_y < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y) &&
@@ -607,12 +641,12 @@ main(void)
 														if (found_next)
 														{
 															board_alphabet_indices[next_y][next_x] |= BOARD_ALPHABET_INDEX_TAKEN;
-															commands[reproduced_subword_length]     = (next_x << 4) | (next_y);
+															commands[reproduced_subword_length]     = (next_x << 4) | next_y;
 															reproduced_subword_length              += 1;
 															delta_x                                 = -2;
 															delta_y                                 = -1;
 
-															if (reproduced_subword_length == subword_length)
+															if (reproduced_subword_length == subword_length) // Reproduced entire subword.
 															{
 																break;
 															}
@@ -621,7 +655,7 @@ main(void)
 														{
 															break; // Can't backtrack any further.
 														}
-														else
+														else // Backtrack.
 														{
 															board_alphabet_indices
 																[NERD_COMMAND_Y(commands[reproduced_subword_length - 1])]
@@ -632,15 +666,17 @@ main(void)
 														}
 													}
 
+													//
+													// Submit commands and clear taken bits.
+													//
+
 													if (reproduced_subword_length == subword_length)
 													{
 														commands[subword_length - 1] |= NERD_COMMAND_SUBMIT_BIT;
-														for (u8 letter_index = 0; letter_index < subword_length; letter_index += 1)
+														for (u8 i = 0; i < subword_length; i += 1)
 														{
-															push_command(commands[letter_index]);
-															board_alphabet_indices
-																[NERD_COMMAND_Y(commands[letter_index])]
-																[NERD_COMMAND_X(commands[letter_index])] &= ~BOARD_ALPHABET_INDEX_TAKEN;
+															push_command(commands[i]);
+															board_alphabet_indices[NERD_COMMAND_Y(commands[i])][NERD_COMMAND_X(commands[i])] &= ~BOARD_ALPHABET_INDEX_TAKEN;
 														}
 
 														goto WORDHUNT_REPRODUCIBLE;
@@ -670,10 +706,10 @@ main(void)
 							subword_bits <<= 1;
 						}
 
-						if (usart_rx_available() && command_reader_masked(0) != command_writer_masked(0))
+						if (usart_rx_available() && command_reader != command_writer)
 						{
 							usart_rx();
-							usart_tx(command_buffer[command_reader_masked(0)]);
+							usart_tx(command_buffer[command_reader]);
 							command_reader += 1;
 						}
 
@@ -692,7 +728,6 @@ main(void)
 	}
 
 	#if DEBUG
-		debug_cstr("Done.\n");
 		matrix_set
 		(
 			(((u64) 0b00000000) << (8 * 0)) |
@@ -712,10 +747,10 @@ main(void)
 	// Send out remaining commands.
 	//
 
-	while (command_reader_masked(0) != command_writer_masked(0))
+	while (command_reader != command_writer)
 	{
 		usart_rx();
-		usart_tx(command_buffer[command_reader_masked(0)]);
+		usart_tx(command_buffer[command_reader]);
 		command_reader += 1;
 	}
 

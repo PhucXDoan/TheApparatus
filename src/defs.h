@@ -2215,13 +2215,13 @@ struct DiplomatPacket
 //
 
 #if PROGRAM_NERD
-	static u8 command_buffer[64] = {0};
-	u8        command_reader     = 0;
-	u8        command_writer     = 0;
+	static u8 command_buffer[256] = {0};
+	u8        command_reader      = 0;
+	u8        command_writer      = 0;
 
-	static_assert((countof(command_buffer) & (countof(command_buffer) - 1)) == 0); // Must be power of two.
-	#define command_writer_masked(OFFSET) ((command_writer + (OFFSET)) & (countof(command_buffer) - 1))
-	#define command_reader_masked(OFFSET) ((command_reader + (OFFSET)) & (countof(command_buffer) - 1))
+	static_assert(sizeof(command_buffer) == 256); // For the byte-sized indices.
+	static_assert(sizeof(command_reader) == 1);   // Wrapping behavior needed.
+	static_assert(sizeof(command_writer) == 1);   // Wrapping behavior needed.
 #endif
 
 //

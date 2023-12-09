@@ -192,6 +192,56 @@ main(void)
 			rotation += 1;
 		}
 
+		if (rotation)
+		{
+			diplomat_packet =
+				(struct DiplomatPacket)
+				{
+					.wordgame = WordGame_wordbites,
+					.board    =
+						{
+							//
+							// Unos.
+							//
+
+							[0][2] = Letter_i,
+							[3][2] = Letter_s,
+							[4][0] = Letter_a,
+							[4][4] = Letter_o,
+							[6][2] = Letter_t,
+							[8][7] = Letter_r,
+
+							//
+							// Vertical Duos.
+							//
+
+							[1][4] = Letter_n,
+							[0][4] = Letter_g,
+
+							[1][7] = Letter_e,
+							[0][7] = Letter_x,
+
+							[2][0] = Letter_f,
+							[1][0] = Letter_o,
+
+							[5][6] = Letter_m,
+							[4][6] = Letter_b,
+
+							//
+							// Horizontal Duos.
+							//
+
+							[7][4] = Letter_n,
+							[7][5] = Letter_d,
+						},
+				};
+			_delay_ms(1000.0);
+			for (u8 i = 0; i < sizeof(diplomat_packet); i += 1)
+			{
+				usart_tx(((volatile u8*) &diplomat_packet)[i]);
+			}
+		}
+
 		switch (menu)
 		{
 			case Menu_main:
@@ -385,21 +435,6 @@ main(void)
 									.wordgame = (enum WordGame) menu_main_selected_option,
 								};
 							usb_ms_ocr_state = USBMSOCRState_set;
-
-							//	diplomat_packet =
-							//		(struct DiplomatPacket)
-							//		{
-							//			.wordgame = (enum WordGame) menu_main_selected_option,
-							//			.board    =
-							//				{
-							//					{ Letter_l, Letter_d, Letter_w, Letter_o, Letter_a, Letter_s, },
-							//				},
-							//		};
-							//	_delay_ms(1000.0);
-							//	for (u8 i = 0; i < sizeof(diplomat_packet); i += 1)
-							//	{
-							//		usart_tx(((volatile u8*) &diplomat_packet)[i]);
-							//	}
 
 							usb_mouse_command(false, 0, 0);
 
