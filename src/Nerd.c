@@ -348,6 +348,7 @@ main(void)
 	u8            max_word_length                    = pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].max_word_length);
 	b8            alphabet_used[MAX_ALPHABET_LENGTH] = {0};
 	enum Letter   board_alphabet_indices[WORDGAME_MAX_DIM_SLOTS_Y][WORDGAME_MAX_DIM_SLOTS_X] = {0};
+	#define BOARD_ALPHABET_INDEX_TAKEN (1 << (bitsof(board_alphabet_indices[0][0]) - 1))
 
 	for (u8 y = 0; y < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y); y += 1)
 	{
@@ -370,6 +371,10 @@ main(void)
 				{
 					error(); // OCR identified a letter that's not in the language's alphabet...
 				}
+			}
+			else
+			{
+				board_alphabet_indices[y][x] = BOARD_ALPHABET_INDEX_TAKEN; // Make slot unusable.
 			}
 		}
 	}
@@ -487,9 +492,6 @@ main(void)
 						{
 							if (subword_bits & (1 << 15))
 							{
-								b8 reproducible = true;
-
-								#define BOARD_ALPHABET_INDEX_USED (1 << (bitsof(board_alphabet_indices[0][0]) - 1))
 								switch (diplomat_packet.wordgame)
 								{
 									case WordGame_anagrams_english_6:
@@ -500,6 +502,7 @@ main(void)
 									case WordGame_anagrams_spanish:
 									case WordGame_anagrams_italian:
 									{
+										b8 reproducible = true;
 										u8 commands[ABSOLUTE_MAX_WORD_LENGTH] = {0};
 
 										for (u8 letter_index = 0; letter_index < subword_length; letter_index += 1)
@@ -510,7 +513,7 @@ main(void)
 											{
 												if (board_alphabet_indices[0][slot_index] == word_alphabet_indices[letter_index])
 												{
-													board_alphabet_indices[0][slot_index] |= BOARD_ALPHABET_INDEX_USED;
+													board_alphabet_indices[0][slot_index] |= BOARD_ALPHABET_INDEX_TAKEN;
 													commands[letter_index]                 = slot_index << 4;
 													break;
 												}
@@ -525,7 +528,7 @@ main(void)
 
 										for (u8 slot_index = 0; slot_index < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x); slot_index += 1)
 										{
-											board_alphabet_indices[0][slot_index] &= ~BOARD_ALPHABET_INDEX_USED;
+											board_alphabet_indices[0][slot_index] &= ~BOARD_ALPHABET_INDEX_TAKEN;
 										}
 
 										if (reproducible)
@@ -543,7 +546,113 @@ main(void)
 									case WordGame_wordhunt_x:
 									case WordGame_wordhunt_5x5:
 									{
-										debug_unhandled();
+										u8 commands[ABSOLUTE_MAX_WORD_LENGTH] = {0};
+
+										for (u8 start_y = 0; start_y < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y); start_y += 1)
+										{
+											for (u8 start_x = 0; start_x < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x); start_x += 1)
+											{
+												if (board_alphabet_indices[start_y][start_x] == word_alphabet_indices[0])
+												{
+													board_alphabet_indices[start_y][start_x] |= BOARD_ALPHABET_INDEX_TAKEN;
+													commands[0]                               = (start_x << 4) | start_y;
+
+													u8 reproduced_subword_length = 1;
+													i8 delta_x                   = -2;
+													i8 delta_y                   = -1;
+
+													while (true)
+													{
+														//
+														// Get next step.
+														//
+
+														b8 found_next = false;
+														u8 next_x     = 0;
+														u8 next_y     = 0;
+														while (true)
+														{
+															delta_x += 1;
+															if (delta_x == 2)
+															{
+																delta_x = -1;
+																delta_y += 1;
+															}
+
+															if (delta_y == 2)
+															{
+																break; // Exhausted all directions to move in.
+															}
+															else
+															{
+																next_x = NERD_COMMAND_X(commands[reproduced_subword_length - 1]) + delta_x;
+																next_y = NERD_COMMAND_Y(commands[reproduced_subword_length - 1]) + delta_y;
+																if
+																(
+																	next_x < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x) &&
+																	next_y < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y) &&
+																	board_alphabet_indices[next_y][next_x] == word_alphabet_indices[reproduced_subword_length]
+																)
+																{
+																	found_next = true;
+																	break;
+																}
+															}
+														}
+
+														//
+														// Make move or backtrack.
+														//
+
+														if (found_next)
+														{
+															board_alphabet_indices[next_y][next_x] |= BOARD_ALPHABET_INDEX_TAKEN;
+															commands[reproduced_subword_length]     = (next_x << 4) | (next_y);
+															reproduced_subword_length              += 1;
+															delta_x                                 = -2;
+															delta_y                                 = -1;
+
+															if (reproduced_subword_length == subword_length)
+															{
+																break;
+															}
+														}
+														else if (reproduced_subword_length == 1)
+														{
+															break; // Can't backtrack any further.
+														}
+														else
+														{
+															board_alphabet_indices
+																[NERD_COMMAND_Y(commands[reproduced_subword_length - 1])]
+																[NERD_COMMAND_X(commands[reproduced_subword_length - 1])] &= ~BOARD_ALPHABET_INDEX_TAKEN;
+															delta_x = NERD_COMMAND_X(commands[reproduced_subword_length - 1]) - NERD_COMMAND_X(commands[reproduced_subword_length - 2]);
+															delta_y = NERD_COMMAND_Y(commands[reproduced_subword_length - 1]) - NERD_COMMAND_Y(commands[reproduced_subword_length - 2]);
+															reproduced_subword_length -= 1;
+														}
+													}
+
+													if (reproduced_subword_length == subword_length)
+													{
+														commands[subword_length - 1] |= NERD_COMMAND_SUBMIT_BIT;
+														for (u8 letter_index = 0; letter_index < subword_length; letter_index += 1)
+														{
+															push_command(commands[letter_index]);
+															board_alphabet_indices
+																[NERD_COMMAND_Y(commands[letter_index])]
+																[NERD_COMMAND_X(commands[letter_index])] &= ~BOARD_ALPHABET_INDEX_TAKEN;
+														}
+
+														goto WORDHUNT_REPRODUCIBLE;
+													}
+													else
+													{
+														board_alphabet_indices[start_y][start_x] &= ~BOARD_ALPHABET_INDEX_TAKEN;
+													}
+												}
+											}
+										}
+										WORDHUNT_REPRODUCIBLE:;
 									} break;
 
 									case WordGame_wordbites:
@@ -555,15 +664,6 @@ main(void)
 									{
 										error(); // Impossible.
 									} break;
-								}
-
-								if (reproducible)
-								{
-									for (u8 i = 0; i < subword_length; i += 1)
-									{
-										debug_char('A' + word_alphabet_indices[i]);
-									}
-									debug_char('\n');
 								}
 							}
 
@@ -592,6 +692,7 @@ main(void)
 	}
 
 	#if DEBUG
+		debug_cstr("Done.\n");
 		matrix_set
 		(
 			(((u64) 0b00000000) << (8 * 0)) |

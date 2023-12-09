@@ -215,10 +215,29 @@ static_assert(LITTLE_ENDIAN); // Lots of structures assume little-endian.
 
 #define ANAGRAMS_6_INIT_X             7
 #define ANAGRAMS_6_INIT_Y             241
-#define ANAGRAMS_6_DELTA_X            23
+#define ANAGRAMS_6_DELTA              23
 #define ANAGRAMS_6_SUBMIT_X           64
 #define ANAGRAMS_6_SUBMIT_Y           171
-static_assert(ANAGRAMS_6_INIT_X + ANAGRAMS_6_DELTA_X * 5 < 128);
+static_assert(ANAGRAMS_6_INIT_X + ANAGRAMS_6_DELTA * 5 < 128);
+
+#define ANAGRAMS_7_INIT_X             4
+#define ANAGRAMS_7_INIT_Y             240
+#define ANAGRAMS_7_DELTA              20
+#define ANAGRAMS_7_SUBMIT_X           64
+#define ANAGRAMS_7_SUBMIT_Y           171
+static_assert(ANAGRAMS_7_INIT_X + ANAGRAMS_7_DELTA * 6 < 128);
+
+#define WORDHUNT_4x4_INIT_X             27
+#define WORDHUNT_4x4_INIT_Y             215
+#define WORDHUNT_4x4_DELTA              25
+static_assert(WORDHUNT_4x4_INIT_X + WORDHUNT_4x4_DELTA * 3 <  128);
+static_assert(WORDHUNT_4x4_INIT_Y - WORDHUNT_4x4_DELTA * 3 >= 0  );
+
+#define WORDHUNT_5x5_INIT_X             20
+#define WORDHUNT_5x5_INIT_Y             220
+#define WORDHUNT_5x5_DELTA              22
+static_assert(WORDHUNT_5x5_INIT_X + WORDHUNT_5x5_DELTA * 4 <  128);
+static_assert(WORDHUNT_5x5_INIT_Y - WORDHUNT_5x5_DELTA * 4 >= 0  );
 
 static_assert(BITS_PER_ALPHABET_INDEX == 5); // PACKED_WORD_SIZE calculation assumes 5 bits per alphabet index.
 

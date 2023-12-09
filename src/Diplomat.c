@@ -173,6 +173,7 @@ main(void)
 	u16                        scroll_tick                            = 0;
 	u8                         scroll_y                               = 0;
 	b8                         nerd_completed                         = false;
+	b8                         wordhunt_began_word                    = false;
 
 	//
 	// Loop.
@@ -378,7 +379,11 @@ main(void)
 							_delay_ms(1.0);
 							pin_high(PIN_NERD_RESET); // By the time OCR is finished, Nerd should all be set up and ready to go.
 
-							diplomat_packet.wordgame = (enum WordGame) menu_main_selected_option;
+							diplomat_packet =
+								(struct DiplomatPacket)
+								{
+									.wordgame = (enum WordGame) menu_main_selected_option,
+								};
 							usb_ms_ocr_state = USBMSOCRState_set;
 
 							//	diplomat_packet =
@@ -398,9 +403,10 @@ main(void)
 
 							usb_mouse_command(false, 0, 0);
 
-							menu           = Menu_displaying;
-							scroll_y       = 0;
-							nerd_completed = false;
+							menu                = Menu_displaying;
+							scroll_y            = 0;
+							nerd_completed      = false;
+							wordhunt_began_word = false;
 						} break;
 
 						case MenuChosenMapOption_datamine:
@@ -746,44 +752,84 @@ main(void)
 					{
 						switch (diplomat_packet.wordgame)
 						{
-							case WordGame_anagrams_english_6:
-							case WordGame_anagrams_russian:
-							case WordGame_anagrams_french:
-							case WordGame_anagrams_german:
-							case WordGame_anagrams_spanish:
-							case WordGame_anagrams_italian:
 							{
-								usb_mouse_command(false, ANAGRAMS_6_INIT_X + ANAGRAMS_6_DELTA_X * NERD_COMMAND_X(command), ANAGRAMS_6_INIT_Y);
+								u8_2 init_pos;
+								u8   delta;
+								u8_2 submit_pos;
+
+								case WordGame_anagrams_english_6:
+								case WordGame_anagrams_russian:
+								case WordGame_anagrams_french:
+								case WordGame_anagrams_german:
+								case WordGame_anagrams_spanish:
+								case WordGame_anagrams_italian:
+								{
+									init_pos   = (u8_2) { ANAGRAMS_6_INIT_X, ANAGRAMS_6_INIT_Y };
+									delta      = ANAGRAMS_6_DELTA;
+									submit_pos = (u8_2) { ANAGRAMS_6_SUBMIT_X, ANAGRAMS_6_SUBMIT_Y };
+								} goto ANAGRAMS;
+
+								case WordGame_anagrams_english_7:
+								{
+									init_pos   = (u8_2) { ANAGRAMS_7_INIT_X, ANAGRAMS_7_INIT_Y };
+									delta      = ANAGRAMS_7_DELTA;
+									submit_pos = (u8_2) { ANAGRAMS_7_SUBMIT_X, ANAGRAMS_7_SUBMIT_Y };
+								} goto ANAGRAMS;
+
+								ANAGRAMS:;
+
+								usb_mouse_command(false, init_pos.x + delta * NERD_COMMAND_X(command), init_pos.y);
 								_delay_ms(48.0);
-								usb_mouse_command(true , ANAGRAMS_6_INIT_X + ANAGRAMS_6_DELTA_X * NERD_COMMAND_X(command), ANAGRAMS_6_INIT_Y);
+								usb_mouse_command(true , init_pos.x + delta * NERD_COMMAND_X(command), init_pos.y);
 								_delay_ms(48.0);
 
 								if (command & NERD_COMMAND_SUBMIT_BIT)
 								{
-									usb_mouse_command(false, ANAGRAMS_6_SUBMIT_X, ANAGRAMS_6_SUBMIT_Y);
+									usb_mouse_command(false, submit_pos.x, submit_pos.y);
 									_delay_ms(48.0);
-									usb_mouse_command(true , ANAGRAMS_6_SUBMIT_X, ANAGRAMS_6_SUBMIT_Y);
+									usb_mouse_command(true , submit_pos.x, submit_pos.y);
 									_delay_ms(48.0);
-									usb_mouse_command(false, ANAGRAMS_6_SUBMIT_X, ANAGRAMS_6_SUBMIT_Y);
+									usb_mouse_command(false, submit_pos.x, submit_pos.y);
 									_delay_ms(48.0);
 								}
 							} break;
 
-							case WordGame_anagrams_english_7:
 							{
-								debug_unhandled();
-							} break;
+								u8_2 init_pos;
+								u8   delta;
 
-							case WordGame_wordhunt_4x4:
-							{
-								debug_unhandled();
-							} break;
+								case WordGame_wordhunt_4x4:
+								{
+									init_pos   = (u8_2) { WORDHUNT_4x4_INIT_X, WORDHUNT_4x4_INIT_Y };
+									delta      = WORDHUNT_4x4_DELTA;
+								} goto WORDHUNT;
 
-							case WordGame_wordhunt_o:
-							case WordGame_wordhunt_x:
-							case WordGame_wordhunt_5x5:
-							{
-								debug_unhandled();
+								case WordGame_wordhunt_o:
+								case WordGame_wordhunt_x:
+								case WordGame_wordhunt_5x5:
+								{
+									init_pos   = (u8_2) { WORDHUNT_5x5_INIT_X, WORDHUNT_5x5_INIT_Y };
+									delta      = WORDHUNT_5x5_DELTA;
+								} goto WORDHUNT;
+
+								WORDHUNT:;
+
+								if (!wordhunt_began_word)
+								{
+									wordhunt_began_word = true;
+									usb_mouse_command(false, init_pos.x + delta * NERD_COMMAND_X(command), init_pos.y - delta * NERD_COMMAND_Y(command));
+									_delay_ms(48.0);
+								}
+
+								usb_mouse_command(true, init_pos.x + delta * NERD_COMMAND_X(command), init_pos.y - delta * NERD_COMMAND_Y(command));
+								_delay_ms(48.0);
+
+								if (command & NERD_COMMAND_SUBMIT_BIT)
+								{
+									wordhunt_began_word = false;
+									usb_mouse_command(false, init_pos.x + delta * NERD_COMMAND_X(command), init_pos.y - delta * NERD_COMMAND_Y(command));
+									_delay_ms(48.0);
+								}
 							} break;
 
 							case WordGame_wordbites:

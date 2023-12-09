@@ -450,7 +450,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 					{
 						case BOOTLOADER_BAUD_SIGNAL:
 						{
-							*(volatile u16*) 0x0800 = 0x7777; // Magic!
+							*(volatile u16*) 0x0800 = 0x7777;
 							restart();
 						} break;
 
@@ -2422,6 +2422,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 	memory (probably where the bootloader resides). How does this write persist through a watchdog
 	reset? I'm not even sure. I hate writing code that I just copy-paste and leave not knowing how
 	it works at all, but this is probably better as a TODO to figured out later...
+	TODO Figured it out: caterina bootloader.
 
 	(1) Magic Bootloader Signal @ URL(github.com/PaxInstruments/ATmega32U4-bootloader/blob/bf5d4d1edff529d5cc8229f15463720250c7bcd3/avr/cores/arduino/CDC.cpp#L99C14-L99C14).
 */
