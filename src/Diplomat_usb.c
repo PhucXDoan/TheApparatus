@@ -1080,6 +1080,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 										{
 											usart_tx(((volatile u8*) &diplomat_packet)[i]);
 										}
+										usart_tx(0xFF); // We're ready for a command!
 									}
 								}
 								else if (_usb_ms_ocr_slot_topdown_pixel_coords.y == compressed_slot_stride) // Move onto the next row of slots.

@@ -213,6 +213,13 @@ static_assert(LITTLE_ENDIAN); // Lots of structures assume little-endian.
 #define BITS_PER_ALPHABET_INDEX       5
 #define PACKED_WORD_SIZE(WORD_LENGTH) (1 + ((((WORD_LENGTH) - 1) * BITS_PER_ALPHABET_INDEX) + ((WORD_LENGTH) - 1) / 3 + 7) / 8)
 
+#define ANAGRAMS_6_INIT_X             7
+#define ANAGRAMS_6_INIT_Y             241
+#define ANAGRAMS_6_DELTA_X            23
+#define ANAGRAMS_6_SUBMIT_X           64
+#define ANAGRAMS_6_SUBMIT_Y           171
+static_assert(ANAGRAMS_6_INIT_X + ANAGRAMS_6_DELTA_X * 5 < 128);
+
 static_assert(BITS_PER_ALPHABET_INDEX == 5); // PACKED_WORD_SIZE calculation assumes 5 bits per alphabet index.
 
 #define ANAGRAMS_GENERIC_6_PRINT_NAME "Anagrams (6)"

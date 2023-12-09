@@ -151,8 +151,6 @@ main(void)
 	sei();
 
 	pin_output(PIN_NERD_RESET);
-	pin_low(PIN_NERD_RESET);
-	_delay_ms(1.0);
 	pin_high(PIN_NERD_RESET);
 
 	usart_init();
@@ -174,6 +172,7 @@ main(void)
 	enum   MenuChosenMapOption menu_chosen_map_first_displayed_option = {0};
 	u16                        scroll_tick                            = 0;
 	u8                         scroll_y                               = 0;
+	b8                         nerd_completed                         = false;
 
 	//
 	// Loop.
@@ -206,65 +205,6 @@ main(void)
 				{
 					menu_main_first_displayed_option += MenuMainOption_COUNT + rotation;
 					menu_main_first_displayed_option %= MenuMainOption_COUNT;
-				}
-
-				if (rotation) // TEMP
-				{
-					pin_low(PIN_NERD_RESET);
-					_delay_ms(1.0);
-					pin_high(PIN_NERD_RESET);
-					_delay_ms(1000.0);
-
-					diplomat_packet =
-						(struct DiplomatPacket)
-						{
-							.wordgame = WordGame_anagrams_english_6,
-							.board    =
-								{
-									{ Letter_l, Letter_d, Letter_w, Letter_o, Letter_a, Letter_s, },
-								},
-						};
-
-					for (u8 i = 0; i < sizeof(diplomat_packet); i += 1)
-					{
-						usart_tx(((volatile u8*) &diplomat_packet)[i]);
-					}
-
-					//
-					//
-					//
-
-					lcd_reset();
-					while (true)
-					{
-						usart_tx(0xFF);          // Dummy byte to indicate to the nerd that we're ready to accept a command.
-						u8 command = usart_rx(); // Wait for command.
-
-						if (command == NERD_COMMAND_COMPLETE)
-						{
-							lcd_strlit("Done.");
-						}
-						else
-						{
-							lcd_char(pgm_u8(LETTER_INFO[diplomat_packet.board[NERD_COMMAND_Y(command)][NERD_COMMAND_X(command)]].lcd_character_code));
-							if (command & NERD_COMMAND_SUBMIT_BIT)
-							{
-								lcd_shift_down();
-								lcd_cursor_pos = (u8_2) { 0, 0 };
-							}
-						}
-
-						lcd_refresh();
-
-						_delay_ms(100.0);
-
-						if (command == NERD_COMMAND_COMPLETE)
-						{
-							break;
-						}
-					}
-
-					_delay_ms(3000.0);
 				}
 
 				//
@@ -438,10 +378,29 @@ main(void)
 							_delay_ms(1.0);
 							pin_high(PIN_NERD_RESET); // By the time OCR is finished, Nerd should all be set up and ready to go.
 
-							usb_ms_ocr_state         = USBMSOCRState_set;
 							diplomat_packet.wordgame = (enum WordGame) menu_main_selected_option;
-							menu                     = Menu_displaying;
-							scroll_y                 = 0;
+							usb_ms_ocr_state = USBMSOCRState_set;
+
+							//	diplomat_packet =
+							//		(struct DiplomatPacket)
+							//		{
+							//			.wordgame = (enum WordGame) menu_main_selected_option,
+							//			.board    =
+							//				{
+							//					{ Letter_l, Letter_d, Letter_w, Letter_o, Letter_a, Letter_s, },
+							//				},
+							//		};
+							//	_delay_ms(1000.0);
+							//	for (u8 i = 0; i < sizeof(diplomat_packet); i += 1)
+							//	{
+							//		usart_tx(((volatile u8*) &diplomat_packet)[i]);
+							//	}
+
+							usb_mouse_command(false, 0, 0);
+
+							menu           = Menu_displaying;
+							scroll_y       = 0;
+							nerd_completed = false;
 						} break;
 
 						case MenuChosenMapOption_datamine:
@@ -771,6 +730,76 @@ main(void)
 				//
 				// React to selection.
 				//
+
+				if (!nerd_completed && usart_rx_available())
+				{
+					u8 command = usart_rx();
+
+					debug_8b(command);
+					debug_char('\n');
+
+					if (command == NERD_COMMAND_COMPLETE)
+					{
+						nerd_completed = true;
+					}
+					else
+					{
+						switch (diplomat_packet.wordgame)
+						{
+							case WordGame_anagrams_english_6:
+							case WordGame_anagrams_russian:
+							case WordGame_anagrams_french:
+							case WordGame_anagrams_german:
+							case WordGame_anagrams_spanish:
+							case WordGame_anagrams_italian:
+							{
+								usb_mouse_command(false, ANAGRAMS_6_INIT_X + ANAGRAMS_6_DELTA_X * NERD_COMMAND_X(command), ANAGRAMS_6_INIT_Y);
+								_delay_ms(48.0);
+								usb_mouse_command(true , ANAGRAMS_6_INIT_X + ANAGRAMS_6_DELTA_X * NERD_COMMAND_X(command), ANAGRAMS_6_INIT_Y);
+								_delay_ms(48.0);
+
+								if (command & NERD_COMMAND_SUBMIT_BIT)
+								{
+									usb_mouse_command(false, ANAGRAMS_6_SUBMIT_X, ANAGRAMS_6_SUBMIT_Y);
+									_delay_ms(48.0);
+									usb_mouse_command(true , ANAGRAMS_6_SUBMIT_X, ANAGRAMS_6_SUBMIT_Y);
+									_delay_ms(48.0);
+									usb_mouse_command(false, ANAGRAMS_6_SUBMIT_X, ANAGRAMS_6_SUBMIT_Y);
+									_delay_ms(48.0);
+								}
+							} break;
+
+							case WordGame_anagrams_english_7:
+							{
+								debug_unhandled();
+							} break;
+
+							case WordGame_wordhunt_4x4:
+							{
+								debug_unhandled();
+							} break;
+
+							case WordGame_wordhunt_o:
+							case WordGame_wordhunt_x:
+							case WordGame_wordhunt_5x5:
+							{
+								debug_unhandled();
+							} break;
+
+							case WordGame_wordbites:
+							{
+								debug_unhandled();
+							} break;
+
+							case WordGame_COUNT:
+							{
+								error(); // Impossible.
+							} break;
+						}
+
+						usart_tx(0xFF); // We're ready for next command.
+					}
+				}
 
 				if (usb_ms_ocr_state == USBMSOCRState_ready && clicked)
 				{
