@@ -2210,14 +2210,10 @@ struct DiplomatPacket
 	static volatile struct DiplomatPacket diplomat_packet = {0};
 #endif
 
-//
-// Nerd.c.
-//
-
 #if PROGRAM_NERD
 	static u8 command_buffer[256] = {0};
-	u8        command_reader      = 0;
-	u8        command_writer      = 0;
+	static u8 command_reader      = 0;
+	static u8 command_writer      = 0;
 
 	static_assert(sizeof(command_buffer) == 256); // For the byte-sized indices.
 	static_assert(sizeof(command_reader) == 1);   // Wrapping behavior needed.

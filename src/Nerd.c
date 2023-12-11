@@ -66,6 +66,101 @@
 	}
 #endif
 
+#define WORDBITES_MAX_DUOS    5
+#define ALPHABET_INDEX_TAKEN (1 << 7)
+static_assert(BITS_PER_ALPHABET_INDEX < 8);
+
+struct WordBitesPiece
+{
+	u8_2 position;
+	u8   alphabet_indices[2];
+};
+
+struct WordBitesPieces
+{
+	struct WordBitesPiece unos[6];
+	struct WordBitesPiece horts[WORDBITES_MAX_DUOS];
+	struct WordBitesPiece verts[WORDBITES_MAX_DUOS];
+	u8                    horts_count;
+	u8                    verts_count;
+};
+
+static void
+debug_piece(struct WordBitesPiece piece)
+{
+	debug_char('(');
+	debug_u64(piece.position.x);
+	debug_char(',');
+	debug_u64(piece.position.y);
+	debug_char(',');
+	if (piece.alphabet_indices[0] & ALPHABET_INDEX_TAKEN)
+	{
+		debug_char(' ');
+	}
+	else
+	{
+		debug_char('A' + piece.alphabet_indices[0]);
+	}
+	if (piece.alphabet_indices[1] & ALPHABET_INDEX_TAKEN)
+	{
+		debug_char(' ');
+	}
+	else
+	{
+		debug_char('A' + piece.alphabet_indices[1]);
+	}
+	debug_char(')');
+}
+
+static void
+debug_wordbites_board(u8 (*board_alphabet_indices)[WORDGAME_MAX_DIM_SLOTS_Y][WORDGAME_MAX_DIM_SLOTS_X], struct WordBitesPieces pieces)
+{
+	for
+	(
+		u8 y = pgm_u8(WORDGAME_INFO[WordGame_wordbites].dim_slots.y);
+		y--;
+	)
+	{
+		for (u8 x = 0; x < pgm_u8(WORDGAME_INFO[WordGame_wordbites].dim_slots.x); x += 1)
+		{
+			if ((*board_alphabet_indices)[y][x] & ALPHABET_INDEX_TAKEN)
+			{
+				debug_char('*');
+			}
+			else
+			{
+				debug_char('A' + (*board_alphabet_indices)[y][x]);
+			}
+			debug_char(' ');
+		}
+		debug_char('\n');
+	}
+
+	debug_cstr("UNOS  : ");
+	for (u8 i = 0; i < countof(pieces.unos); i += 1)
+	{
+		debug_piece(pieces.unos[i]);
+		debug_char(' ');
+	}
+	debug_char('\n');
+
+	debug_cstr("HORTS : ");
+	for (u8 i = 0; i < pieces.horts_count; i += 1)
+	{
+		debug_piece(pieces.horts[i]);
+		debug_char(' ');
+	}
+	debug_char('\n');
+
+	debug_cstr("VERTS : ");
+	for (u8 i = 0; i < pieces.verts_count; i += 1)
+	{
+		debug_piece(pieces.verts[i]);
+		debug_char(' ');
+	}
+	debug_char('\n');
+}
+
 static_assert(WORDGAME_MAX_DIM_SLOTS_X <= 8);
 static_assert(WORDGAME_MAX_DIM_SLOTS_Y <= 15); // Can't be 16, since command of 0xFF is special.
 /*
@@ -334,8 +429,7 @@ main(void)
 	enum Language language                           = pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].language);
 	u8            max_word_length                    = pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].max_word_length);
 	b8            alphabet_used[MAX_ALPHABET_LENGTH] = {0};
-	enum Letter   board_alphabet_indices[WORDGAME_MAX_DIM_SLOTS_Y][WORDGAME_MAX_DIM_SLOTS_X] = {0};
-	#define BOARD_ALPHABET_INDEX_TAKEN (1 << (bitsof(board_alphabet_indices[0][0]) - 1))
+	u8            board_alphabet_indices[WORDGAME_MAX_DIM_SLOTS_Y][WORDGAME_MAX_DIM_SLOTS_X] = {0};
 
 	for (u8 y = 0; y < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y); y += 1)
 	{
@@ -361,29 +455,95 @@ main(void)
 			}
 			else
 			{
-				board_alphabet_indices[y][x] = BOARD_ALPHABET_INDEX_TAKEN; // Make slot unusable.
+				board_alphabet_indices[y][x] = ALPHABET_INDEX_TAKEN; // Make slot unusable.
 			}
 		}
 	}
 
-	for
-	(
-		u8 y = pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y);
-		y--;
-	)
+	//
+	// Find WordBites pieces if needed.
+	//
+
+
+	struct WordBitesPieces wordbites_pieces = {0};
+
+
+	if (diplomat_packet.wordgame == WordGame_wordbites)
 	{
-		for (u8 x = 0; x < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x); x += 1)
+		u8   unos_count         = 0;
+		u8_2 wordgame_dim_slots =
+			{
+				pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x),
+				pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y),
+			};
+
+		for (u8 y = 0; y < wordgame_dim_slots.y; y += 1)
 		{
-			if (board_alphabet_indices[y][x] & BOARD_ALPHABET_INDEX_TAKEN)
+			for (u8 x = 0; x < wordgame_dim_slots.x; x += 1)
 			{
-				debug_char(' ');
-			}
-			else
-			{
-				debug_char('A' + board_alphabet_indices[y][x]);
+				if
+				(
+					board_alphabet_indices[y][x] != ALPHABET_INDEX_TAKEN && // There's a letter on this slot!
+					implies(x                           , board_alphabet_indices[y    ][x - 1] == ALPHABET_INDEX_TAKEN) && // Beginning of horizontal duo piece.
+					implies(y + 1 < wordgame_dim_slots.y, board_alphabet_indices[y + 1][x    ] == ALPHABET_INDEX_TAKEN)    // Beginning of vertical duo piece.
+				)
+				{
+					if (x + 1 < wordgame_dim_slots.x && board_alphabet_indices[y][x + 1] != ALPHABET_INDEX_TAKEN) // Horizontal duo piece!
+					{
+						if (wordbites_pieces.horts_count + wordbites_pieces.verts_count == WORDBITES_MAX_DUOS)
+						{
+							error(); // More pieces than expected...
+						}
+
+						wordbites_pieces.horts[wordbites_pieces.horts_count] =
+							(struct WordBitesPiece)
+							{
+								.position.x          = x,
+								.position.y          = y,
+								.alphabet_indices[0] = board_alphabet_indices[y][x    ],
+								.alphabet_indices[1] = board_alphabet_indices[y][x + 1],
+							};
+						wordbites_pieces.horts_count += 1;
+					}
+					else if (y && board_alphabet_indices[y - 1][x] != ALPHABET_INDEX_TAKEN) // Vertical piece!
+					{
+						if (wordbites_pieces.horts_count + wordbites_pieces.verts_count == WORDBITES_MAX_DUOS)
+						{
+							error(); // More pieces than expected...
+						}
+
+						wordbites_pieces.verts[wordbites_pieces.verts_count] =
+							(struct WordBitesPiece)
+							{
+								.position.x          = x,
+								.position.y          = y,
+								.alphabet_indices[0] = board_alphabet_indices[y    ][x],
+								.alphabet_indices[1] = board_alphabet_indices[y - 1][x],
+							};
+						wordbites_pieces.verts_count += 1;
+					}
+					else // Uno piece!
+					{
+						wordbites_pieces.unos[unos_count] =
+							(struct WordBitesPiece)
+							{
+								.position.x          = x,
+								.position.y          = y,
+								.alphabet_indices[0] = board_alphabet_indices[y][x],
+								.alphabet_indices[1] = ALPHABET_INDEX_TAKEN,
+							};
+						unos_count += 1;
+					}
+				}
 			}
 		}
-		debug_char('\n');
+
+		if (unos_count != countof(wordbites_pieces.unos) || wordbites_pieces.verts_count + wordbites_pieces.horts_count != WORDBITES_MAX_DUOS)
+		{
+			error(); // Less pieces than expected...
+		}
+
+		debug_wordbites_board(&board_alphabet_indices, wordbites_pieces);
 	}
 
 	//
@@ -528,7 +688,7 @@ main(void)
 											{
 												if (board_alphabet_indices[0][slot_index] == word_alphabet_indices[subword_letter_index]) // Matching slot?
 												{
-													board_alphabet_indices[0][slot_index] |= BOARD_ALPHABET_INDEX_TAKEN;
+													board_alphabet_indices[0][slot_index] |= ALPHABET_INDEX_TAKEN;
 													commands[subword_letter_index]         = slot_index << 4;
 													break;
 												}
@@ -560,7 +720,7 @@ main(void)
 
 										for (u8 slot_index = 0; slot_index < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x); slot_index += 1)
 										{
-											board_alphabet_indices[0][slot_index] &= ~BOARD_ALPHABET_INDEX_TAKEN;
+											board_alphabet_indices[0][slot_index] &= ~ALPHABET_INDEX_TAKEN;
 										}
 									} break;
 
@@ -584,7 +744,7 @@ main(void)
 											{
 												if (board_alphabet_indices[start_y][start_x] == word_alphabet_indices[0])
 												{
-													board_alphabet_indices[start_y][start_x] |= BOARD_ALPHABET_INDEX_TAKEN;
+													board_alphabet_indices[start_y][start_x] |= ALPHABET_INDEX_TAKEN;
 													commands[0]                               = (start_x << 4) | start_y;
 
 													//
@@ -640,7 +800,7 @@ main(void)
 
 														if (found_next)
 														{
-															board_alphabet_indices[next_y][next_x] |= BOARD_ALPHABET_INDEX_TAKEN;
+															board_alphabet_indices[next_y][next_x] |= ALPHABET_INDEX_TAKEN;
 															commands[reproduced_subword_length]     = (next_x << 4) | next_y;
 															reproduced_subword_length              += 1;
 															delta_x                                 = -2;
@@ -659,7 +819,7 @@ main(void)
 														{
 															board_alphabet_indices
 																[NERD_COMMAND_Y(commands[reproduced_subword_length - 1])]
-																[NERD_COMMAND_X(commands[reproduced_subword_length - 1])] &= ~BOARD_ALPHABET_INDEX_TAKEN;
+																[NERD_COMMAND_X(commands[reproduced_subword_length - 1])] &= ~ALPHABET_INDEX_TAKEN;
 															delta_x = NERD_COMMAND_X(commands[reproduced_subword_length - 1]) - NERD_COMMAND_X(commands[reproduced_subword_length - 2]);
 															delta_y = NERD_COMMAND_Y(commands[reproduced_subword_length - 1]) - NERD_COMMAND_Y(commands[reproduced_subword_length - 2]);
 															reproduced_subword_length -= 1;
@@ -676,14 +836,14 @@ main(void)
 														for (u8 i = 0; i < subword_length; i += 1)
 														{
 															push_command(commands[i]);
-															board_alphabet_indices[NERD_COMMAND_Y(commands[i])][NERD_COMMAND_X(commands[i])] &= ~BOARD_ALPHABET_INDEX_TAKEN;
+															board_alphabet_indices[NERD_COMMAND_Y(commands[i])][NERD_COMMAND_X(commands[i])] &= ~ALPHABET_INDEX_TAKEN;
 														}
 
 														goto WORDHUNT_REPRODUCIBLE;
 													}
 													else
 													{
-														board_alphabet_indices[start_y][start_x] &= ~BOARD_ALPHABET_INDEX_TAKEN;
+														board_alphabet_indices[start_y][start_x] &= ~ALPHABET_INDEX_TAKEN;
 													}
 												}
 											}
@@ -693,7 +853,201 @@ main(void)
 
 									case WordGame_wordbites:
 									{
-										debug_unhandled();
+										debug_char('\n');
+										for (u8 i = 0; i < subword_length; i += 1)
+										{
+											debug_char('A' + word_alphabet_indices[i]);
+										}
+
+										struct WordBitesPiece* parallel_duos            = wordbites_pieces.horts;
+										u8                     parallel_duos_count      = wordbites_pieces.horts_count;
+										struct WordBitesPiece* perpendicular_duos       = wordbites_pieces.verts;
+										u8                     perpendicular_duos_count = wordbites_pieces.verts_count;
+
+										while (true)
+										{
+											struct UnresolvedPiece
+											{
+												u8 alphabet_index;
+												u8 played_piece_index;
+											};
+
+											struct WordBitesPiece*  played_pieces[ABSOLUTE_MAX_WORD_LENGTH] = {0};
+											u8                      played_pieces_count                     = 0;
+											struct UnresolvedPiece  unresolved_pieces[WORDBITES_MAX_DUOS]   = {0};
+											u8                      unresolved_pieces_count                 = 0;
+
+											for
+											(
+												u8 subword_letter_index = 0;
+												subword_letter_index < subword_length;
+											)
+											{
+												if (subword_letter_index + 1 < subword_length) // See if there's a parallel duo piece that can match two letters at the same for the subword.
+												{
+													for (u8 parallel_index = 0; parallel_index < parallel_duos_count; parallel_index += 1)
+													{
+														if
+														(
+															parallel_duos[parallel_index].alphabet_indices[0] == word_alphabet_indices[subword_letter_index    ] &&
+															parallel_duos[parallel_index].alphabet_indices[1] == word_alphabet_indices[subword_letter_index + 1]
+														)
+														{
+															parallel_duos[parallel_index].alphabet_indices[0] |= ALPHABET_INDEX_TAKEN; // Mark the piece as used!
+															played_pieces[played_pieces_count]                 = &parallel_duos[parallel_index];
+															break;
+														}
+													}
+												}
+
+												if (played_pieces[played_pieces_count]) // Parallel piece found!
+												{
+													played_pieces_count  += 1;
+													subword_letter_index += 2;
+												}
+												else
+												{
+													for (u8 uno_index = 0; uno_index < countof(wordbites_pieces.unos); uno_index += 1) // Check for matching uno piece.
+													{
+														if (wordbites_pieces.unos[uno_index].alphabet_indices[0] == word_alphabet_indices[subword_letter_index])
+														{
+															wordbites_pieces.unos[uno_index].alphabet_indices[0] |= ALPHABET_INDEX_TAKEN; // Mark the piece as used!
+															played_pieces[played_pieces_count]                    = &wordbites_pieces.unos[uno_index];
+															break;
+														}
+													}
+
+													if (!played_pieces[played_pieces_count]) // Will probably be resolved later with a perpendicular piece.
+													{
+														if (unresolved_pieces_count < countof(unresolved_pieces)) // TEMP
+														{
+															unresolved_pieces[unresolved_pieces_count] =
+																(struct UnresolvedPiece)
+																{
+																	.alphabet_index     = word_alphabet_indices[subword_letter_index],
+																	.played_piece_index = played_pieces_count,
+																};
+														}
+														unresolved_pieces_count += 1;
+													}
+
+													played_pieces_count  += 1;
+													subword_letter_index += 1;
+												}
+											}
+
+											//{
+											//	u8 subword_letter_index = 0;
+											//	for (u8 played_piece_index = 0; played_piece_index < played_pieces_count; played_piece_index += 1)
+											//	{
+											//		if (played_pieces[played_piece_index])
+											//		{
+											//			if (played_pieces[played_piece_index]->alphabet_indices[1] == ALPHABET_INDEX_TAKEN) // Uno piece.
+											//			{
+											//				subword_letter_index += 1;
+											//			}
+											//			else // Parallel piece.
+											//			{
+											//				subword_letter_index += 2;
+											//			}
+											//		}
+											//		else // Unresolved perpendicular piece.
+											//		{
+											//			for (u8 perpendicular_index = 0; perpendicular_index < perpendicular_duos_count; perpendicular_index += 1)
+											//			{
+											//				if
+											//				(
+											//					!(perpendicular_duos[perpendicular_index].alphabet_indices[0] & ALPHABET_INDEX_TAKEN) &&
+											//					(
+											//						perpendicular_duos[perpendicular_index].alphabet_indices[0] == word_alphabet_indices[subword_letter_index] ||
+											//						perpendicular_duos[perpendicular_index].alphabet_indices[1] == word_alphabet_indices[subword_letter_index]
+											//					)
+											//				)
+											//				{
+											//					if (played_pieces[played_piece_index]) // Already resolved it?
+											//					{
+											//						debug_unhandled();
+											//					}
+											//					else
+											//					{
+											//						perpendicular_duos[perpendicular_index].alphabet_indices[0] |= ALPHABET_INDEX_TAKEN; // Mark the piece as used!
+											//						played_pieces[played_pieces_count]                           = &perpendicular_duos[perpendicular_index];
+											//					}
+											//				}
+
+											//				if (played_pieces[played_piece_index]) // Uniquely resolved it?
+											//				{
+											//					subword_letter_index += 1;
+											//				}
+											//				else
+											//				{
+											//					break;
+											//				}
+											//			}
+											//		}
+											//	}
+											//}
+
+											debug_char('\n');
+											for (u8 played_piece_index = 0; played_piece_index < played_pieces_count; played_piece_index += 1)
+											{
+												debug_char(' ');
+												if (played_pieces[played_piece_index])
+												{
+													struct WordBitesPiece piece = *played_pieces[played_piece_index];
+													piece.alphabet_indices[0] &= ~ALPHABET_INDEX_TAKEN;
+													debug_piece(piece);
+												}
+												else
+												{
+													debug_cstr("(?)");
+												}
+											}
+											debug_cstr(" | ");
+											for (u8 unresolved_piece_index = 0; unresolved_piece_index < unresolved_pieces_count; unresolved_piece_index += 1)
+											{
+												debug_char(' ');
+												if (unresolved_piece_index < countof(unresolved_pieces))
+												{
+													debug_char('A' + unresolved_pieces[unresolved_piece_index].alphabet_index);
+													debug_char('@');
+													debug_u64(unresolved_pieces[unresolved_piece_index].played_piece_index);
+												}
+												else
+												{
+													debug_char('+');
+												}
+											}
+
+											//
+											// Clear taken bits.
+											//
+
+											for (u8 played_piece_index = 0; played_piece_index < played_pieces_count; played_piece_index += 1)
+											{
+												if (played_pieces[played_piece_index])
+												{
+													played_pieces[played_piece_index]->alphabet_indices[0] &= ~ALPHABET_INDEX_TAKEN;
+												}
+											}
+
+											//
+											// Transpose.
+											//
+
+											if (parallel_duos == wordbites_pieces.horts) // Attempt again but make the word vertically.
+											{
+												parallel_duos            = wordbites_pieces.verts;
+												parallel_duos_count      = wordbites_pieces.verts_count;
+												perpendicular_duos       = wordbites_pieces.horts;
+												perpendicular_duos_count = wordbites_pieces.horts_count;
+											}
+											else // We've already attempted making the word both vertically and horizontally.
+											{
+												_delay_ms(2000.0);
+												break;
+											}
+										}
 									} break;
 
 									case WordGame_COUNT:

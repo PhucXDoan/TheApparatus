@@ -235,7 +235,6 @@ main(void)
 							[7][5] = Letter_d,
 						},
 				};
-			_delay_ms(1000.0);
 			for (u8 i = 0; i < sizeof(diplomat_packet); i += 1)
 			{
 				usart_tx(((volatile u8*) &diplomat_packet)[i]);
