@@ -1331,14 +1331,14 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 		}
 	}
 
-	static u8 // Amount of data copied into dst.
-	debug_rx(char* dst, u8 dst_max_length) // Note that PuTTY sends only '\r' (0x13) for keyboard enter.
+	static u8
+	debug_rx(char* dst, u16 dst_size) // Note that PuTTY sends only '\r' (0x13) for keyboard enter.
 	{
-		u8 result = 0;
+		u16 result = 0;
 
 		if (debug_usb_is_on_host_machine)
 		{
-			while (result < dst_max_length && debug_usb_cdc_out_reader_masked(0) != debug_usb_cdc_out_writer_masked(0))
+			while (result < dst_size && debug_usb_cdc_out_reader_masked(0) != debug_usb_cdc_out_writer_masked(0))
 			{
 				dst[result]               = debug_usb_cdc_out_buffer[debug_usb_cdc_out_reader_masked(0)];
 				debug_usb_cdc_out_reader += 1;

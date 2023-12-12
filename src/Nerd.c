@@ -65,14 +65,16 @@
 		debug_cstr(").\n");
 	}
 
-	static void
-	debug_rx(char* dst, u16 dst_max_length) // Note that PuTTY sends only '\r' (0x13) for keyboard enter.
+	static u8
+	debug_rx(char* dst, u16 dst_size) // Note that PuTTY sends only '\r' (0x13) for keyboard enter.
 	{
-		for (u16 i = 0; i < dst_max_length; i += 1)
+		u8 result = 0;
+		while (result < dst_size && UCSR0A & (1 << RXC0))
 		{
-			while (!(UCSR0A & (1 << RXC0)));
-			dst[i] = UDR0;
+			dst[result] = UDR0;
+			result += 1;
 		}
+		return result;
 	}
 #endif
 
@@ -1072,7 +1074,7 @@ main(void)
 												}
 												debug_char('\n');
 
-												debug_rx(&(char){0}, 1);
+												while (!debug_rx(&(char){0}, 1));
 
 												break;
 											}

@@ -177,6 +177,9 @@ is_slot_excluded(enum WordGame wordgame, u8 x, u8 y)
 		static void
 		debug_chars(char* data, u16 length);
 
+		static u8 // Amount received and copied into dst.
+		debug_rx(char* dst, u16 dst_size);
+
 		static void
 		debug_char(char value)
 		{
