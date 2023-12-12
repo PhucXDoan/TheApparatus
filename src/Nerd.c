@@ -20,11 +20,10 @@
 #include "spi.c"
 #include "sd.c"
 #include "timer.c"
-#if DEBUG
-	#include "matrix.c"
-#endif
 
 #if DEBUG
+	#include "matrix.c"
+
 	static void
 	debug_chars(char* data, u16 length)
 	{
@@ -76,103 +75,83 @@
 		}
 		return result;
 	}
-#endif
 
-#define WORDBITES_MAX_DUOS    5
-#define ALPHABET_INDEX_TAKEN (1 << 7)
-static_assert(BITS_PER_ALPHABET_INDEX < 8);
-
-struct WordBitesPiece
-{
-	u8_2 position;
-	u8   alphabet_indices[2];
-};
-
-static void
-debug_piece(struct WordBitesPiece piece)
-{
-	debug_char('(');
-	debug_u64(piece.position.x);
-	debug_char(',');
-	debug_u64(piece.position.y);
-	debug_char(',');
-	if (piece.alphabet_indices[0] & ALPHABET_INDEX_TAKEN)
+	static void
+	debug_wordbites_piece(struct WordBitesPiece* piece)
 	{
-		debug_char(' ');
-	}
-	else
-	{
-		debug_char('A' + piece.alphabet_indices[0]);
-	}
-	if (piece.alphabet_indices[1] & ALPHABET_INDEX_TAKEN)
-	{
-		debug_char(' ');
-	}
-	else
-	{
-		debug_char('A' + piece.alphabet_indices[1]);
-	}
-	debug_char(')');
-}
-
-static void
-debug_wordbites_board
-(
-	u8 (*board_alphabet_indices)[WORDGAME_MAX_DIM_SLOTS_Y][WORDGAME_MAX_DIM_SLOTS_X],
-	struct WordBitesPiece (*unos)[6],
-	struct WordBitesPiece (*horts)[WORDBITES_MAX_DUOS],
-	struct WordBitesPiece (*verts)[WORDBITES_MAX_DUOS],
-	u8                    unos_count,
-	u8                    horts_count,
-	u8                    verts_count
-)
-{
-	for
-	(
-		u8 y = pgm_u8(WORDGAME_INFO[WordGame_wordbites].dim_slots.y);
-		y--;
-	)
-	{
-		for (u8 x = 0; x < pgm_u8(WORDGAME_INFO[WordGame_wordbites].dim_slots.x); x += 1)
+		debug_char('(');
+		debug_u64(piece->position.x);
+		debug_char(',');
+		debug_u64(piece->position.y);
+		debug_char(',');
+		if (piece->alphabet_indices[0] & ALPHABET_INDEX_TAKEN)
 		{
-			if ((*board_alphabet_indices)[y][x] & ALPHABET_INDEX_TAKEN)
+			debug_char(' ');
+		}
+		else
+		{
+			debug_char('A' + piece->alphabet_indices[0]);
+		}
+		if ((wordbites_unos <= piece && piece < wordbites_unos + countof(wordbites_unos)) || (piece->alphabet_indices[1] & ALPHABET_INDEX_TAKEN))
+		{
+			debug_char(' ');
+		}
+		else
+		{
+			debug_char('A' + piece->alphabet_indices[1]);
+		}
+		debug_char(')');
+	}
+
+	static void
+	debug_wordbites_board(void)
+	{
+		for
+		(
+			u8 y = WORDBITES_DIM_SLOTS_Y;
+			y--;
+		)
+		{
+			for (u8 x = 0; x < WORDBITES_DIM_SLOTS_X; x += 1)
 			{
-				debug_char('*');
+				if (board_alphabet_indices[y][x] & ALPHABET_INDEX_TAKEN)
+				{
+					debug_char('*');
+				}
+				else
+				{
+					debug_char('A' + board_alphabet_indices[y][x]);
+				}
+				debug_char(' ');
 			}
-			else
-			{
-				debug_char('A' + (*board_alphabet_indices)[y][x]);
-			}
+			debug_char('\n');
+		}
+
+		debug_cstr("UNOS  : ");
+		for (u8 i = 0; i < countof(wordbites_unos); i += 1)
+		{
+			debug_wordbites_piece(&wordbites_unos[i]);
+			debug_char(' ');
+		}
+		debug_char('\n');
+
+		debug_cstr("HORTS : ");
+		for (u8 i = 0; i < wordbites_horts_count; i += 1)
+		{
+			debug_wordbites_piece(&wordbites_horts[i]);
+			debug_char(' ');
+		}
+		debug_char('\n');
+
+		debug_cstr("VERTS : ");
+		for (u8 i = 0; i < wordbites_verts_count; i += 1)
+		{
+			debug_wordbites_piece(&wordbites_verts[i]);
 			debug_char(' ');
 		}
 		debug_char('\n');
 	}
-
-	debug_cstr("UNOS  : ");
-	for (u8 i = 0; i < unos_count; i += 1)
-	{
-		debug_piece((*unos)[i]);
-		debug_char(' ');
-	}
-	debug_char('\n');
-
-	debug_cstr("HORTS : ");
-	for (u8 i = 0; i < horts_count; i += 1)
-	{
-		debug_piece((*horts)[i]);
-		debug_char(' ');
-	}
-	debug_char('\n');
-
-	debug_cstr("VERTS : ");
-	for (u8 i = 0; i < verts_count; i += 1)
-	{
-		debug_piece((*verts)[i]);
-		debug_char(' ');
-	}
-	debug_char('\n');
-}
-#define debug_wordbites_board() debug_wordbites_board(&board_alphabet_indices, &wordbites_unos, &wordbites_horts, &wordbites_verts, wordbites_unos_count, wordbites_horts_count, wordbites_verts_count)
+#endif
 
 static_assert(WORDGAME_MAX_DIM_SLOTS_X <= 8);
 static_assert(WORDGAME_MAX_DIM_SLOTS_Y <= 15); // Can't be 16, since command of 0xFF is special.
@@ -198,6 +177,136 @@ push_command(u8 command)
 
 	command_buffer[command_writer]  = command;
 	command_writer                 += 1;
+}
+
+static struct WordBitesPiece* // Returns the piece blocking the destination (in the case the destination is out of bounds, moving_piece is returned).
+attempt_move_wordbites_piece(struct WordBitesPiece* moving_piece, u8 dest_x, u8 dest_y)
+{
+	struct WordBitesPiece* blocking_piece = 0;
+
+	//
+	// Get delta for the second letter of the piece.
+	//
+
+	i8 second_dx = 0;
+	i8 second_dy = 0;
+
+	if (wordbites_horts <= moving_piece && moving_piece < wordbites_horts + wordbites_horts_count)
+	{
+		second_dx = 1;
+	}
+	else if (wordbites_verts <= moving_piece && moving_piece < wordbites_verts + wordbites_verts_count)
+	{
+		second_dy = -1;
+	}
+	else if (!(wordbites_unos <= moving_piece && moving_piece < wordbites_unos + countof(wordbites_unos)))
+	{
+		error(); // Unknown piece...
+	}
+
+	//
+	// Attempt to move the piece.
+	//
+
+	if (dest_x + second_dx < WORDBITES_DIM_SLOTS_X && 0 <= dest_y + second_dy && dest_y < WORDBITES_DIM_SLOTS_Y)
+	{
+		//
+		// Lift piece we're moving from the board.
+		//
+
+		board_alphabet_indices[moving_piece->position.y            ][moving_piece->position.x            ] = ALPHABET_INDEX_TAKEN;
+		board_alphabet_indices[moving_piece->position.y + second_dy][moving_piece->position.x + second_dx] = ALPHABET_INDEX_TAKEN;
+
+		//
+		// See if the destination is occupied.
+		//
+
+		if
+		(
+			board_alphabet_indices[dest_y            ][dest_x            ] != ALPHABET_INDEX_TAKEN ||
+			board_alphabet_indices[dest_y + second_dy][dest_x + second_dx] != ALPHABET_INDEX_TAKEN
+		)
+		{
+			//
+			// Find uno piece.
+			//
+
+			for (u8 i = 0; i < countof(wordbites_unos); i += 1)
+			{
+				if
+				(
+					(wordbites_unos[i].position.x == dest_x             && wordbites_unos[i].position.y == dest_y            ) ||
+					(wordbites_unos[i].position.x == dest_x + second_dx && wordbites_unos[i].position.y == dest_y + second_dy)
+				)
+				{
+					blocking_piece = &wordbites_unos[i];
+					break;
+				}
+			}
+
+			if (!blocking_piece)
+			{
+				//
+				// Find horizontal duo piece.
+				//
+
+				for (u8 i = 0; i < wordbites_horts_count; i += 1)
+				{
+					if
+					(
+						(wordbites_horts[i].position.x     == dest_x             && wordbites_horts[i].position.y == dest_y            ) ||
+						(wordbites_horts[i].position.x + 1 == dest_x             && wordbites_horts[i].position.y == dest_y            ) ||
+						(wordbites_horts[i].position.x     == dest_x + second_dx && wordbites_horts[i].position.y == dest_y + second_dy) ||
+						(wordbites_horts[i].position.x + 1 == dest_x + second_dx && wordbites_horts[i].position.y == dest_y + second_dy)
+					)
+					{
+						blocking_piece = &wordbites_horts[i];
+						break;
+					}
+				}
+
+				//
+				// Find vertical duo piece.
+				//
+
+				if (!blocking_piece)
+				{
+					for (u8 i = 0; i < wordbites_verts_count; i += 1)
+					{
+						if
+						(
+							(wordbites_verts[i].position.x == dest_x             && wordbites_verts[i].position.y     == dest_y            ) ||
+							(wordbites_verts[i].position.x == dest_x             && wordbites_verts[i].position.y - 1 == dest_y            ) ||
+							(wordbites_verts[i].position.x == dest_x + second_dx && wordbites_verts[i].position.y     == dest_y + second_dy) ||
+							(wordbites_verts[i].position.x == dest_x + second_dx && wordbites_verts[i].position.y - 1 == dest_y + second_dy)
+						)
+						{
+							blocking_piece = &wordbites_verts[i];
+							break;
+						}
+					}
+				}
+			}
+		}
+		else // Move piece.
+		{
+			moving_piece->position.x = dest_x;
+			moving_piece->position.y = dest_y;
+		}
+
+		//
+		// Place piece back on the board.
+		//
+
+		board_alphabet_indices[moving_piece->position.y            ][moving_piece->position.x            ] = moving_piece->alphabet_indices[0];
+		board_alphabet_indices[moving_piece->position.y + second_dy][moving_piece->position.x + second_dx] = moving_piece->alphabet_indices[1];
+	}
+	else // Destination would place piece out of bounds!
+	{
+		blocking_piece = moving_piece;
+	}
+
+	return blocking_piece;
 }
 
 int
@@ -442,7 +551,6 @@ main(void)
 	enum Language language                           = pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].language);
 	u8            max_word_length                    = pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].max_word_length);
 	b8            alphabet_used[MAX_ALPHABET_LENGTH] = {0};
-	u8            board_alphabet_indices[WORDGAME_MAX_DIM_SLOTS_Y][WORDGAME_MAX_DIM_SLOTS_X] = {0};
 
 	for (u8 y = 0; y < pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y); y += 1)
 	{
@@ -477,33 +585,22 @@ main(void)
 	// Find WordBites pieces if needed.
 	//
 
-	struct WordBitesPiece wordbites_unos[6]                   = {0};
-	struct WordBitesPiece wordbites_horts[WORDBITES_MAX_DUOS] = {0};
-	struct WordBitesPiece wordbites_verts[WORDBITES_MAX_DUOS] = {0};
-	u8                    wordbites_unos_count                = 0;
-	u8                    wordbites_horts_count               = 0;
-	u8                    wordbites_verts_count               = 0;
-
 	if (diplomat_packet.wordgame == WordGame_wordbites)
 	{
-		u8_2 wordgame_dim_slots =
-			{
-				pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x),
-				pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y),
-			};
+		u8 wordbites_unos_count = 0;
 
-		for (u8 y = 0; y < wordgame_dim_slots.y; y += 1)
+		for (u8 y = 0; y < WORDBITES_DIM_SLOTS_Y; y += 1)
 		{
-			for (u8 x = 0; x < wordgame_dim_slots.x; x += 1)
+			for (u8 x = 0; x < WORDBITES_DIM_SLOTS_X; x += 1)
 			{
 				if
 				(
 					board_alphabet_indices[y][x] != ALPHABET_INDEX_TAKEN && // There's a letter on this slot!
-					implies(x                           , board_alphabet_indices[y    ][x - 1] == ALPHABET_INDEX_TAKEN) && // Beginning of horizontal duo piece.
-					implies(y + 1 < wordgame_dim_slots.y, board_alphabet_indices[y + 1][x    ] == ALPHABET_INDEX_TAKEN)    // Beginning of vertical duo piece.
+					implies(x                            , board_alphabet_indices[y    ][x - 1] == ALPHABET_INDEX_TAKEN) && // Beginning of horizontal duo piece.
+					implies(y + 1 < WORDBITES_DIM_SLOTS_Y, board_alphabet_indices[y + 1][x    ] == ALPHABET_INDEX_TAKEN)    // Beginning of vertical duo piece.
 				)
 				{
-					if (x + 1 < wordgame_dim_slots.x && board_alphabet_indices[y][x + 1] != ALPHABET_INDEX_TAKEN) // Horizontal duo piece!
+					if (x + 1 < WORDBITES_DIM_SLOTS_X && board_alphabet_indices[y][x + 1] != ALPHABET_INDEX_TAKEN) // Horizontal duo piece!
 					{
 						if (wordbites_horts_count + wordbites_verts_count == WORDBITES_MAX_DUOS)
 						{
@@ -545,7 +642,7 @@ main(void)
 								.position.x          = x,
 								.position.y          = y,
 								.alphabet_indices[0] = board_alphabet_indices[y][x],
-								.alphabet_indices[1] = ALPHABET_INDEX_TAKEN,
+								.alphabet_indices[1] = board_alphabet_indices[y][x],
 							};
 						wordbites_unos_count += 1;
 					}
@@ -890,8 +987,8 @@ main(void)
 											if // Word can fit on board in this orientation?
 											(
 												parallels == wordbites_horts
-													? subword_length <= pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x)
-													: subword_length <= pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y)
+													? subword_length <= WORDBITES_DIM_SLOTS_X
+													: subword_length <= WORDBITES_DIM_SLOTS_Y
 											)
 											{
 												//
@@ -1045,36 +1142,90 @@ main(void)
 
 											if (reproducible)
 											{
-												if (parallels == wordbites_horts)
+												// debug_cstr("=======================\n\n");
+
+												// {
+												// 	if (parallels == wordbites_horts)
+												// 	{
+												// 		debug_cstr("h ");
+												// 	}
+												// 	else
+												// 	{
+												// 		debug_cstr("v ");
+												// 	}
+												// 	for (u8 i = 0; i < subword_length; i += 1)
+												// 	{
+												// 		debug_char('A' + word_alphabet_indices[i]);
+												// 	}
+
+												// 	for (u8 playing_piece_index = 0; playing_piece_index < playing_pieces_count; playing_piece_index += 1)
+												// 	{
+												// 		debug_char(' ');
+												// 		if (playing_pieces[playing_piece_index])
+												// 		{
+												// 			struct WordBitesPiece* piece  = playing_pieces[playing_piece_index];
+												// 			piece->alphabet_indices[0]   &= ~ALPHABET_INDEX_TAKEN;
+												// 			debug_wordbites_piece(piece);
+												// 		}
+												// 		else
+												// 		{
+												// 			debug_cstr("(?)");
+												// 		}
+												// 	}
+												// 	debug_char('\n');
+												// }
+
+												// debug_char('\n');
+												// debug_wordbites_board();
+												// debug_char('\n');
+
+												u8 index = timer_ms() % playing_pieces_count;
+												u8 commands[2] = { (playing_pieces[index]->position.x << 4) | playing_pieces[index]->position.y };
+												b8 moved       = false;
+
+												for (u8 y = 0; y < WORDBITES_DIM_SLOTS_Y; y += 1)
 												{
-													debug_cstr("h ");
+													for (u8 x = 0; x < WORDBITES_DIM_SLOTS_X; x += 1)
+													{
+														if (!attempt_move_wordbites_piece(playing_pieces[index], x, y))
+														{
+															commands[1] = (x << 4) | y;
+															moved       = true;
+															goto MOVED;
+														}
+													}
 												}
-												else
+												MOVED:;
+												if (commands[0] == commands[1])
 												{
-													debug_cstr("v ");
+													for (u8 y = WORDBITES_DIM_SLOTS_Y; y--;)
+													{
+														for (u8 x = WORDBITES_DIM_SLOTS_X; x--;)
+														{
+															if (!attempt_move_wordbites_piece(playing_pieces[index], x, y))
+															{
+																commands[1] = (x << 4) | y;
+																moved       = true;
+																goto TEMP;
+															}
+														}
+													}
 												}
-												for (u8 i = 0; i < subword_length; i += 1)
+												TEMP:;
+
+												// debug_char('\n');
+												// debug_wordbites_board();
+												// debug_char('\n');
+
+												if (moved)
 												{
-													debug_char('A' + word_alphabet_indices[i]);
+													if (commands[0] != commands[1])
+													{
+														push_command(commands[0]);
+														push_command(commands[1]);
+													}
 												}
 
-												for (u8 playing_piece_index = 0; playing_piece_index < playing_pieces_count; playing_piece_index += 1)
-												{
-													debug_char(' ');
-													if (playing_pieces[playing_piece_index])
-													{
-														struct WordBitesPiece piece = *playing_pieces[playing_piece_index];
-														piece.alphabet_indices[0] &= ~ALPHABET_INDEX_TAKEN;
-														debug_piece(piece);
-													}
-													else
-													{
-														debug_cstr("(?)");
-													}
-												}
-												debug_char('\n');
-
-												while (!debug_rx(&(char){0}, 1));
 
 												break;
 											}
@@ -1123,6 +1274,7 @@ main(void)
 		}
 	}
 
+	debug_wordbites_board();
 	#if DEBUG
 		matrix_set
 		(

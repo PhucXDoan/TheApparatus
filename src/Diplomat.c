@@ -174,6 +174,7 @@ main(void)
 	u8                         scroll_y                               = 0;
 	b8                         nerd_completed                         = false;
 	b8                         wordhunt_began_word                    = false;
+	u8                         wordbites_picked_up_piece              = false;
 
 	//
 	// Loop.
@@ -192,54 +193,56 @@ main(void)
 			rotation += 1;
 		}
 
-		if (rotation)
-		{
-			diplomat_packet =
-				(struct DiplomatPacket)
-				{
-					.wordgame = WordGame_wordbites,
-					.board    =
-						{
-							//
-							// Unos.
-							//
+		//if (rotation)
+		//{
+		//	diplomat_packet =
+		//		(struct DiplomatPacket)
+		//		{
+		//			.wordgame = WordGame_wordbites,
+		//			.board    =
+		//				{
+		//					//
+		//					// Unos.
+		//					//
 
-							[0][2] = Letter_i,
-							[3][2] = Letter_s,
-							[4][0] = Letter_a,
-							[4][4] = Letter_o,
-							[6][2] = Letter_t,
-							[8][7] = Letter_r,
+		//					[0][2] = Letter_i,
+		//					[3][2] = Letter_s,
+		//					[4][0] = Letter_a,
+		//					[4][4] = Letter_o,
+		//					[6][2] = Letter_t,
+		//					[8][7] = Letter_r,
 
-							//
-							// Vertical Duos.
-							//
+		//					//
+		//					// Vertical Duos.
+		//					//
 
-							[1][4] = Letter_n,
-							[0][4] = Letter_g,
+		//					[1][4] = Letter_n,
+		//					[0][4] = Letter_g,
 
-							[1][7] = Letter_e,
-							[0][7] = Letter_x,
+		//					[1][7] = Letter_e,
+		//					[0][7] = Letter_x,
 
-							[2][0] = Letter_f,
-							[1][0] = Letter_o,
+		//					[2][0] = Letter_f,
+		//					[1][0] = Letter_o,
 
-							[5][6] = Letter_m,
-							[4][6] = Letter_b,
+		//					[5][6] = Letter_m,
+		//					[4][6] = Letter_b,
 
-							//
-							// Horizontal Duos.
-							//
+		//					//
+		//					// Horizontal Duos.
+		//					//
 
-							[7][4] = Letter_n,
-							[7][5] = Letter_d,
-						},
-				};
-			for (u8 i = 0; i < sizeof(diplomat_packet); i += 1)
-			{
-				usart_tx(((volatile u8*) &diplomat_packet)[i]);
-			}
-		}
+		//					[7][4] = Letter_n,
+		//					[7][5] = Letter_d,
+		//				},
+		//		};
+		//	for (u8 i = 0; i < sizeof(diplomat_packet); i += 1)
+		//	{
+		//		usart_tx(((volatile u8*) &diplomat_packet)[i]);
+		//	}
+
+		//	usb_mouse_command(false, 0, 0);
+		//}
 
 		switch (menu)
 		{
@@ -437,10 +440,11 @@ main(void)
 
 							usb_mouse_command(false, 0, 0);
 
-							menu                = Menu_displaying;
-							scroll_y            = 0;
-							nerd_completed      = false;
-							wordhunt_began_word = false;
+							menu                      = Menu_displaying;
+							scroll_y                  = 0;
+							nerd_completed            = false;
+							wordhunt_began_word       = false;
+							wordbites_picked_up_piece = false;
 						} break;
 
 						case MenuChosenMapOption_datamine:
@@ -666,7 +670,7 @@ main(void)
 
 						case MenuChosenMapOption_COUNT:
 						{
-							error();
+							error(); // Impossible.
 						} break;
 					}
 				}
@@ -868,7 +872,24 @@ main(void)
 
 							case WordGame_wordbites:
 							{
-								debug_unhandled();
+								u8 x = WORDBITES_INIT_X + WORDBITES_DELTA * NERD_COMMAND_X(command);
+								u8 y = WORDBITES_INIT_Y - WORDBITES_DELTA * NERD_COMMAND_Y(command);
+
+								if (wordbites_picked_up_piece)
+								{
+									usb_mouse_command(true, x, y);
+									_delay_ms(300.0);
+									usb_mouse_command(false, x, y);
+									_delay_ms(64.0);
+								}
+								else
+								{
+									usb_mouse_command(false, x, y);
+									_delay_ms(128.0);
+									usb_mouse_command(true, x, y);
+									_delay_ms(64.0);
+								}
+								wordbites_picked_up_piece = !wordbites_picked_up_piece;
 							} break;
 
 							case WordGame_COUNT:
@@ -885,7 +906,6 @@ main(void)
 				{
 					menu = Menu_main;
 				}
-
 			} break;
 		}
 	}

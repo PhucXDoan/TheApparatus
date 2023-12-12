@@ -239,23 +239,31 @@ static_assert(WORDHUNT_4x4_INIT_Y - WORDHUNT_4x4_DELTA * 3 >= 0  );
 static_assert(WORDHUNT_5x5_INIT_X + WORDHUNT_5x5_DELTA * 4 <  128);
 static_assert(WORDHUNT_5x5_INIT_Y - WORDHUNT_5x5_DELTA * 4 >= 0  );
 
+#define WORDBITES_INIT_X             5
+#define WORDBITES_INIT_Y             236
+#define WORDBITES_DELTA              17
+static_assert(WORDBITES_INIT_X + WORDBITES_DELTA * 7 <  128);
+static_assert(WORDBITES_INIT_Y - WORDBITES_DELTA * 8 >= 0  );
+
 static_assert(BITS_PER_ALPHABET_INDEX == 5); // PACKED_WORD_SIZE calculation assumes 5 bits per alphabet index.
 
 #define ANAGRAMS_GENERIC_6_PRINT_NAME "Anagrams (6)"
+#define WORDBITES_DIM_SLOTS_X         8
+#define WORDBITES_DIM_SLOTS_Y         9
 #define WORDGAME_XMDT(X, Y) /* There's no good way to determine the language of Anagrams perfectly, so we will always assume it's English and have the test region all be zero. */ \
-	/*    Names                                     | Language | Max Word Length | Sentinel Letter | Board Position | Board Dim (slots) | Slot Dim | Uncompressed Slot Stride | Compressed Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB       | Excluded Slot Coordinates */ \
-		X(anagrams_english_6, "Anagrams (EN, 6)"    , english  , 6               , Letter_z + 1    ,  35, 391       , 6, 1              , 124      , 195                      , 101                    ,   32,  700           , 256,  16               , 0.2645, 0.2409, 0.3358                                         ) \
-		X(anagrams_english_7, "Anagrams (EN, 7)"    , english  , 7               , Letter_z + 1    ,  29, 413       , 7, 1              , 106      , 167.75                   , 101                    ,   32,  656           , 256,  16               , 0.2936, 0.2699, 0.3658                                         ) \
-		X(anagrams_russian  , "Anagrams (RU)"       , russian  , 6               , Letter_COUNT    ,  35, 391       , 6, 1              , 124      , 195                      , 101                    ,    0,    0           ,   0,   0               ,      0,      0,      0                                         ) \
-		X(anagrams_french   , "Anagrams (FR)"       , french   , 6               , Letter_z + 1    ,  35, 391       , 6, 1              , 124      , 195                      , 101                    ,    0,    0           ,   0,   0               ,      0,      0,      0                                         ) \
-		X(anagrams_german   , "Anagrams (DE)"       , german   , 6               , Letter_COUNT    ,  35, 391       , 6, 1              , 124      , 195                      , 101                    ,    0,    0           ,   0,   0               ,      0,      0,      0                                         ) \
-		X(anagrams_spanish  , "Anagrams (ES)"       , spanish  , 6               , Letter_ene + 1  ,  35, 391       , 6, 1              , 124      , 195                      , 101                    ,    0,    0           ,   0,   0               ,      0,      0,      0                                         ) \
-		X(anagrams_italian  , "Anagrams (IT)"       , italian  , 6               , Letter_z + 1    ,  35, 391       , 6, 1              , 124      , 195                      , 101                    ,    0,    0           ,   0,   0               ,      0,      0,      0                                         ) \
-		X(wordhunt_4x4      , "WordHunt (4x4)"      , english  , 15              , Letter_z + 1    , 196, 608       , 4, 4              , 142      , 211.875                  ,  96                    ,  128,  770           , 900,  16               , 0.2204, 0.2775, 0.2089                                         ) \
-		X(wordhunt_o        , "WordHunt (O)"        , english  , 15              , Letter_z + 1    , 140, 550       , 5, 5              , 125      , 191.25                   ,  97                    ,  512,  926           , 128, 128               , 0.4752, 0.6331, 0.4367, Y(0, 0) Y(0, 4) Y(4, 0) Y(4, 4) Y(2, 2)) \
-		X(wordhunt_x        , "WordHunt (X)"        , english  , 15              , Letter_z + 1    , 140, 550       , 5, 5              , 125      , 191.25                   ,  97                    ,  500,  554           , 128, 128               , 0.4356, 0.5768, 0.4018, Y(0, 2) Y(2, 0) Y(4, 2) Y(2, 4)        ) \
-		X(wordhunt_5x5      , "WordHunt (5x5)"      , english  , 15              , Letter_z + 1    , 140, 550       , 5, 5              , 125      , 191.25                   ,  97                    , 1050,  468           ,  64,  64               , 0.4641, 0.6239, 0.4251                                         ) \
-		X(wordbites         , "WordBites"           , english  , 9               , Letter_z + 1    ,  42, 460       , 8, 9              , 104      , 140.375                  ,  87                    ,  400,  218           ,  64,  64               , 0.2675, 0.3956, 0.5153                                         )
+	/*    Names                                     | Language | Max Word Length | Sentinel Letter | Board Position | Board Dim (slots)                           | Slot Dim | Uncompressed Slot Stride | Compressed Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB       | Excluded Slot Coordinates */ \
+		X(anagrams_english_6, "Anagrams (EN, 6)"    , english  , 6               , Letter_z + 1    ,  35, 391       , 6, 1                                        , 124      , 195                      , 101                    ,   32,  700           , 256,  16               , 0.2645, 0.2409, 0.3358                                         ) \
+		X(anagrams_english_7, "Anagrams (EN, 7)"    , english  , 7               , Letter_z + 1    ,  29, 413       , 7, 1                                        , 106      , 167.75                   , 101                    ,   32,  656           , 256,  16               , 0.2936, 0.2699, 0.3658                                         ) \
+		X(anagrams_russian  , "Anagrams (RU)"       , russian  , 6               , Letter_COUNT    ,  35, 391       , 6, 1                                        , 124      , 195                      , 101                    ,    0,    0           ,   0,   0               ,      0,      0,      0                                         ) \
+		X(anagrams_french   , "Anagrams (FR)"       , french   , 6               , Letter_z + 1    ,  35, 391       , 6, 1                                        , 124      , 195                      , 101                    ,    0,    0           ,   0,   0               ,      0,      0,      0                                         ) \
+		X(anagrams_german   , "Anagrams (DE)"       , german   , 6               , Letter_COUNT    ,  35, 391       , 6, 1                                        , 124      , 195                      , 101                    ,    0,    0           ,   0,   0               ,      0,      0,      0                                         ) \
+		X(anagrams_spanish  , "Anagrams (ES)"       , spanish  , 6               , Letter_ene + 1  ,  35, 391       , 6, 1                                        , 124      , 195                      , 101                    ,    0,    0           ,   0,   0               ,      0,      0,      0                                         ) \
+		X(anagrams_italian  , "Anagrams (IT)"       , italian  , 6               , Letter_z + 1    ,  35, 391       , 6, 1                                        , 124      , 195                      , 101                    ,    0,    0           ,   0,   0               ,      0,      0,      0                                         ) \
+		X(wordhunt_4x4      , "WordHunt (4x4)"      , english  , 15              , Letter_z + 1    , 196, 608       , 4, 4                                        , 142      , 211.875                  ,  96                    ,  128,  770           , 900,  16               , 0.2204, 0.2775, 0.2089                                         ) \
+		X(wordhunt_o        , "WordHunt (O)"        , english  , 15              , Letter_z + 1    , 140, 550       , 5, 5                                        , 125      , 191.25                   ,  97                    ,  512,  926           , 128, 128               , 0.4752, 0.6331, 0.4367, Y(0, 0) Y(0, 4) Y(4, 0) Y(4, 4) Y(2, 2)) \
+		X(wordhunt_x        , "WordHunt (X)"        , english  , 15              , Letter_z + 1    , 140, 550       , 5, 5                                        , 125      , 191.25                   ,  97                    ,  500,  554           , 128, 128               , 0.4356, 0.5768, 0.4018, Y(0, 2) Y(2, 0) Y(4, 2) Y(2, 4)        ) \
+		X(wordhunt_5x5      , "WordHunt (5x5)"      , english  , 15              , Letter_z + 1    , 140, 550       , 5, 5                                        , 125      , 191.25                   ,  97                    , 1050,  468           ,  64,  64               , 0.4641, 0.6239, 0.4251                                         ) \
+		X(wordbites         , "WordBites"           , english  , 9               , Letter_z + 1    ,  42, 460       , WORDBITES_DIM_SLOTS_X, WORDBITES_DIM_SLOTS_Y, 104      , 140.375                  ,  87                    ,  400,  218           ,  64,  64               , 0.2675, 0.3956, 0.5153                                         )
 
 #define LETTER_XMDT(X) \
 	/* Name       | LCD Character Code | Unicode Codepoints */ \
@@ -2210,11 +2218,30 @@ struct DiplomatPacket
 	static volatile struct DiplomatPacket diplomat_packet = {0};
 #endif
 
-#if PROGRAM_NERD
-	static u8 command_buffer[256] = {0};
-	static u8 command_reader      = 0;
-	static u8 command_writer      = 0;
+//
+// Nerd.c.
+//
 
+#define WORDBITES_MAX_DUOS    5
+#define ALPHABET_INDEX_TAKEN (1 << 7)
+static_assert(BITS_PER_ALPHABET_INDEX < 8);
+
+struct WordBitesPiece
+{
+	u8_2 position;
+	u8   alphabet_indices[2];
+};
+
+#if PROGRAM_NERD
+	static u8                    board_alphabet_indices[WORDGAME_MAX_DIM_SLOTS_Y][WORDGAME_MAX_DIM_SLOTS_X];
+	static struct WordBitesPiece wordbites_unos[6]                   = {0};
+	static struct WordBitesPiece wordbites_horts[WORDBITES_MAX_DUOS] = {0};
+	static struct WordBitesPiece wordbites_verts[WORDBITES_MAX_DUOS] = {0};
+	static u8                    wordbites_horts_count               = 0;
+	static u8                    wordbites_verts_count               = 0;
+	static u8                    command_buffer[256]                 = {0};
+	static u8                    command_reader                      = 0;
+	static u8                    command_writer                      = 0;
 	static_assert(sizeof(command_buffer) == 256); // For the byte-sized indices.
 	static_assert(sizeof(command_reader) == 1);   // Wrapping behavior needed.
 	static_assert(sizeof(command_writer) == 1);   // Wrapping behavior needed.
