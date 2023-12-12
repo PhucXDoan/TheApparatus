@@ -464,9 +464,7 @@ main(void)
 	// Find WordBites pieces if needed.
 	//
 
-
 	struct WordBitesPieces wordbites_pieces = {0};
-
 
 	if (diplomat_packet.wordgame == WordGame_wordbites)
 	{
@@ -853,198 +851,224 @@ main(void)
 
 									case WordGame_wordbites:
 									{
-										debug_char('\n');
-										for (u8 i = 0; i < subword_length; i += 1)
-										{
-											debug_char('A' + word_alphabet_indices[i]);
-										}
+										struct WordBitesPiece* parallels       = wordbites_pieces.horts;
+										u8                     parallels_count = wordbites_pieces.horts_count;
+										struct WordBitesPiece* perps           = wordbites_pieces.verts;
+										u8                     perps_count     = wordbites_pieces.verts_count;
 
-										struct WordBitesPiece* parallel_duos            = wordbites_pieces.horts;
-										u8                     parallel_duos_count      = wordbites_pieces.horts_count;
-										struct WordBitesPiece* perpendicular_duos       = wordbites_pieces.verts;
-										u8                     perpendicular_duos_count = wordbites_pieces.verts_count;
-
-										while (true)
+										while (true) // Attempt to reproduce the word horizontally and vertically.
 										{
-											struct UnresolvedPiece
+											struct UnresolvedPerp
 											{
-												u8 alphabet_index;
-												u8 played_piece_index;
+												u8 goal_alphabet_index;
+												u8 playing_piece_index;
+												u8 resolving_perp_index;
 											};
 
-											struct WordBitesPiece*  played_pieces[ABSOLUTE_MAX_WORD_LENGTH] = {0};
-											u8                      played_pieces_count                     = 0;
-											struct UnresolvedPiece  unresolved_pieces[WORDBITES_MAX_DUOS]   = {0};
-											u8                      unresolved_pieces_count                 = 0;
+											b8                     reproducible                             = true;
+											struct WordBitesPiece* playing_pieces[ABSOLUTE_MAX_WORD_LENGTH] = {0};
+											u8                     playing_pieces_count                     = 0;
+											struct UnresolvedPerp  unresolved_perps[WORDBITES_MAX_DUOS]     = {0};
+											u8                     unresolved_perps_count                   = 0;
 
-											for
+											if // Word can fit on board in this orientation?
 											(
-												u8 subword_letter_index = 0;
-												subword_letter_index < subword_length;
+												parallels == wordbites_pieces.horts
+													? subword_length <= pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x)
+													: subword_length <= pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y)
 											)
 											{
-												if (subword_letter_index + 1 < subword_length) // See if there's a parallel duo piece that can match two letters at the same for the subword.
+												//
+												// Find a piece for each letter of subword.
+												//
+
+												for
+												(
+													u8 subword_letter_index = 0;
+													subword_letter_index < subword_length;
+												)
 												{
-													for (u8 parallel_index = 0; parallel_index < parallel_duos_count; parallel_index += 1)
+													//
+													// See if there's a parallel duo piece that can match two letters at the same for the subword.
+													//
+
+													if (subword_letter_index + 1 < subword_length) // Can't do it the end when there's only one letter left!
 													{
-														if
+														for (u8 parallel_index = 0; parallel_index < parallels_count; parallel_index += 1)
+														{
+															if
+															(
+																parallels[parallel_index].alphabet_indices[0] == word_alphabet_indices[subword_letter_index    ] &&
+																parallels[parallel_index].alphabet_indices[1] == word_alphabet_indices[subword_letter_index + 1]
+															)
+															{
+																parallels[parallel_index].alphabet_indices[0] |= ALPHABET_INDEX_TAKEN; // Mark the piece as used!
+																playing_pieces[playing_pieces_count]           = &parallels[parallel_index];
+																break;
+															}
+														}
+													}
+
+													if (playing_pieces[playing_pieces_count]) // Found the parallel duo piece!
+													{
+														playing_pieces_count += 1;
+														subword_letter_index += 2;
+													}
+													else
+													{
+														//
+														// See if there's an uno piece that matches the current letter of the subword.
+														//
+
+														for (u8 uno_index = 0; uno_index < countof(wordbites_pieces.unos); uno_index += 1)
+														{
+															if (wordbites_pieces.unos[uno_index].alphabet_indices[0] == word_alphabet_indices[subword_letter_index])
+															{
+																wordbites_pieces.unos[uno_index].alphabet_indices[0] |= ALPHABET_INDEX_TAKEN; // Mark the piece as used!
+																playing_pieces[playing_pieces_count]                  = &wordbites_pieces.unos[uno_index];
+																break;
+															}
+														}
+
+														if (playing_pieces[playing_pieces_count]) // Uno piece found!
+														{
+															playing_pieces_count += 1;
+															subword_letter_index += 1;
+														}
+														else if (unresolved_perps_count < perps_count) // We mark the piece here to be resolved by a perpendicular piece later.
+														{
+															unresolved_perps[unresolved_perps_count] =
+																(struct UnresolvedPerp)
+																{
+																	.goal_alphabet_index = word_alphabet_indices[subword_letter_index],
+																	.playing_piece_index = playing_pieces_count,
+																};
+															unresolved_perps_count += 1;
+															playing_pieces_count   += 1;
+															subword_letter_index   += 1;
+														}
+														else // Too many unresolved pieces!
+														{
+															reproducible = false;
+															break;
+														}
+													}
+												}
+
+												//
+												// Match the unresolved perpendicular duo pieces.
+												//
+
+												if (reproducible)
+												{
+													u8 resolved_count = 0;
+													u8 perp_index     = 0;
+													while (true)
+													{
+														if (resolved_count == unresolved_perps_count) // We fixed every unresolved piece!
+														{
+															break;
+														}
+														else if (perp_index == perps_count)
+														{
+															if (resolved_count) // Backtrack.
+															{
+																resolved_count                                                                            -= 1;
+																playing_pieces[unresolved_perps[resolved_count].playing_piece_index]->alphabet_indices[0] &= ~ALPHABET_INDEX_TAKEN;
+																playing_pieces[unresolved_perps[resolved_count].playing_piece_index]                       = 0;
+																perp_index                                                                                 = unresolved_perps[resolved_count].resolving_perp_index + 1;
+															}
+															else // Exhausted all combinations.
+															{
+																reproducible = false;
+																break;
+															}
+														}
+														else if // Matching perpendicular duo piece?
 														(
-															parallel_duos[parallel_index].alphabet_indices[0] == word_alphabet_indices[subword_letter_index    ] &&
-															parallel_duos[parallel_index].alphabet_indices[1] == word_alphabet_indices[subword_letter_index + 1]
+															!(perps[perp_index].alphabet_indices[0] & ALPHABET_INDEX_TAKEN) &&
+															(
+																perps[perp_index].alphabet_indices[0] == unresolved_perps[resolved_count].goal_alphabet_index ||
+																perps[perp_index].alphabet_indices[1] == unresolved_perps[resolved_count].goal_alphabet_index
+															)
 														)
 														{
-															parallel_duos[parallel_index].alphabet_indices[0] |= ALPHABET_INDEX_TAKEN; // Mark the piece as used!
-															played_pieces[played_pieces_count]                 = &parallel_duos[parallel_index];
-															break;
+															perps[perp_index].alphabet_indices[0]                                |= ALPHABET_INDEX_TAKEN; // Mark piece as used!
+															playing_pieces[unresolved_perps[resolved_count].playing_piece_index]  = &perps[perp_index];
+															unresolved_perps[resolved_count].resolving_perp_index                 = perp_index;
+															resolved_count                                                       += 1;
+															perp_index                                                            = 0;
 														}
-													}
-												}
-
-												if (played_pieces[played_pieces_count]) // Parallel piece found!
-												{
-													played_pieces_count  += 1;
-													subword_letter_index += 2;
-												}
-												else
-												{
-													for (u8 uno_index = 0; uno_index < countof(wordbites_pieces.unos); uno_index += 1) // Check for matching uno piece.
-													{
-														if (wordbites_pieces.unos[uno_index].alphabet_indices[0] == word_alphabet_indices[subword_letter_index])
+														else // Try matching next one.
 														{
-															wordbites_pieces.unos[uno_index].alphabet_indices[0] |= ALPHABET_INDEX_TAKEN; // Mark the piece as used!
-															played_pieces[played_pieces_count]                    = &wordbites_pieces.unos[uno_index];
-															break;
+															perp_index += 1;
 														}
 													}
+												}
 
-													if (!played_pieces[played_pieces_count]) // Will probably be resolved later with a perpendicular piece.
+												//
+												// Clear taken bits.
+												//
+
+												for (u8 playing_piece_index = 0; playing_piece_index < playing_pieces_count; playing_piece_index += 1)
+												{
+													if (playing_pieces[playing_piece_index])
 													{
-														if (unresolved_pieces_count < countof(unresolved_pieces)) // TEMP
-														{
-															unresolved_pieces[unresolved_pieces_count] =
-																(struct UnresolvedPiece)
-																{
-																	.alphabet_index     = word_alphabet_indices[subword_letter_index],
-																	.played_piece_index = played_pieces_count,
-																};
-														}
-														unresolved_pieces_count += 1;
+														playing_pieces[playing_piece_index]->alphabet_indices[0] &= ~ALPHABET_INDEX_TAKEN;
 													}
-
-													played_pieces_count  += 1;
-													subword_letter_index += 1;
 												}
 											}
-
-											//{
-											//	u8 subword_letter_index = 0;
-											//	for (u8 played_piece_index = 0; played_piece_index < played_pieces_count; played_piece_index += 1)
-											//	{
-											//		if (played_pieces[played_piece_index])
-											//		{
-											//			if (played_pieces[played_piece_index]->alphabet_indices[1] == ALPHABET_INDEX_TAKEN) // Uno piece.
-											//			{
-											//				subword_letter_index += 1;
-											//			}
-											//			else // Parallel piece.
-											//			{
-											//				subword_letter_index += 2;
-											//			}
-											//		}
-											//		else // Unresolved perpendicular piece.
-											//		{
-											//			for (u8 perpendicular_index = 0; perpendicular_index < perpendicular_duos_count; perpendicular_index += 1)
-											//			{
-											//				if
-											//				(
-											//					!(perpendicular_duos[perpendicular_index].alphabet_indices[0] & ALPHABET_INDEX_TAKEN) &&
-											//					(
-											//						perpendicular_duos[perpendicular_index].alphabet_indices[0] == word_alphabet_indices[subword_letter_index] ||
-											//						perpendicular_duos[perpendicular_index].alphabet_indices[1] == word_alphabet_indices[subword_letter_index]
-											//					)
-											//				)
-											//				{
-											//					if (played_pieces[played_piece_index]) // Already resolved it?
-											//					{
-											//						debug_unhandled();
-											//					}
-											//					else
-											//					{
-											//						perpendicular_duos[perpendicular_index].alphabet_indices[0] |= ALPHABET_INDEX_TAKEN; // Mark the piece as used!
-											//						played_pieces[played_pieces_count]                           = &perpendicular_duos[perpendicular_index];
-											//					}
-											//				}
-
-											//				if (played_pieces[played_piece_index]) // Uniquely resolved it?
-											//				{
-											//					subword_letter_index += 1;
-											//				}
-											//				else
-											//				{
-											//					break;
-											//				}
-											//			}
-											//		}
-											//	}
-											//}
-
-											debug_char('\n');
-											for (u8 played_piece_index = 0; played_piece_index < played_pieces_count; played_piece_index += 1)
+											else // Word too long to fit on the board in this orientation.
 											{
-												debug_char(' ');
-												if (played_pieces[played_piece_index])
+												reproducible = false;
+											}
+
+											//
+											// Generate moves.
+											//
+
+											if (reproducible)
+											{
+												if (parallels == wordbites_pieces.horts)
 												{
-													struct WordBitesPiece piece = *played_pieces[played_piece_index];
-													piece.alphabet_indices[0] &= ~ALPHABET_INDEX_TAKEN;
-													debug_piece(piece);
+													debug_cstr("h ");
 												}
 												else
 												{
-													debug_cstr("(?)");
+													debug_cstr("v ");
 												}
-											}
-											debug_cstr(" | ");
-											for (u8 unresolved_piece_index = 0; unresolved_piece_index < unresolved_pieces_count; unresolved_piece_index += 1)
-											{
-												debug_char(' ');
-												if (unresolved_piece_index < countof(unresolved_pieces))
+												for (u8 i = 0; i < subword_length; i += 1)
 												{
-													debug_char('A' + unresolved_pieces[unresolved_piece_index].alphabet_index);
-													debug_char('@');
-													debug_u64(unresolved_pieces[unresolved_piece_index].played_piece_index);
+													debug_char('A' + word_alphabet_indices[i]);
 												}
-												else
+
+												for (u8 playing_piece_index = 0; playing_piece_index < playing_pieces_count; playing_piece_index += 1)
 												{
-													debug_char('+');
+													debug_char(' ');
+													if (playing_pieces[playing_piece_index])
+													{
+														struct WordBitesPiece piece = *playing_pieces[playing_piece_index];
+														piece.alphabet_indices[0] &= ~ALPHABET_INDEX_TAKEN;
+														debug_piece(piece);
+													}
+													else
+													{
+														debug_cstr("(?)");
+													}
 												}
+												debug_char('\n');
+
+												break;
 											}
-
-											//
-											// Clear taken bits.
-											//
-
-											for (u8 played_piece_index = 0; played_piece_index < played_pieces_count; played_piece_index += 1)
+											else if (parallels == wordbites_pieces.horts) // Attempt again but make the word vertically.
 											{
-												if (played_pieces[played_piece_index])
-												{
-													played_pieces[played_piece_index]->alphabet_indices[0] &= ~ALPHABET_INDEX_TAKEN;
-												}
-											}
-
-											//
-											// Transpose.
-											//
-
-											if (parallel_duos == wordbites_pieces.horts) // Attempt again but make the word vertically.
-											{
-												parallel_duos            = wordbites_pieces.verts;
-												parallel_duos_count      = wordbites_pieces.verts_count;
-												perpendicular_duos       = wordbites_pieces.horts;
-												perpendicular_duos_count = wordbites_pieces.horts_count;
+												parallels       = wordbites_pieces.verts;
+												parallels_count = wordbites_pieces.verts_count;
+												perps           = wordbites_pieces.horts;
+												perps_count     = wordbites_pieces.horts_count;
 											}
 											else // We've already attempted making the word both vertically and horizontally.
 											{
-												_delay_ms(2000.0);
 												break;
 											}
 										}
