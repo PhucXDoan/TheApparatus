@@ -1,17 +1,12 @@
-/*
-	"HELD"   : Must evaluate to 0 or 1.
-	"DEST_X" : Must be within [0, 127].
-	"DEST_Y" : Must be within [0, 255].
-	See: [Mouse Commands].
-*/
-#define usb_mouse_command(HELD, DEST_X, DEST_Y) usb_mouse_command_((((u16) (HELD)) << 15) | (((u16) (DEST_X)) << 8) | ((u16) (DEST_Y)))
 static void
-usb_mouse_command_(u16 command)
+usb_mouse_command(b8 held, u8 dest_x, u8 dest_y)
 {
 	#if USB_HID_ENABLE
-		while (_usb_mouse_command_writer_masked(1) == _usb_mouse_command_reader_masked(0)); // Our write-cursor is before the interrupt's read-cursor.
-		_usb_mouse_command_buffer[_usb_mouse_command_writer_masked(0)] = command;
-		_usb_mouse_command_writer += 1;
+		while (!_usb_mouse_command_finished);
+		_usb_mouse_command_held     = held;
+		_usb_mouse_command_dest_x   = dest_x;
+		_usb_mouse_command_dest_y   = dest_y;
+		_usb_mouse_command_finished = false;
 	#endif
 }
 
@@ -143,7 +138,6 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 				if (debug_usb_is_on_host_machine)
 				{
 					// Ignore commands to make programming on host machine not be a hassle.
-					_usb_mouse_command_reader = _usb_mouse_command_writer;
 				}
 				else
 				#endif
@@ -156,26 +150,25 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 					}
 					_usb_mouse_calibrations += 1;
 				}
-				else if (_usb_mouse_command_reader_masked(0) != _usb_mouse_command_writer_masked(0)) // There's an available command to handle.
+				else if (!_usb_mouse_command_finished) // There's an available command to handle.
 				{
-					u16 command        = _usb_mouse_command_buffer[_usb_mouse_command_reader_masked(0)];
-					b8  command_held   = (command >> 15);
-					u8  command_dest_x = (command >>  8) & 0b0111'1111;
-					u8  command_dest_y =  command        & 0b1111'1111;
-
-					if (_usb_mouse_held != command_held)
+					if (_usb_mouse_held != _usb_mouse_command_held) // Spend a frame just for changing the mouse press state.
 					{
-						_usb_mouse_held = command_held;
+						_usb_mouse_held = _usb_mouse_command_held;
 					}
-					else if (!command)
+					else if (!_usb_mouse_command_held && _usb_mouse_command_dest_x == 0 && _usb_mouse_command_dest_y == 0) // Reset mouse to origin.
 					{
 						_usb_mouse_curr_x       = 0;
 						_usb_mouse_curr_y       = 0;
 						_usb_mouse_calibrations = 0;
 					}
-					else if (_usb_mouse_curr_x != command_dest_x && (_usb_mouse_curr_y == command_dest_y || ((_usb_mouse_curr_x ^ _usb_mouse_curr_y) & 1)))
+					else if // Zigzag the mouse to move diagonally without being affected by mouse acceleration.
+					(
+						_usb_mouse_curr_x != _usb_mouse_command_dest_x &&
+						(_usb_mouse_curr_y == _usb_mouse_command_dest_y || ((_usb_mouse_curr_x ^ _usb_mouse_curr_y) & 1))
+					)
 					{
-						if (_usb_mouse_curr_x < command_dest_x)
+						if (_usb_mouse_curr_x < _usb_mouse_command_dest_x)
 						{
 							delta_x = 1;
 						}
@@ -184,11 +177,11 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 							delta_x = -1;
 						}
 					}
-					else if (_usb_mouse_curr_y < command_dest_y)
+					else if (_usb_mouse_curr_y < _usb_mouse_command_dest_y)
 					{
 						delta_y = 1;
 					}
-					else if (_usb_mouse_curr_y > command_dest_y)
+					else if (_usb_mouse_curr_y > _usb_mouse_command_dest_y)
 					{
 						delta_y = -1;
 					}
@@ -196,9 +189,9 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 					_usb_mouse_curr_x += delta_x;
 					_usb_mouse_curr_y += delta_y;
 
-					if (_usb_mouse_curr_x == command_dest_x && _usb_mouse_curr_y == command_dest_y) // We are at the destination.
+					if (_usb_mouse_curr_x == _usb_mouse_command_dest_x && _usb_mouse_curr_y == _usb_mouse_command_dest_y) // We are at the destination.
 					{
-						_usb_mouse_command_reader += 1; // Free up the mouse command.
+						_usb_mouse_command_finished = true; // Free up the mouse command.
 					}
 				}
 
@@ -264,10 +257,18 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 		pin_high(PIN_USB_BUSY);
 	#endif
 
+	//
+	// Handle default endpoint setup transaction.
+	//
+
 	UENUM = USB_ENDPOINT_DFLT_INDEX;
 	if (UEINTX & (1 << RXSTPI)) // [Endpoint 0: SETUP-Transactions].
 	{
-		UECONX |= (1 << STALLRQC); // SETUP-transactions lift STALL conditions. See: Source(2) @ Section(8.5.3.4) @ Page(228) & [Endpoint 0: Request Error].
+		UECONX |= 1 << STALLRQC; // SETUP-transactions lift STALL conditions. See: Source(2) @ Section(8.5.3.4) @ Page(228) & [Endpoint 0: Request Error].
+
+		//
+		// Get setup request from host.
+		//
 
 		struct USBSetupRequest request = {0};
 		for (u8 i = 0; i < sizeof(request); i += 1)
@@ -276,12 +277,20 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 		}
 		UEINTX = ~(1 << RXSTPI);
 
+		//
+		// Handle setup request.
+		//
+
 		switch (request.kind)
 		{
 			// [Endpoint 0: GetDescriptor].
 			case USBSetupRequestKind_get_desc:
 			case USBSetupRequestKind_hid_get_desc:
 			{
+				//
+				// Determine the payload to send to the host.
+				//
+
 				u8        payload_length = 0; // Any payload we send will not exceed 255 bytes.
 				const u8* payload_data   = 0;
 
@@ -334,6 +343,10 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 				{
 					error(); // We currently don't handle any other requests, but if needed we could.
 				}
+
+				//
+				// Send payload to host.
+				//
 
 				if (payload_length) // [Endpoint 0: Data-Transfer from Device to Host].
 				{
@@ -552,7 +565,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 #if USB_MS_ENABLE // [Mass Storage Bulk-Only Transfer Communication].
 
 	//
-	// Handle command.
+	// Handle mass storage transaction command.
 	//
 
 	UENUM = USB_ENDPOINT_MS_OUT_INDEX;
@@ -2407,14 +2420,14 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 */
 
 /* [Mouse Commands].
-	Commands to move and drag/click with the mouse are done through 16-bits: HXXX'XXXX'YYYY'YYYY.
-	H is whether or not the mouse button will be held during the movement and X and Y are
-	the coordinates of where the mouse should end up. Note that the X coordinate is only given 7
-	bits while Y has 8 bits, so the maximum value is for X is 127 and for Y is 255. This is to
-	compensate for the aspect ratio of the iPhone screen.
+	Mouse commands can be set by the main program to move, click, and drag the mouse on the phone
+	screen. It used to be buffered, but this didn't really provide much benefit if a lot of mouse
+	commands are sent, as the buffer would immediately be filled and begin blocking the main
+	program anyways since it takes quite a while for these commands to be carried out.
 
-	Of course, we don't actually know the true coordinates of the mouse, we can only infer based
-	on its "known" starting position and the accumulation of all the movements we send to the host.
+	When we do actually carry out the command in the USB interrupt, we don't actually know the
+	true coordinates of the mouse, we can only infer based on its "known" starting position and
+	the accumulation of all the movements we send to the host.
 
 	The actual mouse delta that is sent to the host is only 1, and strictly in either the x-axis or
 	the y-axis. This is to prevent mouse acceleration from becoming an issue (an issue that
@@ -2443,9 +2456,8 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 	There's no guarantee on the reliability of the mouse movement, so we will need to recalibrate
 	the mouse once in a while by shoving it into the corner. Recalibration can be done by using
-	usb_mouse_command(false, 0, 0), which essentially buffers up a 0 command. Since the mouse
-	would be going into the corner anyways, we can take advantage of this by blasting the host
-	with huge mouse deltas.
+	usb_mouse_command(false, 0, 0). Since the mouse would be going into the corner anyways, we can
+	take advantage of this by blasting the host with huge mouse deltas.
 */
 
 /* [Endpoint 0: HID-Specific SetIdle].

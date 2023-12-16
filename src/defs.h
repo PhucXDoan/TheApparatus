@@ -1,4 +1,3 @@
-// TODO Make mouse commands not buffered.
 // TODO Nerd busy LED.
 // TODO Mass storage reset.
 // TODO Remove magic numbers of mouse coordinates.
@@ -2092,28 +2091,15 @@ struct USBConfig // This layout is defined uniquely for our device application.
 #endif
 
 #if PROGRAM_DIPLOMAT
-	// Only the interrupt can read and write these.
-	static u8 _usb_mouse_calibrations = 0;
-	static u8 _usb_mouse_curr_x       = 0; // Origin is top-left.
-	static u8 _usb_mouse_curr_y       = 0; // Origin is top-left.
-	static b8 _usb_mouse_held         = false;
-
-	static volatile u16 _usb_mouse_command_buffer[8] = {0}; // See: [Mouse Commands] @ "Diplomat_usb.c".
-	static volatile u8  _usb_mouse_command_writer    = 0;   // Main program writes.
-	static volatile u8  _usb_mouse_command_reader    = 0;   // Interrupt reads.
-
-	#define _usb_mouse_command_writer_masked(OFFSET) ((_usb_mouse_command_writer + (OFFSET)) & (countof(_usb_mouse_command_buffer) - 1))
-	#define _usb_mouse_command_reader_masked(OFFSET) ((_usb_mouse_command_reader + (OFFSET)) & (countof(_usb_mouse_command_buffer) - 1))
-
-	// A read/write index with a size greater than a byte makes "atomic" read/write operations difficult to guarantee; it can be done, but probably not worthwhile.
-	static_assert(sizeof(_usb_mouse_command_writer) == 1 && sizeof(_usb_mouse_command_reader) == 1);
-
-	// The read/write indices must be able to address any element in the corresponding buffer.
-	static_assert(countof(_usb_mouse_command_buffer) < (((u64) 1) << bitsof(_usb_mouse_command_reader)));
-	static_assert(countof(_usb_mouse_command_buffer) < (((u64) 1) << bitsof(_usb_mouse_command_writer)));
-
-	// Buffer sizes must be a power of two for the "_usb_mouse_X_masked" macros.
-	static_assert(countof(_usb_mouse_command_buffer) && !(countof(_usb_mouse_command_buffer) & (countof(_usb_mouse_command_buffer) - 1)));
+	// See: [Mouse Commands] @ "Diplomat_usb.c".
+	static          u8 _usb_mouse_calibrations     = 0;
+	static          b8 _usb_mouse_held             = false;
+	static          u8 _usb_mouse_curr_x           = 0; // Origin is top-left.
+	static          u8 _usb_mouse_curr_y           = 0; // Origin is top-left.
+	static volatile b8 _usb_mouse_command_held     = 0;
+	static volatile u8 _usb_mouse_command_dest_x   = 0;
+	static volatile u8 _usb_mouse_command_dest_y   = 0;
+	static volatile b8 _usb_mouse_command_finished = false;
 
 	#define MAKE(IDENTIFIER_NAME, PRINT_NAME, LANGUAGE, MAX_WORD_LENGTH, SENTINEL_LETTER, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, SLOT_DIM, UNCOMPRESSED_SLOT_STRIDE, COMPRESSED_SLOT_STRIDE, ...) \
 		static_assert(COMPRESSED_SLOT_STRIDE < 256); // To ensure _usb_ms_ocr_slot_topdown_pixel_coords stays byte-sized.
