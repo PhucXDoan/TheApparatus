@@ -6,7 +6,8 @@
 
 #define SD_CMD8_ARGUMENT                0x00000'1'AA // See: Source(19) @ Table(7-5) @ AbsPage(119).
 #define SD_CMD8_CRC7                    0x43         // See: [CRC7 Calculation].
-#define SD_MAX_COMMAND_RETRIES          8192
+#define SD_MAX_SOFTWARE_RESET_ATTEMPTS  16
+#define SD_MAX_INITIALIZATION_ATTEMPTS  8192
 #define SD_MAX_COMMAND_RESPONSE_LATENCY (((u16) 1) << 15)
 
 [[nodiscard]]
@@ -225,7 +226,7 @@ sd_init(void)
 		{
 			break;
 		}
-		else if (attempts < SD_MAX_COMMAND_RETRIES)
+		else if (attempts < SD_MAX_SOFTWARE_RESET_ATTEMPTS)
 		{
 			attempts += 1;
 		}
@@ -290,7 +291,7 @@ sd_init(void)
 		{
 			error(); // Error signaled in R1 response, or the command timed out.
 		}
-		else if (attempts < SD_MAX_COMMAND_RETRIES)
+		else if (attempts < SD_MAX_INITIALIZATION_ATTEMPTS)
 		{
 			attempts += 1;
 		}
