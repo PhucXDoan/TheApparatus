@@ -25,7 +25,7 @@ set AVR_GCC_DEVELOPMENT_DISABLED_WARNINGS= ^
 	-Wno-unused-label -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-comment
 
 set AVR_GCC_FLAGS= ^
-	-std=c2x -O2 -D DEBUG=0 -D LITTLE_ENDIAN=1 -fshort-enums -I W:/ -fno-strict-aliasing ^
+	-std=c2x -Os -D DEBUG=1 -D LITTLE_ENDIAN=1 -fshort-enums -I W:/ -fno-strict-aliasing ^
 	-Werror -Wall -Wextra -fmax-errors=1 !AVR_GCC_PRACTICAL_DISABLED_WARNINGS! !AVR_GCC_DEVELOPMENT_DISABLED_WARNINGS! ^
 	--param=min-pagesize=0
 

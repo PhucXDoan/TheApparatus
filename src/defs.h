@@ -1,5 +1,4 @@
 // TODO Nerd busy LED.
-// TODO Mass storage reset.
 // TODO Remove magic numbers of mouse coordinates.
 // TODO German words might be duplicated?
 // TODO Time's up signal from Nerd.
@@ -1318,7 +1317,8 @@ enum USBSetupRequestKind // "bmRequestType" in LSB and "bRequest" in MSB. See: S
 	USBSetupRequestKind_hid_get_desc = MAKE(0b1'00'00001, 6   ), // Request code is from the standard device codes.
 	USBSetupRequestKind_hid_set_idle = MAKE(0b0'01'00001, 0x0A),
 
-	// Non-exhuastive. See: MS-Specific Requests @ Source(12) @ Section(3) @ Page(7).
+	// See: MS-Specific Requests @ Source(12) @ Section(3) @ Page(7).
+	USBSetupRequestKind_ms_reset       = MAKE(0b0'01'00001, 0b11111111),
 	USBSetupRequestKind_ms_get_max_lun = MAKE(0b1'01'00001, 0b11111110),
 
 	#undef MAKE
@@ -2101,11 +2101,6 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	static volatile u8 _usb_mouse_command_dest_y   = 0;
 	static volatile b8 _usb_mouse_command_finished = false;
 
-	#define MAKE(IDENTIFIER_NAME, PRINT_NAME, LANGUAGE, MAX_WORD_LENGTH, SENTINEL_LETTER, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, SLOT_DIM, UNCOMPRESSED_SLOT_STRIDE, COMPRESSED_SLOT_STRIDE, ...) \
-		static_assert(COMPRESSED_SLOT_STRIDE < 256); // To ensure _usb_ms_ocr_slot_topdown_pixel_coords stays byte-sized.
-	WORDGAME_XMDT(MAKE,)
-	#undef MAKE
-
 	static volatile enum USBMSOCRState     usb_ms_ocr_state                                                      = {0};
 	static u8_2                           _usb_ms_ocr_slot_topdown_board_coords                                  = {0};
 	static u8_2                           _usb_ms_ocr_slot_topdown_pixel_coords                                  = {0};
@@ -2116,6 +2111,11 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	static struct USBMSOCRMaskStreamState _usb_ms_ocr_next_mask_stream_state                                     = {0};
 	static_assert(WORDGAME_MAX_DIM_SLOTS_X == 8); // For _usb_ms_ocr_packed_activated_slots.
 	static_assert(MASK_DIM % 8 == 0);             // For _usb_ms_ocr_packed_slot_pixels.
+
+	#define MAKE(IDENTIFIER_NAME, PRINT_NAME, LANGUAGE, MAX_WORD_LENGTH, SENTINEL_LETTER, POS_X, POS_Y, DIM_SLOTS_X, DIM_SLOTS_Y, SLOT_DIM, UNCOMPRESSED_SLOT_STRIDE, COMPRESSED_SLOT_STRIDE, ...) \
+		static_assert(COMPRESSED_SLOT_STRIDE < 256); // To ensure _usb_ms_ocr_slot_topdown_pixel_coords stays byte-sized.
+	WORDGAME_XMDT(MAKE,)
+	#undef MAKE
 
 	#if USB_MS_ENABLE
 		static struct USBMSCommandStatusWrapper _usb_ms_status      = { .dCSWSignature = USB_MS_COMMAND_STATUS_WRAPPER_SIGNATURE };

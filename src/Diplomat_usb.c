@@ -507,6 +507,15 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 				}
 			} break;
 
+			case USBSetupRequestKind_ms_reset: // See: "Bulk-Only Mass Storage Reset" @ Source(12) @ Section(3.1) @ Page(7).
+			{
+				// This is probably overkill, but this request happens so rarely, that it's probably best to just do a
+				// full reset and hope it doesn't happen again. Although there is a possibility that the Diplomat may just
+				// straight up terminate a solve mid wordgame, but again, this request already happens so rarely, and I
+				// only recall it ever happening when the device is iniitally plugged in.
+				restart();
+			} break;
+
 			case USBSetupRequestKind_ms_get_max_lun       : // We send back a single zero byte. See: Source(12) @ Section(3.2) @ Page(7).
 			case USBSetupRequestKind_interface_get_status : // We send back two zero bytes. See: Standard "Get Status" on Interfaces @ Source(2) @ Section(9.4.5) @ Page(254).
 			{
