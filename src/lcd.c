@@ -2,6 +2,7 @@
 //
 //     - R/W pin must always be driven low.
 //     - ~5 kOhm resistor tied to ground on the contrast pin sets a satisfactory contrast.
+//     - lcd_init can be called multiple times if needed.
 
 static void
 _lcd_pulse_enable(void)
@@ -43,6 +44,14 @@ lcd_init(void)
 { // See: Initalization via 4-Bit Interface @ Source(25) @ Figure(24) @ Page(46).
 
 	//
+	// Reset state in case of reinitialization.
+	//
+
+	memset(_lcd_cache , 0, sizeof(_lcd_cache ));
+	memset(lcd_display, 0, sizeof(lcd_display));
+	lcd_cursor_pos = (u8_2) {0};
+
+	//
 	// Set up and wait for power.
 	//
 
@@ -52,6 +61,13 @@ lcd_init(void)
 	pin_output(PIN_LCD_DATA_5);
 	pin_output(PIN_LCD_DATA_6);
 	pin_output(PIN_LCD_DATA_7);
+
+	pin_low(PIN_LCD_ENABLE);
+	pin_low(PIN_LCD_REGISTER_SELECT);
+	pin_low(PIN_LCD_DATA_4);
+	pin_low(PIN_LCD_DATA_5);
+	pin_low(PIN_LCD_DATA_6);
+	pin_low(PIN_LCD_DATA_7);
 
 	_delay_ms(15.0);
 
@@ -66,7 +82,7 @@ lcd_init(void)
 	_delay_ms(4.1);
 
 	_lcd_pulse_enable();
-	_delay_us(100);
+	_delay_us(100.0);
 
 	_lcd_pulse_enable();
 

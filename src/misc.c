@@ -106,6 +106,46 @@ is_slot_excluded(enum WordGame wordgame, u8 x, u8 y)
 	return result;
 }
 
+static i8 // -1 released, 0 no change, 1 pressed.
+update_btn(u8* btn_bias, b8 btn_released)
+{
+	i8 transition = 0;
+
+	if (btn_released)
+	{
+		if (*btn_bias >= 128) // Currently still recognize button as being pressed?
+		{
+			*btn_bias -= 1;
+
+			if (*btn_bias < 128) // Enough ticks have passed to the point where we're confident the button is released?
+			{
+				transition = -1;
+				*btn_bias  = 0;
+			}
+		}
+		else // Button is still released.
+		{
+			*btn_bias = 0;
+		}
+	}
+	else if (*btn_bias < 128) // Currently still recognize button as being released?
+	{
+		*btn_bias += 1;
+
+		if (*btn_bias >= 128) // Enough ticks have passed to the point where we're confident the button is pressed?
+		{
+			transition = 1;
+			*btn_bias  = 255;
+		}
+	}
+	else // Button is still pressed.
+	{
+		*btn_bias = 255;
+	}
+
+	return transition;
+}
+
 #ifdef PROGMEM
 	#define pgm_char(LVALUE)                     pgm_read_byte ((const char       *) { &(LVALUE) })
 	#define pgm_u8(LVALUE)                       pgm_read_byte ((const u8         *) { &(LVALUE) })
@@ -163,12 +203,12 @@ is_slot_excluded(enum WordGame wordgame, u8 x, u8 y)
 			cli();
 			debug_dump(file_name, line_number);
 
-			pin_output(HALT);
+			pin_output(PIN_ERROR);
 			for (;;)
 			{
-				pin_high(HALT);
+				pin_high(PIN_ERROR);
 				_delay_ms(500.0);
-				pin_low(HALT);
+				pin_low(PIN_ERROR);
 				_delay_ms(500.0);
 			}
 		}
@@ -286,12 +326,12 @@ is_slot_excluded(enum WordGame wordgame, u8 x, u8 y)
 			debug_dump(file_name, line_number);
 		#endif
 
-		pin_output(HALT);
+		pin_output(PIN_ERROR);
 		for (;;)
 		{
-			pin_high(HALT);
+			pin_high(PIN_ERROR);
 			_delay_ms(25.0);
-			pin_low(HALT);
+			pin_low(PIN_ERROR);
 			_delay_ms(25.0);
 		}
 	}

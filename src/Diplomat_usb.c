@@ -4,7 +4,7 @@
 	"DEST_Y" : Must be within [0, 255].
 	See: [Mouse Commands].
 */
-#define usb_mouse_command(HELD, DEST_X, DEST_Y) usb_mouse_command_((((u16) HELD) << 15) | (((u16) DEST_X) << 8) | ((u16) DEST_Y))
+#define usb_mouse_command(HELD, DEST_X, DEST_Y) usb_mouse_command_((((u16) (HELD)) << 15) | (((u16) (DEST_X)) << 8) | ((u16) (DEST_Y)))
 static void
 usb_mouse_command_(u16 command)
 {
@@ -20,7 +20,7 @@ usb_init(void)
 { // [USB Initialization Process].
 
 	#ifdef PIN_USB_BUSY
-	pin_output(PIN_USB_BUSY);
+		pin_output(PIN_USB_BUSY);
 	#endif
 
 	// 1. "Power on USB pads regulator".
@@ -44,7 +44,7 @@ usb_init(void)
 ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 {
 	#ifdef PIN_USB_BUSY
-	pin_high(PIN_USB_BUSY);
+		pin_high(PIN_USB_BUSY);
 	#endif
 
 	if (UDINT & (1 << EORSTI)) // End-of-Reset.
@@ -54,7 +54,7 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 			if (pgm_u8(USB_ENDPOINT_UECFGNX[endpoint_index][1])) // Elements that aren't explicitly assigned in USB_ENDPOINT_UECFGNX will have the ALLOC bit cleared.
 			{
 				UENUM  = endpoint_index; // "Select the endpoint".
-				UECONX = (1 << EPEN);    // "Activate endpoint".
+				UECONX = 1 << EPEN;      // "Activate endpoint".
 
 				// "Configure and allocate".
 				UECFG0X = pgm_u8(USB_ENDPOINT_UECFGNX[endpoint_index][0]);
@@ -62,163 +62,161 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 
 				// "Test endpoint configuration".
 				#if DEBUG
-				if (!(UESTA0X & (1 << CFGOK)))
-				{
-					debug_unhandled(); // Invald configuration.
-				}
+					if (!(UESTA0X & (1 << CFGOK)))
+					{
+						debug_unhandled(); // Invald configuration.
+					}
 				#endif
 			}
 		}
 
 		// Enable the interrupt source for the event that endpoint 0 receives a SETUP-transaction.
 		UENUM  = USB_ENDPOINT_DFLT_INDEX;
-		UEIENX = (1 << RXSTPE);
+		UEIENX = 1 << RXSTPE;
 
 		#if USB_MS_ENABLE
-		// Enable the interrupt source for the event that mass storage's BULK-OUT endpoint receives (hopefully) a command wrapper.
-		UENUM  = USB_ENDPOINT_MS_OUT_INDEX;
-		UEIENX = (1 << RXOUTE);
+			// Enable the interrupt source for the event that mass storage's BULK-OUT endpoint receives (hopefully) a command wrapper.
+			UENUM  = USB_ENDPOINT_MS_OUT_INDEX;
+			UEIENX = 1 << RXOUTE;
 		#endif
 
 		#if DEBUG
-		debug_usb_is_on_host_machine = false; // For when switching from PC to phone or vice-versa.
+			debug_usb_is_on_host_machine = false; // For when switching from PC to phone or vice-versa.
 		#endif
 	}
 
 	if (UDINT & (1 << SOFI)) // Start-of-Frame.
 	{
-#if DEBUG && USB_CDC_ENABLE
-		UENUM = USB_ENDPOINT_CDC_IN_INDEX;
-		if (UEINTX & (1 << TXINI)) // Endpoint's buffer is ready to be filled up with data to send to the host.
-		{
-			while
-			(
-				(UEINTX & (1 << RWAL)) &&                                              // Endpoint's buffer still has some space left.
-				debug_usb_cdc_in_reader_masked(0) != debug_usb_cdc_in_writer_masked(0) // Our ring buffer still has some data left.
-			)
+		#if USB_CDC_ENABLE
+			UENUM = USB_ENDPOINT_CDC_IN_INDEX;
+			if (UEINTX & (1 << TXINI)) // Endpoint's buffer is ready to be filled up with data to send to the host.
 			{
-				UEDATX                   = debug_usb_cdc_in_buffer[debug_usb_cdc_in_reader_masked(0)];
-				debug_usb_cdc_in_reader += 1;
-			}
-
-			UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
-			UEINTX &= ~(1 << FIFOCON); // Allow the USB controller to send the data for the next IN-transaction. See: Source(1) @ Section(22.14) @ Page(276)
-		}
-#endif
-
-#if DEBUG && USB_CDC_ENABLE
-		UENUM = USB_ENDPOINT_CDC_OUT_INDEX;
-		if (UEINTX & (1 << RXOUTI)) // Endpoint's buffer has data from the host to be copied.
-		{
-			while
-			(
-				(UEINTX & (1 << RWAL)) &&                                                // Endpoint's buffer still has some data left to be copied.
-				debug_usb_cdc_out_writer_masked(1) != debug_usb_cdc_out_reader_masked(0) // Our ring buffer still has some space left.
-			)
-			{
-				debug_usb_cdc_out_buffer[debug_usb_cdc_out_writer_masked(0)] = UEDATX;
-				debug_usb_cdc_out_writer += 1;
-			}
-
-			if (UEINTX & (1 << RWAL)) // Endpoint's buffer still remaining data to be copied.
-			{
-				// The data that has yet to be copied from will still remain in the endpoint's buffer.
-				// Any incoming IN-TOKEN packets by the host will be replied with a NACK-HANDSHAKE packet by the device.
-				// See: Timing Diagram @ Source(1) @ Section(22.13.1) @ Page(276).
-			}
-			else // Endpoint's buffer has been completely copied.
-			{
-				UEINTX &= ~(1 << RXOUTI);  // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.13.1) @ Page(275).
-				UEINTX &= ~(1 << FIFOCON); // Free up this endpoint's buffer so the USB controller can copy the data in the next OUT-transaction to it.
-			}
-		}
-#endif
-
-#if USB_HID_ENABLE
-		UENUM = USB_ENDPOINT_HID_INDEX;
-		if (UEINTX & (1 << TXINI)) // See: [Mouse Commands].
-		{
-			i8 delta_x = 0;
-			i8 delta_y = 0; // Positive makes the mouse move downward.
-
-			#if DEBUG
-			if (debug_usb_is_on_host_machine)
-			{
-				// Ignore commands to make programming on host machine not be a hassle.
-				_usb_mouse_command_reader = _usb_mouse_command_writer;
-			}
-			else
-			#endif
-			if (_usb_mouse_calibrations < USB_MOUSE_CALIBRATIONS_REQUIRED) // Calibrate the mouse to a known origin.
-			{
-				if (_usb_mouse_calibrations < USB_MOUSE_CALIBRATIONS_REQUIRED * 3 / 4)
+				while
+				(
+					(UEINTX & (1 << RWAL)) &&                                              // Endpoint's buffer still has some space left.
+					debug_usb_cdc_in_reader_masked(0) != debug_usb_cdc_in_writer_masked(0) // Our ring buffer still has some data left.
+				)
 				{
-					delta_x = -128;
-					delta_y = -128;
+					UEDATX                   = debug_usb_cdc_in_buffer[debug_usb_cdc_in_reader_masked(0)];
+					debug_usb_cdc_in_reader += 1;
 				}
-				_usb_mouse_calibrations += 1;
-			}
-			else if (_usb_mouse_command_reader_masked(0) != _usb_mouse_command_writer_masked(0)) // There's an available command to handle.
-			{
-				u16 command        = _usb_mouse_command_buffer[_usb_mouse_command_reader_masked(0)];
-				b8  command_held   = (command >> 15);
-				u8  command_dest_x = (command >>  8) & 0b0111'1111;
-				u8  command_dest_y =  command        & 0b1111'1111;
 
-				if (_usb_mouse_held != command_held)
+				UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
+				UEINTX &= ~(1 << FIFOCON); // Allow the USB controller to send the data for the next IN-transaction. See: Source(1) @ Section(22.14) @ Page(276)
+			}
+
+			UENUM = USB_ENDPOINT_CDC_OUT_INDEX;
+			if (UEINTX & (1 << RXOUTI)) // Endpoint's buffer has data from the host to be copied.
+			{
+				while
+				(
+					(UEINTX & (1 << RWAL)) &&                                                // Endpoint's buffer still has some data left to be copied.
+					debug_usb_cdc_out_writer_masked(1) != debug_usb_cdc_out_reader_masked(0) // Our ring buffer still has some space left.
+				)
 				{
-					_usb_mouse_held = command_held;
+					debug_usb_cdc_out_buffer[debug_usb_cdc_out_writer_masked(0)] = UEDATX;
+					debug_usb_cdc_out_writer += 1;
 				}
-				else if (!command)
+
+				if (UEINTX & (1 << RWAL)) // Endpoint's buffer still remaining data to be copied.
 				{
-					_usb_mouse_curr_x       = 0;
-					_usb_mouse_curr_y       = 0;
-					_usb_mouse_calibrations = 0;
+					// The data that has yet to be copied from will still remain in the endpoint's buffer.
+					// Any incoming IN-TOKEN packets by the host will be replied with a NACK-HANDSHAKE packet by the device.
+					// See: Timing Diagram @ Source(1) @ Section(22.13.1) @ Page(276).
 				}
-				else if (_usb_mouse_curr_x != command_dest_x && (_usb_mouse_curr_y == command_dest_y || ((_usb_mouse_curr_x ^ _usb_mouse_curr_y) & 1)))
+				else // Endpoint's buffer has been completely copied.
 				{
-					if (_usb_mouse_curr_x < command_dest_x)
+					UEINTX &= ~(1 << RXOUTI);  // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.13.1) @ Page(275).
+					UEINTX &= ~(1 << FIFOCON); // Free up this endpoint's buffer so the USB controller can copy the data in the next OUT-transaction to it.
+				}
+			}
+		#endif
+
+		#if USB_HID_ENABLE
+			UENUM = USB_ENDPOINT_HID_INDEX;
+			if (UEINTX & (1 << TXINI)) // See: [Mouse Commands].
+			{
+				i8 delta_x = 0;
+				i8 delta_y = 0; // Positive makes the mouse move downward.
+
+				#if DEBUG
+				if (debug_usb_is_on_host_machine)
+				{
+					// Ignore commands to make programming on host machine not be a hassle.
+					_usb_mouse_command_reader = _usb_mouse_command_writer;
+				}
+				else
+				#endif
+				if (_usb_mouse_calibrations < USB_MOUSE_CALIBRATIONS_REQUIRED) // Calibrate the mouse to a known origin.
+				{
+					if (_usb_mouse_calibrations < USB_MOUSE_CALIBRATIONS_REQUIRED * 3 / 4)
 					{
-						delta_x = 1;
+						delta_x = -128;
+						delta_y = -128;
 					}
-					else
+					_usb_mouse_calibrations += 1;
+				}
+				else if (_usb_mouse_command_reader_masked(0) != _usb_mouse_command_writer_masked(0)) // There's an available command to handle.
+				{
+					u16 command        = _usb_mouse_command_buffer[_usb_mouse_command_reader_masked(0)];
+					b8  command_held   = (command >> 15);
+					u8  command_dest_x = (command >>  8) & 0b0111'1111;
+					u8  command_dest_y =  command        & 0b1111'1111;
+
+					if (_usb_mouse_held != command_held)
 					{
-						delta_x = -1;
+						_usb_mouse_held = command_held;
+					}
+					else if (!command)
+					{
+						_usb_mouse_curr_x       = 0;
+						_usb_mouse_curr_y       = 0;
+						_usb_mouse_calibrations = 0;
+					}
+					else if (_usb_mouse_curr_x != command_dest_x && (_usb_mouse_curr_y == command_dest_y || ((_usb_mouse_curr_x ^ _usb_mouse_curr_y) & 1)))
+					{
+						if (_usb_mouse_curr_x < command_dest_x)
+						{
+							delta_x = 1;
+						}
+						else
+						{
+							delta_x = -1;
+						}
+					}
+					else if (_usb_mouse_curr_y < command_dest_y)
+					{
+						delta_y = 1;
+					}
+					else if (_usb_mouse_curr_y > command_dest_y)
+					{
+						delta_y = -1;
+					}
+
+					_usb_mouse_curr_x += delta_x;
+					_usb_mouse_curr_y += delta_y;
+
+					if (_usb_mouse_curr_x == command_dest_x && _usb_mouse_curr_y == command_dest_y) // We are at the destination.
+					{
+						_usb_mouse_command_reader += 1; // Free up the mouse command.
 					}
 				}
-				else if (_usb_mouse_curr_y < command_dest_y)
-				{
-					delta_y = 1;
-				}
-				else if (_usb_mouse_curr_y > command_dest_y)
-				{
-					delta_y = -1;
-				}
 
-				_usb_mouse_curr_x += delta_x;
-				_usb_mouse_curr_y += delta_y;
+				// See: USB_DESC_HID_REPORT.
+				UEDATX = _usb_mouse_held;
+				UEDATX = delta_x;
+				UEDATX = delta_y;
 
-				if (_usb_mouse_curr_x == command_dest_x && _usb_mouse_curr_y == command_dest_y) // We are at the destination.
-				{
-					_usb_mouse_command_reader += 1; // Free up the mouse command.
-				}
+				UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
+				UEINTX &= ~(1 << FIFOCON); // Allow the USB controller to send the data for the next IN-transaction. See: Source(1) @ Section(22.14) @ Page(276)
 			}
-
-			// See: USB_DESC_HID_REPORT.
-			UEDATX = _usb_mouse_held;
-			UEDATX = delta_x;
-			UEDATX = delta_y;
-
-			UEINTX &= ~(1 << TXINI);   // Must be cleared first before FIFOCON. See: Source(1) @ Section(22.14) @ Page(276).
-			UEINTX &= ~(1 << FIFOCON); // Allow the USB controller to send the data for the next IN-transaction. See: Source(1) @ Section(22.14) @ Page(276)
-		}
-#endif
+		#endif
 	}
 
 	UDINT = 0; // Clear interrupt flags to prevent this routine from executing again.
 
 	#ifdef PIN_USB_BUSY
-	pin_low(PIN_USB_BUSY);
+		pin_low(PIN_USB_BUSY);
 	#endif
 }
 
@@ -263,7 +261,7 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 {
 	#ifdef PIN_USB_BUSY
-	pin_high(PIN_USB_BUSY);
+		pin_high(PIN_USB_BUSY);
 	#endif
 
 	UENUM = USB_ENDPOINT_DFLT_INDEX;
@@ -271,7 +269,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 	{
 		UECONX |= (1 << STALLRQC); // SETUP-transactions lift STALL conditions. See: Source(2) @ Section(8.5.3.4) @ Page(228) & [Endpoint 0: Request Error].
 
-		struct USBSetupRequest request;
+		struct USBSetupRequest request = {0};
 		for (u8 i = 0; i < sizeof(request); i += 1)
 		{
 			((u8*) &request)[i] = UEDATX;
@@ -316,10 +314,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 						default:
 						{
-							// We currently don't handle any other standard requests, but if needed we could.
-							#if DEBUG
-							debug_unhandled();
-							#endif
+							error(); // We currently don't handle any other standard requests, but if needed we could.
 						} break;
 					}
 				}
@@ -337,10 +332,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 				#endif
 				else
 				{
-					// We currently don't handle any other requests, but if needed we could.
-					#if DEBUG
-					debug_unhandled();
-					#endif
+					error(); // We currently don't handle any other requests, but if needed we could.
 				}
 
 				if (payload_length) // [Endpoint 0: Data-Transfer from Device to Host].
@@ -382,7 +374,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 				}
 				else
 				{
-					UECONX |= (1 << STALLRQ); // See: [Endpoint 0: Request Error].
+					UECONX |= 1 << STALLRQ; // See: [Endpoint 0: Request Error].
 				}
 			} break;
 
@@ -395,11 +387,11 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 					UEINTX &= ~(1 << TXINI);          // Send out zero-length data-packet for the upcoming IN-transaction.
 					while (!(UEINTX & (1 << TXINI))); // Wait for the IN-transaction to be completed.
 
-					UDADDR |= (1 << ADDEN);
+					UDADDR |= 1 << ADDEN;
 				}
 				else
 				{
-					UECONX |= (1 << STALLRQ); // The host somehow sent us an address that's not within 7-bits. See: Source(2) @ Section(8.3.2.1) @ Page(197).
+					UECONX |= 1 << STALLRQ; // The host somehow sent us an address that's not within 7-bits. See: Source(2) @ Section(8.3.2.1) @ Page(197).
 				}
 			} break;
 
@@ -407,12 +399,12 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 			{
 				switch (request.set_config.id)
 				{
-					#if DEBUG
+				#if DEBUG
 					case 0:
 					{
 						debug_unhandled(); // In the case that the host, for some reason, wants to set the device back to the "address state", we should handle this.
 					} break;
-					#endif
+				#endif
 
 					case USB_CONFIG_ID:
 					{
@@ -422,12 +414,12 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 					default:
 					{
-						UECONX |= (1 << STALLRQ);
+						UECONX |= 1 << STALLRQ;
 					} break;
 				}
 			} break;
 
-			#if USB_CDC_ENABLE
+		#if USB_CDC_ENABLE
 			case USBSetupRequestKind_cdc_set_line_coding: // [Endpoint 0: CDC-Specific SetLineCoding].
 			{
 				if (request.cdc_set_line_coding.incoming_line_coding_datapacket_size == sizeof(struct USBCDCLineCoding))
@@ -450,7 +442,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 					{
 						case BOOTLOADER_BAUD_SIGNAL:
 						{
-							*(volatile u16*) 0x0800 = 0x7777;
+							*(volatile u16*) 0x0800 = 0x7777; // See: [Endpoint 0: CDC-Specific SetLineCoding].
 							restart();
 						} break;
 
@@ -462,10 +454,10 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 				}
 				else
 				{
-					UECONX |= (1 << STALLRQ);
+					UECONX |= 1 << STALLRQ;
 				}
 			} break;
-			#endif
+		#endif
 
 			case USBSetupRequestKind_endpoint_clear_feature: // See: "Clear Feature" @ Source(2) @ Section(9.4.1) @ Page(252).
 			{
@@ -487,18 +479,18 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 						{
 							UENUM  = endpoint_index;
 							UECONX = (1 << STALLRQC) | (1 << RSTDT) | (1 << EPEN); // Clear stall condition, reset data-toggle to DATA0. See: Source(2) @ Section(9.4.5) @ Page(256).
-							UERST  = (1 << endpoint_index);                        // Set to begin resetting FIFO state machine on the endpoint.
+							UERST  = 1 << endpoint_index;                          // Set to begin resetting FIFO state machine on the endpoint.
 							UERST  = 0;                                            // Clear to finish resetting FIFO.
 						}
 						else
 						{
-							UECONX |= (1 << STALLRQ); // An invalid endpoint was requested.
+							UECONX |= 1 << STALLRQ; // An invalid endpoint was requested.
 						}
 					}
 				}
 				else
 				{
-					UECONX |= (1 << STALLRQ); // The standard USB only defines one feature for endpoints.
+					UECONX |= 1 << STALLRQ; // The standard USB only defines one feature for endpoints.
 				}
 			} break;
 
@@ -540,18 +532,18 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 			case USBSetupRequestKind_cdc_set_control_line_state: // [Endpoint 0: Extraneous CDC-Specific Requests].
 			case USBSetupRequestKind_hid_set_idle:               // [Endpoint 0: HID-Specific SetIdle].
 			{
-				UECONX |= (1 << STALLRQ);
+				UECONX |= 1 << STALLRQ;
 
 				#if DEBUG
-				debug_usb_is_on_host_machine = true;
+					debug_usb_is_on_host_machine = true;
 				#endif
 			} break;
 
 			default:
 			{
-				UECONX |= (1 << STALLRQ);
+				UECONX |= 1 << STALLRQ;
 				#if DEBUG
-				debug_unhandled();
+					debug_unhandled();
 				#endif
 			} break;
 		}
@@ -1251,7 +1243,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 				else if (command.bmCBWFlags) // Device to host.
 				{
 					UENUM   = USB_ENDPOINT_MS_IN_INDEX;
-					UECONX |= (1 << STALLRQ);
+					UECONX |= 1 << STALLRQ;
 				}
 				else // Host to device.
 				{
@@ -1312,11 +1304,11 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 #endif
 
 	#ifdef PIN_USB_BUSY
-	pin_low(PIN_USB_BUSY);
+		pin_low(PIN_USB_BUSY);
 	#endif
 }
 
-#if DEBUG && USB_CDC_ENABLE
+#if USB_CDC_ENABLE
 	static void
 	debug_chars(char* value, u16 value_size)
 	{
@@ -2405,26 +2397,13 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 
 	The more important (as in: convenient) signal is BOOTLOADER_BAUD_SIGNAL. This signal is
 	when we should hand the execution back to the booloader so we can reprogram the MCU without
-	having to manually put the RST pin low. You'd think it'd be a trivial task to do right? Just
-	jump to some random address in program memory of where the bootloader would be and that'll be
-	it. Nope. There's very little resources online that detail on how the bootloader is implemented
-	on this ATmega32U4 I have. Are there multiple bootloaders, or are there only one? I don't know.
-	Is there an implementation of an ATmega32U4 bootloader, the very same one that's flashed onto
-	mine? I don't know. All I know is that it's not as simple as jumping to the bootloader's
-	address (wherever that might be!) since it might first check whether or not the MCU has
-	restarted from an external reset (RST pin pulled low), and if not, it just hands the execution
-	back to the main program. So how does Arduino manage to do it then? I can't even say for
-	certain either, but from a public repo in (1), there's this single line of code (which I will
-	mention lacks ANY sort of explaination!) that writes to some seemingly arbitrary address with
-	some seemingly arbritary value. The crazy thing about this is that if we then perform a
-	watchdog reset afterwards, the bootloader actually runs. What does the line even do? I have no
-	goddamn idea. I'm guessing that this is writing some special magic value in a specific spot of
-	memory (probably where the bootloader resides). How does this write persist through a watchdog
-	reset? I'm not even sure. I hate writing code that I just copy-paste and leave not knowing how
-	it works at all, but this is probably better as a TODO to figured out later...
-	TODO Figured it out: caterina bootloader.
+	having to manually put the RST pin low. This is done by setting some particular u16 in memory
+	to some special key that'll execute the Caterina bootloader (the common bootloader on
+	ATmega32U4 boards like Arduino Leonardo and Pro Micro). This can be found within the
+	bootloader's open source code at (1).
 
-	(1) Magic Bootloader Signal @ URL(github.com/PaxInstruments/ATmega32U4-bootloader/blob/bf5d4d1edff529d5cc8229f15463720250c7bcd3/avr/cores/arduino/CDC.cpp#L99C14-L99C14).
+	(1) Caterina Bootloader @ URL(https://github.com/arduino/ArduinoCore-avr/blob/63092126a406402022f943ac048fa195ed7e944b/bootloaders/caterina/Caterina.c#L68-L69).
+
 */
 
 /* [Mouse Commands].

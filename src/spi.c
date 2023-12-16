@@ -2,6 +2,7 @@
 //
 //     - SPI_PRESCALER must be defined to specify SPI clock frequency.
 //     - The SPI hardware and firmware is also pretty much identical across AVR devices, so the ATmega32U4 datasheet will be primarily referred to within this file.
+//     - Refer to spi_init for currently configured SPI mode.
 
 static void
 spi_tx(u8 value)

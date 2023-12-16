@@ -58,13 +58,14 @@ PIN_XMDT(MAKE)
 		- Output, High : The pin will act as a source; that is, VCC of ~5 volts. Reading from this
 		pin will result in a truthy value.
 
-	The pin_input, pin_output, pin_low, pin_high, and pin_read "procedures" are defined
-	in such a way that the compiler is pretty much guaranteed to emit a single instruction. There
-	may be multiple aliases for a single pin. For example, the Mega2560 board has digital pin 53
-	that could be used for anything your heart desires, but it also has the special ability of
-	being the SPI's slave-select pin. Thus, pin_output(53) and pin_output(SPI_SS) are equivalent.
-	The PIN_XMDTs in defs.h simply defines the register and bit index needed to configure the
-	specific pin, as described in (1).
+	The pin_output, pin_low, pin_high, and pin_read "procedures" are defined in such a way that
+	the compiler is pretty much guaranteed to emit a single instruction (except for pin_pullup,
+	which needs to configure the GPIO's port and data direction). There may be multiple aliases
+	for a single pin. For example, the Mega 2560 Rev3 board has digital pin 53 that could be used
+	for anything your heart desires, but it also has the special ability of being the SPI's
+	slave-select pin. Thus, pin_output(53) and pin_output(SPI_SS) are equivalent. The PIN_XMDTs
+	simply defines the register and bit index needed to configure the specific pin, as described
+	in (1).
 
 	(1) "Configuring the Pin" @ Source(1) @ Section(10.2.1) @ Page(68).
 	(2) Arduino Leonardo Pinout Diagram @ Source(3).

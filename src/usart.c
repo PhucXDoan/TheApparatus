@@ -1,7 +1,9 @@
 // Defines basic asynchronous serial communication through a single USART.
 //
-//     - USART_N must be defined to indicate which USART hardware to use. Consequently, multiple USARTs are not directly supported for simplicity.
-//     - The USART hardware and firmware is also pretty much identical across AVR devices, so the ATmega32U4 datasheet will be primarily referred to within this file.
+//     - USART_N must be defined to indicate which USART hardware to use.
+//       For simplicity, multiple USARTs are not directly supported.
+//     - The USART hardware and firmware is also pretty much identical across AVR devices,
+//       so the ATmega32U4 datasheet will be primarily referred to within this file.
 
 // See: "USART Register Description" @ Source(1) @ Section(11.81) @ Page(209).
 #define UCSRnA concat(concat(UCSR, USART_N), A)

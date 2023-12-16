@@ -1,3 +1,10 @@
+// TODO Make mouse commands not buffered.
+// TODO Nerd busy LED.
+// TODO Mass storage reset.
+// TODO Remove magic numbers of mouse coordinates.
+// TODO German words might be duplicated?
+// TODO Time's up signal from Nerd.
+// TODO Flip board upside down.
 #define false            0
 #define true             1
 #define stringify_(X)    #X
@@ -248,6 +255,9 @@ static_assert(WORDBITES_INIT_Y - WORDBITES_DELTA * 8 >= 0  );
 static_assert(BITS_PER_ALPHABET_INDEX == 5); // PACKED_WORD_SIZE calculation assumes 5 bits per alphabet index.
 
 #define ANAGRAMS_GENERIC_6_PRINT_NAME "Anagrams (6)"
+#define ANAGRAMS_PLAY_BUTTON_Y        190
+#define WORDHUNT_PLAY_BUTTON_Y        202
+#define WORDBITES_PLAY_BUTTON_Y       202
 #define WORDGAME_XMDT(X, Y) /* There's no good way to determine the language of Anagrams perfectly, so we will always assume it's English and have the test region all be zero. */ \
 	/*    Names                                     | Language | Max Word Length | Sentinel Letter | Board Position | Board Dim (slots) | Slot Dim | Uncompressed Slot Stride | Compressed Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB       | Excluded Slot Coordinates */ \
 		X(anagrams_english_6, "Anagrams (EN, 6)"    , english  , 6               , Letter_z + 1    ,  35, 391       , 6, 1              , 124      , 195                      , 101                    ,   32,  700           , 256,  16               , 0.2645, 0.2409, 0.3358                                         ) \
@@ -946,47 +956,6 @@ enum CLIProgram
 			#undef MAKE_FIELD_INFO
 			#undef MAKE_PROGRAM_INFO
 		};
-#endif
-
-//
-// "pin.c"
-//
-
-#if BOARD_LEONARDO
-	static_assert(__AVR_ATmega32U4__);
-	#define PIN_XMDT(X) /* See: Source(3). */ \
-		X(0     , D, 2) X(1      , D, 3) X(2       , D, 1) X(3       , D, 0) X(4 , D, 4) X(5 , C, 6) X(6 , D, 7) \
-		X(7     , E, 6) X(8      , B, 4) X(9       , B, 5) X(10      , B, 6) X(11, B, 7) X(12, D, 6) X(13, C, 7) \
-		X(A0    , F, 7) X(A1     , F, 6) X(A2      , F, 5) X(A3      , F, 4) X(A4, F, 1) X(A5, F, 0) \
-		X(SPI_SS, B, 0) X(SPI_CLK, B, 1) X(SPI_MOSI, B, 2) X(SPI_MISO, B, 3) \
-		X(HALT  , D, 5)
-#endif
-
-#if BOARD_PRO_MICRO
-	static_assert(__AVR_ATmega32U4__);
-	#define PIN_XMDT(X) /* Pin assignments are pretty similar to the Arduino Leonardo. */ \
-		X(2     , D, 1) X(3      , D, 0) X(4       , D, 4) X(5       , C, 6) \
-		X(6     , D, 7) X(7      , E, 6) X(8       , B, 4) X(9       , B, 5) \
-		X(10    , B, 6) X(14     , B, 3) X(15      , B, 1) X(16      , B, 2) \
-		X(A0    , F, 7) X(A1     , F, 6) X(A2      , F, 5) X(A3      , F, 4) \
-		X(SPI_SS, B, 0) X(SPI_CLK, B, 1) X(SPI_MOSI, B, 2) X(SPI_MISO, B, 3) \
-		X(HALT  , D, 5)
-#endif
-
-#if BOARD_MEGA_2560_REV3
-	static_assert(__AVR_ATmega2560__);
-	#define PIN_XMDT(X) /* See: Source(18). */ \
-		X(0     , E, 0) X(1      , E, 1) X(2       , E, 4) X(3       , E, 5) X( 4, G, 5) X(5 , E, 3) \
-		X(6     , H, 3) X(7      , H, 4) X(8       , H, 5) X(9       , H, 6) X(10, B, 4) X(11, B, 5) \
-		X(12    , B, 6) X(13     , B, 7) X(14      , J, 1) X(15      , J, 0) X(16, H, 1) X(17, H, 0) \
-		X(18    , D, 3) X(19     , D, 2) X(20      , D, 1) X(21      , D, 0) X(22, A, 0) X(23, A, 1) \
-		X(24    , A, 2) X(25     , A, 3) X(26      , A, 4) X(27      , A, 5) X(28, A, 6) X(29, A, 7) \
-		X(30    , C, 7) X(31     , C, 6) X(32      , C, 5) X(33      , C, 4) X(34, C, 3) X(35, C, 2) \
-		X(36    , C, 1) X(37     , C, 0) X(38      , D, 7) X(39      , G, 2) X(40, G, 1) X(41, G, 0) \
-		X(42    , L, 7) X(43     , L, 6) X(44      , L, 5) X(45      , L, 4) X(46, L, 3) X(47, L, 2) \
-		X(48    , L, 1) X(49     , L, 0) X(50      , B, 3) X(51      , B, 2) X(52, B, 1) X(53, B, 0) \
-		X(SPI_SS, B, 0) X(SPI_CLK, B, 1) X(SPI_MOSI, B, 2) X(SPI_MISO, B, 3) \
-		X(HALT  , B, 7)
 #endif
 
 //
@@ -2218,7 +2187,7 @@ struct DiplomatPacket
 #endif
 
 //
-// Nerd.c.
+// "Nerd.c".
 //
 
 #define ALPHABET_INDEX_TAKEN (1 << 7)
@@ -2248,6 +2217,51 @@ struct WordBitesPiece
 	static_assert(sizeof(command_buffer) == 256); // For the byte-sized indices.
 	static_assert(sizeof(command_reader) == 1);   // Wrapping behavior needed.
 	static_assert(sizeof(command_writer) == 1);   // Wrapping behavior needed.
+#endif
+
+//
+// "Diplomat.c".
+//
+
+enum Menu
+{
+	Menu_main,
+	Menu_chosen_map,
+	Menu_displaying,
+};
+
+#define MENU_CHOSEN_MAP_OPTION_XMDT(X) \
+	X(back     , "Back"       ) \
+	X(auto_play, "Auto play"  ) \
+	X(on_guard , "Be on guard") \
+	X(datamine , "Datamine"   )
+
+#define MENU_CHOSEN_MAP_OPTION_MAX_MESSAGE_SIZE_(NAME, MESSAGE) u8 NAME[sizeof(MESSAGE)];
+#define MENU_CHOSEN_MAP_OPTION_MAX_MESSAGE_SIZE sizeof(union { MENU_CHOSEN_MAP_OPTION_XMDT(MENU_CHOSEN_MAP_OPTION_MAX_MESSAGE_SIZE_) })
+
+enum MenuMainOption
+{
+	// ... enum WordGame ...
+
+	MenuMainOption_reset_filesystem = WordGame_COUNT,
+	MenuMainOption_COUNT,
+};
+
+enum MenuChosenMapOption
+{
+	#define MAKE(NAME, ...) MenuChosenMapOption_##NAME,
+	MENU_CHOSEN_MAP_OPTION_XMDT(MAKE)
+	#undef MAKE
+	MenuChosenMapOption_COUNT,
+};
+
+#if PROGRAM_DIPLOMAT
+	static const char MENU_CHOSEN_MAP_OPTIONS[MenuChosenMapOption_COUNT][MENU_CHOSEN_MAP_OPTION_MAX_MESSAGE_SIZE] PROGMEM =
+		{
+			#define MAKE(NAME, MESSAGE) MESSAGE,
+			MENU_CHOSEN_MAP_OPTION_XMDT(MAKE)
+			#undef MAKE
+		};
 #endif
 
 //

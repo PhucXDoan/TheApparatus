@@ -85,11 +85,6 @@ static void
 sd_read(u32 abs_sector_address)
 { // See: Source(19) @ Section(7.2.3) @ AbsPage(107).
 
-	if (abs_sector_address >= FAT32_TOTAL_SECTOR_COUNT)
-	{
-		error(); // Out-of-range address.
-	}
-
 	spi_tx(0xFF); // Synchronize SD card module's clock.
 
 	pin_low(PIN_SD_SS);
@@ -104,7 +99,7 @@ sd_read(u32 abs_sector_address)
 	{
 		error(); // Failed to command.
 	}
-	else if (!_sd_get_data_block(sd_sector, FAT32_SECTOR_SIZE))
+	else if (!_sd_get_data_block(sd_sector, countof(sd_sector)))
 	{
 		error(); // Failed to receive data.
 	}
@@ -115,11 +110,6 @@ sd_read(u32 abs_sector_address)
 static void
 sd_write(u32 abs_sector_address)
 { // See: Source(19) @ Section(7.2.4) @ AbsPage(108).
-
-	if (abs_sector_address >= FAT32_TOTAL_SECTOR_COUNT)
-	{
-		error(); // Out-of-range address.
-	}
 
 	spi_tx(0xFF); // Synchronize SD card module's clock.
 
@@ -137,7 +127,7 @@ sd_write(u32 abs_sector_address)
 		//
 
 		spi_tx(0b1111'1110); // Starting token. See: Source(19) @ Section(7.3.3.2) @ AbsPage(122-123).
-		for (u16 i = 0; i < FAT32_SECTOR_SIZE; i += 1)
+		for (u16 i = 0; i < countof(sd_sector); i += 1)
 		{
 			spi_tx(sd_sector[i]);
 		}
@@ -317,7 +307,7 @@ sd_init(void)
 	//
 
 	pin_low(PIN_SD_SS);
-	u8 csd[16];
+	u8 csd[16] = {0};
 	if (!_sd_get_data_block(csd, countof(csd)))
 	{
 		error(); // Failed to get CSD data-block.
@@ -331,8 +321,8 @@ sd_init(void)
 	if
 	(
 		!(
-			(((u64) 1) << csd_READ_BL_LEN ) == FAT32_SECTOR_SIZE &&
-			(((u64) 1) << csd_WRITE_BL_LEN) == FAT32_SECTOR_SIZE
+			(((u64) 1) << csd_READ_BL_LEN ) == sizeof(sd_sector) &&
+			(((u64) 1) << csd_WRITE_BL_LEN) == sizeof(sd_sector)
 		)
 	)
 	{
@@ -342,7 +332,7 @@ sd_init(void)
 	/* [Sector Count Determination].
 		If needed, the following expression calculates the sector count of the inserted SD card.
 
-		static_assert(FAT32_SECTOR_SIZE == 512);
+		static_assert(sizeof(sd_sector) == 512);
 		(csd_C_SIZE + 1) * 1024; // See: "C_SIZE" @ Source(19) @ Section(5.3.3) @ AbsPage(98).
 	*/
 }
