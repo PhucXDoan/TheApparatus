@@ -2,11 +2,11 @@ static void
 usb_mouse_command(b8 held, u8 dest_x, u8 dest_y)
 {
 	#if USB_HID_ENABLE
-		while (!_usb_mouse_command_finished);
-		_usb_mouse_command_held     = held;
-		_usb_mouse_command_dest_x   = dest_x;
-		_usb_mouse_command_dest_y   = dest_y;
-		_usb_mouse_command_finished = false;
+		while (!usb_mouse_command_finished);
+		_usb_mouse_command_held    = held;
+		_usb_mouse_command_dest_x  = dest_x;
+		_usb_mouse_command_dest_y  = dest_y;
+		usb_mouse_command_finished = false;
 	#endif
 }
 
@@ -150,7 +150,7 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 					}
 					_usb_mouse_calibrations += 1;
 				}
-				else if (!_usb_mouse_command_finished) // There's an available command to handle.
+				else if (!usb_mouse_command_finished) // There's an available command to handle.
 				{
 					if (_usb_mouse_held != _usb_mouse_command_held) // Spend a frame just for changing the mouse press state.
 					{
@@ -191,7 +191,7 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 
 					if (_usb_mouse_curr_x == _usb_mouse_command_dest_x && _usb_mouse_curr_y == _usb_mouse_command_dest_y) // We are at the destination.
 					{
-						_usb_mouse_command_finished = true; // Free up the mouse command.
+						usb_mouse_command_finished = true; // Free up the mouse command.
 					}
 				}
 

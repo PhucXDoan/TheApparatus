@@ -3,6 +3,8 @@
 // TODO German words might be duplicated?
 // TODO Time's up signal from Nerd.
 // TODO Flip board upside down.
+// TODO Does reducing usart.c's baud rate improve reliability?
+// TODO Add delays in wordhunt?
 #define false            0
 #define true             1
 #define stringify_(X)    #X
@@ -419,7 +421,8 @@ enum WordGame
 
 struct WordGameInfo
 {
-	u8_2 dim_slots;
+	u8_2          dim_slots;
+	enum Language language;
 
 	#if PROGRAM_DIPLOMAT
 		enum Letter sentinel_letter;
@@ -431,8 +434,7 @@ struct WordGameInfo
 	#endif
 
 	#if PROGRAM_NERD || PROGRAM_MICROSERVICES
-		enum Language language;
-		u8            max_word_length;
+		u8 max_word_length;
 	#endif
 
 	#if PROGRAM_MICROSERVICES
@@ -505,6 +507,7 @@ static_assert(MAX_ALPHABET_LENGTH <= (1 << BITS_PER_ALPHABET_INDEX)); // Alphabe
 				... \
 			) \
 				{ \
+					.language               = Language_##LANGUAGE, \
 					.print_name_cstr        = PRINT_NAME, \
 					.sentinel_letter        = SENTINEL_LETTER, \
 					.dim_slots.x            = DIM_SLOTS_X, \
@@ -2099,7 +2102,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 	static volatile b8 _usb_mouse_command_held     = 0;
 	static volatile u8 _usb_mouse_command_dest_x   = 0;
 	static volatile u8 _usb_mouse_command_dest_y   = 0;
-	static volatile b8 _usb_mouse_command_finished = false;
+	static volatile b8 usb_mouse_command_finished  = false;
 
 	static volatile enum USBMSOCRState     usb_ms_ocr_state                                                      = {0};
 	static u8_2                           _usb_ms_ocr_slot_topdown_board_coords                                  = {0};
@@ -2209,45 +2212,18 @@ struct WordBitesPiece
 // "Diplomat.c".
 //
 
-enum Menu
+struct PolledInput
 {
-	Menu_main,
-	Menu_chosen_map,
-	Menu_displaying,
-};
-
-#define MENU_CHOSEN_MAP_OPTION_XMDT(X) \
-	X(back     , "Back"       ) \
-	X(auto_play, "Auto play"  ) \
-	X(on_guard , "Be on guard") \
-	X(datamine , "Datamine"   )
-
-#define MENU_CHOSEN_MAP_OPTION_MAX_MESSAGE_SIZE_(NAME, MESSAGE) u8 NAME[sizeof(MESSAGE)];
-#define MENU_CHOSEN_MAP_OPTION_MAX_MESSAGE_SIZE sizeof(union { MENU_CHOSEN_MAP_OPTION_XMDT(MENU_CHOSEN_MAP_OPTION_MAX_MESSAGE_SIZE_) })
-
-enum MenuMainOption
-{
-	// ... enum WordGame ...
-
-	MenuMainOption_reset_filesystem = WordGame_COUNT,
-	MenuMainOption_COUNT,
-};
-
-enum MenuChosenMapOption
-{
-	#define MAKE(NAME, ...) MenuChosenMapOption_##NAME,
-	MENU_CHOSEN_MAP_OPTION_XMDT(MAKE)
-	#undef MAKE
-	MenuChosenMapOption_COUNT,
+	b8 clicked;
+	i8 rotation;
 };
 
 #if PROGRAM_DIPLOMAT
-	static const char MENU_CHOSEN_MAP_OPTIONS[MenuChosenMapOption_COUNT][MENU_CHOSEN_MAP_OPTION_MAX_MESSAGE_SIZE] PROGMEM =
-		{
-			#define MAKE(NAME, MESSAGE) MESSAGE,
-			MENU_CHOSEN_MAP_OPTION_XMDT(MAKE)
-			#undef MAKE
-		};
+	static u8 input_btn_left_bias  = 0;
+	static u8 input_btn_mid_bias   = 0;
+	static u8 input_btn_right_bias = 0;
+	static u8 input_clicked        = false;
+	static i8 input_rotation       = 0;
 #endif
 
 //
