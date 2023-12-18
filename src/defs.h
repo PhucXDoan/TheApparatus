@@ -1,10 +1,7 @@
-// TODO Nerd busy LED.
-// TODO Remove magic numbers of mouse coordinates.
 // TODO German words might be duplicated?
+// TODO Nerd busy LED.
 // TODO Time's up signal from Nerd.
 // TODO Flip board upside down.
-// TODO Does reducing usart.c's baud rate improve reliability?
-// TODO Add delays in wordhunt?
 #define false            0
 #define true             1
 #define stringify_(X)    #X

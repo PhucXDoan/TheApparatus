@@ -106,9 +106,9 @@ static void
 enter_menu_of_selected_wordgame(enum WordGame wordgame)
 {
 	#define OPTION_XMDT(X) \
-		X(back    , "Back"    ) \
 		X(play    , "Play"    ) \
-		X(datamine, "Datamine")
+		X(datamine, "Datamine") \
+		X(back    , "Back"    )
 
 	enum Option
 	{
@@ -165,11 +165,6 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 		{
 			switch (selected_option)
 			{
-				case Option_back:
-				{
-					done = true;
-				} break;
-
 				case Option_play:
 				{
 					lcd_reset();
@@ -177,8 +172,13 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 					lcd_refresh();
 
 					pin_low(PIN_NERD_RESET);
-					_delay_ms(4.0);
+					_delay_ms(1.0);
 					pin_high(PIN_NERD_RESET); // By the time OCR is finished, Nerd should all be set up and ready to go.
+
+					if (usart_rx_available()) // Flush USART buffer.
+					{
+						usart_rx();
+					}
 
 					u8 shortcuts_option_index = 0;
 					switch (wordgame)
@@ -356,13 +356,13 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 
 							if (command == NERD_COMMAND_COMPLETE)
 							{
-								done = true;
+								done = true; // No more words to receive from Nerd.
 							}
 							else
 							{
 								usart_tx(0xFF); // Let Nerd know we have received the command.
 
-								switch (wordgame)
+								switch (wordgame) // Execute command.
 								{
 									{
 										u8_2 init_pos;
@@ -426,40 +426,51 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 
 										WORDHUNT:;
 
+										u8_2 coords =
+											{
+												init_pos.x + delta * NERD_COMMAND_X(command),
+												init_pos.y - delta * NERD_COMMAND_Y(command),
+											};
+
 										if (!began_word_in_wordhunt)
 										{
 											began_word_in_wordhunt = true;
-											usb_mouse_command(false, init_pos.x + delta * NERD_COMMAND_X(command), init_pos.y - delta * NERD_COMMAND_Y(command));
+											usb_mouse_command(false, coords.x, coords.y);
 										}
 
-										usb_mouse_command(true, init_pos.x + delta * NERD_COMMAND_X(command), init_pos.y - delta * NERD_COMMAND_Y(command));
+										usb_mouse_command(true, coords.x, coords.y);
 
 										if (command & NERD_COMMAND_SUBMIT_BIT)
 										{
 											began_word_in_wordhunt = false;
-											usb_mouse_command(false, init_pos.x + delta * NERD_COMMAND_X(command), init_pos.y - delta * NERD_COMMAND_Y(command));
+											_delay_ms(48.0);
+											usb_mouse_command(false, coords.x, coords.y);
 										}
 									} break;
 
 									case WordGame_wordbites:
 									{
-										u8 x = WORDBITES_INIT_X + WORDBITES_DELTA * NERD_COMMAND_X(command);
-										u8 y = WORDBITES_INIT_Y - WORDBITES_DELTA * NERD_COMMAND_Y(command);
+										u8_2 coords =
+											{
+												WORDBITES_INIT_X + WORDBITES_DELTA * NERD_COMMAND_X(command),
+												WORDBITES_INIT_Y - WORDBITES_DELTA * NERD_COMMAND_Y(command),
+											};
 
 										if (currently_holding_piece_in_wordbites)
 										{
-											usb_mouse_command(true, x, y);
+											usb_mouse_command(true, coords.x, coords.y);
 											_delay_ms(300.0);
-											usb_mouse_command(false, x, y);
+											usb_mouse_command(false, coords.x, coords.y);
 											_delay_ms(64.0);
 										}
 										else
 										{
-											usb_mouse_command(false, x, y);
+											usb_mouse_command(false, coords.x, coords.y);
 											_delay_ms(128.0);
-											usb_mouse_command(true, x, y);
+											usb_mouse_command(true, coords.x, coords.y);
 											_delay_ms(64.0);
 										}
+
 										currently_holding_piece_in_wordbites = !currently_holding_piece_in_wordbites;
 									} break;
 
@@ -477,9 +488,12 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 
 						if (update_btn(&input_btn_mid_bias, pin_read(PIN_BTN_MID)) == 1)
 						{
-							lcd_cursor_pos = (u8_2) { WORDGAME_MAX_DIM_SLOTS_X + 1, 0 };
-							lcd_strlit("STOPPED");
-							lcd_refresh();
+							if (!done)
+							{
+								lcd_cursor_pos = (u8_2) { WORDGAME_MAX_DIM_SLOTS_X + 1, 0 };
+								lcd_strlit("STOPPED");
+								lcd_refresh();
+							}
 
 							while (update_btn(&input_btn_mid_bias, pin_read(PIN_BTN_MID)) != -1);
 
@@ -739,6 +753,11 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 				case Option_COUNT:
 				{
 					error(); // Impossible.
+				} break;
+
+				case Option_back:
+				{
+					done = true;
 				} break;
 			}
 		}
