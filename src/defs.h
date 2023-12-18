@@ -1,7 +1,7 @@
-// TODO German words might be duplicated?
 // TODO Nerd busy LED.
 // TODO Time's up signal from Nerd.
 // TODO Flip board upside down.
+// TODO Find better language files.
 #define false            0
 #define true             1
 #define stringify_(X)    #X
@@ -217,42 +217,42 @@ static_assert(LITTLE_ENDIAN); // Lots of structures assume little-endian.
 #define BITS_PER_ALPHABET_INDEX       5
 #define PACKED_WORD_SIZE(WORD_LENGTH) (1 + ((((WORD_LENGTH) - 1) * BITS_PER_ALPHABET_INDEX) + ((WORD_LENGTH) - 1) / 3 + 7) / 8)
 
-#define ANAGRAMS_6_INIT_X             7
-#define ANAGRAMS_6_INIT_Y             241
+#define ANAGRAMS_6_ORIGIN_X           7
+#define ANAGRAMS_6_ORIGIN_Y           241
 #define ANAGRAMS_6_DELTA              23
 #define ANAGRAMS_6_SUBMIT_X           64
 #define ANAGRAMS_6_SUBMIT_Y           171
-static_assert(ANAGRAMS_6_INIT_X + ANAGRAMS_6_DELTA * 5 < 128);
+static_assert(ANAGRAMS_6_ORIGIN_X + ANAGRAMS_6_DELTA * 5 < 128);
 
-#define ANAGRAMS_7_INIT_X             4
-#define ANAGRAMS_7_INIT_Y             240
+#define ANAGRAMS_7_ORIGIN_X           4
+#define ANAGRAMS_7_ORIGIN_Y           240
 #define ANAGRAMS_7_DELTA              20
 #define ANAGRAMS_7_SUBMIT_X           64
 #define ANAGRAMS_7_SUBMIT_Y           171
-static_assert(ANAGRAMS_7_INIT_X + ANAGRAMS_7_DELTA * 6 < 128);
+static_assert(ANAGRAMS_7_ORIGIN_X + ANAGRAMS_7_DELTA * 6 < 128);
 
-#define WORDHUNT_4x4_INIT_X             27
-#define WORDHUNT_4x4_INIT_Y             215
+#define WORDHUNT_4x4_ORIGIN_X           27
+#define WORDHUNT_4x4_ORIGIN_Y           215
 #define WORDHUNT_4x4_DELTA              25
-static_assert(WORDHUNT_4x4_INIT_X + WORDHUNT_4x4_DELTA * 3 <  128);
-static_assert(WORDHUNT_4x4_INIT_Y - WORDHUNT_4x4_DELTA * 3 >= 0  );
+static_assert(WORDHUNT_4x4_ORIGIN_X + WORDHUNT_4x4_DELTA * 3 <  128);
+static_assert(WORDHUNT_4x4_ORIGIN_Y - WORDHUNT_4x4_DELTA * 3 >= 0  );
 
-#define WORDHUNT_5x5_INIT_X             20
-#define WORDHUNT_5x5_INIT_Y             220
+#define WORDHUNT_5x5_ORIGIN_X           20
+#define WORDHUNT_5x5_ORIGIN_Y           220
 #define WORDHUNT_5x5_DELTA              22
-static_assert(WORDHUNT_5x5_INIT_X + WORDHUNT_5x5_DELTA * 4 <  128);
-static_assert(WORDHUNT_5x5_INIT_Y - WORDHUNT_5x5_DELTA * 4 >= 0  );
+static_assert(WORDHUNT_5x5_ORIGIN_X + WORDHUNT_5x5_DELTA * 4 <  128);
+static_assert(WORDHUNT_5x5_ORIGIN_Y - WORDHUNT_5x5_DELTA * 4 >= 0  );
 
-#define WORDBITES_INIT_X             5
-#define WORDBITES_INIT_Y             236
+#define WORDBITES_ORIGIN_X           5
+#define WORDBITES_ORIGIN_Y           236
 #define WORDBITES_DELTA              17
-static_assert(WORDBITES_INIT_X + WORDBITES_DELTA * 7 <  128);
-static_assert(WORDBITES_INIT_Y - WORDBITES_DELTA * 8 >= 0  );
+static_assert(WORDBITES_ORIGIN_X + WORDBITES_DELTA * 7 <  128);
+static_assert(WORDBITES_ORIGIN_Y - WORDBITES_DELTA * 8 >= 0  );
 
 static_assert(BITS_PER_ALPHABET_INDEX == 5); // PACKED_WORD_SIZE calculation assumes 5 bits per alphabet index.
 
 #define ANAGRAMS_GENERIC_6_PRINT_NAME "Anagrams (6)"
-#define ANAGRAMS_PLAY_BUTTON_Y        190
+#define ANAGRAMS_PLAY_BUTTON_Y        189
 #define WORDHUNT_PLAY_BUTTON_Y        202
 #define WORDBITES_PLAY_BUTTON_Y       202
 #define WORDGAME_XMDT(X, Y) /* There's no good way to determine the language of Anagrams perfectly, so we will always assume it's English and have the test region all be zero. */ \
@@ -1226,7 +1226,7 @@ enum SDR1ResponseFlag // See: Source(19) @ Figure(7-9) @ AbsPage(120).
 // "Diplomat_usb.c"
 //
 
-#define USB_MOUSE_CALIBRATIONS_REQUIRED 128
+#define USB_MOUSE_CALIBRATIONS_REQUIRED 255
 
 #if DEBUG // Used to disable some USB functionalities for development purposes, but does not necessairly remove all data and control flow.
 	#define USB_CDC_ENABLE true

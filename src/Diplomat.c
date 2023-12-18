@@ -180,23 +180,11 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 						usart_rx();
 					}
 
-					u8 shortcuts_option_index = 0;
-					switch (wordgame)
-					{
-						case WordGame_anagrams_english_6 :
-						case WordGame_anagrams_russian   :
-						case WordGame_anagrams_french    :
-						case WordGame_anagrams_german    :
-						case WordGame_anagrams_spanish   :
-						case WordGame_anagrams_italian   : shortcuts_option_index = 0; break;
-						case WordGame_anagrams_english_7 : shortcuts_option_index = 1; break;
-						case WordGame_wordhunt_4x4       : shortcuts_option_index = 2; break;
-						case WordGame_wordhunt_o         :
-						case WordGame_wordhunt_x         :
-						case WordGame_wordhunt_5x5       : shortcuts_option_index = 3; break;
-						case WordGame_wordbites          : shortcuts_option_index = 4; break;
-						case WordGame_COUNT              : error(); break; // Impossible.
-					}
+					u8_2 wordgame_dim_slots =
+						{
+							pgm_u8(WORDGAME_INFO[wordgame].dim_slots.x),
+							pgm_u8(WORDGAME_INFO[wordgame].dim_slots.y),
+						};
 
 					u8 play_button_y = 0;
 					switch (wordgame)
@@ -216,14 +204,69 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 						case WordGame_COUNT              : error(); break; // Impossible.
 					}
 
+					u8   shortcuts_option_index = 0;
+					u8   slot_delta             = {0};
+					u8_2 board_origin           = {0};
+					u8_2 submit_coords          = {0};
+					switch (wordgame)
+					{
+						case WordGame_anagrams_english_6:
+						case WordGame_anagrams_russian:
+						case WordGame_anagrams_french:
+						case WordGame_anagrams_german:
+						case WordGame_anagrams_spanish:
+						case WordGame_anagrams_italian:
+						{
+							shortcuts_option_index = 0;
+							slot_delta             = ANAGRAMS_6_DELTA;
+							board_origin           = (u8_2) { ANAGRAMS_6_ORIGIN_X, ANAGRAMS_6_ORIGIN_Y };
+							submit_coords          = (u8_2) { ANAGRAMS_6_SUBMIT_X, ANAGRAMS_6_SUBMIT_Y };
+						} break;
+
+						case WordGame_anagrams_english_7:
+						{
+							shortcuts_option_index = 1;
+							slot_delta             = ANAGRAMS_7_DELTA;
+							board_origin           = (u8_2) { ANAGRAMS_7_ORIGIN_X, ANAGRAMS_7_ORIGIN_Y };
+							submit_coords          = (u8_2) { ANAGRAMS_7_SUBMIT_X, ANAGRAMS_7_SUBMIT_Y };
+						} break;
+
+						case WordGame_wordhunt_4x4:
+						{
+							shortcuts_option_index = 2;
+							slot_delta             = WORDHUNT_4x4_DELTA;
+							board_origin           = (u8_2) { WORDHUNT_4x4_ORIGIN_X, WORDHUNT_4x4_ORIGIN_Y };
+						} break;
+
+						case WordGame_wordhunt_o:
+						case WordGame_wordhunt_x:
+						case WordGame_wordhunt_5x5:
+						{
+							shortcuts_option_index = 3;
+							slot_delta             = WORDHUNT_5x5_DELTA;
+							board_origin           = (u8_2) { WORDHUNT_5x5_ORIGIN_X, WORDHUNT_5x5_ORIGIN_Y };
+						} break;
+
+						case WordGame_wordbites:
+						{
+							shortcuts_option_index = 4;
+							slot_delta             = WORDBITES_DELTA;
+							board_origin           = (u8_2) { WORDBITES_ORIGIN_X, WORDBITES_ORIGIN_Y };
+						} break;
+
+						case WordGame_COUNT:
+						{
+							error(); // Impossible.
+						} break;
+					}
+
 					//
 					// Open Peripheral-Offsite-Optimizer.
 					//
 
 					usb_mouse_command(false, 0, 0);
-					_delay_ms(128.0);
 					usb_mouse_command(false, ASSISTIVE_TOUCH_X, ASSISTIVE_TOUCH_Y);
-					_delay_ms(64.0);
+					_delay_ms(512.0);
 					usb_mouse_command(true, ASSISTIVE_TOUCH_X, ASSISTIVE_TOUCH_Y);
 					_delay_ms(64.0);
 					usb_mouse_command(false, ASSISTIVE_TOUCH_X, ASSISTIVE_TOUCH_Y);
@@ -279,6 +322,7 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 					lcd_reset();
 					lcd_strlit("Processing BMP...");
 					lcd_refresh();
+
 					while (usb_ms_ocr_state == USBMSOCRState_processing);
 
 					//
@@ -290,11 +334,6 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 					b8   began_word_in_wordhunt               = false;
 					b8   currently_holding_piece_in_wordbites = false;
 					b8   done                                 = false;
-					u8_2 wordgame_dim_slots                   =
-						{
-							pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x),
-							pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y),
-						};
 
 					while (true)
 					{
@@ -350,7 +389,9 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 						// Handle Nerd command.
 						//
 
-						if (!done && usart_rx_available() && usb_mouse_command_finished)
+						b8 escape = update_btn(&input_btn_mid_bias, pin_read(PIN_BTN_MID)) == 1;
+
+						if (!escape && !done && usart_rx_available() && usb_mouse_command_finished)
 						{
 							u8 command = usart_rx();
 
@@ -362,74 +403,55 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 							{
 								usart_tx(0xFF); // Let Nerd know we have received the command.
 
+								#define WAIT(MS) \
+									do \
+									{ \
+										for (u16 i = 0; i < (MS); i += 1) \
+										{ \
+											escape = update_btn(&input_btn_mid_bias, pin_read(PIN_BTN_MID)) == 1; \
+											if (escape) \
+											{ \
+												goto BREAK_NERD_COMMAND; \
+											} \
+											else \
+											{ \
+												_delay_ms(1.0); \
+											} \
+										} \
+									} \
+									while (false)
 								switch (wordgame) // Execute command.
 								{
+									case WordGame_anagrams_english_6:
+									case WordGame_anagrams_russian:
+									case WordGame_anagrams_french:
+									case WordGame_anagrams_german:
+									case WordGame_anagrams_spanish:
+									case WordGame_anagrams_italian:
+									case WordGame_anagrams_english_7:
 									{
-										u8_2 init_pos;
-										u8   delta;
-										u8_2 submit_pos;
-
-										case WordGame_anagrams_english_6:
-										case WordGame_anagrams_russian:
-										case WordGame_anagrams_french:
-										case WordGame_anagrams_german:
-										case WordGame_anagrams_spanish:
-										case WordGame_anagrams_italian:
-										{
-											init_pos   = (u8_2) { ANAGRAMS_6_INIT_X, ANAGRAMS_6_INIT_Y };
-											delta      = ANAGRAMS_6_DELTA;
-											submit_pos = (u8_2) { ANAGRAMS_6_SUBMIT_X, ANAGRAMS_6_SUBMIT_Y };
-										} goto ANAGRAMS;
-
-										case WordGame_anagrams_english_7:
-										{
-											init_pos   = (u8_2) { ANAGRAMS_7_INIT_X, ANAGRAMS_7_INIT_Y };
-											delta      = ANAGRAMS_7_DELTA;
-											submit_pos = (u8_2) { ANAGRAMS_7_SUBMIT_X, ANAGRAMS_7_SUBMIT_Y };
-										} goto ANAGRAMS;
-
-										ANAGRAMS:;
-
-										usb_mouse_command(false, init_pos.x + delta * NERD_COMMAND_X(command), init_pos.y);
-										_delay_ms(48.0);
-										usb_mouse_command(true , init_pos.x + delta * NERD_COMMAND_X(command), init_pos.y);
-										_delay_ms(48.0);
+										usb_mouse_command(false, board_origin.x + slot_delta * NERD_COMMAND_X(command), board_origin.y);
+										usb_mouse_command(true , board_origin.x + slot_delta * NERD_COMMAND_X(command), board_origin.y);
+										WAIT(32);
 
 										if (command & NERD_COMMAND_SUBMIT_BIT)
 										{
-											usb_mouse_command(false, submit_pos.x, submit_pos.y);
-											_delay_ms(48.0);
-											usb_mouse_command(true , submit_pos.x, submit_pos.y);
-											_delay_ms(48.0);
-											usb_mouse_command(false, submit_pos.x, submit_pos.y);
-											_delay_ms(48.0);
+											usb_mouse_command(false, submit_coords.x, submit_coords.y);
+											usb_mouse_command(true , submit_coords.x, submit_coords.y);
+											WAIT(32);
+											usb_mouse_command(false, submit_coords.x, submit_coords.y);
 										}
 									} break;
 
+									case WordGame_wordhunt_4x4:
+									case WordGame_wordhunt_o:
+									case WordGame_wordhunt_x:
+									case WordGame_wordhunt_5x5:
 									{
-										u8_2 init_pos;
-										u8   delta;
-
-										case WordGame_wordhunt_4x4:
-										{
-											init_pos   = (u8_2) { WORDHUNT_4x4_INIT_X, WORDHUNT_4x4_INIT_Y };
-											delta      = WORDHUNT_4x4_DELTA;
-										} goto WORDHUNT;
-
-										case WordGame_wordhunt_o:
-										case WordGame_wordhunt_x:
-										case WordGame_wordhunt_5x5:
-										{
-											init_pos   = (u8_2) { WORDHUNT_5x5_INIT_X, WORDHUNT_5x5_INIT_Y };
-											delta      = WORDHUNT_5x5_DELTA;
-										} goto WORDHUNT;
-
-										WORDHUNT:;
-
 										u8_2 coords =
 											{
-												init_pos.x + delta * NERD_COMMAND_X(command),
-												init_pos.y - delta * NERD_COMMAND_Y(command),
+												board_origin.x + slot_delta * NERD_COMMAND_X(command),
+												board_origin.y - slot_delta * NERD_COMMAND_Y(command),
 											};
 
 										if (!began_word_in_wordhunt)
@@ -443,7 +465,7 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 										if (command & NERD_COMMAND_SUBMIT_BIT)
 										{
 											began_word_in_wordhunt = false;
-											_delay_ms(48.0);
+											WAIT(48);
 											usb_mouse_command(false, coords.x, coords.y);
 										}
 									} break;
@@ -452,23 +474,23 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 									{
 										u8_2 coords =
 											{
-												WORDBITES_INIT_X + WORDBITES_DELTA * NERD_COMMAND_X(command),
-												WORDBITES_INIT_Y - WORDBITES_DELTA * NERD_COMMAND_Y(command),
+												board_origin.x + slot_delta * NERD_COMMAND_X(command),
+												board_origin.y - slot_delta * NERD_COMMAND_Y(command),
 											};
 
 										if (currently_holding_piece_in_wordbites)
 										{
 											usb_mouse_command(true, coords.x, coords.y);
-											_delay_ms(300.0);
+											WAIT(300);
 											usb_mouse_command(false, coords.x, coords.y);
-											_delay_ms(64.0);
+											WAIT(64);
 										}
 										else
 										{
 											usb_mouse_command(false, coords.x, coords.y);
-											_delay_ms(128.0);
+											WAIT(128);
 											usb_mouse_command(true, coords.x, coords.y);
-											_delay_ms(64.0);
+											WAIT(64);
 										}
 
 										currently_holding_piece_in_wordbites = !currently_holding_piece_in_wordbites;
@@ -479,14 +501,16 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 										error(); // Impossible.
 									} break;
 								}
+								BREAK_NERD_COMMAND:;
+								#undef WAIT
 							}
 						}
 
 						//
-						// Stop early by the user if needed.
+						// Stop by the user if needed.
 						//
 
-						if (update_btn(&input_btn_mid_bias, pin_read(PIN_BTN_MID)) == 1)
+						if (escape)
 						{
 							if (!done)
 							{
@@ -687,6 +711,7 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 						// Get to the game.
 						//
 
+						WAIT(1000);
 						CLICK(121, 164, 1000);         // Send the game.
 						CLICK(64, 120, 1250);          // Open the sent game.
 						CLICK(64, play_button_y, 750); // Press the play button of the game.

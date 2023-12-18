@@ -143,7 +143,7 @@ ISR(USB_GEN_vect) // [USB Device Interrupt Routine].
 				#endif
 				if (_usb_mouse_calibrations < USB_MOUSE_CALIBRATIONS_REQUIRED) // Calibrate the mouse to a known origin.
 				{
-					if (_usb_mouse_calibrations < USB_MOUSE_CALIBRATIONS_REQUIRED * 3 / 4)
+					if (_usb_mouse_calibrations < USB_MOUSE_CALIBRATIONS_REQUIRED / 2)
 					{
 						delta_x = -128;
 						delta_y = -128;
