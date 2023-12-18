@@ -811,45 +811,39 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 									(
 										diplomat_packet.wordgame,
 										_usb_ms_ocr_slot_topdown_board_coords.x,
-										board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y
+										_usb_ms_ocr_slot_topdown_board_coords.y
 									);
 
 								if (should_process && diplomat_packet.wordgame == WordGame_wordbites && _usb_ms_ocr_slot_topdown_board_coords.y)
 								{
-									u8_2 coords =
-										{
-											_usb_ms_ocr_slot_topdown_board_coords.x,
-											board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y
-										};
-
 									should_process &= // Up-left slot must be free.
 										implies
 										(
-											coords.x,
-											!diplomat_packet.board[coords.y + 1][coords.x - 1]
+											_usb_ms_ocr_slot_topdown_board_coords.x,
+											!diplomat_packet.board[_usb_ms_ocr_slot_topdown_board_coords.y - 1][_usb_ms_ocr_slot_topdown_board_coords.x - 1]
 										);
 
 									should_process &= // Up-right slot must be free.
 										implies
 										(
-											coords.x < board_dim_slots.x - 1,
-											!diplomat_packet.board[coords.y + 1][coords.x + 1]
+											_usb_ms_ocr_slot_topdown_board_coords.x < board_dim_slots.x - 1,
+											!diplomat_packet.board[_usb_ms_ocr_slot_topdown_board_coords.y - 1][_usb_ms_ocr_slot_topdown_board_coords.x + 1]
 										);
 
 									should_process &= // Must not be below a vertical duo piece.
 										implies
 										(
-											coords.y + 2 < board_dim_slots.y,
+											_usb_ms_ocr_slot_topdown_board_coords.y >= 2,
 											!(
-												diplomat_packet.board[coords.y + 2][coords.x] &&
-												diplomat_packet.board[coords.y + 1][coords.x]
+												diplomat_packet.board[_usb_ms_ocr_slot_topdown_board_coords.y - 2][_usb_ms_ocr_slot_topdown_board_coords.x] &&
+												diplomat_packet.board[_usb_ms_ocr_slot_topdown_board_coords.y - 1][_usb_ms_ocr_slot_topdown_board_coords.x]
 											)
 										);
 
 									should_process &= // We must have already encountered an activated pixel at some point.
 										implies
 										(
-											!(_usb_ms_ocr_packed_activated_slots & (1 << coords.x)),
+											!(_usb_ms_ocr_packed_activated_slots & (1 << _usb_ms_ocr_slot_topdown_board_coords.x)),
 											_usb_ms_ocr_slot_topdown_pixel_coords.y < MASK_DIM / 4
 										);
 									static_assert(MASK_DIM == 64);
@@ -1072,7 +1066,7 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 											}
 										}
 
-										diplomat_packet.board[board_dim_slots.y - 1 - _usb_ms_ocr_slot_topdown_board_coords.y][slot_coord_x] = best_letter;
+										diplomat_packet.board[_usb_ms_ocr_slot_topdown_board_coords.y][slot_coord_x] = best_letter;
 									}
 
 									_usb_ms_ocr_packed_activated_slots = 0;

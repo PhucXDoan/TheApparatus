@@ -360,7 +360,7 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 						{
 							if ((scroll_y + row) % (wordgame_dim_slots.y + 1) < wordgame_dim_slots.y)
 							{
-								u8 y = wordgame_dim_slots.y - 1 - (scroll_y + row) % (wordgame_dim_slots.y + 1);
+								u8 y = (scroll_y + row) % (wordgame_dim_slots.y + 1);
 								for (u8 x = 0; x < wordgame_dim_slots.x; x += 1)
 								{
 									if (is_slot_excluded(diplomat_packet.wordgame, x, y))
@@ -451,7 +451,7 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 										u8_2 coords =
 											{
 												board_origin.x + slot_delta * NERD_COMMAND_X(command),
-												board_origin.y - slot_delta * NERD_COMMAND_Y(command),
+												board_origin.y + slot_delta * NERD_COMMAND_Y(command),
 											};
 
 										if (!began_word_in_wordhunt)
@@ -475,7 +475,7 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 										u8_2 coords =
 											{
 												board_origin.x + slot_delta * NERD_COMMAND_X(command),
-												board_origin.y - slot_delta * NERD_COMMAND_Y(command),
+												board_origin.y + slot_delta * NERD_COMMAND_Y(command),
 											};
 
 										if (currently_holding_piece_in_wordbites)

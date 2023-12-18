@@ -1,6 +1,5 @@
-// TODO Nerd busy LED.
 // TODO Time's up signal from Nerd.
-// TODO Flip board upside down.
+// TODO Nerd busy LED.
 #define false            0
 #define true             1
 #define stringify_(X)    #X
@@ -231,22 +230,22 @@ static_assert(ANAGRAMS_6_ORIGIN_X + ANAGRAMS_6_DELTA * 5 < 128);
 static_assert(ANAGRAMS_7_ORIGIN_X + ANAGRAMS_7_DELTA * 6 < 128);
 
 #define WORDHUNT_4x4_ORIGIN_X           27
-#define WORDHUNT_4x4_ORIGIN_Y           215
+#define WORDHUNT_4x4_ORIGIN_Y           140
 #define WORDHUNT_4x4_DELTA              25
-static_assert(WORDHUNT_4x4_ORIGIN_X + WORDHUNT_4x4_DELTA * 3 <  128);
-static_assert(WORDHUNT_4x4_ORIGIN_Y - WORDHUNT_4x4_DELTA * 3 >= 0  );
+static_assert(WORDHUNT_4x4_ORIGIN_X + WORDHUNT_4x4_DELTA * 3 < 128);
+static_assert(WORDHUNT_4x4_ORIGIN_Y + WORDHUNT_4x4_DELTA * 3 < 256);
 
 #define WORDHUNT_5x5_ORIGIN_X           20
-#define WORDHUNT_5x5_ORIGIN_Y           220
+#define WORDHUNT_5x5_ORIGIN_Y           132
 #define WORDHUNT_5x5_DELTA              22
-static_assert(WORDHUNT_5x5_ORIGIN_X + WORDHUNT_5x5_DELTA * 4 <  128);
-static_assert(WORDHUNT_5x5_ORIGIN_Y - WORDHUNT_5x5_DELTA * 4 >= 0  );
+static_assert(WORDHUNT_5x5_ORIGIN_X + WORDHUNT_5x5_DELTA * 4 < 128);
+static_assert(WORDHUNT_5x5_ORIGIN_Y + WORDHUNT_5x5_DELTA * 4 < 256);
 
 #define WORDBITES_ORIGIN_X           5
-#define WORDBITES_ORIGIN_Y           236
+#define WORDBITES_ORIGIN_Y           100
 #define WORDBITES_DELTA              17
-static_assert(WORDBITES_ORIGIN_X + WORDBITES_DELTA * 7 <  128);
-static_assert(WORDBITES_ORIGIN_Y - WORDBITES_DELTA * 8 >= 0  );
+static_assert(WORDBITES_ORIGIN_X + WORDBITES_DELTA * 7 < 128);
+static_assert(WORDBITES_ORIGIN_Y + WORDBITES_DELTA * 8 < 256);
 
 static_assert(BITS_PER_ALPHABET_INDEX == 5); // PACKED_WORD_SIZE calculation assumes 5 bits per alphabet index.
 
