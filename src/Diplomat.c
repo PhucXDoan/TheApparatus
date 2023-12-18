@@ -583,11 +583,7 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 							"  Screenshot #"
 						);
 						lcd_u64(screenshot_count);
-						lcd_strlit
-						(
-							"...\n"
-							"  Hold to cancel  "
-						);
+						lcd_strlit("...");
 						lcd_refresh();
 
 						//
@@ -765,14 +761,11 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 						"  Datamined "
 					);
 					lcd_u64(screenshot_count);
-					lcd_strlit
-					(
-						"!\n"
-						"  Release to finish"
-					);
+					lcd_char('!');
 					lcd_refresh();
 
-					while (update_btn(&input_btn_mid_bias, pin_read(PIN_BTN_MID)) != -1);
+					while (update_btn(&input_btn_mid_bias, pin_read(PIN_BTN_MID)) != -1); // User releases from initial press to stop the datamining.
+					while (update_btn(&input_btn_mid_bias, pin_read(PIN_BTN_MID)) != -1); // User presses again to leave datamining results.
 				} break;
 
 				case Option_COUNT:

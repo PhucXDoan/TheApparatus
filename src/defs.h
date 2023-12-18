@@ -1,7 +1,7 @@
+// TODO Find better language files.
 // TODO Nerd busy LED.
 // TODO Time's up signal from Nerd.
 // TODO Flip board upside down.
-// TODO Find better language files.
 #define false            0
 #define true             1
 #define stringify_(X)    #X
