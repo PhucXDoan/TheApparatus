@@ -1487,13 +1487,49 @@ main(int argc, char** argv)
 								u16 subword_bitfield = 1 << (parsed_word_length - MIN_WORD_LENGTH);
 
 								//
+								// Search for duplicate.
+								//
+
+								for
+								(
+									i32 doppelganger_word_length = max_word_length;
+									doppelganger_word_length >= parsed_word_length && !skip_appending;
+									doppelganger_word_length -= 1
+								)
+								{
+									struct Dary_u16 doppelganger_wordset = wordsets[ABSOLUTE_MAX_WORD_LENGTH - doppelganger_word_length][parsed_word_buffer[0]];
+									for
+									(
+										u16* doppelganger_word_makeup = doppelganger_wordset.data;
+										doppelganger_word_makeup < doppelganger_wordset.data + doppelganger_wordset.length;
+										doppelganger_word_makeup += doppelganger_word_length
+									)
+									{
+										static_assert(sizeof(parsed_word_buffer[0]) == sizeof(doppelganger_word_makeup[0]));
+										if
+										(
+											memeq
+											(
+												(doppelganger_word_makeup + 1), // Skipping subword bitfield.
+												(parsed_word_buffer       + 1), // Skipping word's initial letter.
+												(parsed_word_length       - 1) * sizeof(parsed_word_buffer[0])
+											) && (doppelganger_word_makeup[0] & (1 << (parsed_word_length - MIN_WORD_LENGTH)))
+										)
+										{
+											skip_appending = true;
+											break;
+										}
+									}
+								}
+
+								//
 								// Search for parenting word.
 								//
 
 								for
 								(
 									i32 parenting_word_length = max_word_length;
-									parenting_word_length > parsed_word_length;
+									parenting_word_length > parsed_word_length && !skip_appending;
 									parenting_word_length -= 1
 								)
 								{
@@ -1516,38 +1552,9 @@ main(int argc, char** argv)
 											)
 										)
 										{
-											skip_appending            = true;                                        // The word already has a parent.
+											skip_appending            = true;
 											parenting_word_makeup[0] |= 1 << (parsed_word_length - MIN_WORD_LENGTH); // Set bit in the parent's subword bitfield.
-										}
-									}
-								}
-
-								//
-								// Search for duplicate.
-								//
-
-								if (!skip_appending)
-								{
-									struct Dary_u16 doppelganger_wordset = wordsets[ABSOLUTE_MAX_WORD_LENGTH - parsed_word_length][parsed_word_buffer[0]];
-									for
-									(
-										u16* doppelganger_word_makeup = doppelganger_wordset.data;
-										doppelganger_word_makeup < doppelganger_wordset.data + doppelganger_wordset.length;
-										doppelganger_word_makeup += parsed_word_length
-									)
-									{
-										static_assert(sizeof(doppelganger_wordset.data[0]) == sizeof(parsed_word_buffer[0]));
-										if
-										(
-											memeq
-											(
-												(doppelganger_word_makeup + 1), // Skipping subword field.
-												(parsed_word_buffer       + 1), // Skipping word's initial letter.
-												(parsed_word_length       - 1) * sizeof(parsed_word_buffer[0])
-											)
-										)
-										{
-											skip_appending = true; // Avoid having duplicated words. This may occur in German where lowercase/uppercase have meaning.
+											break;
 										}
 									}
 								}

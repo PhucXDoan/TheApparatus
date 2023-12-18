@@ -1,4 +1,3 @@
-// TODO Find better language files.
 // TODO Nerd busy LED.
 // TODO Time's up signal from Nerd.
 // TODO Flip board upside down.
@@ -287,7 +286,7 @@ static_assert(BITS_PER_ALPHABET_INDEX == 5); // PACKED_WORD_SIZE calculation ass
 	X(l           , 'L'                , 'L'   , 'l'                   , 0x0141, 0x0142                                                                ) \
 	X(m           , 'M'                , 'M'   , 'm'   , 0x041C, 0x043C                                                                                ) \
 	X(n           , 'N'                , 'N'   , 'n'                                                                                                   ) \
-	X(o           , 'O'                , 'O'   , 'o'   , 0x041E, 0x043E, 0x00D5, 0x00F5, 0x00D2, 0x00F2, 0x00D3, 0x00F3, 0x014C, 0x014D                ) \
+	X(o           , 'O'                , 'O'   , 'o'   , 0x041E, 0x043E, 0x00D5, 0x00F5, 0x00D2, 0x00F2, 0x00D3, 0x00F3, 0x014C, 0x014D, 0x00F4        ) \
 	X(p           , 'P'                , 'P'   , 'p'   , 0x0420, 0x0440                                                                                ) \
 	X(q           , 'Q'                , 'Q'   , 'q'                                                                                                   ) \
 	X(r           , 'R'                , 'R'   , 'r'                                                                                                   ) \
@@ -342,6 +341,8 @@ static_assert(BITS_PER_ALPHABET_INDEX == 5); // PACKED_WORD_SIZE calculation ass
 			0x00DC, 0x00FC,                 // u_umlaut.
 			0x0053, 0x00DF,                 // eszett.
 			0x0152, 0x0153,                 // oe.
+			0x00B0,                         // Degree sign.
+			'-', '.', ' ', '\'', '(',
 		};
 #endif
 
