@@ -1,10 +1,10 @@
-#define F_CPU         16'000'000
-#define PROGRAM_NERD  true
-#define SPI_PRESCALER SPIPrescaler_2
-#define USART_N       3
-#define PIN_NERD_BUSY 33
-#define PIN_SD_SS     49
-#define PIN_ERROR     32
+#define F_CPU             16'000'000
+#define PROGRAM_NERD      true
+#define SPI_PRESCALER     SPIPrescaler_2
+#define USART_N           3
+#define PIN_NERD_WAITING 33
+#define PIN_SD_SS        49
+#define PIN_ERROR        32
 #define PIN_XMDT(X) /* See: Source(18). */ \
 	X(0     , E, 0) X(1      , E, 1) X(2       , E, 4) X(3       , E, 5) X( 4, G, 5) X(5 , E, 3) \
 	X(6     , H, 3) X(7      , H, 4) X(8       , H, 5) X(9       , H, 6) X(10, B, 4) X(11, B, 5) \
@@ -241,7 +241,9 @@ push_command(u8 command)
 {
 	if ((u8) (command_writer + 1) == command_reader) // Any open space in command buffer?
 	{
+		pin_high(PIN_NERD_WAITING);
 		usart_rx();                               // Wait for the ready signal from the Diplomat.
+		pin_low(PIN_NERD_WAITING);
 		usart_tx(command_buffer[command_reader]); // Send out command.
 		command_reader += 1;                      // A space opened up!
 	}
@@ -424,7 +426,7 @@ main(void)
 		debug_cstr("\n\n--------------------------------\n\n"); // If terminal is opened early, lots of junk could appear due to noise; this helps separate.
 	#endif
 
-	pin_output(PIN_ERROR);
+	pin_output(PIN_NERD_WAITING);
 
 	usart_init();
 	spi_init();
@@ -611,11 +613,16 @@ main(void)
 	// Wait for packet from Diplomat.
 	//
 
+	usart_rx();                         // Dummy byte sent by Diplomat indicating that the game has begun.
+	u32 timesup_timestamp = timer_ms(); // Later added with duration of wordgame.
+
+	pin_high(PIN_NERD_WAITING);
 	struct DiplomatPacket diplomat_packet = {0};
 	for (u8 i = 0; i < sizeof(diplomat_packet); i += 1)
 	{
 		((u8*) &diplomat_packet)[i] = usart_rx();
 	}
+	pin_low(PIN_NERD_WAITING);
 
 	//
 	// Parse packet.
@@ -659,6 +666,23 @@ main(void)
 				board_alphabet_indices[y][x] = ALPHABET_INDEX_TAKEN; // Make slot unusable.
 			}
 		}
+	}
+
+	switch (diplomat_packet.wordgame)
+	{
+		case WordGame_anagrams_english_6 :
+		case WordGame_anagrams_english_7 :
+		case WordGame_anagrams_russian   :
+		case WordGame_anagrams_french    :
+		case WordGame_anagrams_german    :
+		case WordGame_anagrams_spanish   :
+		case WordGame_anagrams_italian   : timesup_timestamp += 60'000; break;
+		case WordGame_wordhunt_4x4       :
+		case WordGame_wordhunt_o         :
+		case WordGame_wordhunt_x         :
+		case WordGame_wordhunt_5x5       :
+		case WordGame_wordbites          : timesup_timestamp += 80'000; break;
+		case WordGame_COUNT              : error(); // Impossible.
 	}
 
 //	//
@@ -835,6 +859,8 @@ main(void)
 						{
 							if (subword_bits & (1 << 15))
 							{
+								b8 reproducible = true;
+
 								switch (diplomat_packet.wordgame)
 								{
 									// An optimization can be made where if a subword can be reproduced,
@@ -849,7 +875,6 @@ main(void)
 									case WordGame_anagrams_spanish:
 									case WordGame_anagrams_italian:
 									{
-										b8 reproducible                       = true;
 										u8 commands[ABSOLUTE_MAX_WORD_LENGTH] = {0};
 
 										//
@@ -1020,6 +1045,7 @@ main(void)
 													else
 													{
 														board_alphabet_indices[start_y][start_x] &= ~ALPHABET_INDEX_TAKEN;
+														reproducible                              = false;
 													}
 												}
 											}
@@ -1029,6 +1055,8 @@ main(void)
 
 									case WordGame_wordbites:
 									{
+										reproducible = false;
+
 									//	struct WordBitesPiece* parallels       = wordbites_horts;
 									//	u8                     parallels_count = wordbites_horts_count;
 									//	struct WordBitesPiece* perps           = wordbites_verts;
@@ -1331,10 +1359,23 @@ main(void)
 										error(); // Impossible.
 									} break;
 								}
+
+								//
+								// Check if we have ran out of time.
+								//
+
+								if (reproducible && timer_ms() >= timesup_timestamp)
+								{
+									goto TIMES_UP;
+								}
 							}
 
 							subword_bits <<= 1;
 						}
+
+						//
+						// Yield command.
+						//
 
 						if (usart_rx_available() && command_reader != command_writer)
 						{
@@ -1356,20 +1397,55 @@ main(void)
 			}
 		}
 	}
-
-//	debug_wordbites_board();
-
-	push_command(NERD_COMMAND_COMPLETE);
+	TIMES_UP:;
 
 	//
 	// Send out remaining commands.
 	//
 
+	pin_high(PIN_NERD_WAITING);
+
+	b8 times_up = false;
 	while (command_reader != command_writer)
 	{
-		usart_rx();
-		usart_tx(command_buffer[command_reader]);
-		command_reader += 1;
+		if (timer_ms() >= timesup_timestamp)
+		{
+			times_up       = true;
+			command_reader = command_writer; // Flush buffer, since we're out of time!
+		}
+		else
+		{
+			usart_rx();
+			usart_tx(command_buffer[command_reader]);
+			command_reader += 1;
+		}
+	}
+
+	usart_rx();
+	usart_tx(NERD_COMMAND_COMPLETE);
+
+	pin_low(PIN_NERD_WAITING);
+
+	//
+	// Flash to indicate whether or not we ran out of time.
+	//
+
+	for (u8 i = 0; i < 8; i += 1)
+	{
+		if (times_up)
+		{
+			pin_high(PIN_NERD_WAITING);
+			_delay_ms(100.0);
+			pin_low(PIN_NERD_WAITING);
+			_delay_ms(1000.0);
+		}
+		else
+		{
+			pin_high(PIN_NERD_WAITING);
+			_delay_ms(1000.0);
+			pin_low(PIN_NERD_WAITING);
+			_delay_ms(1000.0);
+		}
 	}
 
 	for(;;);

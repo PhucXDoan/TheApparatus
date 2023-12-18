@@ -1,5 +1,3 @@
-// TODO Time's up signal from Nerd.
-// TODO Nerd busy LED.
 #define false            0
 #define true             1
 #define stringify_(X)    #X

@@ -290,6 +290,7 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 					usb_mouse_command(false, 64, play_button_y);
 					_delay_ms(1000.0);
 					usb_mouse_command(true, 64, play_button_y);
+					usart_tx(0xFF); // Dummy byte to indicate we began the game.
 					_delay_ms(64.0);
 					usb_mouse_command(false, 64, play_button_y);
 					_delay_ms(64.0);
