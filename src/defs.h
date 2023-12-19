@@ -2207,12 +2207,6 @@ struct WordBitesPiece
 // "Diplomat.c".
 //
 
-struct PolledInput
-{
-	b8 clicked;
-	i8 rotation;
-};
-
 #if PROGRAM_DIPLOMAT
 	static u8 input_btn_left_bias  = 0;
 	static u8 input_btn_mid_bias   = 0;

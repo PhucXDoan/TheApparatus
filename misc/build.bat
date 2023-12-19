@@ -182,9 +182,9 @@ pushd W:\build\
 	REM
 
 	:OPEN_PUTTY
-REM	if not "!PUTTY_ARGS!" == "" (
-REM		start putty.exe -load "Default Settings" !PUTTY_ARGS!
-REM	)
+	if not "!PUTTY_ARGS!" == "" (
+		start putty.exe -load "Default Settings" !PUTTY_ARGS!
+	)
 
 	del *.o > nul 2>&1
 	:ABORT

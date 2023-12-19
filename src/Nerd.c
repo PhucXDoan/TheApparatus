@@ -126,64 +126,60 @@
 
 		for (u8 i = 0; i < countof(wordbites_pieces); i += 1)
 		{
-			i8_2 delta =
+			u8_2 delta =
 				{
-					wordbites_pieces[i].orientation == WordBitesPieceOrientation_hort ?  1 : 0,
-					wordbites_pieces[i].orientation == WordBitesPieceOrientation_vert ? -1 : 0,
+					wordbites_pieces[i].orientation == WordBitesPieceOrientation_hort,
+					wordbites_pieces[i].orientation == WordBitesPieceOrientation_vert,
 				};
 
 			if
 			(
-				wordbites_pieces[i].position.x + delta.x < board_dim_slots.x &&
-				0 <= wordbites_pieces[i].position.y + delta.y && wordbites_pieces[i].position.y < board_dim_slots.y
+				wordbites_pieces[i].position.x + delta.x >= board_dim_slots.x &&
+				wordbites_pieces[i].position.y + delta.y >= board_dim_slots.y
 			)
 			{
-				if
-				(
-					buffer[wordbites_pieces[i].position.y          ][wordbites_pieces[i].position.x          ][1] != '*' ||
-					buffer[wordbites_pieces[i].position.y + delta.y][wordbites_pieces[i].position.x + delta.x][1] != '*'
-				)
-				{
-					error(); // Overlapping piece!
-				}
-				else
-				{
-					switch (wordbites_pieces[i].orientation)
-					{
-						case WordBitesPieceOrientation_none: buffer[wordbites_pieces[i].position.y][wordbites_pieces[i].position.x][0] = '['; break;
-						case WordBitesPieceOrientation_hort: buffer[wordbites_pieces[i].position.y][wordbites_pieces[i].position.x][0] = '('; break;
-						case WordBitesPieceOrientation_vert: buffer[wordbites_pieces[i].position.y][wordbites_pieces[i].position.x][0] = '/'; break;
-					}
-
-					buffer[wordbites_pieces[i].position.y][wordbites_pieces[i].position.x][1] = 'A' + wordbites_pieces[i].alphabet_indices[0];
-
-					switch (wordbites_pieces[i].orientation)
-					{
-						case WordBitesPieceOrientation_none: buffer[wordbites_pieces[i].position.y][wordbites_pieces[i].position.x][2] = ']';  break;
-						case WordBitesPieceOrientation_hort: buffer[wordbites_pieces[i].position.y][wordbites_pieces[i].position.x][2] = ' ';  break;
-						case WordBitesPieceOrientation_vert: buffer[wordbites_pieces[i].position.y][wordbites_pieces[i].position.x][2] = '\\'; break;
-					}
-
-					switch (wordbites_pieces[i].orientation)
-					{
-						case WordBitesPieceOrientation_none: buffer[wordbites_pieces[i].position.y + delta.y][wordbites_pieces[i].position.x + delta.x][0] = '[';  break;
-						case WordBitesPieceOrientation_hort: buffer[wordbites_pieces[i].position.y + delta.y][wordbites_pieces[i].position.x + delta.x][0] = ' ';  break;
-						case WordBitesPieceOrientation_vert: buffer[wordbites_pieces[i].position.y + delta.y][wordbites_pieces[i].position.x + delta.x][0] = '\\'; break;
-					}
-
-					buffer[wordbites_pieces[i].position.y + delta.y][wordbites_pieces[i].position.x + delta.x][1] = 'A' + wordbites_pieces[i].alphabet_indices[1];
-
-					switch (wordbites_pieces[i].orientation)
-					{
-						case WordBitesPieceOrientation_none: buffer[wordbites_pieces[i].position.y + delta.y][wordbites_pieces[i].position.x + delta.x][2] = ']'; break;
-						case WordBitesPieceOrientation_hort: buffer[wordbites_pieces[i].position.y + delta.y][wordbites_pieces[i].position.x + delta.x][2] = ')'; break;
-						case WordBitesPieceOrientation_vert: buffer[wordbites_pieces[i].position.y + delta.y][wordbites_pieces[i].position.x + delta.x][2] = '/'; break;
-					}
-				}
-			}
-			else
-			{
 				error(); // Out of bounds piece!
+			}
+
+			if
+			(
+				buffer[wordbites_pieces[i].position.y          ][wordbites_pieces[i].position.x          ][1] != '*' ||
+				buffer[wordbites_pieces[i].position.y + delta.y][wordbites_pieces[i].position.x + delta.x][1] != '*'
+			)
+			{
+				error(); // Overlapping piece!
+			}
+
+			switch (wordbites_pieces[i].orientation)
+			{
+				case WordBitesPieceOrientation_none: buffer[wordbites_pieces[i].position.y][wordbites_pieces[i].position.x][0] = '['; break;
+				case WordBitesPieceOrientation_hort: buffer[wordbites_pieces[i].position.y][wordbites_pieces[i].position.x][0] = '('; break;
+				case WordBitesPieceOrientation_vert: buffer[wordbites_pieces[i].position.y][wordbites_pieces[i].position.x][0] = '/'; break;
+			}
+
+			buffer[wordbites_pieces[i].position.y][wordbites_pieces[i].position.x][1] = 'A' + wordbites_pieces[i].alphabet_indices[0];
+
+			switch (wordbites_pieces[i].orientation)
+			{
+				case WordBitesPieceOrientation_none: buffer[wordbites_pieces[i].position.y][wordbites_pieces[i].position.x][2] = ']';  break;
+				case WordBitesPieceOrientation_hort: buffer[wordbites_pieces[i].position.y][wordbites_pieces[i].position.x][2] = ' ';  break;
+				case WordBitesPieceOrientation_vert: buffer[wordbites_pieces[i].position.y][wordbites_pieces[i].position.x][2] = '\\'; break;
+			}
+
+			switch (wordbites_pieces[i].orientation)
+			{
+				case WordBitesPieceOrientation_none: buffer[wordbites_pieces[i].position.y + delta.y][wordbites_pieces[i].position.x + delta.x][0] = '[';  break;
+				case WordBitesPieceOrientation_hort: buffer[wordbites_pieces[i].position.y + delta.y][wordbites_pieces[i].position.x + delta.x][0] = ' ';  break;
+				case WordBitesPieceOrientation_vert: buffer[wordbites_pieces[i].position.y + delta.y][wordbites_pieces[i].position.x + delta.x][0] = '\\'; break;
+			}
+
+			buffer[wordbites_pieces[i].position.y + delta.y][wordbites_pieces[i].position.x + delta.x][1] = 'A' + wordbites_pieces[i].alphabet_indices[1];
+
+			switch (wordbites_pieces[i].orientation)
+			{
+				case WordBitesPieceOrientation_none: buffer[wordbites_pieces[i].position.y + delta.y][wordbites_pieces[i].position.x + delta.x][2] = ']'; break;
+				case WordBitesPieceOrientation_hort: buffer[wordbites_pieces[i].position.y + delta.y][wordbites_pieces[i].position.x + delta.x][2] = ')'; break;
+				case WordBitesPieceOrientation_vert: buffer[wordbites_pieces[i].position.y + delta.y][wordbites_pieces[i].position.x + delta.x][2] = '/'; break;
 			}
 		}
 
@@ -192,27 +188,30 @@
 			debug_char('.');
 		}
 		debug_char('\n');
-		for
-		(
-			u8 y = board_dim_slots.y;
-			y--;
-		)
+		for (u8 y = 0; y < board_dim_slots.y; y += 1)
 		{
 			debug_char(':');
 			for (u8 x = 0; x < board_dim_slots.x; x += 1)
 			{
 				debug_chars(&buffer[y][x][0], 3);
 
-				//if
-				//(
-				//	!(
-				//		(board_alphabet_indices[y][x] == ALPHABET_INDEX_TAKEN && buffer[y][x][1] == '*') ||
-				//		(buffer[y][x][1] == 'A' + board_alphabet_indices[y][x])
-				//	)
-				//)
-				//{
-				//	error(); // Discrepency!
-				//}
+				if
+				(
+					!(
+						(board_alphabet_indices[y][x] == ALPHABET_INDEX_TAKEN && buffer[y][x][1] == '*') ||
+						(buffer[y][x][1] == 'A' + board_alphabet_indices[y][x])
+					)
+				)
+				{
+					debug_char('\n');
+					debug_8H(board_alphabet_indices[y][x]);
+					debug_char(' ');
+					debug_char(buffer[y][x][1]);
+					debug_char('\n');
+					debug_8H(board_alphabet_indices[y][x]);
+					debug_char('\n');
+					error(); // Discrepency!
+				}
 			}
 			debug_cstr(":\n");
 		}
@@ -252,167 +251,118 @@ push_command(u8 command)
 	command_writer                 += 1;
 }
 
-// static void
-// transpose_wordbites(void)
-// {
-// 	for (u8 v = 0; v < board_dim_slots.y; v += 1)
-// 	{
-// 		for (u8 u = 0; u < board_dim_slots.y - v; u += 1)
-// 		{
-// 			u8 tu = board_dim_slots.y - 1 - u;
-// 			u8 tv = board_dim_slots.x - 1 - v;
-// 
-// 			u8 temp = board_alphabet_indices[v][u];
-// 			board_alphabet_indices[v ][u ] = board_alphabet_indices[tv][tu];
-// 			board_alphabet_indices[tv][tu] = temp;
-// 		}
-// 	}
-// 
-// 	for (u8 i = 0; i < countof(wordbites_pieces); i += 1)
-// 	{
-// 		wordbites_pieces[i].position    = (u8_2) { wordbites_pieces[i].position.y, wordbites_pieces[i].position.x };
-// 		wordbites_pieces[i].orientation =
-// 			wordbites_pieces[i].orientation == WordBitesPieceOrientation_hort ? WordBitesPieceOrientation_vert :
-// 			wordbites_pieces[i].orientation == WordBitesPieceOrientation_vert ? WordBitesPieceOrientation_hort : WordBitesPieceOrientation_none;
-// 	}
-// 
-// 	board_dim_slots = (u8_2) { board_dim_slots.y, board_dim_slots.x };
-// }
+static void
+transpose_wordbites(void)
+{
+	for (u8 v = 0; v < u8_max(board_dim_slots.x, board_dim_slots.y); v += 1)
+	{
+		for (u8 u = 0; u < v; u += 1)
+		{
+			u8 temp = board_alphabet_indices[v][u];
+			board_alphabet_indices[v][u] = board_alphabet_indices[u][v];
+			board_alphabet_indices[u][v] = temp;
+		}
+	}
 
-//	static struct WordBitesPiece* // Returns the piece blocking the destination (in the case the destination is out of bounds, moving_piece is returned).
-//	attempt_move_wordbites_piece(struct WordBitesPiece* moving_piece, u8 dest_x, u8 dest_y)
-//	{
-//		struct WordBitesPiece* blocking_piece = 0;
-//	
-//		//
-//		// Get delta for the second letter of the piece.
-//		//
-//	
-//		i8 second_dx = 0;
-//		i8 second_dy = 0;
-//	
-//		if (wordbites_horts <= moving_piece && moving_piece < wordbites_horts + wordbites_horts_count)
-//		{
-//			second_dx = 1;
-//		}
-//		else if (wordbites_verts <= moving_piece && moving_piece < wordbites_verts + wordbites_verts_count)
-//		{
-//			second_dy = -1;
-//		}
-//		else if (!(wordbites_unos <= moving_piece && moving_piece < wordbites_unos + countof(wordbites_unos)))
-//		{
-//			error(); // Unknown piece...
-//		}
-//	
-//		//
-//		// Attempt to move the piece.
-//		//
-//	
-//		if (dest_x + second_dx < board_dim_slots.x && 0 <= dest_y + second_dy && dest_y < board_dim_slots.y)
-//		{
-//			//
-//			// Lift piece we're moving from the board.
-//			//
-//	
-//			board_alphabet_indices[moving_piece->position.y            ][moving_piece->position.x            ] = ALPHABET_INDEX_TAKEN;
-//			board_alphabet_indices[moving_piece->position.y + second_dy][moving_piece->position.x + second_dx] = ALPHABET_INDEX_TAKEN;
-//	
-//			//
-//			// See if the destination is occupied.
-//			//
-//	
-//			if
-//			(
-//				board_alphabet_indices[dest_y            ][dest_x            ] != ALPHABET_INDEX_TAKEN ||
-//				board_alphabet_indices[dest_y + second_dy][dest_x + second_dx] != ALPHABET_INDEX_TAKEN
-//			)
-//			{
-//				//
-//				// Find uno piece.
-//				//
-//	
-//				for (u8 i = 0; i < countof(wordbites_unos); i += 1)
-//				{
-//					if
-//					(
-//						(wordbites_unos[i].position.x == dest_x             && wordbites_unos[i].position.y == dest_y            ) ||
-//						(wordbites_unos[i].position.x == dest_x + second_dx && wordbites_unos[i].position.y == dest_y + second_dy)
-//					)
-//					{
-//						blocking_piece = &wordbites_unos[i];
-//						break;
-//					}
-//				}
-//	
-//				if (!blocking_piece)
-//				{
-//					//
-//					// Find horizontal duo piece.
-//					//
-//	
-//					for (u8 i = 0; i < wordbites_horts_count; i += 1)
-//					{
-//						if
-//						(
-//							(wordbites_horts[i].position.x     == dest_x             && wordbites_horts[i].position.y == dest_y            ) ||
-//							(wordbites_horts[i].position.x + 1 == dest_x             && wordbites_horts[i].position.y == dest_y            ) ||
-//							(wordbites_horts[i].position.x     == dest_x + second_dx && wordbites_horts[i].position.y == dest_y + second_dy) ||
-//							(wordbites_horts[i].position.x + 1 == dest_x + second_dx && wordbites_horts[i].position.y == dest_y + second_dy)
-//						)
-//						{
-//							blocking_piece = &wordbites_horts[i];
-//							break;
-//						}
-//					}
-//	
-//					//
-//					// Find vertical duo piece.
-//					//
-//	
-//					if (!blocking_piece)
-//					{
-//						for (u8 i = 0; i < wordbites_verts_count; i += 1)
-//						{
-//							if
-//							(
-//								(wordbites_verts[i].position.x == dest_x             && wordbites_verts[i].position.y     == dest_y            ) ||
-//								(wordbites_verts[i].position.x == dest_x             && wordbites_verts[i].position.y - 1 == dest_y            ) ||
-//								(wordbites_verts[i].position.x == dest_x + second_dx && wordbites_verts[i].position.y     == dest_y + second_dy) ||
-//								(wordbites_verts[i].position.x == dest_x + second_dx && wordbites_verts[i].position.y - 1 == dest_y + second_dy)
-//							)
-//							{
-//								blocking_piece = &wordbites_verts[i];
-//								break;
-//							}
-//						}
-//	
-//						if (!blocking_piece)
-//						{
-//							error(); // Destination was blocked... but couldn't find the blocking piece...!
-//						}
-//					}
-//				}
-//			}
-//			else // Move piece.
-//			{
-//				moving_piece->position.x = dest_x;
-//				moving_piece->position.y = dest_y;
-//			}
-//	
-//			//
-//			// Place piece back on the board.
-//			//
-//	
-//			board_alphabet_indices[moving_piece->position.y            ][moving_piece->position.x            ] = moving_piece->alphabet_indices[0];
-//			board_alphabet_indices[moving_piece->position.y + second_dy][moving_piece->position.x + second_dx] = moving_piece->alphabet_indices[1];
-//		}
-//		else // Destination would place piece out of bounds!
-//		{
-//			blocking_piece = moving_piece;
-//		}
-//	
-//		return blocking_piece;
-//	}
+	for (u8 i = 0; i < countof(wordbites_pieces); i += 1)
+	{
+		wordbites_pieces[i].position    = (u8_2) { wordbites_pieces[i].position.y, wordbites_pieces[i].position.x };
+		wordbites_pieces[i].orientation =
+			wordbites_pieces[i].orientation == WordBitesPieceOrientation_hort ? WordBitesPieceOrientation_vert :
+			wordbites_pieces[i].orientation == WordBitesPieceOrientation_vert ? WordBitesPieceOrientation_hort : WordBitesPieceOrientation_none;
+	}
+
+	board_dim_slots = (u8_2) { board_dim_slots.y, board_dim_slots.x };
+}
+
+static struct WordBitesPiece* // Returns the piece blocking the destination (in the case the destination is out of bounds, moving_piece itself is returned).
+attempt_move_wordbites_piece(struct WordBitesPiece* moving_piece, u8 dest_x, u8 dest_y)
+{
+	struct WordBitesPiece* blocking_piece = 0;
+
+	u8_2 moving_delta =
+		{
+			moving_piece->orientation == WordBitesPieceOrientation_hort,
+			moving_piece->orientation == WordBitesPieceOrientation_vert,
+		};
+
+	if // In bounds of the board?
+	(
+		dest_x + moving_delta.x < board_dim_slots.x &&
+		dest_y + moving_delta.y < board_dim_slots.y
+	)
+	{
+		//
+		// Lift piece we're moving from the board.
+		//
+
+		board_alphabet_indices[moving_piece->position.y                 ][moving_piece->position.x                 ] = ALPHABET_INDEX_TAKEN;
+		board_alphabet_indices[moving_piece->position.y + moving_delta.y][moving_piece->position.x + moving_delta.x] = ALPHABET_INDEX_TAKEN;
+
+		//
+		// See if the destination is occupied.
+		//
+
+		if
+		(
+			board_alphabet_indices[dest_y                 ][dest_x                 ] == ALPHABET_INDEX_TAKEN &&
+			board_alphabet_indices[dest_y + moving_delta.y][dest_x + moving_delta.x] == ALPHABET_INDEX_TAKEN
+		)
+		{
+			moving_piece->position.x = dest_x;
+			moving_piece->position.y = dest_y;
+		}
+		else // There's a collision!
+		{
+			for
+			(
+				u8 piece_index = 0;
+				piece_index < countof(wordbites_pieces) && !blocking_piece;
+				piece_index += 1
+			)
+			{
+				if (moving_piece != &wordbites_pieces[piece_index])
+				{
+					u8_2 piece_delta =
+						{
+							wordbites_pieces[piece_index].orientation == WordBitesPieceOrientation_hort,
+							wordbites_pieces[piece_index].orientation == WordBitesPieceOrientation_vert,
+						};
+
+					if
+					(
+						(wordbites_pieces[piece_index].position.x                 == dest_x                  && wordbites_pieces[piece_index].position.y                 == dest_y                 ) ||
+						(wordbites_pieces[piece_index].position.x + piece_delta.x == dest_x                  && wordbites_pieces[piece_index].position.y + piece_delta.y == dest_y                 ) ||
+						(wordbites_pieces[piece_index].position.x                 == dest_x + moving_delta.x && wordbites_pieces[piece_index].position.y                 == dest_y + moving_delta.y) ||
+						(wordbites_pieces[piece_index].position.x + piece_delta.x == dest_x + moving_delta.x && wordbites_pieces[piece_index].position.y + piece_delta.y == dest_y + moving_delta.y)
+					)
+					{
+						blocking_piece = &wordbites_pieces[piece_index];
+						break;
+					}
+				}
+			}
+
+			if (!blocking_piece)
+			{
+				error(); // Destination was blocked... but couldn't find the blocking piece...!
+			}
+		}
+
+		//
+		// Place piece back on the board.
+		//
+
+		board_alphabet_indices[moving_piece->position.y                 ][moving_piece->position.x                 ] = moving_piece->alphabet_indices[0];
+		board_alphabet_indices[moving_piece->position.y + moving_delta.y][moving_piece->position.x + moving_delta.x] = moving_piece->alphabet_indices[1];
+	}
+	else // Destination would place piece out of bounds!
+	{
+		blocking_piece = moving_piece;
+	}
+
+	return blocking_piece;
+}
 
 int
 main(void)
@@ -431,7 +381,6 @@ main(void)
 	usart_init();
 	spi_init();
 	timer_init();
-
 	sd_init();
 
 	//
@@ -685,80 +634,76 @@ main(void)
 		case WordGame_COUNT              : error(); // Impossible.
 	}
 
-//	//
-//	// Find WordBites pieces.
-//	//
-//
-//	if (diplomat_packet.wordgame == WordGame_wordbites)
-//	{
-//		u8 wordbites_pieces_count = 0;
-//
-//		for (u8 y = 0; y < board_dim_slots.y; y += 1)
-//		{
-//			for (u8 x = 0; x < board_dim_slots.x; x += 1)
-//			{
-//				if
-//				(
-//					board_alphabet_indices[y][x] != ALPHABET_INDEX_TAKEN                                             && // There's a letter on this slot!
-//					implies(x                        , board_alphabet_indices[y    ][x - 1] == ALPHABET_INDEX_TAKEN) && // Must be beginning of horizontal piece.
-//					implies(y + 1 < board_dim_slots.y, board_alphabet_indices[y + 1][x    ] == ALPHABET_INDEX_TAKEN)    // Must be beginning of vertical piece.
-//				)
-//				{
-//					if (wordbites_pieces_count == countof(wordbites_pieces))
-//					{
-//						error(); // More pieces than expected...
-//					}
-//
-//					wordbites_pieces[wordbites_pieces_count] =
-//						(struct WordBitesPiece)
-//						{
-//							.position.x          = x,
-//							.position.y          = y,
-//							.alphabet_indices[0] = board_alphabet_indices[y][x],
-//						};
-//
-//					if (x + 1 < board_dim_slots.x && board_alphabet_indices[y][x + 1] != ALPHABET_INDEX_TAKEN)
-//					{
-//						wordbites_pieces[wordbites_pieces_count].orientation         = WordBitesPieceOrientation_hort;
-//						wordbites_pieces[wordbites_pieces_count].alphabet_indices[1] = board_alphabet_indices[y][x + 1];
-//					}
-//					else if (y && board_alphabet_indices[y - 1][x] != ALPHABET_INDEX_TAKEN)
-//					{
-//						wordbites_pieces[wordbites_pieces_count].orientation         = WordBitesPieceOrientation_vert;
-//						wordbites_pieces[wordbites_pieces_count].alphabet_indices[1] = board_alphabet_indices[y - 1][x];
-//					}
-//					else
-//					{
-//						wordbites_pieces[wordbites_pieces_count].orientation         = WordBitesPieceOrientation_none;
-//						wordbites_pieces[wordbites_pieces_count].alphabet_indices[1] = board_alphabet_indices[y][x];
-//					}
-//
-//					wordbites_pieces_count += 1;
-//				}
-//			}
-//		}
-//
-//		if (wordbites_pieces_count != countof(wordbites_pieces))
-//		{
-//			error(); // Less pieces than expected...
-//		}
-//
-//		debug_wordbites_board();
-//
-//		for (u8 i = 0; i < countof(wordbites_pieces); i += 1)
-//		{
-//			debug_wordbites_piece(wordbites_pieces[i]);
-//		}
-//
-//		transpose_wordbites();
-//
-//		debug_wordbites_board();
-//
-//		for (u8 i = 0; i < countof(wordbites_pieces); i += 1)
-//		{
-//			debug_wordbites_piece(wordbites_pieces[i]);
-//		}
-//	}
+	//
+	// Find WordBites pieces.
+	//
+
+	if (diplomat_packet.wordgame == WordGame_wordbites)
+	{
+		u8 wordbites_pieces_count = 0;
+
+		for (u8 y = 0; y < board_dim_slots.y; y += 1)
+		{
+			for (u8 x = 0; x < board_dim_slots.x; x += 1)
+			{
+				if
+				(
+					board_alphabet_indices[y][x] != ALPHABET_INDEX_TAKEN                     && // There's a letter on this slot!
+					implies(x, board_alphabet_indices[y    ][x - 1] == ALPHABET_INDEX_TAKEN) && // Must be beginning of horizontal piece.
+					implies(y, board_alphabet_indices[y - 1][x    ] == ALPHABET_INDEX_TAKEN)    // Must be beginning of vertical piece.
+				)
+				{
+					if (wordbites_pieces_count == countof(wordbites_pieces))
+					{
+						error(); // More pieces than expected...
+					}
+
+					wordbites_pieces[wordbites_pieces_count] =
+						(struct WordBitesPiece)
+						{
+							.position.x          = x,
+							.position.y          = y,
+							.alphabet_indices[0] = board_alphabet_indices[y][x],
+						};
+
+					if (x + 1 < board_dim_slots.x && board_alphabet_indices[y][x + 1] != ALPHABET_INDEX_TAKEN)
+					{
+						wordbites_pieces[wordbites_pieces_count].orientation         = WordBitesPieceOrientation_hort;
+						wordbites_pieces[wordbites_pieces_count].alphabet_indices[1] = board_alphabet_indices[y][x + 1];
+					}
+					else if (y + 1 < board_dim_slots.y && board_alphabet_indices[y + 1][x] != ALPHABET_INDEX_TAKEN)
+					{
+						wordbites_pieces[wordbites_pieces_count].orientation         = WordBitesPieceOrientation_vert;
+						wordbites_pieces[wordbites_pieces_count].alphabet_indices[1] = board_alphabet_indices[y + 1][x];
+					}
+					else
+					{
+						wordbites_pieces[wordbites_pieces_count].orientation         = WordBitesPieceOrientation_none;
+						wordbites_pieces[wordbites_pieces_count].alphabet_indices[1] = board_alphabet_indices[y][x];
+					}
+
+					wordbites_pieces_count += 1;
+				}
+			}
+		}
+
+		if (wordbites_pieces_count != countof(wordbites_pieces))
+		{
+			error(); // Less pieces than expected...
+		}
+
+		debug_wordbites_board();
+		for (u8 i = 0; i < countof(wordbites_pieces); i += 1)
+		{
+			debug_wordbites_piece(wordbites_pieces[i]);
+		}
+		debug_cstr
+		(
+			"\n"
+			"================================\n"
+			"\n"
+		);
+	}
 
 	//
 	// Process for words.
