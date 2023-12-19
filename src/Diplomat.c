@@ -175,10 +175,7 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 					_delay_ms(1.0);
 					pin_high(PIN_NERD_RESET); // By the time OCR is finished, Nerd should all be set up and ready to go.
 
-					if (usart_rx_available()) // Flush USART buffer.
-					{
-						usart_rx();
-					}
+					usart_rx_flush();
 
 					u8_2 wordgame_dim_slots =
 						{
@@ -482,16 +479,16 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 										if (currently_holding_piece_in_wordbites)
 										{
 											usb_mouse_command(true, coords.x, coords.y);
-											WAIT(300);
+											WAIT(256);
 											usb_mouse_command(false, coords.x, coords.y);
-											WAIT(64);
+											WAIT(32);
 										}
 										else
 										{
 											usb_mouse_command(false, coords.x, coords.y);
-											WAIT(128);
+											WAIT(32);
 											usb_mouse_command(true, coords.x, coords.y);
-											WAIT(64);
+											WAIT(32);
 										}
 
 										currently_holding_piece_in_wordbites = !currently_holding_piece_in_wordbites;

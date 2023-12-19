@@ -232,23 +232,23 @@ static_assert(WORDGAME_MAX_DIM_SLOTS_Y <= 15); // Can't be 16, since command of 
 	"Y"       : Y coordinate of the slot to select.
 
 	If command is NERD_COMMAND_COMPLETE, then this is a signal to the Diplomat that the Nerd is done processing.
-	In WordBites, commands should be "paired up", where the first command is where the mouse should pick up the piece, and the second command is where the piece should be
-	dropped off.
+	In WordBites, commands should be "paired up", where the first command is where the mouse should pick up the piece,
+	and the second command is where the piece should be dropped off.
 */
 static void
-push_command(u8 command)
+push_unyielded_command(u8 command)
 {
-	if ((u8) (command_writer + 1) == command_reader) // Any open space in command buffer?
+	if ((u8) (unyielded_command_writer + 1) == unyielded_command_reader) // Any open space in command buffer?
 	{
 		pin_high(PIN_NERD_WAITING);
-		usart_rx();                               // Wait for the ready signal from the Diplomat.
+		usart_rx(); // Wait for the ready signal from the Diplomat.
 		pin_low(PIN_NERD_WAITING);
-		usart_tx(command_buffer[command_reader]); // Send out command.
-		command_reader += 1;                      // A space opened up!
+		usart_tx(unyielded_command_buffer[unyielded_command_reader]); // Send out command.
+		unyielded_command_reader += 1;                                // A space opened up!
 	}
 
-	command_buffer[command_writer]  = command;
-	command_writer                 += 1;
+	unyielded_command_buffer[unyielded_command_writer]  = command;
+	unyielded_command_writer                           += 1;
 }
 
 static void
@@ -275,93 +275,70 @@ transpose_wordbites(void)
 	board_dim_slots = (u8_2) { board_dim_slots.y, board_dim_slots.x };
 }
 
-static struct WordBitesPiece* // Returns the piece blocking the destination (in the case the destination is out of bounds, moving_piece itself is returned).
-attempt_move_wordbites_piece(struct WordBitesPiece* moving_piece, u8 dest_x, u8 dest_y)
+static struct WordBitesPiece*
+get_wordbites_piece(u8 x, u8 y)
 {
-	struct WordBitesPiece* blocking_piece = 0;
+	struct WordBitesPiece* result = 0;
 
-	u8_2 moving_delta =
+	for (struct WordBitesPiece* piece = wordbites_pieces; piece < wordbites_pieces + countof(wordbites_pieces); piece += 1)
+	{
+		u8_2 delta =
+			{
+				piece->orientation == WordBitesPieceOrientation_hort,
+				piece->orientation == WordBitesPieceOrientation_vert,
+			};
+
+		if
+		(
+			(piece->position.x           == x && piece->position.y           == y) ||
+			(piece->position.x + delta.x == x && piece->position.y + delta.y == y)
+		)
 		{
-			moving_piece->orientation == WordBitesPieceOrientation_hort,
-			moving_piece->orientation == WordBitesPieceOrientation_vert,
+			result = piece;
+			break;
+		}
+	}
+
+	return result;
+}
+
+static b8
+move_wordbites_piece(struct WordBitesPiece* piece, u8 dest_x, u8 dest_y)
+{
+	b8   successful = false;
+	u8_2 delta      =
+		{
+			piece->orientation == WordBitesPieceOrientation_hort,
+			piece->orientation == WordBitesPieceOrientation_vert,
 		};
 
 	if // In bounds of the board?
 	(
-		dest_x + moving_delta.x < board_dim_slots.x &&
-		dest_y + moving_delta.y < board_dim_slots.y
+		(u16) dest_x + delta.x < board_dim_slots.x &&
+		(u16) dest_y + delta.y < board_dim_slots.y
 	)
 	{
-		//
 		// Lift piece we're moving from the board.
-		//
+		board_alphabet_indices[piece->position.y          ][piece->position.x          ] = ALPHABET_INDEX_VOID;
+		board_alphabet_indices[piece->position.y + delta.y][piece->position.x + delta.x] = ALPHABET_INDEX_VOID;
 
-		board_alphabet_indices[moving_piece->position.y                 ][moving_piece->position.x                 ] = ALPHABET_INDEX_VOID;
-		board_alphabet_indices[moving_piece->position.y + moving_delta.y][moving_piece->position.x + moving_delta.x] = ALPHABET_INDEX_VOID;
-
-		//
-		// See if the destination is occupied.
-		//
-
-		if
+		if // Unoccupied destination?
 		(
-			board_alphabet_indices[dest_y                 ][dest_x                 ] == ALPHABET_INDEX_VOID &&
-			board_alphabet_indices[dest_y + moving_delta.y][dest_x + moving_delta.x] == ALPHABET_INDEX_VOID
+			board_alphabet_indices[dest_y          ][dest_x          ] == ALPHABET_INDEX_VOID &&
+			board_alphabet_indices[dest_y + delta.y][dest_x + delta.x] == ALPHABET_INDEX_VOID
 		)
 		{
-			moving_piece->position.x = dest_x;
-			moving_piece->position.y = dest_y;
-		}
-		else // There's a collision!
-		{
-			for
-			(
-				u8 piece_index = 0;
-				piece_index < countof(wordbites_pieces) && !blocking_piece;
-				piece_index += 1
-			)
-			{
-				if (moving_piece != &wordbites_pieces[piece_index])
-				{
-					u8_2 piece_delta =
-						{
-							wordbites_pieces[piece_index].orientation == WordBitesPieceOrientation_hort,
-							wordbites_pieces[piece_index].orientation == WordBitesPieceOrientation_vert,
-						};
-
-					if
-					(
-						(wordbites_pieces[piece_index].position.x                 == dest_x                  && wordbites_pieces[piece_index].position.y                 == dest_y                 ) ||
-						(wordbites_pieces[piece_index].position.x + piece_delta.x == dest_x                  && wordbites_pieces[piece_index].position.y + piece_delta.y == dest_y                 ) ||
-						(wordbites_pieces[piece_index].position.x                 == dest_x + moving_delta.x && wordbites_pieces[piece_index].position.y                 == dest_y + moving_delta.y) ||
-						(wordbites_pieces[piece_index].position.x + piece_delta.x == dest_x + moving_delta.x && wordbites_pieces[piece_index].position.y + piece_delta.y == dest_y + moving_delta.y)
-					)
-					{
-						blocking_piece = &wordbites_pieces[piece_index];
-						break;
-					}
-				}
-			}
-
-			if (!blocking_piece)
-			{
-				error(); // Destination was blocked... but couldn't find the blocking piece...!
-			}
+			piece->position.x = dest_x;
+			piece->position.y = dest_y;
+			successful        = true;
 		}
 
-		//
 		// Place piece back on the board.
-		//
-
-		board_alphabet_indices[moving_piece->position.y                 ][moving_piece->position.x                 ] = moving_piece->alphabet_indices[0];
-		board_alphabet_indices[moving_piece->position.y + moving_delta.y][moving_piece->position.x + moving_delta.x] = moving_piece->alphabet_indices[1];
-	}
-	else // Destination would place piece out of bounds!
-	{
-		blocking_piece = moving_piece;
+		board_alphabet_indices[piece->position.y          ][piece->position.x          ] = piece->alphabet_indices[0];
+		board_alphabet_indices[piece->position.y + delta.y][piece->position.x + delta.x] = piece->alphabet_indices[1];
 	}
 
-	return blocking_piece;
+	return successful;
 }
 
 int
@@ -697,12 +674,6 @@ main(void)
 		{
 			debug_wordbites_piece(wordbites_pieces[i]);
 		}
-		debug_cstr
-		(
-			"\n"
-			"================================\n"
-			"\n"
-		);
 	}
 
 	//
@@ -856,7 +827,7 @@ main(void)
 											commands[subword_length - 1] |= NERD_COMMAND_SUBMIT_BIT;
 											for (u8 i = 0; i < subword_length; i += 1)
 											{
-												push_command(commands[i]);
+												push_unyielded_command(commands[i]);
 											}
 										}
 
@@ -981,7 +952,7 @@ main(void)
 														commands[subword_length - 1] |= NERD_COMMAND_SUBMIT_BIT;
 														for (u8 i = 0; i < subword_length; i += 1)
 														{
-															push_command(commands[i]);
+															push_unyielded_command(commands[i]);
 															board_alphabet_indices[NERD_COMMAND_Y(commands[i])][NERD_COMMAND_X(commands[i])] &= ~ALPHABET_INDEX_VOID;
 														}
 
@@ -1158,25 +1129,224 @@ main(void)
 
 											if (reproducible)
 											{
+												#define PUSH_COMMAND(X, Y) \
+													do \
+													{ \
+														if (command_count < countof(command_buffer)) \
+														{ \
+															command_buffer[command_count]  = ((X) << 4) | (Y); \
+															command_count                 += 1; \
+														} \
+														else \
+														{ \
+															error(); /* Ran of space! */ \
+														} \
+													} \
+													while (false)
+												u8 command_buffer[2 * countof(wordbites_pieces) * countof(wordbites_pieces)] = {0};
+												u8 command_count = 0;
+												static_assert(countof(command_buffer) < 256); // Indexable by command_count.
+
+												u8_2 beginning_position = { 0, 1 };
 												{
-													if (reproducible)
+													memset(reserved_board_slots, 0, sizeof(reserved_board_slots));
+
+													u8 letter_index = 0;
+													for (u8 playing_piece_index = 0; playing_piece_index < playing_pieces_count; playing_piece_index += 1)
 													{
-														debug_cstr("  ");
-													}
-													else
-													{
-														debug_cstr("X ");
+														i8_2 delta = {0};
+
+														switch (playing_pieces[playing_piece_index]->orientation)
+														{
+															case WordBitesPieceOrientation_none: delta = (i8_2) { 0, 0 }; break;
+															case WordBitesPieceOrientation_hort: delta = (i8_2) { 1, 0 }; break;
+															case WordBitesPieceOrientation_vert:
+															{
+																if (playing_pieces[playing_piece_index]->alphabet_indices[0] == word_alphabet_indices[letter_index])
+																{
+																	delta = (i8_2) { 0, 1 }; // Unused letter is below the word.
+																}
+																else
+																{
+																	delta = (i8_2) { 0, -1 }; // Unused letter is above the word.
+																}
+															} break;
+														}
+
+														if // In bounds?
+														(
+															0 <= beginning_position.x + letter_index + delta.x && beginning_position.x + letter_index + delta.x < board_dim_slots.x &&
+															0 <= beginning_position.y                + delta.y && beginning_position.y                + delta.y < board_dim_slots.y
+														)
+														{
+															reserved_board_slots[beginning_position.y          ][beginning_position.x + letter_index          ] = true;
+															reserved_board_slots[beginning_position.y + delta.y][beginning_position.x + letter_index + delta.x] = true;
+															letter_index += 1 + delta.x;
+														}
+														else // Can't make the word at this spot!
+														{
+															break;
+														}
 													}
 
+													if (letter_index == subword_length) // Word can fit on the board at this spot?
+													{
+														//
+														// Add reserve the space before and after the word.
+														//
 
-													if (board_dim_slots.x == pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x))
-													{
-														debug_cstr("h ");
+														if (beginning_position.x) // Put a space before the word.
+														{
+															reserved_board_slots[beginning_position.y][beginning_position.x - 1] = true;
+														}
+
+														if (beginning_position.x + subword_length < board_dim_slots.x) // Put a space after the word.
+														{
+															reserved_board_slots[beginning_position.y][beginning_position.x + subword_length] = true;
+														}
+
+														//	{
+														//		debug_cstr
+														//		(
+														//			"\n"
+														//			"================================\n"
+														//			"\n"
+														//		);
+
+														//		for (u8 y = 0; y < board_dim_slots.y; y += 1)
+														//		{
+														//			for (u8 x = 0; x < board_dim_slots.x; x += 1)
+														//			{
+														//				debug_char(reserved_board_slots[y][x] ? 'O' : '.');
+														//			}
+														//			debug_char('\n');
+														//		}
+														//	}
+
+														//
+														// Find pieces that are on the reserved slots and relocate them.
+														//
+
+														for (struct WordBitesPiece* piece = wordbites_pieces; piece < wordbites_pieces + countof(wordbites_pieces); piece += 1)
+														{
+															u8_2 delta =
+																{
+																	piece->orientation == WordBitesPieceOrientation_hort,
+																	piece->orientation == WordBitesPieceOrientation_vert,
+																};
+
+															if
+															(
+																reserved_board_slots[piece->position.y          ][piece->position.x          ] ||
+																reserved_board_slots[piece->position.y + delta.y][piece->position.x + delta.x]
+															)
+															{
+																//	debug_wordbites_piece(*piece);
+
+																PUSH_COMMAND(piece->position.x, piece->position.y); // Pick up the piece here.
+
+																b8 relocated = false;
+																for
+																(
+																	u8 y = 0;
+																	y + delta.y < board_dim_slots.y;
+																	y += 1
+																)
+																{
+																	for
+																	(
+																		u8 x = 0;
+																		x + delta.x < board_dim_slots.x;
+																		x += 1
+																	)
+																	{
+																		if
+																		(
+																			!reserved_board_slots[y          ][x          ] &&
+																			!reserved_board_slots[y + delta.y][x + delta.x] &&
+																			move_wordbites_piece(piece, x, y)
+																		)
+																		{
+																			PUSH_COMMAND(x, y); // Drop off the piece here.
+																			relocated = true;
+																			goto RELOCATED;
+																		}
+																	}
+																}
+																RELOCATED:;
+
+																if (!relocated)
+																{
+																	error(); // We couldn't relocate the piece out of the reserved area for some reason...
+																}
+															}
+														}
+														//	debug_char('\n');
+
+														//
+														// Move the playing pieces to make the word.
+														//
+
+														letter_index = 0;
+														for (u8 playing_piece_index = 0; playing_piece_index < playing_pieces_count; playing_piece_index += 1)
+														{
+															i8_2 delta = {0};
+
+															switch (playing_pieces[playing_piece_index]->orientation)
+															{
+																case WordBitesPieceOrientation_none: delta = (i8_2) { 0, 0 }; break;
+																case WordBitesPieceOrientation_hort: delta = (i8_2) { 1, 0 }; break;
+																case WordBitesPieceOrientation_vert:
+																{
+																	if (playing_pieces[playing_piece_index]->alphabet_indices[0] == word_alphabet_indices[letter_index])
+																	{
+																		delta = (i8_2) { 0, 0 }; // Unused letter is below the word.
+																	}
+																	else
+																	{
+																		delta = (i8_2) { 0, -1 }; // Unused letter is above the word.
+																	}
+																} break;
+															}
+
+															PUSH_COMMAND(playing_pieces[playing_piece_index]->position.x, playing_pieces[playing_piece_index]->position.y);
+
+															if (!move_wordbites_piece(playing_pieces[playing_piece_index], beginning_position.x + letter_index, beginning_position.y + delta.y))
+															{
+																error(); // We for some reason couldn't move the piece, even thought the area should be cleared...
+															}
+
+															PUSH_COMMAND(playing_pieces[playing_piece_index]->position.x, playing_pieces[playing_piece_index]->position.y);
+															letter_index += 1 + delta.x;
+														}
 													}
-													else
+												}
+
+												if (board_dim_slots.x == pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y))
+												{
+													transpose_wordbites();
+
+													for (u8 i = 0; i < command_count; i += 1)
 													{
-														debug_cstr("v ");
+														command_buffer[i] = (command_buffer[i] << 4) | (command_buffer[i] >> 4);
 													}
+												}
+
+												for (u8 i = 0; i < command_count; i += 1)
+												{
+													push_unyielded_command(command_buffer[i]);
+												}
+
+												{
+													//	debug_wordbites_board();
+													//	debug_char('(');
+													//	debug_u64(src_position.x);
+													//	debug_char(',');
+													//	debug_u64(src_position.y);
+													//	debug_char(')');
+													//	debug_char('\n');
+													//	debug_wordbites_piece(*playing_pieces[0]);
+													//	debug_char('\n');
 
 													for (u8 i = 0; i < subword_length; i += 1)
 													{
@@ -1218,17 +1388,21 @@ main(void)
 													}
 													debug_char('\n');
 
-													while (!debug_rx((char[]){0}, 1));
+													debug_wordbites_board();
+													debug_char('\n');
+
+													//while (!debug_rx((char[]){0}, 1))
+													//{
+													//	if (usart_rx_available() && unyielded_command_reader != unyielded_command_writer)
+													//	{
+													//		usart_rx();
+													//		usart_tx(unyielded_command_buffer[unyielded_command_reader]);
+													//		unyielded_command_reader += 1;
+													//	}
+													//}
 												}
 
-												//
-												// Done for this subword!
-												//
-
-												if (board_dim_slots.x == pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y))
-												{
-													transpose_wordbites();
-												}
+												#undef PUSH_COMMAND
 
 												break;
 											}
@@ -1266,11 +1440,11 @@ main(void)
 						// Yield command.
 						//
 
-						if (usart_rx_available() && command_reader != command_writer)
+						if (usart_rx_available() && unyielded_command_reader != unyielded_command_writer)
 						{
 							usart_rx();
-							usart_tx(command_buffer[command_reader]);
-							command_reader += 1;
+							usart_tx(unyielded_command_buffer[unyielded_command_reader]);
+							unyielded_command_reader += 1;
 						}
 
 						entries_remaining -= 1;
@@ -1295,18 +1469,18 @@ main(void)
 	pin_high(PIN_NERD_WAITING);
 
 	b8 times_up = false;
-	while (command_reader != command_writer)
+	while (unyielded_command_reader != unyielded_command_writer)
 	{
 		if (timer_ms() >= timesup_timestamp)
 		{
-			times_up       = true;
-			command_reader = command_writer; // Flush buffer, since we're out of time!
+			times_up                 = true;
+			unyielded_command_reader = unyielded_command_writer; // Flush buffer, since we're out of time!
 		}
 		else
 		{
 			usart_rx();
-			usart_tx(command_buffer[command_reader]);
-			command_reader += 1;
+			usart_tx(unyielded_command_buffer[unyielded_command_reader]);
+			unyielded_command_reader += 1;
 		}
 	}
 

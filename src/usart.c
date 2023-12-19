@@ -68,3 +68,12 @@ usart_rx(void)
 
 	return UDRn;
 }
+
+static void
+usart_rx_flush(void)
+{
+	while (UCSRnA & (1 << RXCn))
+	{
+		UDRn;
+	}
+}

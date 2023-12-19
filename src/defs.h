@@ -2171,6 +2171,18 @@ struct DiplomatPacket
 #endif
 
 //
+// "Diplomat.c".
+//
+
+#if PROGRAM_DIPLOMAT
+	static u8 input_btn_left_bias  = 0;
+	static u8 input_btn_mid_bias   = 0;
+	static u8 input_btn_right_bias = 0;
+	static u8 input_clicked        = false;
+	static i8 input_rotation       = 0;
+#endif
+
+//
 // "Nerd.c".
 //
 
@@ -2193,26 +2205,15 @@ struct WordBitesPiece
 
 #if PROGRAM_NERD
 	static u8                    board_alphabet_indices[WORDGAME_MAX_DIM_SLOTS][WORDGAME_MAX_DIM_SLOTS] = {0};
+	static b8                    reserved_board_slots  [WORDGAME_MAX_DIM_SLOTS][WORDGAME_MAX_DIM_SLOTS] = {0};
 	static u8_2                  board_dim_slots      = {0};
 	static struct WordBitesPiece wordbites_pieces[11] = {0};
-	static u8                    command_buffer[256]  = {0};
-	static u8                    command_reader       = 0;
-	static u8                    command_writer       = 0;
-	static_assert(sizeof(command_buffer) == 256); // For the byte-sized indices.
-	static_assert(sizeof(command_reader) == 1);   // Wrapping behavior needed.
-	static_assert(sizeof(command_writer) == 1);   // Wrapping behavior needed.
-#endif
-
-//
-// "Diplomat.c".
-//
-
-#if PROGRAM_DIPLOMAT
-	static u8 input_btn_left_bias  = 0;
-	static u8 input_btn_mid_bias   = 0;
-	static u8 input_btn_right_bias = 0;
-	static u8 input_clicked        = false;
-	static i8 input_rotation       = 0;
+	static u8                    unyielded_command_buffer[256]  = {0};
+	static u8                    unyielded_command_reader       = 0;
+	static u8                    unyielded_command_writer       = 0;
+	static_assert(sizeof(unyielded_command_buffer) == 256); // For the byte-sized indices.
+	static_assert(sizeof(unyielded_command_reader) == 1);   // Wrapping behavior needed.
+	static_assert(sizeof(unyielded_command_writer) == 1);   // Wrapping behavior needed.
 #endif
 
 //
