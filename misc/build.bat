@@ -3,8 +3,8 @@ setlocal EnableDelayedExpansion
 REM To list AVRDUDE's supported AVR devices: "avrdude -c avrisp".
 REM To list AVRDUDE's supported programmers: "avrdude -c asd".
 
-set COMPILE_MICROSERVICES=1
-set COMPILE_DIPLOMAT=1
+set COMPILE_MICROSERVICES=0
+set COMPILE_DIPLOMAT=0
 set COMPILE_NERD=1
 
 set MSVC_PRACTICAL_DISABLED_WARNINGS= ^

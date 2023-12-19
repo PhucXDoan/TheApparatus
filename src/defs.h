@@ -2174,8 +2174,8 @@ struct DiplomatPacket
 // "Nerd.c".
 //
 
-#define ALPHABET_INDEX_TAKEN (1 << 7)
-static_assert(BITS_PER_ALPHABET_INDEX < 8); // For ALPHABET_INDEX_TAKEN.
+#define ALPHABET_INDEX_VOID (1 << 7)
+static_assert(BITS_PER_ALPHABET_INDEX < 8); // For ALPHABET_INDEX_VOID.
 
 enum WordBitesPieceOrientation
 {
