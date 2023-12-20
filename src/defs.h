@@ -251,6 +251,7 @@ static_assert(BITS_PER_ALPHABET_INDEX == 5); // PACKED_WORD_SIZE calculation ass
 #define ANAGRAMS_PLAY_BUTTON_Y        189
 #define WORDHUNT_PLAY_BUTTON_Y        202
 #define WORDBITES_PLAY_BUTTON_Y       202
+#define WORDBITES_PIECES_COUNT        11
 #define WORDGAME_XMDT(X, Y) /* There's no good way to determine the language of Anagrams perfectly, so we will always assume it's English and have the test region all be zero. */ \
 	/*    Names                                     | Language | Max Word Length | Sentinel Letter | Board Position | Board Dim (slots) | Slot Dim | Uncompressed Slot Stride | Compressed Slot Stride | Test Region Position | Test Region Dimensions | Test Region RGB       | Excluded Slot Coordinates */ \
 		X(anagrams_english_6, "Anagrams (EN, 6)"    , english  , 6               , Letter_z + 1    ,  35, 391       , 6, 1              , 124      , 195                      , 101                    ,   32,  700           , 256,  16               , 0.2645, 0.2409, 0.3358                                         ) \
@@ -2203,14 +2204,17 @@ struct WordBitesPiece
 	u8                             alphabet_indices[2]; // Singleton pieces will have the same single alphabet index in both entries.
 };
 
+struct WordGameState
+{
+	u8_2                  board_dim_slots;
+	u8                    board_alphabet_indices[WORDGAME_MAX_DIM_SLOTS][WORDGAME_MAX_DIM_SLOTS];
+	struct WordBitesPiece wordbites_pieces      [WORDBITES_PIECES_COUNT];
+};
+
 #if PROGRAM_NERD
-	static u8                    board_alphabet_indices[WORDGAME_MAX_DIM_SLOTS][WORDGAME_MAX_DIM_SLOTS] = {0};
-	static b8                    reserved_board_slots  [WORDGAME_MAX_DIM_SLOTS][WORDGAME_MAX_DIM_SLOTS] = {0};
-	static u8_2                  board_dim_slots      = {0};
-	static struct WordBitesPiece wordbites_pieces[11] = {0};
-	static u8                    unyielded_command_buffer[256]  = {0};
-	static u8                    unyielded_command_reader       = 0;
-	static u8                    unyielded_command_writer       = 0;
+	static u8 unyielded_command_buffer[256] = {0};
+	static u8 unyielded_command_reader      = 0;
+	static u8 unyielded_command_writer      = 0;
 	static_assert(sizeof(unyielded_command_buffer) == 256); // For the byte-sized indices.
 	static_assert(sizeof(unyielded_command_reader) == 1);   // Wrapping behavior needed.
 	static_assert(sizeof(unyielded_command_writer) == 1);   // Wrapping behavior needed.

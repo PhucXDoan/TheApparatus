@@ -430,13 +430,13 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 									{
 										usb_mouse_command(false, board_origin.x + slot_delta * NERD_COMMAND_X(command), board_origin.y);
 										usb_mouse_command(true , board_origin.x + slot_delta * NERD_COMMAND_X(command), board_origin.y);
-										WAIT(32);
+										WAIT(48);
 
 										if (command & NERD_COMMAND_SUBMIT_BIT)
 										{
 											usb_mouse_command(false, submit_coords.x, submit_coords.y);
 											usb_mouse_command(true , submit_coords.x, submit_coords.y);
-											WAIT(32);
+											WAIT(48);
 											usb_mouse_command(false, submit_coords.x, submit_coords.y);
 										}
 									} break;
@@ -879,55 +879,6 @@ main(void)
 		if (!input_clicked)
 		{
 			apply_input_rotation_to_fst_and_selected_options(&fst_displayed_option, &selected_option, TOTAL_OPTION_COUNT, LCD_DIM_Y);
-
-			{
-				diplomat_packet = // TEMP
-					(struct DiplomatPacket)
-					{
-						.wordgame = WordGame_wordbites,
-						.board    =
-							{
-								//
-								// Unos.
-								//
-
-								[8-0][2] = Letter_i,
-								[8-3][2] = Letter_s,
-								[8-4][0] = Letter_a,
-								[8-4][4] = Letter_o,
-								[8-6][2] = Letter_t,
-								[8-8][7] = Letter_r,
-
-								//
-								// Vertical Duos.
-								//
-
-								[8-1][4] = Letter_n,
-								[8-0][4] = Letter_g,
-
-								[8-1][7] = Letter_e,
-								[8-0][7] = Letter_x,
-
-								[8-2][0] = Letter_f,
-								[8-1][0] = Letter_o,
-
-								[8-5][6] = Letter_m,
-								[8-4][6] = Letter_b,
-
-								//
-								// Horizontal Duos.
-								//
-
-								[8-7][4] = Letter_n,
-								[8-7][5] = Letter_d,
-							},
-					};
-				usart_tx(0xFF);
-				for (u8 i = 0; i < sizeof(diplomat_packet); i += 1)
-				{
-					usart_tx(((volatile u8*) &diplomat_packet)[i]);
-				}
-			}
 		}
 		else if (selected_option < BaseOption_COUNT)
 		{
