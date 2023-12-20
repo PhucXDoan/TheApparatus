@@ -303,7 +303,7 @@ get_wordbites_piece(u8 x, u8 y)
 }
 
 static struct WordBitesPiece*
-move_wordbites_piece(struct WordBitesPiece* moving_piece, u8 dest_x, u8 dest_y)
+can_move_wordbites_piece(struct WordBitesPiece* moving_piece, u8 dest_x, u8 dest_y, b8 immediately_move)
 {
 	struct WordBitesPiece* blocking_piece = 0;
 
@@ -331,7 +331,7 @@ move_wordbites_piece(struct WordBitesPiece* moving_piece, u8 dest_x, u8 dest_y)
 		{
 			blocking_piece = get_wordbites_piece(dest_x + delta.x, dest_y + delta.y);
 		}
-		else
+		else if (immediately_move)
 		{
 			moving_piece->position.x = dest_x;
 			moving_piece->position.y = dest_y;
@@ -377,7 +377,7 @@ relocate_wordbites_piece(struct WordBitesPiece* piece)
 			(
 				!reserved_board_slots[y          ][x          ] &&
 				!reserved_board_slots[y + delta.y][x + delta.x] &&
-				!move_wordbites_piece(piece, x, y)
+				!can_move_wordbites_piece(piece, x, y, true)
 			)
 			{
 				relocated = true;
@@ -1023,7 +1023,29 @@ main(void)
 
 									case WordGame_wordbites:
 									{
-										while (true) // Attempt to make the word horizontally, and if that doesn't work, then vertically.
+										#define PUSH_COMMAND(X, Y) \
+											do \
+											{ \
+												if (command_count < countof(command_buffer)) \
+												{ \
+													command_buffer[command_count]  = ((X) << 4) | (Y); \
+													command_count                 += 1; \
+												} \
+												else \
+												{ \
+													error(); /* Ran of space! */ \
+												} \
+											} \
+											while (false)
+										u8 command_buffer[2 * countof(wordbites_pieces) * countof(wordbites_pieces)] = {0};
+										u8 command_count = 0;
+										static_assert(countof(command_buffer) < 256); // Indexable by command_count.
+
+										//
+										// Attempt to make the word most optimally.
+										//
+
+										while (true)
 										{
 											reproducible = true;
 
@@ -1094,17 +1116,19 @@ main(void)
 													}
 													else // Mark the playing piece as unresolved.
 													{
-														if (unresolved_pieces_count < countof(unresolved_pieces))
+														if (unresolved_pieces_count >= countof(unresolved_pieces))
 														{
-															unresolved_pieces[unresolved_pieces_count] =
-																(struct UnresolvedPiece)
-																{
-																	.goal_alphabet_index = word_alphabet_indices[subword_letter_index],
-																	.playing_piece       = &playing_pieces[playing_pieces_count],
-																};
+															error(); // Shouldn't happen based on max word length.
 														}
-														subword_letter_index    += 1;
+
+														unresolved_pieces[unresolved_pieces_count] =
+															(struct UnresolvedPiece)
+															{
+																.goal_alphabet_index = word_alphabet_indices[subword_letter_index],
+																.playing_piece       = &playing_pieces[playing_pieces_count],
+															};
 														unresolved_pieces_count += 1;
+														subword_letter_index    += 1;
 													}
 
 													playing_pieces_count += 1;
@@ -1181,24 +1205,6 @@ main(void)
 
 											if (reproducible)
 											{
-												#define PUSH_COMMAND(X, Y) \
-													do \
-													{ \
-														if (command_count < countof(command_buffer)) \
-														{ \
-															command_buffer[command_count]  = ((X) << 4) | (Y); \
-															command_count                 += 1; \
-														} \
-														else \
-														{ \
-															error(); /* Ran of space! */ \
-														} \
-													} \
-													while (false)
-												u8 command_buffer[2 * countof(wordbites_pieces) * countof(wordbites_pieces)] = {0};
-												u8 command_count = 0;
-												static_assert(countof(command_buffer) < 256); // Indexable by command_count.
-
 												u8_2 beginning_position = { 0, 1 };
 												{
 													memset(reserved_board_slots, 0, sizeof(reserved_board_slots));
@@ -1245,7 +1251,7 @@ main(void)
 														}
 													}
 
-													if (letter_index == subword_length) // Word can even fit on the board at this spot?
+													if (letter_index == subword_length) // Can the word even fit on the board at this spot?
 													{
 														//
 														// Reserve the space before and after the word.
@@ -1263,6 +1269,7 @@ main(void)
 
 														//
 														// Find non-playing pieces that are on the reserved slots and relocate them.
+														// Necessary to ensure there's space before and after the word.
 														//
 
 														for (struct WordBitesPiece* piece = wordbites_pieces; piece < wordbites_pieces + countof(wordbites_pieces); piece += 1)
@@ -1306,62 +1313,51 @@ main(void)
 														letter_index = 0;
 														for (u8 playing_piece_index = 0; playing_piece_index < playing_pieces_count; playing_piece_index += 1)
 														{
-															i8_2 delta = {0};
-
-															switch (playing_pieces[playing_piece_index]->orientation)
-															{
-																case WordBitesPieceOrientation_none: delta = (i8_2) { 0, 0 }; break;
-																case WordBitesPieceOrientation_hort: delta = (i8_2) { 1, 0 }; break;
-																case WordBitesPieceOrientation_vert:
+															u8_2 old_position = playing_pieces[playing_piece_index]->position;
+															u8_2 new_position =
 																{
-																	if (playing_pieces[playing_piece_index]->alphabet_indices[0] == word_alphabet_indices[letter_index])
+																	beginning_position.x + letter_index,
+																	beginning_position.y +
+																		(
+																			playing_pieces[playing_piece_index]->orientation == WordBitesPieceOrientation_vert &&
+																			playing_pieces[playing_piece_index]->alphabet_indices[1] == word_alphabet_indices[letter_index]
+																				? -1
+																				: 0
+																		)
+																};
+
+															if // Only matters if the moving piece actually needs to move.
+															(
+																old_position.x != new_position.x ||
+																old_position.y != new_position.y
+															)
+															{
+																while (true)
+																{
+																	struct WordBitesPiece* colliding_piece = can_move_wordbites_piece(playing_pieces[playing_piece_index], new_position.x, new_position.y, true);
+																	if (colliding_piece)
 																	{
-																		delta = (i8_2) { 0, 0 }; // Unused letter is below the word.
+																		PUSH_COMMAND(colliding_piece->position.x, colliding_piece->position.y);
+																		relocate_wordbites_piece(colliding_piece);
+																		PUSH_COMMAND(colliding_piece->position.x, colliding_piece->position.y);
 																	}
 																	else
 																	{
-																		delta = (i8_2) { 0, -1 }; // Unused letter is above the word.
-																	}
-																} break;
-															}
-
-															while (true)
-															{
-																u8_2                   old_position    = playing_pieces[playing_piece_index]->position;
-																struct WordBitesPiece* colliding_piece =
-																	move_wordbites_piece
-																	(
-																		playing_pieces[playing_piece_index],
-																		beginning_position.x + letter_index,
-																		beginning_position.y + delta.y
-																	);
-																if (colliding_piece)
-																{
-																	PUSH_COMMAND(colliding_piece->position.x, colliding_piece->position.y);
-																	relocate_wordbites_piece(colliding_piece);
-																	PUSH_COMMAND(colliding_piece->position.x, colliding_piece->position.y);
-																}
-																else
-																{
-																	if
-																	(
-																		!(
-																			old_position.x == playing_pieces[playing_piece_index]->position.x &&
-																			old_position.y == playing_pieces[playing_piece_index]->position.y
-																		)
-																	)
-																	{
 																		PUSH_COMMAND(old_position.x, old_position.y);
-																		PUSH_COMMAND(playing_pieces[playing_piece_index]->position.x, playing_pieces[playing_piece_index]->position.y);
+																		PUSH_COMMAND(new_position.x, new_position.y);
+																		break;
 																	}
-
-																	letter_index += 1 + delta.x;
-																	break;
 																}
 															}
+
+															letter_index += 1 + (playing_pieces[playing_piece_index]->orientation == WordBitesPieceOrientation_hort);
 														}
 													}
 												}
+
+												//
+												// Put board back into original orientation.
+												//
 
 												if (board_dim_slots.x == pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y))
 												{
@@ -1371,76 +1367,6 @@ main(void)
 													{
 														command_buffer[i] = (command_buffer[i] << 4) | (command_buffer[i] >> 4);
 													}
-												}
-
-												for (u8 i = 0; i < command_count; i += 1)
-												{
-													push_unyielded_command(command_buffer[i]);
-												}
-
-												{
-													//	debug_wordbites_board();
-													//	debug_char('(');
-													//	debug_u64(src_position.x);
-													//	debug_char(',');
-													//	debug_u64(src_position.y);
-													//	debug_char(')');
-													//	debug_char('\n');
-													//	debug_wordbites_piece(*playing_pieces[0]);
-													//	debug_char('\n');
-
-													for (u8 i = 0; i < subword_length; i += 1)
-													{
-														debug_char('A' + word_alphabet_indices[i]);
-													}
-													debug_char('\n');
-
-													for (u8 playing_piece_index = 0; playing_piece_index < playing_pieces_count; playing_piece_index += 1)
-													{
-														if (playing_pieces[playing_piece_index])
-														{
-															struct WordBitesPiece piece  = *playing_pieces[playing_piece_index];
-															piece.alphabet_indices[0]   &= ~ALPHABET_INDEX_VOID;
-															if (board_dim_slots.x == pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.y))
-															{
-																piece.position    = (u8_2) { piece.position.y, piece.position.x };
-																piece.orientation =
-																	piece.orientation == WordBitesPieceOrientation_hort ? WordBitesPieceOrientation_vert :
-																	piece.orientation == WordBitesPieceOrientation_vert ? WordBitesPieceOrientation_hort : WordBitesPieceOrientation_none;
-															}
-
-															debug_wordbites_piece(piece);
-														}
-														else if (board_dim_slots.x == pgm_u8(WORDGAME_INFO[diplomat_packet.wordgame].dim_slots.x))
-														{
-															debug_cstr
-															(
-																"/?\\\n"
-																"\\?/\n"
-															);
-														}
-														else
-														{
-															debug_cstr
-															(
-																"(?\?)\n"
-															);
-														}
-													}
-													debug_char('\n');
-
-													debug_wordbites_board();
-													debug_char('\n');
-
-													//while (!debug_rx((char[]){0}, 1))
-													//{
-													//	if (usart_rx_available() && unyielded_command_reader != unyielded_command_writer)
-													//	{
-													//		usart_rx();
-													//		usart_tx(unyielded_command_buffer[unyielded_command_reader]);
-													//		unyielded_command_reader += 1;
-													//	}
-													//}
 												}
 
 												#undef PUSH_COMMAND
@@ -1456,6 +1382,18 @@ main(void)
 												}
 											}
 										}
+
+										//
+										// Send commands.
+										//
+
+										if (reproducible)
+										{
+											for (u8 i = 0; i < command_count; i += 1)
+											{
+												push_unyielded_command(command_buffer[i]);
+											}
+										}
 									} break;
 
 									case WordGame_COUNT:
@@ -1468,10 +1406,10 @@ main(void)
 								// Check if we have ran out of time.
 								//
 
-								//	if (reproducible && timer_ms() >= timesup_timestamp)
-								//	{
-								//		goto TIMES_UP;
-								//	}
+								if (reproducible && timer_ms() >= timesup_timestamp)
+								{
+									goto TIMES_UP;
+								}
 							}
 
 							subword_bits <<= 1;
