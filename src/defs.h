@@ -2156,6 +2156,8 @@ struct USBConfig // This layout is defined uniquely for our device application.
 // Diplomat and Nerd.
 //
 
+#define WORDBITES_MOVE_COST_FUNCTION(X0, Y0, X1, Y1) ((u16) (5 + i8_abs(((i8) (X0)) - ((i8) (X1))) + i8_abs(((i8) (Y0)) - ((i8) (Y1)))))
+
 #define NERD_COMMAND_SUBMIT_BIT 0b1'000'0000
 #define NERD_COMMAND_COMPLETE   0b1'111'1111
 #define NERD_COMMAND_X(COMMAND) ((COMMAND >> 4) & 0b0000'0111)
@@ -2187,7 +2189,6 @@ struct DiplomatPacket
 // "Nerd.c".
 //
 
-#define WORDBITES_MOVE_COST_FUNCTION(X0, Y0, X1, Y1) (5 + i8_abs(((i8) (X0)) - ((i8) (X1))) + i8_abs(((i8) (Y0)) - ((i8) (Y1))))
 #define ALPHABET_INDEX_VOID (1 << 7)
 static_assert(BITS_PER_ALPHABET_INDEX < 8); // For ALPHABET_INDEX_VOID.
 

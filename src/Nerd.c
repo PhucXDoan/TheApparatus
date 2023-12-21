@@ -740,8 +740,8 @@ main(void)
 	// Process for words.
 	//
 
-	const struct WordsTableOfContentEntry* curr_table_entry    = pgm_read_ptr(&WORDS_TABLE_OF_CONTENTS[language].entries);
-	u8_2                                   curr_mouse_position = {0};
+	const struct WordsTableOfContentEntry* curr_table_entry  = pgm_read_ptr(&WORDS_TABLE_OF_CONTENTS[language].entries);
+	u8_2                                   curr_mouse_coords = {0};
 	for
 	(
 		u8 entry_word_length = pgm_u8(WORDS_TABLE_OF_CONTENTS[language].max_word_length);
@@ -1389,8 +1389,8 @@ main(void)
 																u16 cost =
 																	WORDBITES_MOVE_COST_FUNCTION
 																	(
-																		curr_mouse_position.x,
-																		curr_mouse_position.y,
+																		curr_mouse_coords.x,
+																		curr_mouse_coords.y,
 																		NERD_COMMAND_X(command_buffer[0]),
 																		NERD_COMMAND_Y(command_buffer[0])
 																	);
@@ -1488,7 +1488,7 @@ main(void)
 									{
 										push_unyielded_command(command_buffer[i]);
 									}
-									curr_mouse_position =
+									curr_mouse_coords =
 										(u8_2)
 										{
 											NERD_COMMAND_X(command_buffer[command_count - 1]),

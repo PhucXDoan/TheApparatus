@@ -331,6 +331,7 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 					u8   scroll_y                             = 0;
 					b8   began_word_in_wordhunt               = false;
 					b8   currently_holding_piece_in_wordbites = false;
+					i8_2 curr_mouse_coords_in_wordbites       = {0};
 					b8   done                                 = false;
 
 					while (true)
@@ -480,19 +481,27 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 										if (currently_holding_piece_in_wordbites)
 										{
 											usb_mouse_command(true, coords.x, coords.y);
-											WAIT(256);
+											WAIT // TODO Explain
+											(
+												WORDBITES_MOVE_COST_FUNCTION
+												(
+													curr_mouse_coords_in_wordbites.x,
+													curr_mouse_coords_in_wordbites.y,
+													NERD_COMMAND_X(command),
+													NERD_COMMAND_Y(command)
+												) * 20
+											);
 											usb_mouse_command(false, coords.x, coords.y);
-											WAIT(32);
 										}
 										else
 										{
 											usb_mouse_command(false, coords.x, coords.y);
-											WAIT(32);
 											usb_mouse_command(true, coords.x, coords.y);
-											WAIT(32);
 										}
 
 										currently_holding_piece_in_wordbites = !currently_holding_piece_in_wordbites;
+										curr_mouse_coords_in_wordbites.x     = NERD_COMMAND_X(command);
+										curr_mouse_coords_in_wordbites.y     = NERD_COMMAND_Y(command);
 									} break;
 
 									case WordGame_COUNT:
