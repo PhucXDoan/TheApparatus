@@ -1,3 +1,6 @@
+// TODO Optimize wordbites move generation where a blocking playing piece is moved if possible.
+// TODO Be able to break out of waiting for screenshot.
+
 #define false            0
 #define true             1
 #define stringify_(X)    #X
@@ -2204,17 +2207,13 @@ struct WordBitesPiece
 	u8                             alphabet_indices[2]; // Singleton pieces will have the same single alphabet index in both entries.
 };
 
-struct WordGameState
-{
-	u8_2                  board_dim_slots;
-	u8                    board_alphabet_indices[WORDGAME_MAX_DIM_SLOTS][WORDGAME_MAX_DIM_SLOTS];
-	struct WordBitesPiece wordbites_pieces      [WORDBITES_PIECES_COUNT];
-};
-
 #if PROGRAM_NERD
-	static u8 unyielded_command_buffer[256] = {0};
-	static u8 unyielded_command_reader      = 0;
-	static u8 unyielded_command_writer      = 0;
+	static u8_2                  board_dim_slots;
+	static u8                    board_alphabet_indices[WORDGAME_MAX_DIM_SLOTS][WORDGAME_MAX_DIM_SLOTS];
+	static struct WordBitesPiece wordbites_pieces      [WORDBITES_PIECES_COUNT];
+	static u8                    unyielded_command_buffer[256] = {0};
+	static u8                    unyielded_command_reader      = 0;
+	static u8                    unyielded_command_writer      = 0;
 	static_assert(sizeof(unyielded_command_buffer) == 256); // For the byte-sized indices.
 	static_assert(sizeof(unyielded_command_reader) == 1);   // Wrapping behavior needed.
 	static_assert(sizeof(unyielded_command_writer) == 1);   // Wrapping behavior needed.

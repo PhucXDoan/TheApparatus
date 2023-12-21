@@ -393,9 +393,10 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 						{
 							u8 command = usart_rx();
 
-							if (command == NERD_COMMAND_COMPLETE)
+							if (command == NERD_COMMAND_COMPLETE) // No more commands to receive from Nerd.
 							{
-								done = true; // No more words to receive from Nerd.
+								done = true;
+								usb_mouse_command(false, 0, 0);
 							}
 							else
 							{
