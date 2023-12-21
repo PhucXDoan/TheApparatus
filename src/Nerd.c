@@ -356,8 +356,8 @@ relocate_wordbites_piece
 	struct WordBitesPiece* piece
 )
 {
-	b8   relocated = false;
-	u8_2 delta     =
+	i8_2 best_relocation = { -1, -1 };
+	u8_2 delta           =
 		{
 			piece->orientation == WordBitesPieceOrientation_hort,
 			piece->orientation == WordBitesPieceOrientation_vert,
@@ -365,14 +365,14 @@ relocate_wordbites_piece
 
 	for
 	(
-		u8 y = 0;
+		i8 y = 0;
 		y + delta.y < board_dim_slots.y;
 		y += 1
 	)
 	{
 		for
 		(
-			u8 x = 0;
+			i8 x = 0;
 			x + delta.x < board_dim_slots.x;
 			x += 1
 		)
@@ -381,17 +381,21 @@ relocate_wordbites_piece
 			(
 				!(*reserved_board_slots)[y          ][x          ] &&
 				!(*reserved_board_slots)[y + delta.y][x + delta.x] &&
-				!can_move_wordbites_piece(piece, x, y, true)
+				(
+					(best_relocation.x == -1 && best_relocation.y == -1) ||
+					WORDBITES_MOVE_COST_FUNCTION(piece->position.x, piece->position.y, best_relocation.x, best_relocation.y) >
+					WORDBITES_MOVE_COST_FUNCTION(piece->position.x, piece->position.y,                 x,                 y)
+				) &&
+				!can_move_wordbites_piece(piece, x, y, false)
 			)
 			{
-				relocated = true;
-				goto RELOCATED;
+				best_relocation.x = x;
+				best_relocation.y = y;
 			}
 		}
 	}
-	RELOCATED:;
 
-	if (!relocated)
+	if (can_move_wordbites_piece(piece, best_relocation.x, best_relocation.y, true))
 	{
 		error(); // We couldn't relocate the piece for some reason...
 	}
@@ -736,7 +740,8 @@ main(void)
 	// Process for words.
 	//
 
-	const struct WordsTableOfContentEntry* curr_table_entry = pgm_read_ptr(&WORDS_TABLE_OF_CONTENTS[language].entries);
+	const struct WordsTableOfContentEntry* curr_table_entry    = pgm_read_ptr(&WORDS_TABLE_OF_CONTENTS[language].entries);
+	u8_2                                   curr_mouse_position = {0};
 	for
 	(
 		u8 entry_word_length = pgm_u8(WORDS_TABLE_OF_CONTENTS[language].max_word_length);
@@ -1037,6 +1042,7 @@ main(void)
 										struct WordBitesPiece best_wordbites_pieces[WORDBITES_PIECES_COUNT] = {0};
 										u8                    best_command_buffer[255] = {0};
 										u8                    best_command_count = 0;
+										u16                   best_cost          = 0;
 
 										while (true)
 										{
@@ -1378,24 +1384,52 @@ main(void)
 															// See if the sequence of commands is better than the current best.
 															//
 
-															if (!best_command_count || best_command_count > command_count)
+															if (command_count)
 															{
-																best_board_dim_slots = board_dim_slots;
-																best_command_count   = command_count;
-																memcpy(best_board_alphabet_indices, board_alphabet_indices, sizeof(board_alphabet_indices));
-																memcpy(best_wordbites_pieces      , wordbites_pieces      , sizeof(wordbites_pieces));
-																memcpy(best_command_buffer        , command_buffer        , sizeof(command_buffer));
+																u16 cost =
+																	WORDBITES_MOVE_COST_FUNCTION
+																	(
+																		curr_mouse_position.x,
+																		curr_mouse_position.y,
+																		NERD_COMMAND_X(command_buffer[0]),
+																		NERD_COMMAND_Y(command_buffer[0])
+																	);
+																for
+																(
+																	u8 i = 1;
+																	i < command_count;
+																	i += 1
+																)
+																{
+																	cost +=
+																		WORDBITES_MOVE_COST_FUNCTION
+																		(
+																			NERD_COMMAND_X(command_buffer[i - 1]),
+																			NERD_COMMAND_Y(command_buffer[i - 1]),
+																			NERD_COMMAND_X(command_buffer[i    ]),
+																			NERD_COMMAND_Y(command_buffer[i    ])
+																		);
+																}
+
+																if (!best_command_count || best_cost > cost)
+																{
+																	best_board_dim_slots = board_dim_slots;
+																	best_command_count   = command_count;
+																	best_cost            = cost;
+																	memcpy(best_board_alphabet_indices, board_alphabet_indices, sizeof(board_alphabet_indices));
+																	memcpy(best_wordbites_pieces      , wordbites_pieces      , sizeof(wordbites_pieces));
+																	memcpy(best_command_buffer        , command_buffer        , sizeof(command_buffer));
+																}
+
+																//
+																// Restore state of board before the moves to make the word.
+																//
+
+																memcpy(board_alphabet_indices, old_board_alphabet_indices, sizeof(old_board_alphabet_indices));
+																memcpy(wordbites_pieces      , old_wordbites_pieces      , sizeof(old_wordbites_pieces));
+																command_count = 0;
 															}
 
-															//
-															// Restore state of board before the moves to make the word.
-															//
-
-															memcpy(board_alphabet_indices, old_board_alphabet_indices, sizeof(old_board_alphabet_indices));
-															memcpy(wordbites_pieces      , old_wordbites_pieces      , sizeof(old_wordbites_pieces));
-															command_count = 0;
-
-															break;
 															#undef PUSH_COMMAND
 														}
 													}
@@ -1448,9 +1482,18 @@ main(void)
 								// Send commands.
 								//
 
-								for (u8 i = 0; i < command_count; i += 1)
+								if (command_count)
 								{
-									push_unyielded_command(command_buffer[i]);
+									for (u8 i = 0; i < command_count; i += 1)
+									{
+										push_unyielded_command(command_buffer[i]);
+									}
+									curr_mouse_position =
+										(u8_2)
+										{
+											NERD_COMMAND_X(command_buffer[command_count - 1]),
+											NERD_COMMAND_Y(command_buffer[command_count - 1]),
+										};
 								}
 
 								//

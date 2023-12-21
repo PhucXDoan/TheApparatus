@@ -14,6 +14,10 @@ static i8  i8_max (i8  x, i8  y) { return x > y ? x : y; }
 static i16 i16_max(i16 x, i16 y) { return x > y ? x : y; }
 static i32 i32_max(i32 x, i32 y) { return x > y ? x : y; }
 static i64 i64_max(i64 x, i64 y) { return x > y ? x : y; }
+static i8  i8_abs (i8  x) { return x > 0 ? x : -x; }
+static i16 i16_abs(i16 x) { return x > 0 ? x : -x; }
+static i32 i32_abs(i32 x) { return x > 0 ? x : -x; }
+static i64 i64_abs(i64 x) { return x > 0 ? x : -x; }
 
 static u8 // Amount written; will never exceed 20.
 serialize_u64(char* dst, u16 dst_size, u64 value) // "dst_size" of at least 20 will handle all values.

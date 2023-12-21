@@ -1,6 +1,3 @@
-// TODO Optimize wordbites move generation where a blocking playing piece is moved if possible.
-// TODO Be able to break out of waiting for screenshot.
-
 #define false            0
 #define true             1
 #define stringify_(X)    #X
@@ -2190,6 +2187,7 @@ struct DiplomatPacket
 // "Nerd.c".
 //
 
+#define WORDBITES_MOVE_COST_FUNCTION(X0, Y0, X1, Y1) (5 + i8_abs(((i8) (X0)) - ((i8) (X1))) + i8_abs(((i8) (Y0)) - ((i8) (Y1))))
 #define ALPHABET_INDEX_VOID (1 << 7)
 static_assert(BITS_PER_ALPHABET_INDEX < 8); // For ALPHABET_INDEX_VOID.
 
