@@ -70,9 +70,3 @@ PIN_XMDT(MAKE)
 	(1) "Configuring the Pin" @ Source(1) @ Section(10.2.1) @ Page(68).
 	(2) Arduino Leonardo Pinout Diagram @ Source(3).
 */
-
-/* TODO[Power Consumption?]
-	Apparently floating pins comsume more power than pins that are tied to 5v.
-	How much though? Is it that important?
-	* "Unconnected Pins" @ Source(1) @ Section(10.2.6) @ Page(71-72).
-*/

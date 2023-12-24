@@ -2769,8 +2769,3 @@ ISR(USB_COM_vect) // [USB Endpoint Interrupt Routine].
 	(2) "Introduction" @ Source(1) @ Section(22.1) @ Page(270).
 	(3) Endpoint Sizes @ Source(21) @ Section(23.18.2) @ Page(279).
 */
-
-/* TODO[USB Regulator vs Interface]
-	There's a different bit for enabling the USB pad regulator and USB interface,
-	but why are these separate? Perhaps for saving state?
-*/

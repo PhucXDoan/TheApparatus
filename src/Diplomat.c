@@ -481,7 +481,7 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 										if (currently_holding_piece_in_wordbites)
 										{
 											usb_mouse_command(true, coords.x, coords.y);
-											WAIT // TODO Explain
+											WAIT // The further away we drag the piece, we long we should wait so it can catch up.
 											(
 												WORDBITES_MOVE_COST_FUNCTION
 												(
@@ -489,7 +489,7 @@ enter_menu_of_selected_wordgame(enum WordGame wordgame)
 													curr_mouse_coords_in_wordbites.y,
 													NERD_COMMAND_X(command),
 													NERD_COMMAND_Y(command)
-												) * 20
+												) * 10
 											);
 											usb_mouse_command(false, coords.x, coords.y);
 										}
@@ -969,7 +969,19 @@ main(void)
 //
 
 /* [Overview].
-	TODO
+	The Diplomat is the MCU that handles the communication with the iPhone.
+	It has the following responsibilities:
+
+		- Control the mouse cursor of the phone.
+		- Emulate being a mass storage device.
+		- Performing OCR on screenshots.
+
+	The Diplomat implements a USB HID interface that controls the mouse cursor of the iPhone. This
+	cursor can then be used to run a Shortcuts program on the phone that takes a screenshot of the
+	wordgame, compress it, and then upload it to the Diplomat (since it appears as a external
+	storage device). The Diplomat intercepts the uploading transaction to perform OCR which
+	determines the letters that are within the wordgame. After that, it then transmits the results
+	to the Nerd to begin searching for words for the Diplomat to reproduce.
 */
 
 /* [Bootloader-Tampered State].

@@ -1103,7 +1103,7 @@ union FAT32DirEntry
 		u16 LDIR_Name1[5];  // First five UTF-16 characters that this long-entry provides for the long name.
 		u8  LDIR_Attr;      // Must be FAT32_DIR_ENTRY_ATTR_FLAGS_LONG.
 		u8  LDIR_Type;      // Must be zero.
-		u8  LDIR_Chksum;    // "Checksum of name in the associated short name directory entry at the end of the long name directory entry set". TODO Not so simple...
+		u8  LDIR_Chksum;    // "Checksum of name in the associated short name directory entry at the end of the long name directory entry set".
 		u16 LDIR_Name2[6];  // The next six UTF-16 characters that this long-entry provides for the long name.
 		u16 LDIR_FstClusLO; // Must be zero.
 		u16 LDIR_Name3[2];  // The last two UTF-16 characters that this long-entry provides for the long name.
@@ -1925,8 +1925,8 @@ struct USBConfig // This layout is defined uniquely for our device application.
 					.wTotalLength        = sizeof(struct USBConfig),
 					.bNumInterfaces      = USBConfigInterface_COUNT,
 					.bConfigurationValue = USB_CONFIG_ID,
-					.bmAttributes        = USBConfigAttrFlag_reserved_one | USBConfigAttrFlag_self_powered, // TODO We should calculate our power consumption!
-					.bMaxPower           = 50,                                                              // TODO We should calculate our power consumption!
+					.bmAttributes        = USBConfigAttrFlag_reserved_one | USBConfigAttrFlag_self_powered,
+					.bMaxPower           = 50, // Arbitrary, really.
 				},
 		#if USB_CDC_ENABLE
 			.iad_cdc =
@@ -2156,7 +2156,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 // Diplomat and Nerd.
 //
 
-#define WORDBITES_MOVE_COST_FUNCTION(X0, Y0, X1, Y1) ((u16) (5 + i8_abs(((i8) (X0)) - ((i8) (X1))) + i8_abs(((i8) (Y0)) - ((i8) (Y1)))))
+#define WORDBITES_MOVE_COST_FUNCTION(X0, Y0, X1, Y1) ((u16) (10 + i8_abs(((i8) (X0)) - ((i8) (X1))) + i8_abs(((i8) (Y0)) - ((i8) (Y1)))))
 
 #define NERD_COMMAND_SUBMIT_BIT 0b1'000'0000
 #define NERD_COMMAND_COMPLETE   0b1'111'1111
@@ -2243,7 +2243,7 @@ struct WordBitesPiece
 	Source(18) := Arduino Mega 2560 Rev3 Pinout Diagram (STORE.ARDUINO.CC/MEGA-2560-REV3) (Updated on: 16/12/2020).
 	Source(19) := SD Specifications Part 1 Physical Layer Simplified Specification Version 2.00 (Dated: September 25, 2006).
 	Source(20) := "How to Use MMC/SDC" by Elm-Chan (Updated on: December 26, 2019).
-	Source(21) := "8-bit Atmel Microcontroller with 64/128Kbytes of ISP Flash and USB Controller" datasheet (Dated: 9/12).
+	Source(21) := "8-bit Atmel Microcontroller with 64/128Kbytes of ISP Flash and USB Controller" AT90USB646/AT90USB647/AT90USB1286/AT90USB1287 datasheet (Dated: 9/12).
 	Source(22) := Microsofts's "Windows GDI" PDF Article (Dated: 01/24/2023).
 	Source(23) := PDF Article of Microsoft's "Open Specifications" for Protocols (Dated: 08/01/2023).
 	Source(24) := Wikipedia's "BMP file format" Page (Last Edited: 23 October 2022, at 13:30 (UTC)).
