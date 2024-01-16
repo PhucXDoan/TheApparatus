@@ -1,4 +1,4 @@
-// Versitile interface for LCD displays driven by HD44780U.
+// Versatile interface for LCD displays driven by HD44780U.
 //
 //     - R/W pin must always be driven low.
 //     - ~5 kOhm resistor tied to ground on the contrast pin sets a satisfactory contrast.
