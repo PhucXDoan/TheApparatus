@@ -1915,7 +1915,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 			.bNumConfigurations = 1
 		};
 
-	#define USB_CONFIG_ID 1 // Must be non-zero. See: Soure(2) @ Figure(11-10) @ Page(310).
+	#define USB_CONFIG_ID 1 // Must be non-zero. See: Source(2) @ Figure(11-10) @ Page(310).
 	static const struct USBConfig USB_CONFIG PROGMEM =
 		{
 			.desc =
