@@ -1878,7 +1878,7 @@ struct USBConfig // This layout is defined uniquely for our device application.
 		};
 	static const u8 USB_MS_SCSI_UNSUPPORTED_COMMAND_SENSE[] PROGMEM = // See: Source(13) @ Section(7.20.2) @ Page(136-138).
 		{
-			// "VALID"              : Must be 1 for this sense data to comply with the standard. See: Source(13) @ Section(7.20.2) @ Page(136).
+			// "VALID"              : Must be 1 for this sense data to comply with the standard. See: Source(13) @ Section(7.20.2) @ Page(136). CORRECTION: I misread this; this simply indicates that the "INFORMATION" field is valid or not. This bit could be set to zero and it wouldn't affect anything, I think.
 			//    | "RESPONSE CODE" : 0x70 says taht the sense data is about the "current errors" that the device just had. See: Source(13) @ Section(7.20.4) @ Page(140).
 			//    |    |
 			//    v vvvvvvv
