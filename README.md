@@ -2,7 +2,7 @@
 
 The Apparatus supersedes [The Machine](https://github.com/PhucXDoan/TheMachine). I decided to do the entire project again, because 1. typing in the letters of the wordgame sucked and 2. using the Arduino USB HID library sucked even more. So just under the span of four months, I took the oath of celibacy from all external dependencies and rewrote the project all entirely from scratch.
 
-This includes writing myself the USB firmware stack, which implements the mass storage interface to **automatically perform OCR on the fly**. It's pretty sick, honestly. All of it was done entirely on the ATmega32U4, an 8-bit AVR microcontroller running at 8 MIPS (or something). To achieve this, I took the approach of using the cutting edge artifical intelligence algorithm that is: comparing BMPs of the letters against the screenshot of the game and picking the close matching one. It ain't slow either (lots of clever optimizations had to be done). It only takes around 6 seconds to parse the board of the largest word game 🚀🚀🚀🚀🚀!
+This includes writing myself the USB firmware stack, which implements the mass storage interface to **automatically perform OCR on the fly**. It's pretty sick, honestly. All of it was done entirely on the ATmega32U4, an 8-bit AVR microcontroller running at 8 MIPS (or something). To achieve this, I took the approach of using the cutting edge artifical intelligence algorithm that is: comparing BMPs of the letters against the screenshot of the game and picking the closest matching one. It ain't slow either (lots of clever optimizations had to be done). It only takes around 6 seconds to parse the board of the largest word game 🚀🚀🚀🚀🚀!
 
 Here are some demos:
 
